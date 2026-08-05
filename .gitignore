@@ -1,0 +1,31 @@
+.migration-sources/
+AGENTS.md
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+htmlcov/
+*.egg-info/
+*.tsbuildinfo
+
+# Node and browser tooling
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+
+# Local configuration and runtime data
+.env
+!.env.example
+*.sqlite3
+*.db
+*.log
+data/
+session/

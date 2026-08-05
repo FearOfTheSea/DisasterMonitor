@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      ALLOWED_ORIGINS: http://localhost:3000
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: qwen3:1.7b
+    ports:
+      - "8001:8001"
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8001/api/v1
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8001/api/v1
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
