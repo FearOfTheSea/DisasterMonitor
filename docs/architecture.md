@@ -7,10 +7,16 @@ flowchart LR
     browser["Browser"] --> web["Next.js web app"]
     web --> api["FastAPI API"]
     api --> ollama["Local Ollama / Qwen"]
+    api --> jma["JMA JSON feeds"]
+    api --> usgs["USGS GeoJSON"]
+    api --> reliefweb["ReliefWeb JSON"]
     web --> osm["OpenStreetMap tiles"]
 ```
 
-OpenStreetMap is used only for the basic base map. The MVP has no live disaster-data provider. The browser retains the conversation for the current tab session; the API does not persist multi-user conversations.
+OpenStreetMap is used only for the basic base map. The current-earthquake
+workflow has bounded JMA, USGS, and ReliefWeb source adapters; other live
+disaster datasets remain unimplemented. The browser retains the conversation for
+the current tab session; the API does not persist multi-user conversations.
 
 ## Backend request flow
 
@@ -19,18 +25,32 @@ sequenceDiagram
     participant Browser
     participant Route as FastAPI route
     participant UseCase as AnswerMapQuestion
+    participant Report as CurrentDisasterReportService
+    participant Events as JMA/USGS event ports
+    participant Situation as JMA/ReliefWeb situation ports
     participant Port as LanguageModel port
     participant Adapter as OllamaQwenAdapter
     participant Model as Ollama/Qwen
 
     Browser->>Route: POST /api/v1/assistant
     Route->>UseCase: validated question + map view
+    UseCase->>UseCase: deterministic classification
+    alt current-disaster request
+        UseCase->>Report: normalized query
+        Report->>Events: bounded recent-event lookup
+        Events-->>Report: normalized candidates + issues
+        Report->>Report: rank event and reconcile evidence
+        Report->>Situation: selected event lookup
+        Situation-->>Report: normalized facts + issues
+        Report-->>UseCase: deterministic source-backed report
+    else ordinary request
     UseCase->>UseCase: normalize and prepare deterministic messages
     UseCase->>Port: generate(ModelRequest)
     Port->>Adapter: provider-neutral call
     Adapter->>Model: POST /api/chat
     Model-->>Adapter: provider response
     Adapter-->>UseCase: ModelResponse
+    end
     UseCase-->>Route: AssistantAnswer
     Route-->>Browser: stable JSON response
 ```
@@ -50,15 +70,23 @@ React components do not call Ollama, manipulate browser storage directly, or con
 
 ## Ports and adapters
 
-The MVP uses one meaningful application port:
+The application uses these meaningful ports:
 
 ```text
 LanguageModel
   generate(ModelRequest) -> ModelResponse
   check_readiness() -> ModelReadiness
+
+DisasterEventProvider
+  find_recent_events(DisasterQuery, now) -> ProviderBatch[DisasterEvent]
+
+SituationReportProvider
+  get_situation_reports(DisasterEvent, DisasterQuery, now) -> ProviderBatch[SituationReport]
 ```
 
-`OllamaQwenAdapter` implements that port. Tests inject a fake implementation. No speculative ports exist for weather, satellite, geocoding, or remote providers.
+`OllamaQwenAdapter` implements the model port. JMA, USGS, and ReliefWeb adapters
+implement the disaster ports. Tests inject deterministic implementations. No
+speculative ports exist for weather, satellite, geocoding, or remote providers.
 
 ## Dependency direction
 

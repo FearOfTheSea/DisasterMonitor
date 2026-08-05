@@ -1,5 +1,6 @@
 import type {
   AssistantRequest,
+  AssistantReport,
   AssistantResponse,
   MapView,
 } from '@/shared/types/assistant';
@@ -69,10 +70,83 @@ export class AssistantClient {
       return false;
     }
     const item = value as Record<string, unknown>;
-    return (
+    if (
       typeof item.message === 'string' &&
       typeof item.conversation_id === 'string' &&
       typeof item.model === 'string'
+    ) {
+      if (item.response_type !== undefined && typeof item.response_type !== 'string') {
+        return false;
+      }
+      if (
+        item.retrieval_time !== undefined &&
+        typeof item.retrieval_time !== 'string'
+      ) {
+        return false;
+      }
+      if (item.warnings !== undefined && !this.isStringArray(item.warnings)) {
+        return false;
+      }
+      if (item.sections !== undefined && !this.isReportSections(item.sections)) {
+        return false;
+      }
+      if (item.sources !== undefined && !this.isSources(item.sources)) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  private isStringArray(value: unknown): value is string[] {
+    return Array.isArray(value) && value.every((item) => typeof item === 'string');
+  }
+
+  private isSources(value: unknown): boolean {
+    return (
+      Array.isArray(value) &&
+      value.every((item) => {
+        if (!item || typeof item !== 'object') {
+          return false;
+        }
+        const source = item as Record<string, unknown>;
+        return (
+          typeof source.publisher === 'string' &&
+          typeof source.title === 'string' &&
+          typeof source.canonical_url === 'string' &&
+          typeof source.retrieved_at === 'string'
+        );
+      })
     );
   }
+
+  private isReportSections(value: unknown): boolean {
+    return (
+      Array.isArray(value) &&
+      value.every((item) => {
+        if (!item || typeof item !== 'object') {
+          return false;
+        }
+        const section = item as Record<string, unknown>;
+        return typeof section.title === 'string' && typeof section.content === 'string';
+      })
+    );
+  }
+}
+
+export function toAssistantReport(
+  response: AssistantResponse,
+): AssistantReport | undefined {
+  if (!response.response_type || response.response_type === 'assistant') {
+    return undefined;
+  }
+  return {
+    responseType: response.response_type,
+    selectedEvent: response.selected_event,
+    retrievalTime: response.retrieval_time,
+    sources: response.sources ?? [],
+    warnings: response.warnings ?? [],
+    sections: response.sections ?? [],
+    partial: response.partial ?? false,
+  };
 }

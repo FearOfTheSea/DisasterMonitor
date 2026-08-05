@@ -2,7 +2,11 @@
 
 import { FormEvent, useState } from 'react';
 
-import type { ConversationMessage, ConversationStatus } from '@/shared/types/assistant';
+import type {
+  AssistantReport,
+  ConversationMessage,
+  ConversationStatus,
+} from '@/shared/types/assistant';
 
 type AssistantPanelProps = {
   messages: ConversationMessage[];
@@ -11,6 +15,79 @@ type AssistantPanelProps = {
   onSubmit: (question: string) => Promise<void>;
   onClear: () => void;
 };
+
+function formatTime(value: string | undefined) {
+  if (!value) {
+    return 'Time unavailable';
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function DisasterReportView({
+  report,
+  message,
+}: {
+  report: AssistantReport;
+  message: string;
+}) {
+  return (
+    <div className="disaster-report">
+      {report.partial && report.warnings.length > 0 && (
+        <div className="report-warning" role="status">
+          {report.warnings.map((warning) => (
+            <p key={warning}>{warning}</p>
+          ))}
+        </div>
+      )}
+      {report.selectedEvent && (
+        <div className="report-event">
+          <strong>{report.selectedEvent.location}</strong>
+          <span>
+            {formatTime(report.selectedEvent.event_time)}
+            {report.selectedEvent.magnitude !== undefined
+              ? ` · M${report.selectedEvent.magnitude}`
+              : ''}
+          </span>
+        </div>
+      )}
+      <div className="report-sections">
+        {report.sections.map((section) => (
+          <section key={section.title}>
+            <h3>{section.title}</h3>
+            <p>{section.content}</p>
+          </section>
+        ))}
+      </div>
+      {report.sources.length > 0 && (
+        <div className="report-sources">
+          <h3>Source timestamps</h3>
+          {report.sources.map((source) => (
+            <a
+              key={source.canonical_url}
+              href={source.canonical_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>
+                {source.publisher}: {source.title}
+              </span>
+              <small>
+                Published/updated:{' '}
+                {formatTime(source.updated_at ?? source.published_at)}
+                {' · '}Retrieved: {formatTime(source.retrieved_at)}
+              </small>
+            </a>
+          ))}
+        </div>
+      )}
+      <details className="report-text">
+        <summary>Text report</summary>
+        <p>{message}</p>
+      </details>
+    </div>
+  );
+}
 
 export function AssistantPanel({
   messages,
@@ -39,8 +116,8 @@ export function AssistantPanel({
         <p>Powered by your local Qwen model through Ollama.</p>
       </header>
       <div className="availability-note">
-        External data is not connected yet. The assistant cannot see live weather,
-        flood, satellite, or geocoding results.
+        Source-backed current earthquake reports are available for supported requests.
+        Other live datasets remain unconnected.
       </div>
       <div className="message-list" aria-live="polite">
         {messages.length === 0 ? (
@@ -51,7 +128,11 @@ export function AssistantPanel({
               <span className="message-label">
                 {message.role === 'user' ? 'You' : 'Assistant'}
               </span>
-              {message.content}
+              {message.report ? (
+                <DisasterReportView report={message.report} message={message.content} />
+              ) : (
+                message.content
+              )}
             </div>
           ))
         )}

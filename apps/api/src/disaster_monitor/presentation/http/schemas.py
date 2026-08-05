@@ -1,5 +1,6 @@
 """HTTP request and response schemas."""
 
+from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -31,6 +32,44 @@ class AssistantResponse(BaseModel):
     message: str
     conversation_id: str
     model: str
+    response_type: str = "assistant"
+    selected_event: "SelectedEventResponse | None" = None
+    retrieval_time: datetime | None = None
+    sources: list["SourceResponse"] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    sections: list["ReportSectionResponse"] = Field(default_factory=list)
+    partial: bool = False
+
+
+class SourceResponse(BaseModel):
+    """Source metadata exposed to the browser."""
+
+    publisher: str
+    title: str
+    canonical_url: str
+    published_at: datetime | None = None
+    updated_at: datetime | None = None
+    retrieved_at: datetime
+
+
+class SelectedEventResponse(BaseModel):
+    """The specific event covered by a current-disaster report."""
+
+    event_id: str
+    hazard: str
+    location: str
+    event_time: datetime
+    magnitude: float | None = None
+    intensity: str | None = None
+    depth_km: float | None = None
+    source: SourceResponse
+
+
+class ReportSectionResponse(BaseModel):
+    """One readable report section."""
+
+    title: str
+    content: str
 
 
 class HealthResponse(BaseModel):

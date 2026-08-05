@@ -56,4 +56,40 @@ describe('AssistantClient', () => {
       expect.objectContaining<Partial<AssistantApiError>>({ status: 503 }),
     );
   });
+
+  it('accepts structured current-disaster metadata and source timestamps', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: '## Situation summary',
+          conversation_id: 'session-1',
+          model: 'source-backed-report',
+          response_type: 'current_disaster',
+          retrieval_time: '2026-08-05T12:00:00Z',
+          sources: [
+            {
+              publisher: 'JMA',
+              title: 'Fixture event',
+              canonical_url: 'https://example.test/event',
+              published_at: '2026-08-05T11:00:00Z',
+              retrieved_at: '2026-08-05T12:00:00Z',
+            },
+          ],
+          sections: [{ title: 'Situation summary', content: 'Verified.' }],
+          warnings: ['One source is unavailable.'],
+          partial: true,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Latest earthquake damage?', null, {
+        centerLatitude: 21,
+        centerLongitude: 105,
+        zoom: 8,
+      }),
+    ).resolves.toMatchObject({ response_type: 'current_disaster', partial: true });
+  });
 });

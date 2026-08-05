@@ -1,6 +1,13 @@
 """Application-layer request and response types."""
 
 from dataclasses import dataclass
+from datetime import datetime
+
+from disaster_monitor.application.disaster import (
+    ReportSection,
+    SelectedEventSummary,
+    SourceReference,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,3 +49,10 @@ class AssistantAnswer:
     message: str
     conversation_id: str
     model: str
+    response_type: str = "assistant"
+    selected_event: SelectedEventSummary | None = None
+    retrieval_time: datetime | None = None
+    sources: tuple[SourceReference, ...] = ()
+    warnings: tuple[str, ...] = ()
+    sections: tuple[ReportSection, ...] = ()
+    partial: bool = False

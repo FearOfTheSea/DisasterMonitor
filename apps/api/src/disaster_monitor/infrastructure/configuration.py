@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     ollama_model: str = Field(default="qwen3:1.7b", min_length=1)
     ollama_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
     ollama_max_tokens: int = Field(default=512, ge=32, le=4096)
+    disaster_provider_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    disaster_provider_max_response_bytes: int = Field(
+        default=1_000_000, ge=10_000, le=5_000_000
+    )
+    reliefweb_app_name: str = Field(default="disaster-monitor-local", min_length=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",

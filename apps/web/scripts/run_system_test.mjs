@@ -48,13 +48,22 @@ try {
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: 'Open assistant' }).click();
-  await page.getByLabel('Question').fill('What can I use this map for?');
-  await page.getByRole('button', { name: 'Ask assistant' }).click();
   await page
-    .getByText('Deterministic system-test response.')
-    .waitFor({ timeout: 30_000 });
+    .getByLabel('Question')
+    .fill(
+      'There was a recent earthquake in Japan. Please update me with the latest information about the damages in Japan.',
+    );
+  await page.getByRole('button', { name: 'Ask assistant' }).click();
+  await page.getByText('Ishikawa, Japan', { exact: true }).waitFor({ timeout: 30_000 });
+  await page.getByRole('heading', { name: 'Situation summary' }).waitFor();
+  await page.getByText('Buildings damaged: 4.').first().waitFor();
+  await page.getByRole('link', { name: /ReliefWeb fixture/ }).waitFor();
+  await page
+    .getByText(/Retrieved:/)
+    .first()
+    .waitFor();
   await browser.close();
-  console.log('System test passed: fake backend response rendered in the Next.js UI.');
+  console.log('System test passed: source-backed current-disaster report rendered.');
 } finally {
   stopStack();
 }

@@ -16,7 +16,14 @@ sys.path.insert(0, str(script_directory))
 
 from disaster_monitor.main import create_app  # noqa: E402
 from disaster_monitor.infrastructure.configuration import Settings  # noqa: E402
-from system_test_backend import FakeSystemModel  # noqa: E402
+from system_test_backend import (  # noqa: E402
+    FakeSystemEventProvider,
+    FakeSystemModel,
+    FakeSystemSituationProvider,
+)
+from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
+    CurrentDisasterReportService,
+)
 
 
 def main() -> int:
@@ -25,6 +32,9 @@ def main() -> int:
             create_app(
                 settings=Settings(allowed_origins="http://127.0.0.1:4173"),
                 model=FakeSystemModel(),
+                current_disaster_report=CurrentDisasterReportService(
+                    FakeSystemEventProvider(), FakeSystemSituationProvider()
+                ),
             ),
             host="127.0.0.1",
             port=8787,

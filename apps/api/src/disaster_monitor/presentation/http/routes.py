@@ -13,6 +13,9 @@ from disaster_monitor.presentation.http.schemas import (
     AssistantResponse,
     HealthResponse,
     ReadinessResponse,
+    ReportSectionResponse,
+    SelectedEventResponse,
+    SourceResponse,
 )
 
 router = APIRouter()
@@ -53,6 +56,7 @@ async def readiness(
 @router.post(
     "/assistant",
     response_model=AssistantResponse,
+    response_model_exclude_unset=True,
     status_code=status.HTTP_200_OK,
     tags=["assistant"],
 )
@@ -74,8 +78,55 @@ async def assistant(
             )
         ),
     )
+    if result.response_type == "assistant":
+        return AssistantResponse(
+            message=result.message,
+            conversation_id=result.conversation_id,
+            model=result.model,
+        )
+    selected_event = result.selected_event
     return AssistantResponse(
         message=result.message,
         conversation_id=result.conversation_id,
         model=result.model,
+        response_type=result.response_type,
+        selected_event=(
+            None
+            if selected_event is None
+            else SelectedEventResponse(
+                event_id=selected_event.event_id,
+                hazard=selected_event.hazard,
+                location=selected_event.location,
+                event_time=selected_event.event_time,
+                magnitude=selected_event.magnitude,
+                intensity=selected_event.intensity,
+                depth_km=selected_event.depth_km,
+                source=SourceResponse(
+                    publisher=selected_event.source.publisher,
+                    title=selected_event.source.title,
+                    canonical_url=selected_event.source.canonical_url,
+                    published_at=selected_event.source.published_at,
+                    updated_at=selected_event.source.updated_at,
+                    retrieved_at=selected_event.source.retrieved_at,
+                ),
+            )
+        ),
+        retrieval_time=result.retrieval_time,
+        sources=[
+            SourceResponse(
+                publisher=source.publisher,
+                title=source.title,
+                canonical_url=source.canonical_url,
+                published_at=source.published_at,
+                updated_at=source.updated_at,
+                retrieved_at=source.retrieved_at,
+            )
+            for source in result.sources
+        ],
+        warnings=list(result.warnings),
+        sections=[
+            ReportSectionResponse(title=section.title, content=section.content)
+            for section in result.sections
+        ],
+        partial=result.partial,
     )

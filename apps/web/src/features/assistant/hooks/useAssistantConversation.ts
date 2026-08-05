@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { AssistantClient } from '@/features/assistant/api/assistantClient';
+import {
+  AssistantClient,
+  toAssistantReport,
+} from '@/features/assistant/api/assistantClient';
 import { DEFAULT_MAP_VIEW, API_BASE_URL } from '@/shared/config/runtime';
 import { SessionConversationStore } from '@/shared/storage/sessionConversationStore';
 import type {
@@ -60,6 +63,7 @@ export function useAssistantConversation() {
           state.conversationId,
           mapView,
         );
+        const report = toAssistantReport(response);
         setState((current) => ({
           conversationId: response.conversation_id,
           messages: [
@@ -68,6 +72,7 @@ export function useAssistantConversation() {
               id: crypto.randomUUID(),
               role: 'assistant',
               content: response.message,
+              ...(report ? { report } : {}),
             },
           ],
         }));

@@ -4,6 +4,7 @@ export type ConversationMessage = {
   id: string;
   role: MessageRole;
   content: string;
+  report?: AssistantReport;
 };
 
 export type MapView = {
@@ -26,6 +27,48 @@ export type AssistantResponse = {
   message: string;
   conversation_id: string;
   model: string;
+  response_type?: string;
+  selected_event?: SelectedEvent;
+  retrieval_time?: string;
+  sources?: AssistantSource[];
+  warnings?: string[];
+  sections?: ReportSection[];
+  partial?: boolean;
+};
+
+export type AssistantSource = {
+  publisher: string;
+  title: string;
+  canonical_url: string;
+  published_at?: string;
+  updated_at?: string;
+  retrieved_at: string;
+};
+
+export type SelectedEvent = {
+  event_id: string;
+  hazard: string;
+  location: string;
+  event_time: string;
+  magnitude?: number;
+  intensity?: string;
+  depth_km?: number;
+  source: AssistantSource;
+};
+
+export type ReportSection = {
+  title: string;
+  content: string;
+};
+
+export type AssistantReport = {
+  responseType: string;
+  selectedEvent?: SelectedEvent;
+  retrievalTime?: string;
+  sources: AssistantSource[];
+  warnings: string[];
+  sections: ReportSection[];
+  partial: boolean;
 };
 
 export type ConversationState = {

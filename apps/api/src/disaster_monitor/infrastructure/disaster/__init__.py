@@ -1,0 +1,1 @@
+"""Live disaster-information adapters."""

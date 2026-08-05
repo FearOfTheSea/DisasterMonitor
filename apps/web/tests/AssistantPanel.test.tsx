@@ -48,4 +48,52 @@ describe('AssistantPanel', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('local backend');
   });
+
+  it('renders structured report sections, warnings, links, and freshness', () => {
+    render(
+      <AssistantPanel
+        messages={[
+          {
+            id: 'report-1',
+            role: 'assistant',
+            content: 'Source-backed report text.',
+            report: {
+              responseType: 'current_disaster',
+              partial: true,
+              warnings: ['Situation source unavailable.'],
+              sections: [
+                { title: 'Situation summary', content: 'A quake was identified.' },
+                {
+                  title: 'Physical and infrastructure damage',
+                  content: 'No reliable figure yet.',
+                },
+              ],
+              sources: [
+                {
+                  publisher: 'JMA',
+                  title: 'Earthquake fixture',
+                  canonical_url: 'https://example.test/event',
+                  published_at: '2026-08-05T11:00:00Z',
+                  retrieved_at: '2026-08-05T12:00:00Z',
+                },
+              ],
+            },
+          },
+        ]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Situation summary' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Situation source unavailable.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /JMA: Earthquake fixture/ }),
+    ).toHaveAttribute('href', 'https://example.test/event');
+    expect(screen.getByText(/Retrieved:/)).toBeInTheDocument();
+  });
 });

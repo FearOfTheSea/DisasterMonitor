@@ -1,6 +1,8 @@
 # Disaster Monitor
 
-Disaster Monitor is a local-first MVP for exploring a basic interactive map and asking a locally running Qwen model map or disaster-monitoring questions. The application intentionally avoids cloud credentials and does not pretend to have live external data.
+Disaster Monitor is a local-first MVP for exploring a basic interactive map and
+asking a locally running Qwen model map or disaster-monitoring questions. It also
+has a bounded, source-backed current-earthquake reporting workflow for Japan.
 
 ## Current MVP
 
@@ -9,14 +11,27 @@ Disaster Monitor is a local-first MVP for exploring a basic interactive map and 
 - Browser-session conversation continuity using `sessionStorage`.
 - FastAPI health, readiness, and assistant endpoints.
 - Ollama adapter for a configurable local Qwen model.
+- Deterministic current-earthquake request classification and event selection.
+- JMA earthquake/tsunami feeds, USGS earthquake GeoJSON, and supplementary
+  ReliefWeb situation reports behind focused provider ports.
+- Source-attributed report sections, conflict/partial/stale warnings, and
+  clickable source metadata in the assistant drawer.
 - Deterministic request normalization, prompt preparation, and provider-error translation.
 - Unit, HTTP integration, component, adapter, and deterministic Playwright system tests.
 
-The assistant clearly reports that live weather, flood, satellite, and geocoding data are not connected. Those capabilities are not fake endpoints or hidden fallbacks.
+The assistant clearly reports that live weather, flood, satellite, geocoding, and
+other unimplemented data are not connected. The current-earthquake workflow only
+uses retrieved provider evidence and does not substitute model memory for current
+facts. See [docs/current-disaster-reporting.md](docs/current-disaster-reporting.md)
+for the implemented flow and limitations.
 
 ## Deferred capabilities
 
-Live weather, geocoding, satellite catalogs and imagery, flood providers, remote model providers, paid map services, authentication, queues, background workers, cloud deployment, multi-user persistence, and advanced analytics are intentionally deferred. See [docs/migration-report.md](docs/migration-report.md) for the migration decisions.
+Live weather, geocoding, satellite catalogs and imagery, flood providers, broad
+news aggregation, remote model providers, paid map services, authentication,
+queues, background workers, cloud deployment, multi-user persistence, and
+advanced analytics are intentionally deferred. See
+[docs/migration-report.md](docs/migration-report.md) for the migration decisions.
 
 ## Repository layout
 
@@ -66,7 +81,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Open <http://localhost:3000>, click **Open assistant**, and submit a question. The map uses OpenStreetMap tiles, so map tiles require network access; the assistant itself uses only the local API and Ollama.
+Open <http://localhost:3000>, click **Open assistant**, and submit a question. The map uses OpenStreetMap tiles, so map tiles require network access; ordinary assistant requests use the local API and Ollama, while supported current-earthquake reports use the configured source adapters.
 
 Useful checks:
 
@@ -121,6 +136,15 @@ Playwright may need its browser installed once:
 ```powershell
 npx playwright install chromium
 ```
+
+The optional live-provider smoke test is excluded from normal CI and checks only
+structural properties of changing live data:
+
+```powershell
+uv run --project apps/api python scripts/live_disaster_smoke.py
+```
+
+It was not run during the default offline verification.
 
 ## Optional real-Qwen smoke test
 

@@ -210,6 +210,75 @@ button {
   border: 1px solid var(--line);
 }
 
+.disaster-report {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.report-warning {
+  border-left: 3px solid #c27a1a;
+  background: #fff7e7;
+  color: #6e4612;
+  padding: 0.55rem 0.7rem;
+}
+
+.report-warning p {
+  margin: 0.15rem 0;
+}
+
+.report-event {
+  display: grid;
+  gap: 0.15rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.6rem;
+}
+
+.report-event span,
+.report-sources small {
+  color: #5c6e68;
+  font-size: 0.8rem;
+}
+
+.report-sections {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.report-sections section {
+  border-top: 1px solid var(--line);
+  padding-top: 0.55rem;
+}
+
+.report-sections h3,
+.report-sources h3 {
+  margin: 0 0 0.25rem;
+  color: #1c3b33;
+  font-size: 0.92rem;
+}
+
+.report-sections p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.report-sources {
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+
+.report-sources a {
+  display: grid;
+  gap: 0.15rem;
+  color: var(--accent);
+  margin: 0.45rem 0;
+}
+
+.report-text {
+  color: #5c6e68;
+  font-size: 0.82rem;
+}
+
 .message-label {
   display: block;
   font-size: 0.7rem;
