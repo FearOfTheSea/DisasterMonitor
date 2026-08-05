@@ -1,6 +1,6 @@
 # Disaster Monitor
 
-Disaster Monitor is a local-first MVP for exploring a basic interactive map and asking a locally running Qwen model map or disaster-monitoring questions. The application intentionally avoids cloud credentials and does not pretend to have live external data.
+Disaster Monitor is a local-first MVP for exploring a basic interactive map and asking a locally running Qwen model map or disaster-monitoring questions. The model runs locally. A narrowly routed, no-key RSS lookup supplies recent report metadata only for explicit latest/current earthquake requests and latest damage requests about Japan.
 
 ## Current MVP
 
@@ -10,20 +10,22 @@ Disaster Monitor is a local-first MVP for exploring a basic interactive map and 
 - FastAPI health, readiness, and assistant endpoints.
 - Ollama adapter for a configurable local Qwen model.
 - Deterministic request normalization, prompt preparation, and provider-error translation.
+- Deterministic routing for current Japan earthquake-damage questions.
+- A focused `DisasterInformationProvider` port backed by Google News RSS report metadata.
 - Unit, HTTP integration, component, adapter, and deterministic Playwright system tests.
 
-The assistant clearly reports that live weather, flood, satellite, and geocoding data are not connected. Those capabilities are not fake endpoints or hidden fallbacks.
+The assistant still clearly reports that live weather, flood, satellite, and geocoding data are not connected. The RSS adapter supplies source titles, publication times, URLs, and snippets; it does not independently verify damage figures. The model is instructed to attribute all time-sensitive claims, preserve conflicting or preliminary reports, and report lookup unavailability instead of answering from memory.
 
 ## Deferred capabilities
 
-Live weather, geocoding, satellite catalogs and imagery, flood providers, remote model providers, paid map services, authentication, queues, background workers, cloud deployment, multi-user persistence, and advanced analytics are intentionally deferred. See [docs/migration-report.md](docs/migration-report.md) for the migration decisions.
+Live weather, geocoding, satellite catalogs and imagery, flood providers, general-purpose web search, remote model providers, paid map services, authentication, queues, background workers, cloud deployment, multi-user persistence, and advanced analytics are intentionally deferred. See [docs/migration-report.md](docs/migration-report.md) for the migration decisions.
 
 ## Repository layout
 
 ```text
 apps/api/       FastAPI application and Python tests
 apps/web/       Next.js application, OpenLayers map, and frontend tests
-docs/           Architecture and migration notes
+docs/           Architecture, migration notes, and scoped implementation prompts
 scripts/        Deterministic system-test server and optional smoke helpers
 compose.yaml    Optional local two-service orchestration
 ```
@@ -34,6 +36,7 @@ compose.yaml    Optional local two-service orchestration
 - `uv` 0.6+
 - Node.js 24 and npm 11+
 - Ollama for real model requests (optional for tests)
+- Network access for map tiles and current earthquake-report lookup
 - Docker Desktop if using Compose (optional)
 
 ## Local Qwen setup
@@ -46,7 +49,7 @@ ollama pull qwen3:1.7b
 ollama list
 ```
 
-The backend defaults to `http://localhost:11434` and `qwen3:1.7b`. Copy `apps/api/.env.example` to `apps/api/.env` to override the model, timeout, or allowed origins. No API key is required.
+The backend defaults to `http://localhost:11434` and `qwen3:1.7b`. Copy `apps/api/.env.example` to `apps/api/.env` to override the model, timeout, allowed origins, RSS URL, report limit, or lookback window. No API key is required for the RSS adapter.
 
 ## Run the applications independently
 
@@ -66,7 +69,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Open <http://localhost:3000>, click **Open assistant**, and submit a question. The map uses OpenStreetMap tiles, so map tiles require network access; the assistant itself uses only the local API and Ollama.
+Open <http://localhost:3000>, click **Open assistant**, and submit a question. The map uses OpenStreetMap tiles. Explicit current earthquake-damage requests also require the configured RSS endpoint to be reachable; other assistant requests use only the local API and Ollama.
 
 Useful checks:
 
@@ -109,18 +112,7 @@ npm test
 npm run build
 ```
 
-The deterministic system test starts a fake-model FastAPI server and a Next.js dev server, so it does not need Ollama:
-
-```powershell
-cd apps/web
-npm run test:system
-```
-
-Playwright may need its browser installed once:
-
-```powershell
-npx playwright install chromium
-```
+The deterministic backend and system tests inject fake model and disaster-information providers. They do not require Ollama, cloud credentials, or a live RSS response.
 
 ## Optional real-Qwen smoke test
 
@@ -135,12 +127,13 @@ The readiness response must report both `ollama_available: true` and `model_avai
 ## Troubleshooting
 
 - A `503` assistant response means Ollama is not reachable or the configured model is not installed. Check `ollama serve`, `ollama list`, `OLLAMA_BASE_URL`, and `OLLAMA_MODEL`.
+- A current earthquake-damage answer that says the latest information cannot be verified means the RSS request failed, returned malformed XML, or returned no matching reports. Check network access and the `DISASTER_NEWS_*` settings.
 - A frontend network error usually means the API is not running on port 8001 or `NEXT_PUBLIC_API_BASE_URL` is incorrect.
-- OpenStreetMap tiles are external map tiles, not a disaster-data provider. If tiles are unavailable, the assistant and API tests still work.
-- If Playwright cannot start, install Chromium with the command above and make sure both Node.js and `uv` are on `PATH`.
+- OpenStreetMap tiles are external map tiles, not a disaster-data provider.
+- If Playwright cannot start, install Chromium with `npx playwright install chromium` and make sure both Node.js and `uv` are on `PATH`.
 
 ## Extension guidance
 
 Add future capabilities by introducing a focused application port only when the capability is used. Keep provider calls in infrastructure adapters, translate them into application DTOs, and inject the adapter from `infrastructure/composition.py`. The frontend should receive typed transport data through a feature API client rather than calling providers from React components.
 
-See [docs/architecture.md](docs/architecture.md) for the current dependency direction.
+See [docs/architecture.md](docs/architecture.md) for the current dependency direction and [docs/current-earthquake-damage-capability.md](docs/current-earthquake-damage-capability.md) for the scoped implementation prompt.

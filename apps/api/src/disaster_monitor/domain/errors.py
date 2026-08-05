@@ -11,3 +11,7 @@ class ModelRuntimeError(RuntimeError):
 
 class ModelResponseError(RuntimeError):
     """Raised when the model runtime returns an unusable response."""
+
+
+class DisasterInformationRuntimeError(RuntimeError):
+    """Raised when current disaster information cannot be retrieved or parsed."""

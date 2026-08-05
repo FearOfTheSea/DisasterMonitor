@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from conftest import FakeLanguageModel
 
@@ -42,11 +44,18 @@ def test_normalize_question_rejects_empty_and_oversized_text() -> None:
 def test_prompt_preparation_is_deterministic_without_map_context() -> None:
     question = MapQuestion("Explain the map", "session")
 
-    request = prepare_model_request(question)
+    request = prepare_model_request(question, current_date=date(2026, 8, 5))
 
-    assert request == prepare_model_request(question)
+    assert request == prepare_model_request(
+        question,
+        current_date=date(2026, 8, 5),
+    )
     assert request.messages[1].content == (
-        "Map view context: unavailable.\nUser question: Explain the map"
+        "Runtime date: 2026-08-05.\n"
+        "Map view context: unavailable.\n"
+        "CURRENT DISASTER INFORMATION EVIDENCE\n"
+        "Status: not requested for this question.\n"
+        "User question: Explain the map"
     )
 
 

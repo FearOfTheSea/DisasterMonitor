@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     ollama_model: str = Field(default="qwen3:1.7b", min_length=1)
     ollama_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
     ollama_max_tokens: int = Field(default=512, ge=32, le=4096)
+    disaster_news_base_url: str = Field(
+        default="https://news.google.com/rss/search", min_length=1
+    )
+    disaster_news_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    disaster_news_max_items: int = Field(default=8, ge=1, le=20)
+    disaster_news_lookback_days: int = Field(default=30, ge=1, le=90)
 
     model_config = SettingsConfigDict(
         env_file=".env",
