@@ -16,6 +16,9 @@ sys.path.insert(0, str(script_directory))
 
 from disaster_monitor.main import create_app  # noqa: E402
 from disaster_monitor.infrastructure.configuration import Settings  # noqa: E402
+from disaster_monitor.infrastructure.disaster.composite import (  # noqa: E402
+    CompositeDisasterEventProvider,
+)
 from system_test_backend import (  # noqa: E402
     FakeSystemEventProvider,
     FakeSystemModel,
@@ -33,7 +36,8 @@ def main() -> int:
                 settings=Settings(allowed_origins="http://127.0.0.1:4173"),
                 model=FakeSystemModel(),
                 current_disaster_report=CurrentDisasterReportService(
-                    FakeSystemEventProvider(), FakeSystemSituationProvider()
+                    CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
+                    FakeSystemSituationProvider(),
                 ),
             ),
             host="127.0.0.1",

@@ -24,6 +24,8 @@ test-results/
 # Local configuration and runtime data
 .env
 !.env.example
+*.env.*
+!.env.example
 *.sqlite3
 *.db
 *.log

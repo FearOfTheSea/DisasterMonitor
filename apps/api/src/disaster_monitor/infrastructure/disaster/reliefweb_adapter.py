@@ -2,11 +2,13 @@
 
 import html
 import re
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 import httpx
 
 from disaster_monitor.application.disaster import (
+    CorrelationStatus,
     DisasterEvent,
     DisasterQuery,
     FactStatus,
@@ -16,6 +18,7 @@ from disaster_monitor.application.disaster import (
     SourceReference,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
+    correlate_situation_report,
     normalize_timestamp,
     sanitize_provider_text,
 )
@@ -56,6 +59,56 @@ def _nested_text(value: object) -> str:
             if result:
                 return result
     return ""
+
+
+def _metadata(
+    fields: dict[str, object],
+) -> tuple[datetime | None, tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """Extract only bounded event metadata from the ReliefWeb shape."""
+    event_time: datetime | None = None
+    event_ids: list[str] = []
+    locations: list[str] = []
+    countries: list[str] = []
+    disasters = fields.get("disaster")
+    items = disasters if isinstance(disasters, list) else [disasters]
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        identifier = _text(item.get("id"))
+        if identifier:
+            event_ids.append(f"reliefweb:{identifier}")
+        date_value = item.get("date")
+        if isinstance(date_value, dict):
+            date_value = date_value.get("occurred") or date_value.get("start")
+        parsed = normalize_timestamp(date_value)
+        if parsed is not None:
+            event_time = event_time or parsed
+    for key in ("location", "primary_location", "affected_location"):
+        value = fields.get(key)
+        if isinstance(value, list):
+            locations.extend(
+                item for item in (_nested_text(entry) for entry in value) if item
+            )
+        else:
+            value_text = _nested_text(value)
+            if value_text:
+                locations.append(value_text)
+    for key in ("country", "primary_country", "affected_country"):
+        value = fields.get(key)
+        if isinstance(value, list):
+            countries.extend(
+                item for item in (_nested_text(entry) for entry in value) if item
+            )
+        else:
+            value_text = _nested_text(value)
+            if value_text:
+                countries.append(value_text)
+    return (
+        event_time,
+        tuple(dict.fromkeys(locations)),
+        tuple(dict.fromkeys(countries)),
+        tuple(dict.fromkeys(event_ids)),
+    )
 
 
 def _find_number(text: str, expressions: tuple[str, ...]) -> str | None:
@@ -114,12 +167,23 @@ class ReliefWebSituationAdapter:
         *,
         now: datetime,
     ) -> ProviderBatch[SituationReport]:
+        query_terms = [query.hazard, query.geography, event.location]
+        if query.event_identifier:
+            query_terms.append(query.event_identifier)
+        if query.prefecture:
+            query_terms.append(query.prefecture)
+        if query.city:
+            query_terms.append(query.city)
+        if query.date_from and query.date_to:
+            query_terms.append(query.date_from.date().isoformat())
+        if query.magnitude is not None:
+            query_terms.append(f"magnitude {query.magnitude:g}")
         payload = await get_json(
             self._client,
             RELIEFWEB_REPORTS_URL,
             params={
                 "appname": self._app_name,
-                "query[value]": f"{query.hazard} {query.geography}",
+                "query[value]": " ".join(query_terms),
                 "limit": 20,
                 "sort[]": "date.created:desc",
             },
@@ -162,12 +226,26 @@ class ReliefWebSituationAdapter:
             raw_body = fields.get("body") or fields.get("description") or ""
             narrative = sanitize_provider_text(html.unescape(_text(raw_body)))
             facts = self._extract_facts(narrative, source, event, published_at)
+            reported_event_time, locations, countries, provider_event_ids = _metadata(
+                fields
+            )
+            report = SituationReport(
+                source=source,
+                narrative=narrative,
+                facts=tuple(facts),
+                reported_event_time=reported_event_time,
+                locations=locations,
+                countries=countries,
+                provider_event_ids=provider_event_ids,
+            )
+            status = correlate_situation_report(report, event)
             reports.append(
-                SituationReport(
-                    source=source,
-                    narrative=narrative,
-                    facts=tuple(facts),
-                    event_id=event.event_id,
+                replace(
+                    report,
+                    correlation=status,
+                    event_id=event.event_id
+                    if status == CorrelationStatus.MATCHED
+                    else None,
                 )
             )
         return ProviderBatch(records=tuple(reports))

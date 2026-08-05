@@ -63,6 +63,7 @@ class SelectedEventResponse(BaseModel):
     intensity: str | None = None
     depth_km: float | None = None
     source: SourceResponse
+    provider_ids: list[str] = Field(default_factory=list)
 
 
 class ReportSectionResponse(BaseModel):

@@ -33,9 +33,14 @@ function DisasterReportView({
 }) {
   return (
     <div className="disaster-report">
-      {report.partial && report.warnings.length > 0 && (
+      {report.partial && (
         <div className="report-warning" role="status">
-          {report.warnings.map((warning) => (
+          {(report.warnings.length > 0
+            ? report.warnings
+            : [
+                'This report is partial because reliable event-specific evidence was not available.',
+              ]
+          ).map((warning) => (
             <p key={warning}>{warning}</p>
           ))}
         </div>

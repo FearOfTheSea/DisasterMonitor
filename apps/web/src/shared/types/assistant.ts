@@ -54,6 +54,7 @@ export type SelectedEvent = {
   intensity?: string;
   depth_km?: number;
   source: AssistantSource;
+  provider_ids?: string[];
 };
 
 export type ReportSection = {

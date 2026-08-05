@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from html import unescape
 
 from disaster_monitor.application.disaster import (
+    CorrelationStatus,
     DisasterEvent,
     DisasterQuery,
     EvidencePacket,
@@ -61,6 +62,65 @@ def normalize_timestamp(value: object) -> datetime | None:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
+def correlate_situation_report(
+    report: SituationReport, event: DisasterEvent
+) -> CorrelationStatus:
+    """Conservatively classify whether a report describes the selected event."""
+    event_ids = {event.event_id.lower(), *(item.lower() for item in event.provider_ids)}
+    report_ids = {
+        item.lower() for item in (report.event_id, *report.provider_event_ids) if item
+    }
+    if report_ids & event_ids:
+        return CorrelationStatus.MATCHED
+    if report_ids:
+        return CorrelationStatus.UNMATCHED
+
+    if report.reported_event_time is not None:
+        time_delta = abs(
+            (report.reported_event_time - event.event_time).total_seconds()
+        )
+        date_matches = time_delta <= 48 * 60 * 60
+    else:
+        date_matches = False
+
+    source_text = " ".join(
+        (report.source.title, report.narrative, *report.locations, *report.countries)
+    ).lower()
+    event_location_words = {
+        word
+        for word in re.findall(r"[a-z][a-z-]{2,}", event.location.lower())
+        if word not in {"japan", "near", "prefecture", "island"}
+    }
+    location_matches = bool(
+        event_location_words
+        and any(word in source_text for word in event_location_words)
+    )
+    country_matches = any(
+        country.lower() in {"japan", "jpn"} for country in report.countries
+    )
+    magnitude_matches = (
+        report.magnitude is not None
+        and event.magnitude is not None
+        and abs(report.magnitude - event.magnitude) <= 0.3
+    )
+    if date_matches and location_matches:
+        return CorrelationStatus.MATCHED
+    if (date_matches and (country_matches or magnitude_matches)) or location_matches:
+        return CorrelationStatus.POSSIBLE
+    return CorrelationStatus.UNMATCHED
+
+
+def _has_correlation_metadata(report: SituationReport) -> bool:
+    return bool(
+        report.event_id
+        or report.provider_event_ids
+        or report.reported_event_time
+        or report.locations
+        or report.countries
+        or report.magnitude is not None
+    )
+
+
 def _source_key(source: SourceReference) -> str:
     return source.canonical_url.rstrip("/").lower()
 
@@ -106,11 +166,33 @@ def build_evidence_packet(
 ) -> EvidencePacket:
     """Reconcile duplicate, newer, missing, and conflicting provider facts."""
     reports = _deduplicate_reports(reports)
+    correlated_reports: list[SituationReport] = []
+    correlation_warnings: list[str] = []
+    for report in reports:
+        status = report.correlation or correlate_situation_report(report, event)
+        if report.correlation is not None or _has_correlation_metadata(report):
+            if status == CorrelationStatus.MATCHED:
+                correlated_reports.append(report)
+            elif status == CorrelationStatus.POSSIBLE:
+                correlation_warnings.append(
+                    f"A {report.source.publisher} report may describe a different "
+                    "earthquake and was excluded from event facts."
+                )
+            else:
+                correlation_warnings.append(
+                    f"A {report.source.publisher} report did not match the selected "
+                    "earthquake and was excluded."
+                )
+        else:
+            correlated_reports.append(report)
+    reports = tuple(correlated_reports)
     candidates: dict[str, list[ReportedFact]] = {}
     for report in reports:
         for fact in report.facts:
             safe_value = sanitize_provider_text(fact.value, limit=240)
             if not safe_value:
+                continue
+            if fact.event_id and not event.has_provider_id(fact.event_id):
                 continue
             normalized = ReportedFact(
                 category=fact.category,
@@ -155,12 +237,72 @@ def build_evidence_packet(
         ("Some source updates are stale (more than 24 hours old).",) if stale else ()
     )
     narratives = tuple(
-        narrative
-        for narrative in (
-            sanitize_provider_text(report.narrative) for report in reports
-        )
-        if narrative
+        f"{narrative} Source: {report.source.publisher} — {report.source.title} "
+        f"({report.source.canonical_url})"
+        for report in reports
+        if (narrative := sanitize_provider_text(report.narrative))
     )
+    impact_categories = {
+        "fatalities",
+        "injuries",
+        "missing",
+        "evacuations",
+        "shelters",
+        "buildings",
+        "fires",
+        "landslides",
+        "roads",
+        "rail",
+        "airports",
+        "ports",
+        "utilities",
+        "communications",
+        "critical_facilities",
+        "damage_status",
+        "tsunami",
+        "response",
+        "government_response",
+        "emergency_response",
+    }
+    has_impact_facts = any(fact.category in impact_categories for fact in selected)
+    has_impact_narrative = any(
+        re.search(
+            r"\b(?:damage|damaged|destroyed|closed|blocked|outage|shelter|rescue|"
+            r"evacu|injur|killed|fatalit|inspection|closure|disrupt)",
+            report.narrative,
+            re.IGNORECASE,
+        )
+        for report in reports
+    )
+    non_stale_warnings = tuple(
+        warning
+        for warning in (*warnings, *correlation_warnings)
+        if "stale" not in warning.lower()
+    )
+    if not reports:
+        completeness = "event_verified_no_situation_evidence"
+        completeness_warning = (
+            "No reliable event-specific damage or situation information was found; "
+            "this does not mean that no damage occurred."
+        )
+    elif not has_impact_facts and not has_impact_narrative:
+        completeness = "event_verified_no_relevant_impact_evidence"
+        completeness_warning = (
+            "Situation reports were retrieved, but no reliable event-specific damage "
+            "or impact evidence was found; this does not mean that no damage occurred."
+        )
+    elif non_stale_warnings:
+        completeness = "event_verified_partial_provider_success"
+        completeness_warning = (
+            "Some configured situation sources did not provide usable data."
+        )
+    else:
+        completeness = "event_verified_with_event_specific_evidence"
+        completeness_warning = None
+    packet_warnings = list(dict.fromkeys((*warnings, *correlation_warnings)))
+    if completeness_warning:
+        packet_warnings.append(completeness_warning)
+    partial = completeness != "event_verified_with_event_specific_evidence"
     return EvidencePacket(
         query=query,
         event=event,
@@ -168,7 +310,9 @@ def build_evidence_packet(
         narratives=narratives[:6],
         sources=tuple(sources[:10]),
         conflicts=tuple(conflicts[:8]),
-        warnings=tuple(dict.fromkeys((*warnings, *stale_warning))),
+        warnings=tuple(dict.fromkeys((*packet_warnings, *stale_warning))),
         retrieved_at=retrieved_at,
         stale=stale,
+        completeness=completeness,
+        partial=partial,
     )

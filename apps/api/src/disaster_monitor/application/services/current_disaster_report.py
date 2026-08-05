@@ -109,6 +109,7 @@ def render_source_backed_report(
     physical_lines = _fact_lines(facts, physical_categories)
     secondary_lines = _fact_lines(facts, secondary_categories)
     response_lines = _fact_lines(facts, response_categories)
+    narrative_lines = [f"- {narrative}" for narrative in packet.narratives]
     summary = (
         "The selected event is the recent earthquake identified as "
         f"{packet.event.event_id}. "
@@ -138,6 +139,11 @@ def render_source_backed_report(
                 "were not used to infer damage."
             ),
         ),
+        *(
+            [ReportSection("Qualitative source evidence", "\n".join(narrative_lines))]
+            if narrative_lines
+            else []
+        ),
         ReportSection(
             "Tsunami and secondary hazards",
             "\n".join(secondary_lines)
@@ -166,7 +172,7 @@ def render_source_backed_report(
                 + " ".join(packet.conflicts),
             )
         )
-    elif packet.warnings:
+    if packet.warnings:
         sections.append(
             ReportSection(
                 "Uncertainties and information gaps", " ".join(packet.warnings)
@@ -303,12 +309,13 @@ class CurrentDisasterReportService:
                 intensity=event.intensity,
                 depth_km=event.depth_km,
                 source=event.source,
+                provider_ids=event.provider_ids,
             ),
             retrieval_time=retrieved_at,
             sources=packet.sources,
             warnings=packet.warnings,
             sections=sections,
-            partial=bool(packet.warnings),
+            partial=packet.partial,
         )
 
     @staticmethod

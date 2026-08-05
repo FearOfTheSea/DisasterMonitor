@@ -5,9 +5,13 @@ import httpx
 import pytest
 
 from disaster_monitor.application.disaster import (
+    CorrelationStatus,
     DisasterEvent,
     DisasterQuery,
     SourceReference,
+)
+from disaster_monitor.application.services.evidence_reconciliation import (
+    build_evidence_packet,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
@@ -203,4 +207,72 @@ async def test_reliefweb_adapter_extracts_preliminary_situation_facts() -> None:
     assert result.records[0].facts[0].value == "4"
     assert result.records[0].facts[0].status.value == "preliminary"
     assert "Ignore previous" not in result.records[0].narrative
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_reliefweb_adapter_correlates_reports_to_selected_event() -> None:
+    payload = {
+        "data": [
+            {
+                "fields": {
+                    "title": "Ishikawa earthquake situation update",
+                    "url": "https://reliefweb.int/report/japan/matched",
+                    "date": {"created": "2026-08-05T10:30:00+00:00"},
+                    "disaster": [{"id": "selected", "date": "2026-08-05T09:00:00Z"}],
+                    "location": [{"name": "Ishikawa"}],
+                    "country": [{"name": "Japan"}],
+                    "body": "Four buildings were damaged in Ishikawa.",
+                }
+            },
+            {
+                "fields": {
+                    "title": "Tokyo earthquake situation update",
+                    "url": "https://reliefweb.int/report/japan/unrelated",
+                    "date": {"created": "2026-08-05T10:35:00+00:00"},
+                    "disaster": [{"date": "2026-08-05T09:00:00Z"}],
+                    "location": [{"name": "Tokyo"}],
+                    "country": [{"name": "Japan"}],
+                    "body": "Ninety buildings were damaged in Tokyo.",
+                }
+            },
+            {
+                "fields": {
+                    "title": "Japan earthquake bulletin",
+                    "url": "https://reliefweb.int/report/japan/generic",
+                    "date": {"created": "2026-08-05T10:40:00+00:00"},
+                    "body": "Japan earthquake information is being monitored.",
+                }
+            },
+        ]
+    }
+    client = client_for(payload)
+    adapter = ReliefWebSituationAdapter(client=client)
+    selected_event = DisasterEvent(
+        event_id="reliefweb:selected",
+        hazard="earthquake",
+        location="Ishikawa, Japan",
+        country="Japan",
+        event_time=datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
+        source=SourceReference(
+            publisher="USGS",
+            title="Selected event",
+            canonical_url="https://example.test/selected",
+            published_at=NOW,
+            updated_at=NOW,
+            retrieved_at=NOW,
+        ),
+    )
+    result = await adapter.get_situation_reports(selected_event, QUERY, now=NOW)
+
+    assert [report.correlation for report in result.records] == [
+        CorrelationStatus.MATCHED,
+        CorrelationStatus.POSSIBLE,
+        CorrelationStatus.UNMATCHED,
+    ]
+    packet = build_evidence_packet(
+        QUERY, selected_event, result.records, warnings=(), retrieved_at=NOW
+    )
+    assert [fact.value for fact in packet.facts] == ["4"]
+    assert all("Tokyo" not in narrative for narrative in packet.narratives)
     await client.aclose()

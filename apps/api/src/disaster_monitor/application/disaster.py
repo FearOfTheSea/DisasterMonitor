@@ -29,6 +29,14 @@ class FactStatus(StrEnum):
     UNKNOWN = "unknown"
 
 
+class CorrelationStatus(StrEnum):
+    """How strongly a situation record is tied to the selected event."""
+
+    MATCHED = "matched"
+    POSSIBLE = "possible"
+    UNMATCHED = "unmatched"
+
+
 @dataclass(frozen=True, slots=True)
 class DisasterQuery:
     """Normalized user intent for a bounded current-disaster lookup."""
@@ -85,6 +93,25 @@ class DisasterEvent:
     significance: float | None = None
     is_aftershock: bool = False
     parent_event_id: str | None = None
+    sequence_id: str | None = None
+    provider_ids: tuple[str, ...] = ()
+
+    def has_provider_id(self, value: str) -> bool:
+        """Return whether a provider-specific identifier belongs to this event."""
+        normalized = value.lower()
+        identifiers = {
+            item.lower().removeprefix("jma:").removeprefix("usgs:")
+            for item in (self.event_id, *self.provider_ids)
+        }
+        return normalized.removeprefix("jma:").removeprefix("usgs:") in identifiers
+
+    @property
+    def jma_event_id(self) -> str | None:
+        """Return the preserved JMA identifier, if one was clustered here."""
+        for value in (self.event_id, *self.provider_ids):
+            if value.lower().startswith("jma:"):
+                return value.removeprefix("jma:")
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +136,12 @@ class SituationReport:
     narrative: str
     facts: tuple[ReportedFact, ...] = ()
     event_id: str | None = None
+    correlation: CorrelationStatus | None = None
+    reported_event_time: datetime | None = None
+    locations: tuple[str, ...] = ()
+    countries: tuple[str, ...] = ()
+    magnitude: float | None = None
+    provider_event_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +173,8 @@ class EvidencePacket:
     warnings: tuple[str, ...]
     retrieved_at: datetime
     stale: bool
+    completeness: str = "partial"
+    partial: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +197,7 @@ class SelectedEventSummary:
     intensity: str | None
     depth_km: float | None
     source: SourceReference
+    provider_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

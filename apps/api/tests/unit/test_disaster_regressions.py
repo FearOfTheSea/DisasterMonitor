@@ -1,0 +1,305 @@
+from datetime import UTC, datetime, timedelta
+
+import httpx
+import pytest
+
+from disaster_monitor.application.disaster import (
+    CorrelationStatus,
+    DisasterEvent,
+    DisasterQuery,
+    FactStatus,
+    ReportedFact,
+    SituationReport,
+    SourceReference,
+)
+from disaster_monitor.application.services.current_disaster_report import (
+    CurrentDisasterReportService,
+    render_source_backed_report,
+)
+from disaster_monitor.application.services.disaster_query import (
+    extract_disaster_query,
+)
+from disaster_monitor.application.services.event_resolution import (
+    resolve_recent_event,
+)
+from disaster_monitor.application.services.evidence_reconciliation import (
+    build_evidence_packet,
+    correlate_situation_report,
+)
+from disaster_monitor.infrastructure.disaster.composite import (
+    cluster_physical_events,
+)
+from disaster_monitor.infrastructure.disaster.errors import (
+    DisasterProviderResponseError,
+)
+from disaster_monitor.infrastructure.disaster.http import get_json
+
+NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
+
+
+def _source(publisher: str, title: str) -> SourceReference:
+    return SourceReference(
+        publisher=publisher,
+        title=title,
+        canonical_url=f"https://example.test/{title.replace(' ', '-')}",
+        published_at=NOW,
+        updated_at=NOW,
+        retrieved_at=NOW,
+    )
+
+
+def _event(
+    event_id: str,
+    *,
+    hours_old: int = 2,
+    location: str = "Ishikawa, Japan",
+    latitude: float = 37.0,
+    longitude: float = 137.0,
+    magnitude: float = 6.0,
+    aftershock: bool = False,
+    parent_event_id: str | None = None,
+) -> DisasterEvent:
+    return DisasterEvent(
+        event_id=event_id,
+        hazard="earthquake",
+        location=location,
+        country="Japan",
+        event_time=NOW - timedelta(hours=hours_old),
+        source=_source("USGS", event_id),
+        latitude=latitude,
+        longitude=longitude,
+        magnitude=magnitude,
+        significance=magnitude * 100,
+        is_aftershock=aftershock,
+        parent_event_id=parent_event_id,
+        provider_ids=(event_id,),
+    )
+
+
+def _query(**kwargs: object) -> DisasterQuery:
+    values: dict[str, object] = {
+        "hazard": "earthquake",
+        "geography": "Japan",
+        "country_code": "JPN",
+        "time_intent": "recent",
+        "focus": ("damage",),
+    }
+    values.update(kwargs)
+    return DisasterQuery(**values)  # type: ignore[arg-type]
+
+
+def test_date_and_each_event_discriminator_narrows_resolution() -> None:
+    query = extract_disaster_query(
+        "Latest earthquake in Japan on 2026-08-05 in Ishikawa Prefecture "
+        "near Kanazawa City at 37.0, 137.0, magnitude 6.0."
+    )
+    assert query is not None
+    assert query.date_from is not None and query.date_to is not None
+    assert query.date_to > query.date_from
+    assert query.prefecture == "Ishikawa"
+    assert query.city == "Kanazawa"
+    assert query.latitude == 37.0
+    assert query.longitude == 137.0
+    assert query.magnitude == 6.0
+
+    candidates = (
+        _event("target", location="Ishikawa, Japan"),
+        _event(
+            "other",
+            hours_old=30,
+            location="Tokyo, Japan",
+            latitude=35.7,
+            longitude=139.7,
+            magnitude=5.0,
+        ),
+    )
+    selected = resolve_recent_event(
+        candidates,
+        _query(date_from=query.date_from, date_to=query.date_to),
+        now=NOW,
+    )
+    assert selected.selected == candidates[0]
+
+    assert (
+        resolve_recent_event(
+            candidates,
+            _query(prefecture="Ishikawa"),
+            now=NOW,
+        ).selected
+        == candidates[0]
+    )
+    assert (
+        resolve_recent_event(
+            candidates,
+            _query(city="Tokyo"),
+            now=NOW,
+        ).selected
+        == candidates[1]
+    )
+    assert (
+        resolve_recent_event(
+            candidates,
+            _query(latitude=35.7, longitude=139.7),
+            now=NOW,
+        ).selected
+        == candidates[1]
+    )
+    assert (
+        resolve_recent_event(
+            candidates,
+            _query(magnitude=5.0),
+            now=NOW,
+        ).selected
+        == candidates[1]
+    )
+    assert (
+        resolve_recent_event(
+            candidates,
+            _query(event_identifier="other"),
+            now=NOW,
+        ).selected
+        == candidates[1]
+    )
+
+
+def test_event_sequence_requires_more_than_an_aftershock_label() -> None:
+    mainshock = _event("mainshock", hours_old=8, magnitude=6.8)
+    nearby_aftershock = _event(
+        "aftershock", hours_old=1, magnitude=4.2, latitude=37.1, aftershock=True
+    )
+    distant_aftershock = _event(
+        "distant-aftershock",
+        hours_old=1,
+        magnitude=4.2,
+        latitude=43.0,
+        longitude=145.0,
+        aftershock=True,
+    )
+    old_aftershock = _event(
+        "old-aftershock",
+        hours_old=100,
+        magnitude=4.2,
+        aftershock=True,
+        parent_event_id="mainshock",
+    )
+    assert (
+        resolve_recent_event(
+            (mainshock, nearby_aftershock), _query(), now=NOW
+        ).ambiguous
+        is False
+    )
+    assert resolve_recent_event(
+        (mainshock, distant_aftershock), _query(), now=NOW
+    ).ambiguous
+    assert (
+        resolve_recent_event((mainshock, old_aftershock), _query(), now=NOW).selected
+        == mainshock
+    )
+
+
+def test_jma_and_usgs_observations_are_one_event_with_both_ids() -> None:
+    jma = _event("jma:20260805100000", magnitude=5.9)
+    usgs = _event("usgs:us7000fixture", magnitude=6.0)
+    normalized = cluster_physical_events((jma, usgs))
+    assert len(normalized) == 1
+    assert set(normalized[0].provider_ids) == {
+        "jma:20260805100000",
+        "usgs:us7000fixture",
+    }
+    assert normalized[0].jma_event_id == "20260805100000"
+
+
+def test_rejected_report_cannot_contribute_facts_and_narrative_is_preserved() -> None:
+    event = _event("usgs:target")
+    good_source = _source("ReliefWeb", "Ishikawa update")
+    bad_source = _source("ReliefWeb", "Tokyo update")
+    good = SituationReport(
+        source=good_source,
+        narrative="A named airport closed and shelters opened in Ishikawa.",
+        facts=(
+            ReportedFact(
+                category="airports",
+                label="Airport closure",
+                value="closed",
+                status=FactStatus.PRELIMINARY,
+                source=good_source,
+            ),
+        ),
+        correlation=CorrelationStatus.MATCHED,
+        event_id=event.event_id,
+    )
+    bad = SituationReport(
+        source=bad_source,
+        narrative="Tokyo airport closed after another Japan earthquake.",
+        facts=(
+            ReportedFact(
+                category="airports",
+                label="Airport closure",
+                value="Tokyo airport closed",
+                status=FactStatus.CONFIRMED,
+                source=bad_source,
+            ),
+        ),
+        correlation=CorrelationStatus.UNMATCHED,
+    )
+    assert correlate_situation_report(bad, event) == CorrelationStatus.UNMATCHED
+    packet = build_evidence_packet(
+        _query(), event, (good, bad), warnings=(), retrieved_at=NOW
+    )
+    message, _ = render_source_backed_report(packet)
+    assert "Tokyo airport" not in message
+    assert "airport closed" in message
+    assert good_source.canonical_url in message
+
+
+@pytest.mark.asyncio
+async def test_event_without_situation_records_is_explicitly_partial() -> None:
+    class Events:
+        async def find_recent_events(self, _query, *, now):
+            return (_event("usgs:verified"),)
+
+    class NoSituation:
+        async def get_situation_reports(self, _event, _query, *, now):
+            return ()
+
+    result = await CurrentDisasterReportService(
+        Events(), NoSituation(), clock=lambda: NOW
+    ).execute("There was a recent earthquake in Japan. Please provide an update.")
+    assert result.selected_event is not None
+    assert result.partial is True
+    assert any("does not mean" in warning for warning in result.warnings)
+
+
+class _TrackingStream(httpx.AsyncByteStream):
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+        self.reads = 0
+
+    async def __aiter__(self):
+        for chunk in self.chunks:
+            self.reads += 1
+            yield chunk
+
+    async def aclose(self) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_http_rejects_oversize_before_reading_and_stops_chunked_read() -> None:
+    declared = _TrackingStream([b"never read"])
+    chunked = _TrackingStream([b"{}", b"more data that must not be read"])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        stream = declared if request.url.path.endswith("declared") else chunked
+        headers = {"content-type": "application/json"}
+        if stream is declared:
+            headers["content-length"] = "100"
+        return httpx.Response(200, headers=headers, stream=stream, request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(DisasterProviderResponseError, match="size limit"):
+            await get_json(client, "https://example.test/declared", max_bytes=10)
+        with pytest.raises(DisasterProviderResponseError, match="size limit"):
+            await get_json(client, "https://example.test/chunked", max_bytes=2)
+    assert declared.reads == 0
+    assert chunked.reads == 2

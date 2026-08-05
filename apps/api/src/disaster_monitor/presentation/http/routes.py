@@ -101,6 +101,7 @@ async def assistant(
                 magnitude=selected_event.magnitude,
                 intensity=selected_event.intensity,
                 depth_km=selected_event.depth_km,
+                provider_ids=list(selected_event.provider_ids),
                 source=SourceResponse(
                     publisher=selected_event.source.publisher,
                     title=selected_event.source.title,

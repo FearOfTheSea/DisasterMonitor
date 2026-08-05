@@ -1,7 +1,9 @@
 """Explicit recent-event selection rules."""
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from math import asin, cos, radians, sin, sqrt
 
 from disaster_monitor.application.disaster import DisasterEvent, DisasterQuery
 
@@ -16,31 +18,86 @@ class EventResolution:
     rationale: str
 
 
-def _score(event: DisasterEvent, now: datetime) -> float:
+def _distance_km(first: DisasterEvent, second: DisasterEvent) -> float | None:
+    if None in (first.latitude, first.longitude, second.latitude, second.longitude):
+        return None
+    first_lat = radians(first.latitude or 0)
+    second_lat = radians(second.latitude or 0)
+    delta_lat = radians((second.latitude or 0) - (first.latitude or 0))
+    delta_lon = radians((second.longitude or 0) - (first.longitude or 0))
+    value = (
+        sin(delta_lat / 2) ** 2
+        + cos(first_lat) * cos(second_lat) * sin(delta_lon / 2) ** 2
+    )
+    return 6371 * 2 * asin(sqrt(value))
+
+
+def _location_matches(event: DisasterEvent, value: str) -> bool:
+    wanted = re.sub(r"[^a-z0-9]+", " ", value.lower()).split()
+    actual = re.sub(r"[^a-z0-9]+", " ", event.location.lower()).split()
+    return bool(wanted) and all(token in actual for token in wanted)
+
+
+def _score(event: DisasterEvent, query: DisasterQuery, now: datetime) -> float:
     age_hours = max(0.0, (now - event.event_time).total_seconds() / 3600)
     recency = max(0.0, 1.0 - age_hours / (30 * 24))
     magnitude = event.magnitude or 0.0
     significance = (event.significance or 0.0) / 1_000
     aftershock_penalty = 3.0 if event.is_aftershock else 0.0
-    return recency * 2.0 + magnitude * 1.3 + significance - aftershock_penalty
+    discriminator_bonus = 0.0
+    if query.prefecture and _location_matches(event, query.prefecture):
+        discriminator_bonus += 8.0
+    if query.city and _location_matches(event, query.city):
+        discriminator_bonus += 8.0
+    if query.latitude is not None and query.longitude is not None:
+        distance = _distance_to_coordinates(event, query.latitude, query.longitude)
+        if distance is not None:
+            discriminator_bonus += max(0.0, 8.0 - distance / 25.0)
+    if query.magnitude is not None and event.magnitude is not None:
+        discriminator_bonus += max(
+            0.0, 4.0 - abs(event.magnitude - query.magnitude) * 8
+        )
+    return (
+        recency * 2.0
+        + magnitude * 1.3
+        + significance
+        + discriminator_bonus
+        - aftershock_penalty
+    )
+
+
+def _distance_to_coordinates(
+    event: DisasterEvent, latitude: float, longitude: float
+) -> float | None:
+    if event.latitude is None or event.longitude is None:
+        return None
+    first_lat = radians(event.latitude)
+    second_lat = radians(latitude)
+    delta_lat = radians(latitude - event.latitude)
+    delta_lon = radians(longitude - event.longitude)
+    value = (
+        sin(delta_lat / 2) ** 2
+        + cos(first_lat) * cos(second_lat) * sin(delta_lon / 2) ** 2
+    )
+    return 6371 * 2 * asin(sqrt(value))
 
 
 def _same_sequence(first: DisasterEvent, second: DisasterEvent) -> bool:
-    if first.parent_event_id and first.parent_event_id == second.event_id:
+    first_ids = {first.event_id, *first.provider_ids}
+    second_ids = {second.event_id, *second.provider_ids}
+    if first.parent_event_id and first.parent_event_id in second_ids:
         return True
-    if second.parent_event_id and second.parent_event_id == first.event_id:
+    if second.parent_event_id and second.parent_event_id in first_ids:
         return True
-    if first.is_aftershock != second.is_aftershock:
+    if first.sequence_id and first.sequence_id == second.sequence_id:
         return True
-    if first.latitude is None or second.latitude is None:
+    if not (first.is_aftershock or second.is_aftershock):
         return False
-    if first.longitude is None or second.longitude is None:
+    distance = _distance_km(first, second)
+    if distance is None:
         return False
-    distance = abs(first.latitude - second.latitude) + abs(
-        first.longitude - second.longitude
-    )
     return (
-        distance <= 1.5
+        distance <= 50
         and abs((first.event_time - second.event_time).total_seconds()) <= 48 * 3600
     )
 
@@ -52,31 +109,43 @@ def resolve_recent_event(
     now: datetime,
 ) -> EventResolution:
     """Filter, rank, and detect ambiguity without model-driven routing."""
-    window_start = now - timedelta(days=query.time_window_days)
+    window_start = query.date_from or now - timedelta(days=query.time_window_days)
+    window_end = query.date_to or now + timedelta(minutes=5)
     filtered = [
         event
         for event in candidates
         if event.hazard == query.hazard
         and event.country.lower() == query.geography.lower()
-        and window_start <= event.event_time <= now + timedelta(minutes=5)
+        and window_start <= event.event_time <= window_end
         and (
             query.event_identifier is None
-            or query.event_identifier.lower() in event.event_id.lower()
+            or event.has_provider_id(query.event_identifier)
         )
-        and (query.magnitude is None or (event.magnitude or 0) >= query.magnitude - 0.1)
+        and (
+            query.magnitude is None
+            or (
+                event.magnitude is not None
+                and abs(event.magnitude - query.magnitude) <= 0.25
+            )
+        )
     ]
+    if query.prefecture:
+        filtered = [
+            event for event in filtered if _location_matches(event, query.prefecture)
+        ]
+    if query.city:
+        filtered = [event for event in filtered if _location_matches(event, query.city)]
     if query.latitude is not None and query.longitude is not None:
+        distances = [
+            (event, _distance_to_coordinates(event, query.latitude, query.longitude))
+            for event in filtered
+        ]
         filtered = [
             event
-            for event in filtered
-            if event.latitude is None
-            or (
-                abs(event.latitude - query.latitude) <= 5
-                and event.longitude is not None
-                and abs(event.longitude - query.longitude) <= 5
-            )
+            for event, distance in distances
+            if distance is not None and distance <= 150
         ]
-    ranked = sorted(filtered, key=lambda item: _score(item, now), reverse=True)
+    ranked = sorted(filtered, key=lambda item: _score(item, query, now), reverse=True)
     if not ranked:
         return EventResolution(
             None, (), False, "No candidate matched the bounded query window."
@@ -87,9 +156,9 @@ def resolve_recent_event(
     ambiguous = False
     if len(ranked) > 1:
         second = ranked[1]
-        score_gap = _score(selected, now) - _score(second, now)
+        score_gap = _score(selected, query, now) - _score(second, query, now)
         unrelated = not _same_sequence(selected, second)
-        ambiguous = unrelated and score_gap < 0.6
+        ambiguous = unrelated and (score_gap < 0.6 or second.is_aftershock)
     rationale = (
         "Selected the most significant recent candidate, accounting for recency and "
         "penalizing likely aftershocks."

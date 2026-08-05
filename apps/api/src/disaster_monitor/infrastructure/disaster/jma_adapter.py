@@ -86,7 +86,8 @@ class JmaEarthquakeAdapter:
                 "The JMA earthquake response was not a list."
             )
         events: list[DisasterEvent] = []
-        start = now - timedelta(days=query.time_window_days)
+        start = query.date_from or now - timedelta(days=query.time_window_days)
+        end = query.date_to or now + timedelta(minutes=5)
         for item in payload[:200]:
             if not isinstance(item, dict):
                 continue
@@ -95,7 +96,7 @@ class JmaEarthquakeAdapter:
             event_id = _safe_string(item.get("eid"))
             if not event_id or event_time is None or not _is_japan(latitude, longitude):
                 continue
-            if not start <= event_time <= now + timedelta(minutes=5):
+            if not start <= event_time <= end:
                 continue
             location = _safe_string(item.get("en_anm")) or _safe_string(item.get("anm"))
             published_at = normalize_timestamp(item.get("rdt")) or event_time
@@ -135,6 +136,7 @@ class JmaEarthquakeAdapter:
                     depth_km=depth_km,
                     significance=(magnitude or 0) * 100,
                     is_aftershock="aftershock" in location.lower(),
+                    provider_ids=(f"jma:{event_id}",),
                 )
             )
         return ProviderBatch(records=tuple(events))
@@ -176,7 +178,9 @@ class JmaTsunamiSituationAdapter:
             raise DisasterProviderResponseError(
                 "The JMA tsunami response was not a list."
             )
-        raw_event_id = event.event_id.removeprefix("jma:")
+        raw_event_id = event.jma_event_id
+        if raw_event_id is None:
+            return ProviderBatch(records=())
         reports: list[SituationReport] = []
         for item in payload[:200]:
             if (

@@ -66,6 +66,11 @@ class UsgsEarthquakeAdapter:
         }
         if query.magnitude is not None:
             params["minmagnitude"] = query.magnitude - 0.1
+        if query.latitude is not None and query.longitude is not None:
+            params["minlatitude"] = max(20, query.latitude - 2)
+            params["maxlatitude"] = min(46, query.latitude + 2)
+            params["minlongitude"] = max(122, query.longitude - 2)
+            params["maxlongitude"] = min(154, query.longitude + 2)
         payload = await get_json(
             self._client,
             USGS_QUERY_URL,
@@ -147,6 +152,7 @@ class UsgsEarthquakeAdapter:
                     significance=_number(properties.get("sig")),
                     is_aftershock="aftershock"
                     in _text(properties.get("title")).lower(),
+                    provider_ids=(f"usgs:{event_id}",),
                 )
             )
         return ProviderBatch(records=tuple(events))

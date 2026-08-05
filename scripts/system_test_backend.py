@@ -41,12 +41,28 @@ class FakeSystemModel:
 
 class FakeSystemEventProvider:
     async def find_recent_events(self, _query, *, now):
-        source = SourceReference(
+        jma_source = SourceReference(
             publisher="JMA fixture",
-            title="Deterministic Japan earthquake event",
-            canonical_url="https://example.test/system-event",
+            title="Deterministic JMA Japan earthquake event",
+            canonical_url="https://example.test/system-jma-event",
             published_at=now - timedelta(hours=2),
             updated_at=now - timedelta(minutes=10),
+            retrieved_at=now,
+        )
+        usgs_source = SourceReference(
+            publisher="USGS fixture",
+            title="Deterministic USGS Japan earthquake event",
+            canonical_url="https://example.test/system-usgs-event",
+            published_at=now - timedelta(hours=2),
+            updated_at=now - timedelta(minutes=5),
+            retrieved_at=now,
+        )
+        unrelated_source = SourceReference(
+            publisher="USGS fixture",
+            title="Unrelated Tokyo earthquake event",
+            canonical_url="https://example.test/system-unrelated-event",
+            published_at=now - timedelta(hours=3),
+            updated_at=now - timedelta(minutes=5),
             retrieved_at=now,
         )
         return ProviderBatch(
@@ -57,12 +73,41 @@ class FakeSystemEventProvider:
                     location="Ishikawa, Japan",
                     country="Japan",
                     event_time=now - timedelta(hours=2),
-                    source=source,
+                    source=jma_source,
                     latitude=37.0,
                     longitude=137.0,
-                    magnitude=6.1,
+                    magnitude=6.0,
                     intensity="JMA 6-",
                     depth_km=12,
+                    significance=400,
+                    provider_ids=("jma:system-fixture",),
+                ),
+                DisasterEvent(
+                    event_id="usgs:system-fixture",
+                    hazard="earthquake",
+                    location="Ishikawa, Japan",
+                    country="Japan",
+                    event_time=now - timedelta(hours=2),
+                    source=usgs_source,
+                    latitude=37.02,
+                    longitude=137.01,
+                    magnitude=6.1,
+                    depth_km=11,
+                    significance=600,
+                    provider_ids=("usgs:system-fixture",),
+                ),
+                DisasterEvent(
+                    event_id="usgs:unrelated",
+                    hazard="earthquake",
+                    location="Tokyo, Japan",
+                    country="Japan",
+                    event_time=now - timedelta(hours=3),
+                    source=unrelated_source,
+                    latitude=35.7,
+                    longitude=139.7,
+                    magnitude=5.8,
+                    significance=500,
+                    provider_ids=("usgs:unrelated",),
                 ),
             )
         )
@@ -82,7 +127,10 @@ class FakeSystemSituationProvider:
             (
                 SituationReport(
                     source=source,
-                    narrative="Four buildings were damaged in the affected area.",
+                    narrative=(
+                        "Four buildings were damaged in Ishikawa; an airport closure "
+                        "was reported while officials inspected the area."
+                    ),
                     facts=(
                         ReportedFact(
                             category="buildings",
@@ -95,6 +143,41 @@ class FakeSystemSituationProvider:
                         ),
                     ),
                     event_id=event.event_id,
+                ),
+                SituationReport(
+                    source=SourceReference(
+                        publisher="JMA tsunami fixture",
+                        title="Official tsunami status for system event",
+                        canonical_url="https://example.test/system-tsunami",
+                        published_at=now - timedelta(minutes=4),
+                        updated_at=now - timedelta(minutes=3),
+                        retrieved_at=now,
+                    ),
+                    narrative="No tsunami warning was issued for the selected event.",
+                    facts=(
+                        ReportedFact(
+                            category="tsunami",
+                            label="Tsunami status",
+                            value="No tsunami warning issued",
+                            status=FactStatus.CONFIRMED,
+                            source=SourceReference(
+                                publisher="JMA tsunami fixture",
+                                title="Official tsunami status for system event",
+                                canonical_url="https://example.test/system-tsunami",
+                                published_at=now - timedelta(minutes=4),
+                                updated_at=now - timedelta(minutes=3),
+                                retrieved_at=now,
+                            ),
+                            event_id="jma:system-fixture",
+                            claim_id="tsunami-status",
+                        ),
+                    ),
+                    event_id="jma:system-fixture",
+                ),
+                SituationReport(
+                    source=source,
+                    narrative="Tokyo suffered unrelated damage after another quake.",
+                    event_id="usgs:unrelated",
                 ),
             )
         )
