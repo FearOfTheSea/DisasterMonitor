@@ -13,6 +13,7 @@ from disaster_monitor.application.disaster import (
     DisasterQuery,
     FactStatus,
     ProviderBatch,
+    ProviderIssue,
     ReportedFact,
     SituationReport,
     SourceReference,
@@ -25,7 +26,7 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
-from disaster_monitor.infrastructure.disaster.http import get_json
+from disaster_monitor.infrastructure.disaster.http import HttpParam, get_json
 
 RELIEFWEB_REPORTS_URL = "https://api.reliefweb.int/v2/reports"
 _NUMBER = (
@@ -150,7 +151,7 @@ class ReliefWebSituationAdapter:
     def __init__(
         self,
         *,
-        app_name: str = "disaster-monitor-local",
+        app_name: str | None = None,
         client: httpx.AsyncClient | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 1_000_000,
@@ -160,6 +161,20 @@ class ReliefWebSituationAdapter:
         self._owns_client = client is None
         self._max_response_bytes = max_response_bytes
 
+    @property
+    def configured(self) -> bool:
+        """Return whether an explicitly supplied, non-placeholder app name exists."""
+        return bool(
+            self._app_name
+            and self._app_name.strip()
+            and self._app_name.strip().lower()
+            not in {
+                "disaster-monitor-local",
+                "change-me",
+                "your-app-name",
+            }
+        )
+
     async def get_situation_reports(
         self,
         event: DisasterEvent,
@@ -167,41 +182,62 @@ class ReliefWebSituationAdapter:
         *,
         now: datetime,
     ) -> ProviderBatch[SituationReport]:
-        query_terms = [query.hazard, query.geography, event.location]
-        if query.event_identifier:
-            query_terms.append(query.event_identifier)
-        if query.prefecture:
-            query_terms.append(query.prefecture)
-        if query.city:
-            query_terms.append(query.city)
-        if query.date_from and query.date_to:
-            query_terms.append(query.date_from.date().isoformat())
-        if query.magnitude is not None:
-            query_terms.append(f"magnitude {query.magnitude:g}")
+        if not self.configured:
+            return ProviderBatch(records=())
+        fields = (
+            "title",
+            "body",
+            "url",
+            "date",
+            "disaster",
+            "country",
+            "source",
+            "location",
+        )
+        params: dict[str, HttpParam] = {
+            "appname": self._app_name,
+            "query[value]": f"{query.hazard} {event.location}",
+            "query[operator]": "AND",
+            "filter[field]": "country.name",
+            "filter[value]": "Japan",
+            "filter[operator]": "AND",
+            "filter[field][]": ("date.created", "country.name"),
+            "filter[value][from]": (
+                query.date_from or now - timedelta(days=query.time_window_days)
+            )
+            .date()
+            .isoformat(),
+            "filter[value][to]": (query.date_to or now + timedelta(minutes=5))
+            .date()
+            .isoformat(),
+            "limit": 20,
+            "sort[]": "date.created:desc",
+        }
+        for index, field in enumerate(fields):
+            params[f"fields[include][{index}]"] = field
         payload = await get_json(
             self._client,
             RELIEFWEB_REPORTS_URL,
-            params={
-                "appname": self._app_name,
-                "query[value]": " ".join(query_terms),
-                "limit": 20,
-                "sort[]": "date.created:desc",
-            },
+            params=params,
             max_bytes=self._max_response_bytes,
+            provider_name=self.provider_name,
         )
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
             raise DisasterProviderResponseError(
                 "The ReliefWeb response had no report list."
             )
         reports: list[SituationReport] = []
+        malformed = False
         minimum_date = now - timedelta(days=query.time_window_days)
         for item in payload["data"]:
             if not isinstance(item, dict) or not isinstance(item.get("fields"), dict):
+                malformed = True
                 continue
             fields = item["fields"]
             title = _text(fields.get("title"))
             url = _text(fields.get("url"))
             if not title or not url or not url.startswith("https://"):
+                malformed = True
                 continue
             published_at = normalize_timestamp(
                 fields.get("date", {}).get("created")
@@ -223,7 +259,9 @@ class ReliefWebSituationAdapter:
                 updated_at=updated_at,
                 retrieved_at=now,
             )
-            raw_body = fields.get("body") or fields.get("description") or ""
+            raw_body = fields.get("body") or ""
+            if not raw_body:
+                malformed = True
             narrative = sanitize_provider_text(html.unescape(_text(raw_body)))
             facts = self._extract_facts(narrative, source, event, published_at)
             reported_event_time, locations, countries, provider_event_ids = _metadata(
@@ -248,7 +286,24 @@ class ReliefWebSituationAdapter:
                     else None,
                 )
             )
-        return ProviderBatch(records=tuple(reports))
+        issues: tuple[ProviderIssue, ...] = ()
+        if malformed and not reports:
+            issues = (
+                ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: Required report fields were missing.",
+                    reason_code="invalid_payload",
+                ),
+            )
+        elif not reports:
+            issues = (
+                ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: The provider returned no matching records.",
+                    reason_code="empty_result",
+                ),
+            )
+        return ProviderBatch(records=tuple(reports), issues=issues)
 
     @staticmethod
     def _extract_facts(

@@ -13,8 +13,12 @@ from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
     CompositeSituationReportProvider,
 )
+from disaster_monitor.infrastructure.disaster.fdma_adapter import (
+    FdmaSituationReportAdapter,
+)
 from disaster_monitor.infrastructure.disaster.jma_adapter import (
     JmaEarthquakeAdapter,
+    JmaSignificantEarthquakeAdapter,
     JmaTsunamiSituationAdapter,
 )
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
@@ -42,23 +46,43 @@ def build_current_disaster_report(settings: Settings) -> CurrentDisasterReportSe
                 timeout_seconds=settings.disaster_provider_timeout_seconds,
                 max_response_bytes=settings.disaster_provider_max_response_bytes,
             ),
+            JmaSignificantEarthquakeAdapter(
+                timeout_seconds=settings.disaster_provider_timeout_seconds,
+                max_response_bytes=settings.disaster_provider_max_response_bytes,
+            ),
             UsgsEarthquakeAdapter(
                 timeout_seconds=settings.disaster_provider_timeout_seconds,
                 max_response_bytes=settings.disaster_provider_max_response_bytes,
             ),
         )
     )
-    situation_provider: SituationReportProvider = CompositeSituationReportProvider(
-        (
-            JmaTsunamiSituationAdapter(
-                timeout_seconds=settings.disaster_provider_timeout_seconds,
-                max_response_bytes=settings.disaster_provider_max_response_bytes,
-            ),
+    situation_providers: list[SituationReportProvider] = [
+        FdmaSituationReportAdapter(
+            timeout_seconds=settings.disaster_provider_timeout_seconds,
+            max_response_bytes=settings.disaster_provider_max_response_bytes,
+        ),
+        JmaTsunamiSituationAdapter(
+            timeout_seconds=settings.disaster_provider_timeout_seconds,
+            max_response_bytes=settings.disaster_provider_max_response_bytes,
+        ),
+    ]
+    if (
+        settings.reliefweb_app_name
+        and settings.reliefweb_app_name.strip().lower()
+        not in {
+            "disaster-monitor-local",
+            "change-me",
+            "your-app-name",
+        }
+    ):
+        situation_providers.append(
             ReliefWebSituationAdapter(
                 app_name=settings.reliefweb_app_name,
                 timeout_seconds=settings.disaster_provider_timeout_seconds,
                 max_response_bytes=settings.disaster_provider_max_response_bytes,
-            ),
+            )
         )
+    situation_provider: SituationReportProvider = CompositeSituationReportProvider(
+        tuple(situation_providers)
     )
     return CurrentDisasterReportService(event_provider, situation_provider)

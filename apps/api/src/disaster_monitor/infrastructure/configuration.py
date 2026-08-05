@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     disaster_provider_max_response_bytes: int = Field(
         default=1_000_000, ge=10_000, le=5_000_000
     )
-    reliefweb_app_name: str = Field(default="disaster-monitor-local", min_length=1)
+    reliefweb_app_name: str | None = Field(default=None, min_length=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",

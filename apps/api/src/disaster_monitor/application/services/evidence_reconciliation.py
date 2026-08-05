@@ -127,6 +127,8 @@ def _source_key(source: SourceReference) -> str:
 
 def _source_priority(source: SourceReference) -> int:
     publisher = source.publisher.lower()
+    if "fire and disaster management" in publisher or publisher == "fdma":
+        return 5
     if "japan meteorological agency" in publisher or publisher == "jma":
         return 4
     if "united states geological survey" in publisher or publisher == "usgs":
@@ -230,8 +232,11 @@ def build_evidence_packet(
     for report in reports:
         if _source_key(report.source) not in {_source_key(item) for item in sources}:
             sources.append(report.source)
+    event_source_key = _source_key(event.source)
     stale = any(
-        retrieved_at - source.effective_at > timedelta(hours=24) for source in sources
+        _source_key(report.source) != event_source_key
+        and retrieved_at - report.source.effective_at > timedelta(hours=24)
+        for report in reports
     )
     stale_warning = (
         ("Some source updates are stale (more than 24 hours old).",) if stale else ()
@@ -246,9 +251,12 @@ def build_evidence_packet(
         "fatalities",
         "injuries",
         "missing",
+        "rescued",
         "evacuations",
         "shelters",
         "buildings",
+        "buildings_destroyed",
+        "buildings_damaged",
         "fires",
         "landslides",
         "roads",
@@ -256,6 +264,7 @@ def build_evidence_packet(
         "airports",
         "ports",
         "utilities",
+        "infrastructure",
         "communications",
         "critical_facilities",
         "damage_status",

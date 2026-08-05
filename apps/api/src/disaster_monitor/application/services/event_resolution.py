@@ -42,7 +42,8 @@ def _score(event: DisasterEvent, query: DisasterQuery, now: datetime) -> float:
     age_hours = max(0.0, (now - event.event_time).total_seconds() / 3600)
     recency = max(0.0, 1.0 - age_hours / (30 * 24))
     magnitude = event.magnitude or 0.0
-    significance = (event.significance or 0.0) / 1_000
+    significance = (event.significance or 0.0) / 500
+    intensity = _intensity_score(event.intensity)
     aftershock_penalty = 3.0 if event.is_aftershock else 0.0
     discriminator_bonus = 0.0
     if query.prefecture and _location_matches(event, query.prefecture):
@@ -58,12 +59,38 @@ def _score(event: DisasterEvent, query: DisasterQuery, now: datetime) -> float:
             0.0, 4.0 - abs(event.magnitude - query.magnitude) * 8
         )
     return (
-        recency * 2.0
-        + magnitude * 1.3
+        recency * 0.6
+        + magnitude * 2.0
+        + intensity * 1.5
         + significance
         + discriminator_bonus
         - aftershock_penalty
     )
+
+
+def _intensity_score(value: str | None) -> float:
+    if not value:
+        return 0.0
+    normalized = (
+        value.lower()
+        .replace("jma", "")
+        .translate(str.maketrans("０１２３４５６７", "01234567"))
+        .strip()
+    )
+    for token, score in (
+        ("7", 7.0),
+        ("6+", 6.0),
+        ("6-", 5.5),
+        ("5+", 5.0),
+        ("5-", 4.5),
+        ("4", 4.0),
+        ("3", 3.0),
+        ("2", 2.0),
+        ("1", 1.0),
+    ):
+        if token in normalized:
+            return score
+    return 0.0
 
 
 def _distance_to_coordinates(
@@ -160,9 +187,25 @@ def resolve_recent_event(
         unrelated = not _same_sequence(selected, second)
         ambiguous = unrelated and (score_gap < 0.6 or second.is_aftershock)
     rationale = (
-        "Selected the most significant recent candidate, accounting for recency and "
-        "penalizing likely aftershocks."
+        "Selected the highest-ranked recent candidate using maximum JMA intensity, "
+        "magnitude, provider significance, recency, and an aftershock penalty; "
+        "magnitude and intensity outweigh a small age difference."
     )
+    if any(
+        (
+            query.event_identifier,
+            query.date_from,
+            query.date_to,
+            query.prefecture,
+            query.city,
+            query.latitude is not None and query.longitude is not None,
+            query.magnitude is not None,
+        )
+    ):
+        rationale = (
+            "Selected the candidate matching the explicit date, location, coordinate, "
+            "magnitude, or event-identifier discriminator."
+        )
     if ambiguous:
         rationale = (
             "Multiple unrelated candidates have materially similar recency and "

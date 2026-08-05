@@ -89,9 +89,18 @@ def render_source_backed_report(
 ) -> tuple[str, tuple[ReportSection, ...]]:
     """Render only normalized evidence; never infer zeros from missing fields."""
     facts = packet.facts
-    human_categories = {"fatalities", "injuries", "missing", "evacuations", "shelters"}
+    human_categories = {
+        "fatalities",
+        "injuries",
+        "missing",
+        "rescued",
+        "evacuations",
+        "shelters",
+    }
     physical_categories = {
         "buildings",
+        "buildings_destroyed",
+        "buildings_damaged",
         "fires",
         "landslides",
         "roads",
@@ -99,6 +108,7 @@ def render_source_backed_report(
         "airports",
         "ports",
         "utilities",
+        "infrastructure",
         "communications",
         "critical_facilities",
         "damage_status",

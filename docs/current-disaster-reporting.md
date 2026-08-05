@@ -11,7 +11,11 @@ The flow is:
 1. Normalize the question and extract hazard, geography, time intent, focus, and
    optional dates, coordinates, magnitude, prefecture, city, or event identifier.
 2. Query the bounded event-source ports for recent Japanese earthquake candidates.
-3. Rank candidates by recency and significance, with an aftershock penalty. A
+3. Rank candidates by maximum JMA intensity, magnitude, provider significance,
+   recency, and an aftershock penalty. Magnitude and intensity materially outweigh
+   a small age difference, so a destructive mainshock remains preferred to a later
+   routine tremor. Explicit date, location, coordinate, magnitude, and event-ID
+   discriminators override generic ranking. A
    materially ambiguous pair of unrelated events is disclosed instead of being
    silently conflated.
 4. Retrieve situation records for the selected event from the bounded situation
@@ -32,24 +36,39 @@ The initial provider set is deliberately narrow:
 
 - `JmaEarthquakeAdapter` reads the Japan Meteorological Agency's machine-readable
   earthquake JSON list and translates event time, location, magnitude, depth, and
-  maximum intensity when present.
+  maximum intensity when present. It remains a recent-bulletin source and is
+  bounded to its first 200 entries.
+- `JmaSignificantEarthquakeAdapter` reads the official JMA emergency-earthquake-
+  warning history, which retains warning-level events beyond the rolling bulletin
+  list. It is a durable discovery source, not a visual-map scrape.
 - `UsgsEarthquakeAdapter` queries the documented USGS FDSN GeoJSON catalog as an
-  independent earthquake event source.
+  independent earthquake event source. Generic searches use a bounded,
+  magnitude-ordered query with a moderate minimum magnitude and do not request
+  unused expanded origins or magnitude collections.
+- `FdmaSituationReportAdapter` matches the newest official Fire and Disaster
+  Management Agency earthquake report by event date and geographic identity,
+  extracts text from HTML or text-based PDFs, and attributes normalized human,
+  damage, infrastructure, and response facts to that report.
 - `JmaTsunamiSituationAdapter` reads JMA tsunami JSON status messages related to
   the selected JMA event.
 - `ReliefWebSituationAdapter` reads supplementary ReliefWeb JSON reports and
   extracts only bounded, clearly preliminary narrative facts. ReliefWeb values
   are not treated as official totals.
 
-The JMA and USGS event adapters are composed together. The JMA and ReliefWeb
-situation adapters are composed together. Each source can fail independently;
-partial results expose a warning rather than hiding the failure. No weather,
+The rolling JMA, durable JMA, and USGS event adapters are composed together. FDMA
+is the primary human-impact source, with JMA tsunami and optionally configured
+ReliefWeb as supplementary sources. Each source can fail independently; partial
+results expose a safe warning rather than hiding the failure. Provider diagnostics
+retain a stable reason code, retryability, and safe HTTP status for live diagnostics.
+No weather,
 flood, satellite, geocoding, news, authentication, or map-overlay provider is
 implemented by this feature.
 
 ## Evidence and freshness rules
 
-Every normalized fact retains its source, canonical URL, event identifier, and
+Human-impact precedence is newest matching FDMA report, then another newer
+event-specific Japanese government source, then an event-specific ReliefWeb report,
+then other explicitly configured supplementary sources. Every normalized fact retains its source, canonical URL, event identifier, and
 the available event, publication, update, and retrieval timestamps. Official JMA
 and USGS facts have higher priority than supplementary reports, and newer
 official figures replace older official figures for the same claim. Different
@@ -71,7 +90,8 @@ environment:
 
 - `DISASTER_PROVIDER_TIMEOUT_SECONDS` (default `10`)
 - `DISASTER_PROVIDER_MAX_RESPONSE_BYTES` (default `1000000`)
-- `RELIEFWEB_APP_NAME` (default `disaster-monitor-local`)
+- `RELIEFWEB_APP_NAME` (unset by default). If set, it must be a pre-approved
+  ReliefWeb application name; placeholder names do not compose the adapter.
 
 The default unit, adapter, HTTP, and system tests use deterministic fixtures and
 do not require network access, Ollama, or cloud credentials. The Playwright
@@ -86,12 +106,19 @@ The opt-in structural smoke test is excluded from normal CI:
 uv run --project apps/api python scripts/live_disaster_smoke.py
 ```
 
-It checks that a candidate event, event/source timestamps, canonical URLs, and a
-source-backed report are returned. It does not assert changing casualty or damage
-figures. This smoke test was not run as part of the implementation verification.
+It runs both the generic Japan request and an event-specific Kumamoto diagnostic
+request. For every composed provider it prints success, no-records, skipped, or
+failure status, typed failure code, safe HTTP status, record counts, selected event
+and provider IDs, and latest source timestamps. It does not assert changing live
+casualty or damage figures.
 
 Rapidly changing disaster figures remain provisional. A source can revise an
 event, publish a correction, or report only a local impact. The report therefore
 keeps source attribution and uncertainty visible and does not generalize local
 evidence to all of Japan.
 
+FDMA extraction is intentionally text-only. It supports HTML and extractable
+text-based PDFs, preserves Japanese labels in fact provenance, and returns a
+typed partial-provider issue when a PDF requires OCR, has an image-only table,
+or changes structure. It does not infer values from images or silently convert
+unknown fields to zero.

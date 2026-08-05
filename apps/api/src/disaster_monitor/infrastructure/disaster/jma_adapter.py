@@ -1,7 +1,9 @@
 """Adapters for Japan Meteorological Agency JSON earthquake and tsunami feeds."""
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
+from urllib.parse import urljoin
 
 import httpx
 
@@ -10,6 +12,7 @@ from disaster_monitor.application.disaster import (
     DisasterQuery,
     FactStatus,
     ProviderBatch,
+    ProviderIssue,
     ReportedFact,
     SituationReport,
     SourceReference,
@@ -18,14 +21,16 @@ from disaster_monitor.application.services.evidence_reconciliation import (
     normalize_timestamp,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
+    DisasterProviderError,
     DisasterProviderResponseError,
 )
-from disaster_monitor.infrastructure.disaster.http import get_json
+from disaster_monitor.infrastructure.disaster.http import get_json, get_text
 
 JMA_EARTHQUAKE_LIST_URL = "https://www.jma.go.jp/bosai/quake/data/list.json"
 JMA_TSUNAMI_LIST_URL = "https://www.jma.go.jp/bosai/tsunami/data/list.json"
 JMA_DATA_BASE_URL = "https://www.jma.go.jp/bosai/quake/data/"
 JMA_TSUNAMI_DATA_BASE_URL = "https://www.jma.go.jp/bosai/tsunami/data/"
+JMA_EEW_HISTORY_URL = "https://www.data.jma.go.jp/eew/data/nc/pub_hist/index.html"
 _JMA_CODE = re.compile(
     r"(?P<lat>[+-]\d+(?:\.\d+)?)(?P<lon>[+-]\d+(?:\.\d+)?)-(?P<depth>\d+)"
 )
@@ -80,6 +85,7 @@ class JmaEarthquakeAdapter:
             self._client,
             JMA_EARTHQUAKE_LIST_URL,
             max_bytes=self._max_response_bytes,
+            provider_name=self.provider_name,
         )
         if not isinstance(payload, list):
             raise DisasterProviderResponseError(
@@ -139,6 +145,17 @@ class JmaEarthquakeAdapter:
                     provider_ids=(f"jma:{event_id}",),
                 )
             )
+        if not events:
+            return ProviderBatch(
+                issues=(
+                    ProviderIssue(
+                        self.provider_name,
+                        f"{self.provider_name}: The provider returned no matching "
+                        "records.",
+                        reason_code="empty_result",
+                    ),
+                )
+            )
         return ProviderBatch(records=tuple(events))
 
     async def aclose(self) -> None:
@@ -173,6 +190,7 @@ class JmaTsunamiSituationAdapter:
             self._client,
             JMA_TSUNAMI_LIST_URL,
             max_bytes=self._max_response_bytes,
+            provider_name=self.provider_name,
         )
         if not isinstance(payload, list):
             raise DisasterProviderResponseError(
@@ -231,8 +249,228 @@ class JmaTsunamiSituationAdapter:
                     event_id=event.event_id,
                 )
             )
+        if not reports:
+            return ProviderBatch(
+                issues=(
+                    ProviderIssue(
+                        self.provider_name,
+                        f"{self.provider_name}: The provider returned no matching "
+                        "records.",
+                        reason_code="empty_result",
+                    ),
+                )
+            )
         return ProviderBatch(records=tuple(reports))
 
     async def aclose(self) -> None:
         if self._owns_client:
             await self._client.aclose()
+
+
+class _JmaHistoryParser(HTMLParser):
+    """Parse table rows without depending on the current page's visual layout."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: list[tuple[list[str], str, dict[str, str]]] = []
+        self._cells: list[str] | None = None
+        self._cell_parts: list[str] = []
+        self._href = ""
+        self._attrs: dict[str, str] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "tr":
+            self._cells = []
+            self._href = ""
+            self._attrs = dict((key, value or "") for key, value in attrs)
+        elif self._cells is not None and tag in {"td", "th"}:
+            self._cell_parts = []
+        elif self._cells is not None and tag == "a":
+            values = dict((key, value or "") for key, value in attrs)
+            self._href = values.get("href", self._href)
+
+    def handle_data(self, data: str) -> None:
+        if self._cells is not None:
+            self._cell_parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._cells is None:
+            return
+        if tag in {"td", "th"}:
+            self._cells.append(" ".join(self._cell_parts).strip())
+            self._cell_parts = []
+        elif tag == "tr":
+            if self._cells:
+                self.rows.append((self._cells, self._href, self._attrs))
+            self._cells = None
+
+
+def _history_timestamp(value: str) -> datetime | None:
+    value = value.strip()
+    for pattern in ("%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(value, pattern).replace(
+                tzinfo=timezone(timedelta(hours=9))
+            )
+        except ValueError:
+            continue
+    return normalize_timestamp(value)
+
+
+def _history_number(value: str) -> float | None:
+    match = re.search(r"(?:M\s*)?(\d+(?:\.\d+)?)", value, re.IGNORECASE)
+    return float(match.group(1)) if match else None
+
+
+def _history_intensity(value: str) -> str | None:
+    value = value.strip()
+    if not value or value in {"---", "-"}:
+        return None
+    return f"JMA {value}"
+
+
+def _history_event_id(href: str, event_time: datetime) -> str:
+    match = re.search(r"(\d{14})", href)
+    return match.group(1) if match else event_time.strftime("%Y%m%d%H%M%S")
+
+
+def _detail_coordinates(text: str) -> tuple[float | None, float | None, float | None]:
+    latitude = re.search(r"(?:北緯|latitude)\D{0,30}(\d+(?:\.\d+)?)", text, re.I)
+    longitude = re.search(r"(?:東経|longitude)\D{0,30}(\d+(?:\.\d+)?)", text, re.I)
+    depth = re.search(r"(?:深さ|depth)\D{0,30}(\d+(?:\.\d+)?)", text, re.I)
+    return (
+        float(latitude.group(1)) if latitude else None,
+        float(longitude.group(1)) if longitude else None,
+        float(depth.group(1)) if depth else None,
+    )
+
+
+class JmaSignificantEarthquakeAdapter:
+    """Discover warning-level JMA earthquakes retained beyond the rolling list."""
+
+    provider_name = "JMA significant"
+
+    def __init__(
+        self,
+        *,
+        client: httpx.AsyncClient | None = None,
+        timeout_seconds: float = 10.0,
+        max_response_bytes: int = 1_000_000,
+    ) -> None:
+        self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
+        self._owns_client = client is None
+        self._max_response_bytes = max_response_bytes
+
+    async def find_recent_events(
+        self, query: DisasterQuery, *, now: datetime
+    ) -> ProviderBatch[DisasterEvent]:
+        markup = await get_text(
+            self._client,
+            JMA_EEW_HISTORY_URL,
+            max_bytes=self._max_response_bytes,
+            provider_name=self.provider_name,
+        )
+        parser = _JmaHistoryParser()
+        try:
+            parser.feed(markup)
+        except Exception as error:
+            raise DisasterProviderResponseError(
+                "The JMA significant-event history could not be parsed.",
+                reason_code="invalid_payload",
+            ) from error
+        start = query.date_from or now - timedelta(days=query.time_window_days)
+        end = query.date_to or now + timedelta(minutes=5)
+        events: list[DisasterEvent] = []
+        for cells, href, attrs in parser.rows:
+            if len(cells) < 4:
+                continue
+            event_time = _history_timestamp(cells[0])
+            magnitude = _history_number(cells[2])
+            if (
+                event_time is None
+                or magnitude is None
+                or not start <= event_time <= end
+            ):
+                continue
+            event_id = _history_event_id(href, event_time)
+            latitude = _number_from_attr(attrs, "latitude")
+            longitude = _number_from_attr(attrs, "longitude")
+            depth_km = _number_from_attr(attrs, "depth")
+            detail_url = urljoin(JMA_EEW_HISTORY_URL, href) if href else None
+            if detail_url and (latitude is None or longitude is None):
+                try:
+                    detail = await get_text(
+                        self._client,
+                        detail_url,
+                        max_bytes=self._max_response_bytes,
+                        provider_name=self.provider_name,
+                    )
+                    latitude, longitude, detail_depth = _detail_coordinates(detail)
+                    depth_km = depth_km or detail_depth
+                except DisasterProviderError:
+                    # The index is still a valid significant-event record.
+                    pass
+            source = SourceReference(
+                publisher="Japan Meteorological Agency",
+                title=f"Emergency earthquake warning history — {cells[1]}",
+                canonical_url=detail_url or JMA_EEW_HISTORY_URL,
+                published_at=event_time,
+                updated_at=event_time,
+                retrieved_at=now,
+            )
+            events.append(
+                DisasterEvent(
+                    event_id=f"jma:{event_id}",
+                    hazard="earthquake",
+                    location=cells[1] or "Japan",
+                    country="Japan",
+                    event_time=event_time,
+                    source=source,
+                    latitude=latitude,
+                    longitude=longitude,
+                    magnitude=magnitude,
+                    magnitude_type="Mj",
+                    intensity=_history_intensity(cells[3]),
+                    depth_km=depth_km,
+                    significance=magnitude * 100 + _intensity_score(cells[3]) * 100,
+                    provider_ids=(f"jma:{event_id}",),
+                )
+            )
+        if not events:
+            return ProviderBatch(
+                issues=(
+                    ProviderIssue(
+                        self.provider_name,
+                        f"{self.provider_name}: The provider returned no matching "
+                        "records.",
+                        reason_code="empty_result",
+                    ),
+                )
+            )
+        return ProviderBatch(records=tuple(events))
+
+    async def aclose(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
+
+
+def _number_from_attr(attrs: dict[str, str], name: str) -> float | None:
+    value = attrs.get(name, attrs.get(f"data-{name}", ""))
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
+
+
+def _intensity_score(value: str) -> int:
+    return {
+        "7": 7,
+        "６強": 6,
+        "６弱": 5,
+        "６": 5,
+        "５強": 4,
+        "５弱": 3,
+        "５": 3,
+        "４": 2,
+        "３": 1,
+    }.get(value.strip(), 0)

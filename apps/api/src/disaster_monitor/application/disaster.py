@@ -146,10 +146,14 @@ class SituationReport:
 
 @dataclass(frozen=True, slots=True)
 class ProviderIssue:
-    """A user-safe description of a provider problem."""
+    """A user-safe, structured description of a provider problem."""
 
     provider: str
     message: str
+    reason_code: str = "invalid_payload"
+    retryable: bool = False
+    http_status: int | None = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

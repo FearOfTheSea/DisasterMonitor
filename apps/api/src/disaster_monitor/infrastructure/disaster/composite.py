@@ -15,6 +15,34 @@ from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
 )
+from disaster_monitor.infrastructure.disaster.errors import DisasterProviderError
+
+_SAFE_MESSAGES = {
+    "timeout": "The provider request timed out.",
+    "network_error": "The provider network request failed.",
+    "http_client_error": "The provider rejected the request.",
+    "http_server_error": "The provider returned a server error.",
+    "rate_limited": "The provider rate-limited the request.",
+    "configuration_rejected": "The provider configuration was rejected.",
+    "response_too_large": "The provider response exceeded the configured size limit.",
+    "unexpected_content_type": "The provider returned an unexpected content type.",
+    "malformed_json": "The provider returned malformed JSON.",
+    "invalid_payload": "The provider returned an unsupported payload.",
+    "empty_result": "The provider returned no matching records.",
+}
+
+
+def _issue(provider: str, error: DisasterProviderError) -> ProviderIssue:
+    failure = error.failure
+    message = _SAFE_MESSAGES.get(failure.reason_code, _SAFE_MESSAGES["invalid_payload"])
+    return ProviderIssue(
+        provider=provider,
+        message=f"{provider}: {message}",
+        reason_code=failure.reason_code,
+        retryable=failure.retryable,
+        http_status=failure.http_status,
+        detail=failure.detail,
+    )
 
 
 class CompositeDisasterEventProvider:
@@ -22,12 +50,19 @@ class CompositeDisasterEventProvider:
 
     def __init__(self, providers: Iterable[DisasterEventProvider]) -> None:
         self._providers = tuple(providers)
+        self.last_diagnostics: tuple[ProviderIssue, ...] = ()
+        self.last_record_counts: dict[str, int] = {}
+
+    @property
+    def providers(self) -> tuple[DisasterEventProvider, ...]:
+        return self._providers
 
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
     ) -> ProviderBatch[DisasterEvent]:
         records: list[DisasterEvent] = []
         issues: list[ProviderIssue] = []
+        self.last_record_counts = {}
         for provider in self._providers:
             name = getattr(provider, "provider_name", provider.__class__.__name__)
             try:
@@ -39,10 +74,20 @@ class CompositeDisasterEventProvider:
                 )
                 records.extend(batch.records)
                 issues.extend(batch.issues)
-            except Exception:
-                issues.append(
-                    ProviderIssue(name, f"{name} did not return usable event data.")
-                )
+                self.last_record_counts[name] = len(batch.records)
+            except Exception as error:
+                if isinstance(error, DisasterProviderError):
+                    issues.append(_issue(name, error))
+                else:
+                    issues.append(
+                        ProviderIssue(
+                            name,
+                            f"{name}: The provider returned an unsupported payload.",
+                            reason_code="invalid_payload",
+                        )
+                    )
+                self.last_record_counts[name] = 0
+        self.last_diagnostics = tuple(issues)
         return ProviderBatch(
             records=cluster_physical_events(tuple(records)), issues=tuple(issues)
         )
@@ -59,6 +104,12 @@ class CompositeSituationReportProvider:
 
     def __init__(self, providers: Iterable[SituationReportProvider]) -> None:
         self._providers = tuple(providers)
+        self.last_diagnostics: tuple[ProviderIssue, ...] = ()
+        self.last_record_counts: dict[str, int] = {}
+
+    @property
+    def providers(self) -> tuple[SituationReportProvider, ...]:
+        return self._providers
 
     async def get_situation_reports(
         self,
@@ -69,6 +120,7 @@ class CompositeSituationReportProvider:
     ) -> ProviderBatch[SituationReport]:
         records: list[SituationReport] = []
         issues: list[ProviderIssue] = []
+        self.last_record_counts = {}
         for provider in self._providers:
             name = getattr(provider, "provider_name", provider.__class__.__name__)
             try:
@@ -80,10 +132,20 @@ class CompositeSituationReportProvider:
                 )
                 records.extend(batch.records)
                 issues.extend(batch.issues)
-            except Exception:
-                issues.append(
-                    ProviderIssue(name, f"{name} did not return usable situation data.")
-                )
+                self.last_record_counts[name] = len(batch.records)
+            except Exception as error:
+                if isinstance(error, DisasterProviderError):
+                    issues.append(_issue(name, error))
+                else:
+                    issues.append(
+                        ProviderIssue(
+                            name,
+                            f"{name}: The provider returned an unsupported payload.",
+                            reason_code="invalid_payload",
+                        )
+                    )
+                self.last_record_counts[name] = 0
+        self.last_diagnostics = tuple(issues)
         return ProviderBatch(records=tuple(records), issues=tuple(issues))
 
     async def aclose(self) -> None:
@@ -141,6 +203,14 @@ def _preferred_event(events: list[DisasterEvent]) -> DisasterEvent:
 
 def _merge_event(events: list[DisasterEvent]) -> DisasterEvent:
     preferred = _preferred_event(events)
+    richest = max(
+        events,
+        key=lambda event: (
+            event.intensity is not None,
+            event.depth_km is not None,
+            event.latitude is not None and event.longitude is not None,
+        ),
+    )
     provider_ids = tuple(
         dict.fromkeys(
             identifier
@@ -159,12 +229,12 @@ def _merge_event(events: list[DisasterEvent]) -> DisasterEvent:
         longitude=preferred.longitude,
         magnitude=preferred.magnitude,
         magnitude_type=preferred.magnitude_type,
-        intensity=preferred.intensity,
-        depth_km=preferred.depth_km,
-        significance=preferred.significance,
-        is_aftershock=preferred.is_aftershock,
-        parent_event_id=preferred.parent_event_id,
-        sequence_id=preferred.sequence_id,
+        intensity=preferred.intensity or richest.intensity,
+        depth_km=preferred.depth_km or richest.depth_km,
+        significance=max((event.significance or 0) for event in events),
+        is_aftershock=any(event.is_aftershock for event in events),
+        parent_event_id=preferred.parent_event_id or richest.parent_event_id,
+        sequence_id=preferred.sequence_id or richest.sequence_id,
         provider_ids=provider_ids,
     )
 

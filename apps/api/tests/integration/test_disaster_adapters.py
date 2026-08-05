@@ -10,15 +10,24 @@ from disaster_monitor.application.disaster import (
     DisasterQuery,
     SourceReference,
 )
+from disaster_monitor.application.services.event_resolution import resolve_recent_event
 from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
+)
+from disaster_monitor.infrastructure.disaster.composite import (
+    CompositeDisasterEventProvider,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
     DisasterProviderResponseError,
 )
+from disaster_monitor.infrastructure.disaster.fdma_adapter import (
+    FdmaSituationReportAdapter,
+    _extract_pdf_text,
+)
 from disaster_monitor.infrastructure.disaster.jma_adapter import (
     JmaEarthquakeAdapter,
+    JmaSignificantEarthquakeAdapter,
 )
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
@@ -181,7 +190,7 @@ async def test_reliefweb_adapter_extracts_preliminary_situation_facts() -> None:
         ]
     }
     client = client_for(payload)
-    adapter = ReliefWebSituationAdapter(client=client)
+    adapter = ReliefWebSituationAdapter(client=client, app_name="approved-test")
 
     selected_event = DisasterEvent(
         event_id="usgs:fixture",
@@ -247,7 +256,7 @@ async def test_reliefweb_adapter_correlates_reports_to_selected_event() -> None:
         ]
     }
     client = client_for(payload)
-    adapter = ReliefWebSituationAdapter(client=client)
+    adapter = ReliefWebSituationAdapter(client=client, app_name="approved-test")
     selected_event = DisasterEvent(
         event_id="reliefweb:selected",
         hazard="earthquake",
@@ -276,3 +285,226 @@ async def test_reliefweb_adapter_correlates_reports_to_selected_event() -> None:
     assert [fact.value for fact in packet.facts] == ["4"]
     assert all("Tokyo" not in narrative for narrative in packet.narratives)
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_generic_query_is_bounded_and_magnitude_ordered() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=json.dumps(usgs_payload()).encode(),
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = UsgsEarthquakeAdapter(client=client)
+    await adapter.find_recent_events(QUERY, now=NOW)
+    query_params = dict(requests[0].url.params.multi_items())
+    assert query_params["orderby"] == "magnitude"
+    assert query_params["limit"] == "50"
+    assert query_params["minmagnitude"] == "4.5"
+    assert "includeallorigins" not in query_params
+    assert "includeallmagnitudes" not in query_params
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "expected_code", "expected_attempts"),
+    [
+        (429, "rate_limited", 2),
+        (503, "http_server_error", 2),
+        (403, "configuration_rejected", 1),
+    ],
+)
+async def test_http_failures_keep_typed_issue_and_bounded_retry(
+    status: int, expected_code: str, expected_attempts: int
+) -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1 and status in {429, 503}:
+            return httpx.Response(
+                status,
+                headers={"content-type": "application/json"},
+                content=b"{}",
+                request=request,
+            )
+        return httpx.Response(
+            status,
+            headers={"content-type": "application/json"},
+            content=b"{}",
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    composite = CompositeDisasterEventProvider((UsgsEarthquakeAdapter(client=client),))
+    result = await composite.find_recent_events(QUERY, now=NOW)
+    assert attempts == expected_attempts
+    assert result.records == ()
+    assert result.issues[0].reason_code == expected_code
+    assert result.issues[0].retryable is (status in {429, 503})
+    assert result.issues[0].http_status == status
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_durable_jma_history_survives_rolling_list_limit_and_clusters_usgs() -> (
+    None
+):
+    rolling = [
+        {
+            "eid": f"minor-{index}",
+            "at": "2026-08-01T10:00:00+09:00",
+            "cod": "+40.0+140.0-10000/",
+            "mag": "5.8",
+            "maxi": "4",
+        }
+        for index in range(201)
+    ]
+    durable = """
+    <table>
+      <tr data-latitude="32.8" data-longitude="130.7" data-depth="10">
+        <td>2026/07/28 16:27</td><td>熊本県熊本地方</td><td>7.1</td><td>７</td>
+      </tr>
+    </table>
+    """
+    usgs = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": "usgs-kumamoto",
+                "properties": {
+                    "time": int(
+                        datetime(2026, 7, 28, 7, 27, tzinfo=UTC).timestamp() * 1000
+                    ),
+                    "mag": 7.1,
+                    "place": "Kumamoto, Japan",
+                    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/usgs-kumamoto",
+                    "sig": 1500,
+                },
+                "geometry": {"type": "Point", "coordinates": [130.7, 32.8, 10]},
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("list.json"):
+            payload: object = rolling
+        elif request.url.path.endswith("/query"):
+            payload = usgs
+        else:
+            payload = durable
+        return httpx.Response(
+            200,
+            headers={
+                "content-type": "application/json"
+                if not isinstance(payload, str)
+                else "text/html"
+            },
+            content=json.dumps(payload).encode()
+            if not isinstance(payload, str)
+            else payload.encode(),
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    event_provider = CompositeDisasterEventProvider(
+        (
+            JmaEarthquakeAdapter(client=client),
+            JmaSignificantEarthquakeAdapter(client=client),
+            UsgsEarthquakeAdapter(client=client),
+        )
+    )
+    events = await event_provider.find_recent_events(QUERY, now=NOW)
+    resolution = resolve_recent_event(events.records, QUERY, now=NOW)
+    assert resolution.selected is not None
+    assert resolution.selected.magnitude == 7.1
+    assert (
+        "Kumamoto" in resolution.selected.location
+        or "熊本" in resolution.selected.location
+    )
+    assert set(resolution.selected.provider_ids) >= {
+        "jma:20260728162700",
+        "usgs:usgs-kumamoto",
+    }
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake() -> (
+    None
+):
+    index = """
+    <table>
+      <tr><td>2026/07/28</td><td><a href="https://fdma.test/old.pdf">
+      熊本県熊本地方を震源とする地震 第１報</a></td></tr>
+      <tr><td>2026/07/28</td><td><a href="https://fdma.test/new.html">
+      熊本県熊本地方を震源とする地震 第２報</a></td></tr>
+      <tr><td>2026/08/01</td><td><a href="https://fdma.test/tokyo.html">
+      東京都を震源とする地震 第９報</a></td></tr>
+    </table>
+    """
+    bodies = {
+        "/": index.encode(),
+        "/new.html": (
+            "死者 38名、負傷者 120名、全壊 5棟、半壊 9棟、消防隊が対応。"
+        ).encode(),
+        "/old.pdf": "死者 30名、負傷者 100名".encode(),
+        "/tokyo.html": "死者 999名".encode(),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        content = (
+            bodies["/"]
+            if request.url.path.endswith("/info/")
+            else bodies[request.url.path]
+        )
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            content=content,
+            request=request,
+        )
+
+    event = DisasterEvent(
+        event_id="usgs:kumamoto",
+        hazard="earthquake",
+        location="Kumamoto, Japan",
+        country="Japan",
+        event_time=datetime(2026, 7, 28, 7, 27, tzinfo=UTC),
+        source=SourceReference(
+            publisher="USGS",
+            title="M 7.1 Kumamoto, Japan",
+            canonical_url="https://usgs.test/kumamoto",
+            published_at=NOW,
+            updated_at=NOW,
+            retrieved_at=NOW,
+        ),
+        magnitude=7.1,
+        provider_ids=("usgs:kumamoto",),
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    result = await FdmaSituationReportAdapter(client=client).get_situation_reports(
+        event, QUERY, now=NOW
+    )
+    assert len(result.records) == 1
+    assert {fact.value for fact in result.records[0].facts} >= {"38", "120"}
+    assert all(
+        fact.source.canonical_url.endswith("new.html")
+        for fact in result.records[0].facts
+    )
+    assert not any(fact.value == "999" for fact in result.records[0].facts)
+    await client.aclose()
+
+
+def test_unextractable_fdma_pdf_is_rejected_without_guessing() -> None:
+    with pytest.raises(DisasterProviderResponseError, match="extractable text"):
+        _extract_pdf_text(b"%PDF-1.7 not a text-bearing PDF")

@@ -8,6 +8,7 @@ from disaster_monitor.application.disaster import (
     DisasterEvent,
     DisasterQuery,
     ProviderBatch,
+    ProviderIssue,
     SourceReference,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
@@ -50,6 +51,17 @@ class UsgsEarthquakeAdapter:
     ) -> ProviderBatch[DisasterEvent]:
         starttime = query.date_from or now - timedelta(days=query.time_window_days)
         endtime = query.date_to or now
+        generic_query = not any(
+            (
+                query.event_identifier,
+                query.date_from,
+                query.date_to,
+                query.prefecture,
+                query.city,
+                query.latitude is not None and query.longitude is not None,
+                query.magnitude is not None,
+            )
+        )
         params: dict[str, str | int | float | bool | None] = {
             "format": "geojson",
             "eventtype": "earthquake",
@@ -59,11 +71,11 @@ class UsgsEarthquakeAdapter:
             "maxlatitude": 46,
             "minlongitude": 122,
             "maxlongitude": 154,
-            "orderby": "time",
+            "orderby": "magnitude" if generic_query else "time",
             "limit": 50,
-            "includeallmagnitudes": "true",
-            "includeallorigins": "true",
         }
+        if generic_query:
+            params["minmagnitude"] = 4.5
         if query.magnitude is not None:
             params["minmagnitude"] = query.magnitude - 0.1
         if query.latitude is not None and query.longitude is not None:
@@ -76,6 +88,7 @@ class UsgsEarthquakeAdapter:
             USGS_QUERY_URL,
             params=params,
             max_bytes=self._max_response_bytes,
+            provider_name=self.provider_name,
         )
         if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
             raise DisasterProviderResponseError(
@@ -153,6 +166,17 @@ class UsgsEarthquakeAdapter:
                     is_aftershock="aftershock"
                     in _text(properties.get("title")).lower(),
                     provider_ids=(f"usgs:{event_id}",),
+                )
+            )
+        if not events:
+            return ProviderBatch(
+                issues=(
+                    ProviderIssue(
+                        self.provider_name,
+                        f"{self.provider_name}: The provider returned no matching "
+                        "records.",
+                        reason_code="empty_result",
+                    ),
                 )
             )
         return ProviderBatch(records=tuple(events))
