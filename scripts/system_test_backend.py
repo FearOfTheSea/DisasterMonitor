@@ -9,14 +9,7 @@ import uvicorn
 api_src = Path(__file__).resolve().parents[1] / "apps" / "api" / "src"
 sys.path.insert(0, str(api_src))
 
-from disaster_monitor.application.disaster import (  # noqa: E402
-    DisasterEvent,
-    FactStatus,
-    ProviderBatch,
-    ReportedFact,
-    SituationReport,
-    SourceReference,
-)
+from disaster_monitor.application.disaster import ProviderBatch  # noqa: E402
 from disaster_monitor.application.dto import (  # noqa: E402
     ModelReadiness,
     ModelRequest,
@@ -25,12 +18,27 @@ from disaster_monitor.application.services.current_disaster_report import (  # n
     CurrentDisasterReportService,
 )
 from disaster_monitor.main import create_app  # noqa: E402
+from disaster_monitor.domain.disaster import (  # noqa: E402
+    DisasterEvent,
+    FactStatus,
+    Hazard,
+    ReportedFact,
+    SituationReport,
+    SourceReference,
+)
+from disaster_monitor.infrastructure.geography.static_country_catalog import (  # noqa: E402
+    StaticCountryCatalog,
+)
 
 NOW = datetime(2026, 8, 6, 3, 0, tzinfo=UTC)
 TARGET_TIME = datetime(2026, 8, 5, 14, 30, tzinfo=UTC)
 FOREIGN_SENTINEL = "VENEZUELA-FOREIGN-EVIDENCE-SENTINEL"
 UNRELATED_SENTINEL = "TOKYO-UNRELATED-EVIDENCE-SENTINEL"
 MODEL_SENTINEL = "GENERAL-MODEL-SENTINEL"
+CATALOG = StaticCountryCatalog()
+JAPAN = CATALOG.get_by_alpha3("JPN")
+VENEZUELA = CATALOG.get_by_alpha3("VEN")
+assert JAPAN is not None and VENEZUELA is not None
 
 
 class FakeSystemModel:
@@ -79,9 +87,9 @@ class FakeSystemEventProvider:
             (
                 DisasterEvent(
                     event_id="jma:system-fixture",
-                    hazard="earthquake",
+                    hazard=Hazard.EARTHQUAKE,
                     location="Ishikawa, Japan",
-                    country="Japan",
+                    country=JAPAN,
                     event_time=TARGET_TIME,
                     source=jma_source,
                     latitude=37.0,
@@ -94,9 +102,9 @@ class FakeSystemEventProvider:
                 ),
                 DisasterEvent(
                     event_id="usgs:system-fixture",
-                    hazard="earthquake",
+                    hazard=Hazard.EARTHQUAKE,
                     location="Ishikawa, Japan",
-                    country="Japan",
+                    country=JAPAN,
                     event_time=TARGET_TIME + timedelta(seconds=20),
                     source=usgs_source,
                     latitude=37.02,
@@ -108,9 +116,9 @@ class FakeSystemEventProvider:
                 ),
                 DisasterEvent(
                     event_id="usgs:unrelated",
-                    hazard="earthquake",
+                    hazard=Hazard.EARTHQUAKE,
                     location="Tokyo, Japan",
-                    country="Japan",
+                    country=JAPAN,
                     event_time=datetime(2026, 8, 5, 23, 15, tzinfo=UTC),
                     source=unrelated_source,
                     latitude=35.7,
@@ -121,9 +129,9 @@ class FakeSystemEventProvider:
                 ),
                 DisasterEvent(
                     event_id="usgs:venezuela-decoy",
-                    hazard="earthquake",
+                    hazard=Hazard.EARTHQUAKE,
                     location="Sucre, Venezuela",
-                    country="Venezuela",
+                    country=VENEZUELA,
                     event_time=datetime(2026, 8, 6, 1, 45, tzinfo=UTC),
                     source=foreign_source,
                     latitude=10.4,

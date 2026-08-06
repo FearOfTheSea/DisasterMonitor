@@ -5,14 +5,17 @@ import httpx
 import pytest
 
 from disaster_monitor.application.disaster import (
-    CorrelationStatus,
-    DisasterEvent,
     DisasterQuery,
-    SourceReference,
 )
 from disaster_monitor.application.services.event_resolution import resolve_recent_event
 from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
+)
+from disaster_monitor.domain.disaster import (
+    CorrelationStatus,
+    DisasterEvent,
+    Hazard,
+    SourceReference,
 )
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
@@ -33,12 +36,17 @@ from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
 )
 from disaster_monitor.infrastructure.disaster.usgs_adapter import UsgsEarthquakeAdapter
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
 
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
+CATALOG = StaticCountryCatalog()
+JAPAN = CATALOG.get_by_alpha3("JPN")
+assert JAPAN is not None
 QUERY = DisasterQuery(
-    hazard="earthquake",
-    geography="Japan",
-    country_code="JPN",
+    hazard=Hazard.EARTHQUAKE,
+    country=JAPAN,
     time_intent="recent",
     focus=("damage", "latest developments"),
 )
@@ -194,9 +202,9 @@ async def test_reliefweb_adapter_extracts_preliminary_situation_facts() -> None:
 
     selected_event = DisasterEvent(
         event_id="usgs:fixture",
-        hazard="earthquake",
+        hazard=Hazard.EARTHQUAKE,
         location="Honshu, Japan",
-        country="Japan",
+        country=JAPAN,
         event_time=NOW,
         source=SourceReference(
             publisher="USGS",
@@ -259,9 +267,9 @@ async def test_reliefweb_adapter_correlates_reports_to_selected_event() -> None:
     adapter = ReliefWebSituationAdapter(client=client, app_name="approved-test")
     selected_event = DisasterEvent(
         event_id="reliefweb:selected",
-        hazard="earthquake",
+        hazard=Hazard.EARTHQUAKE,
         location="Ishikawa, Japan",
-        country="Japan",
+        country=JAPAN,
         event_time=datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
         source=SourceReference(
             publisher="USGS",
@@ -476,9 +484,9 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
 
     event = DisasterEvent(
         event_id="usgs:kumamoto",
-        hazard="earthquake",
+        hazard=Hazard.EARTHQUAKE,
         location="Kumamoto, Japan",
-        country="Japan",
+        country=JAPAN,
         event_time=datetime(2026, 7, 28, 7, 27, tzinfo=UTC),
         source=SourceReference(
             publisher="USGS",

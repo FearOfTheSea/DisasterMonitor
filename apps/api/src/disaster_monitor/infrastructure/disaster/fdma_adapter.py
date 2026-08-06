@@ -13,19 +13,21 @@ import httpx
 from pypdf import PdfReader
 
 from disaster_monitor.application.disaster import (
-    CorrelationStatus,
-    DisasterEvent,
     DisasterQuery,
-    FactStatus,
     ProviderBatch,
     ProviderIssue,
-    ReportedFact,
-    SituationReport,
-    SourceReference,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
     correlate_situation_report,
     sanitize_provider_text,
+)
+from disaster_monitor.domain.disaster import (
+    CorrelationStatus,
+    DisasterEvent,
+    FactStatus,
+    ReportedFact,
+    SituationReport,
+    SourceReference,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,

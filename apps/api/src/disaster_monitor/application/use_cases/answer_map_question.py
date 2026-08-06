@@ -7,7 +7,9 @@ from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
-from disaster_monitor.application.services.disaster_query import classify_request
+from disaster_monitor.application.services.disaster_query_parser import (
+    DisasterQueryParser,
+)
 from disaster_monitor.application.services.prompt_preparation import (
     clean_model_text,
     normalize_conversation_id,
@@ -25,9 +27,11 @@ class AnswerMapQuestion:
         self,
         language_model: LanguageModel,
         current_disaster_report: CurrentDisasterReportService | None = None,
+        disaster_query_parser: DisasterQueryParser | None = None,
     ) -> None:
         self._language_model = language_model
         self._current_disaster_report = current_disaster_report
+        self._disaster_query_parser = disaster_query_parser
 
     async def execute(
         self,
@@ -38,13 +42,22 @@ class AnswerMapQuestion:
         """Return a stable answer while keeping model details behind the port."""
         normalized_question = normalize_question(question)
         normalized_conversation_id = normalize_conversation_id(conversation_id)
-        classification = classify_request(normalized_question)
-        if classification.request_type.value == "current_disaster":
+        classification = (
+            self._disaster_query_parser.classify(normalized_question)
+            if self._disaster_query_parser is not None
+            else None
+        )
+        if (
+            classification is not None
+            and classification.request_type.value == "current_disaster"
+        ):
             if self._current_disaster_report is None:
                 raise ModelResponseError(
                     "The current-disaster workflow is not configured."
                 )
-            report = await self._current_disaster_report.execute(normalized_question)
+            if classification.query is None:
+                raise ModelResponseError("The disaster query could not be normalized.")
+            report = await self._current_disaster_report.execute(classification.query)
             return AssistantAnswer(
                 message=report.message,
                 conversation_id=(

@@ -3,12 +3,8 @@
 from datetime import datetime
 from typing import Protocol
 
-from disaster_monitor.application.disaster import (
-    DisasterEvent,
-    DisasterQuery,
-    ProviderBatch,
-    SituationReport,
-)
+from disaster_monitor.application.disaster import DisasterQuery, ProviderBatch
+from disaster_monitor.domain.disaster import DisasterEvent, SituationReport
 
 
 class DisasterEventProvider(Protocol):

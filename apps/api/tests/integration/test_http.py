@@ -4,17 +4,21 @@ import httpx
 import pytest
 from conftest import FakeLanguageModel
 
-from disaster_monitor.application.disaster import (
+from disaster_monitor.application.disaster import ProviderBatch
+from disaster_monitor.application.dto import ModelRequest
+from disaster_monitor.application.services.current_disaster_report import (
+    CurrentDisasterReportService,
+)
+from disaster_monitor.domain.disaster import (
     DisasterEvent,
     FactStatus,
-    ProviderBatch,
+    Hazard,
     ReportedFact,
     SituationReport,
     SourceReference,
 )
-from disaster_monitor.application.dto import ModelRequest
-from disaster_monitor.application.services.current_disaster_report import (
-    CurrentDisasterReportService,
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
 )
 from disaster_monitor.main import create_app
 
@@ -27,6 +31,10 @@ AUGUST_2026_PROMPT = (
     "Please give me the latest information about the earthquake in Japan on "
     "August 5, 2026."
 )
+CATALOG = StaticCountryCatalog()
+JAPAN = CATALOG.get_by_alpha3("JPN")
+VENEZUELA = CATALOG.get_by_alpha3("VEN")
+assert JAPAN is not None and VENEZUELA is not None
 
 
 def build_current_service(*, situation_error: Exception | None = None):
@@ -40,9 +48,9 @@ def build_current_service(*, situation_error: Exception | None = None):
     )
     selected_event = DisasterEvent(
         event_id="jma:fixture-event",
-        hazard="earthquake",
+        hazard=Hazard.EARTHQUAKE,
         location="Ishikawa, Japan",
-        country="Japan",
+        country=JAPAN,
         event_time=datetime(2026, 8, 5, 10, 0, tzinfo=UTC),
         source=event_source,
         latitude=37.0,
@@ -220,9 +228,9 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
     )
     target_event = DisasterEvent(
         event_id="jma:202608051430",
-        hazard="earthquake",
+        hazard=Hazard.EARTHQUAKE,
         location="Ishikawa, Japan",
-        country="Japan",
+        country=JAPAN,
         event_time=target_time,
         source=target_source,
         latitude=37.0,
@@ -239,9 +247,9 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
                 (
                     DisasterEvent(
                         event_id="usgs:venezuela-decoy",
-                        hazard="earthquake",
+                        hazard=Hazard.EARTHQUAKE,
                         location="Sucre, Venezuela",
-                        country="Venezuela",
+                        country=VENEZUELA,
                         event_time=datetime(2026, 8, 5, 18, 0, tzinfo=UTC),
                         source=target_source,
                         magnitude=9.8,
@@ -249,9 +257,9 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
                     ),
                     DisasterEvent(
                         event_id="usgs:tokyo-decoy",
-                        hazard="earthquake",
+                        hazard=Hazard.EARTHQUAKE,
                         location="Tokyo, Japan",
-                        country="Japan",
+                        country=JAPAN,
                         event_time=datetime(2026, 8, 6, 1, 0, tzinfo=UTC),
                         source=target_source,
                         magnitude=9.5,

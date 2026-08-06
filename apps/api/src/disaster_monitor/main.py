@@ -11,9 +11,13 @@ from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
+from disaster_monitor.application.services.disaster_query_parser import (
+    DisasterQueryParser,
+)
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.infrastructure.composition import (
     build_current_disaster_report,
+    build_disaster_query_parser,
     build_language_model,
 )
 from disaster_monitor.infrastructure.configuration import Settings
@@ -25,6 +29,7 @@ def create_app(
     settings: Settings | None = None,
     model: LanguageModel | None = None,
     current_disaster_report: CurrentDisasterReportService | None = None,
+    disaster_query_parser: DisasterQueryParser | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -32,6 +37,7 @@ def create_app(
     disaster_report = current_disaster_report or build_current_disaster_report(
         app_settings
     )
+    query_parser = disaster_query_parser or build_disaster_query_parser()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -57,7 +63,9 @@ def create_app(
     )
     app.state.language_model = language_model
     app.state.current_disaster_report = disaster_report
-    app.state.answer_map_question = AnswerMapQuestion(language_model, disaster_report)
+    app.state.answer_map_question = AnswerMapQuestion(
+        language_model, disaster_report, query_parser
+    )
     app.include_router(router, prefix="/api/v1")
     register_error_handlers(app)
     return app

@@ -4,20 +4,14 @@ import httpx
 import pytest
 
 from disaster_monitor.application.disaster import (
-    CorrelationStatus,
-    DisasterEvent,
     DisasterQuery,
-    FactStatus,
-    ReportedFact,
-    SituationReport,
-    SourceReference,
 )
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
     render_source_backed_report,
 )
-from disaster_monitor.application.services.disaster_query import (
-    extract_disaster_query,
+from disaster_monitor.application.services.disaster_query_parser import (
+    DisasterQueryParser,
 )
 from disaster_monitor.application.services.event_resolution import (
     resolve_recent_event,
@@ -26,6 +20,15 @@ from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
     correlate_situation_report,
 )
+from disaster_monitor.domain.disaster import (
+    CorrelationStatus,
+    DisasterEvent,
+    FactStatus,
+    Hazard,
+    ReportedFact,
+    SituationReport,
+    SourceReference,
+)
 from disaster_monitor.infrastructure.disaster.composite import (
     cluster_physical_events,
 )
@@ -33,8 +36,15 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
 from disaster_monitor.infrastructure.disaster.http import get_json
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
 
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
+CATALOG = StaticCountryCatalog()
+PARSER = DisasterQueryParser(CATALOG)
+JAPAN = CATALOG.get_by_alpha3("JPN")
+assert JAPAN is not None
 
 
 def _source(publisher: str, title: str) -> SourceReference:
@@ -61,9 +71,9 @@ def _event(
 ) -> DisasterEvent:
     return DisasterEvent(
         event_id=event_id,
-        hazard="earthquake",
+        hazard=Hazard.EARTHQUAKE,
         location=location,
-        country="Japan",
+        country=JAPAN,
         event_time=NOW - timedelta(hours=hours_old),
         source=_source("USGS", event_id),
         latitude=latitude,
@@ -78,9 +88,8 @@ def _event(
 
 def _query(**kwargs: object) -> DisasterQuery:
     values: dict[str, object] = {
-        "hazard": "earthquake",
-        "geography": "Japan",
-        "country_code": "JPN",
+        "hazard": Hazard.EARTHQUAKE,
+        "country": JAPAN,
         "time_intent": "recent",
         "focus": ("damage",),
     }
@@ -89,10 +98,10 @@ def _query(**kwargs: object) -> DisasterQuery:
 
 
 def test_date_and_each_event_discriminator_narrows_resolution() -> None:
-    query = extract_disaster_query(
+    query = PARSER.parse(
         "Latest earthquake in Japan on 2026-08-05 in Ishikawa Prefecture "
         "near Kanazawa City at 37.0, 137.0, magnitude 6.0."
-    )
+    ).query
     assert query is not None
     assert query.date_from is not None and query.date_to is not None
     assert query.date_to > query.date_from
@@ -264,7 +273,7 @@ async def test_event_without_situation_records_is_explicitly_partial() -> None:
 
     result = await CurrentDisasterReportService(
         Events(), NoSituation(), clock=lambda: NOW
-    ).execute("There was a recent earthquake in Japan. Please provide an update.")
+    ).execute(_query())
     assert result.selected_event is not None
     assert result.partial is True
     assert any("does not mean" in warning for warning in result.warnings)

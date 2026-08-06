@@ -4,11 +4,10 @@ import re
 from datetime import UTC, datetime, timedelta
 from html import unescape
 
-from disaster_monitor.application.disaster import (
+from disaster_monitor.application.disaster import DisasterQuery, EvidencePacket
+from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     DisasterEvent,
-    DisasterQuery,
-    EvidencePacket,
     FactStatus,
     ReportedFact,
     SituationReport,

@@ -1,13 +1,16 @@
-"""Provider-neutral types for source-backed disaster reports.
-
-These types intentionally contain facts and provenance, rather than provider
-payloads.  Provider adapters translate their responses into this vocabulary
-before an application service can use them.
-"""
+"""Application workflow types for source-backed disaster reporting."""
 
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+
+from disaster_monitor.domain.disaster import (
+    Country,
+    DisasterEvent,
+    Hazard,
+    ReportedFact,
+    SourceReference,
+)
 
 
 class RequestType(StrEnum):
@@ -19,31 +22,23 @@ class RequestType(StrEnum):
     AMBIGUOUS = "ambiguous"
 
 
-class FactStatus(StrEnum):
-    """How confidently a source presents a reported value."""
-
-    CONFIRMED = "confirmed"
-    PRELIMINARY = "preliminary"
-    ESTIMATED = "estimated"
-    DISPUTED = "disputed"
-    UNKNOWN = "unknown"
-
-
-class CorrelationStatus(StrEnum):
-    """How strongly a situation record is tied to the selected event."""
+class QueryParseStatus(StrEnum):
+    """Deterministic outcomes from disaster intent parsing."""
 
     MATCHED = "matched"
-    POSSIBLE = "possible"
-    UNMATCHED = "unmatched"
+    NO_HAZARD = "no_hazard"
+    NO_COUNTRY = "no_country"
+    MULTIPLE_HAZARDS = "multiple_hazards"
+    MULTIPLE_COUNTRIES = "multiple_countries"
+    DATE_TIMEZONE_UNAVAILABLE = "date_timezone_unavailable"
 
 
 @dataclass(frozen=True, slots=True)
 class DisasterQuery:
     """Normalized user intent for a bounded current-disaster lookup."""
 
-    hazard: str
-    geography: str
-    country_code: str
+    hazard: Hazard
+    country: Country
     time_intent: str
     focus: tuple[str, ...]
     time_window_days: int = 30
@@ -56,92 +51,34 @@ class DisasterQuery:
     longitude: float | None = None
     event_identifier: str | None = None
 
-
-@dataclass(frozen=True, slots=True)
-class SourceReference:
-    """A canonical source and the distinct timestamps attached to it."""
-
-    publisher: str
-    title: str
-    canonical_url: str
-    published_at: datetime | None
-    updated_at: datetime | None
-    retrieved_at: datetime
+    @property
+    def geography(self) -> str:
+        """Return the canonical country name for display-only compatibility."""
+        return self.country.canonical_name
 
     @property
-    def effective_at(self) -> datetime:
-        """Return the best timestamp for freshness and conflict handling."""
-        return self.updated_at or self.published_at or self.retrieved_at
+    def country_code(self) -> str:
+        """Return the canonical ISO alpha-3 code."""
+        return self.country.alpha3_code
 
 
 @dataclass(frozen=True, slots=True)
-class DisasterEvent:
-    """A normalized candidate earthquake event."""
+class DisasterQueryParseResult:
+    """A parsed query or an explicit deterministic limitation."""
 
-    event_id: str
-    hazard: str
-    location: str
-    country: str
-    event_time: datetime
-    source: SourceReference
-    latitude: float | None = None
-    longitude: float | None = None
-    magnitude: float | None = None
-    magnitude_type: str | None = None
-    intensity: str | None = None
-    depth_km: float | None = None
-    significance: float | None = None
-    is_aftershock: bool = False
-    parent_event_id: str | None = None
-    sequence_id: str | None = None
-    provider_ids: tuple[str, ...] = ()
-
-    def has_provider_id(self, value: str) -> bool:
-        """Return whether a provider-specific identifier belongs to this event."""
-        normalized = value.lower()
-        identifiers = {
-            item.lower().removeprefix("jma:").removeprefix("usgs:")
-            for item in (self.event_id, *self.provider_ids)
-        }
-        return normalized.removeprefix("jma:").removeprefix("usgs:") in identifiers
-
-    @property
-    def jma_event_id(self) -> str | None:
-        """Return the preserved JMA identifier, if one was clustered here."""
-        for value in (self.event_id, *self.provider_ids):
-            if value.lower().startswith("jma:"):
-                return value.removeprefix("jma:")
-        return None
+    status: QueryParseStatus
+    query: DisasterQuery | None = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class ReportedFact:
-    """One source-attributed, normalized claim about an event."""
+class RequestClassification:
+    """Deterministic request type and optional normalized query."""
 
-    category: str
-    label: str
-    value: str
-    status: FactStatus
-    source: SourceReference
-    event_id: str | None = None
-    observed_at: datetime | None = None
-    claim_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class SituationReport:
-    """A provider-neutral situation update with bounded narrative text."""
-
-    source: SourceReference
-    narrative: str
-    facts: tuple[ReportedFact, ...] = ()
-    event_id: str | None = None
-    correlation: CorrelationStatus | None = None
-    reported_event_time: datetime | None = None
-    locations: tuple[str, ...] = ()
-    countries: tuple[str, ...] = ()
-    magnitude: float | None = None
-    provider_event_ids: tuple[str, ...] = ()
+    request_type: RequestType
+    query: DisasterQuery | None
+    parse_status: QueryParseStatus | None = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,7 +131,7 @@ class SelectedEventSummary:
     """Stable event metadata exposed at the API boundary."""
 
     event_id: str
-    hazard: str
+    hazard: Hazard
     location: str
     event_time: datetime
     magnitude: float | None

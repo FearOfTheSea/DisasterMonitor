@@ -8,20 +8,22 @@ from datetime import datetime, timedelta
 import httpx
 
 from disaster_monitor.application.disaster import (
-    CorrelationStatus,
-    DisasterEvent,
     DisasterQuery,
-    FactStatus,
     ProviderBatch,
     ProviderIssue,
-    ReportedFact,
-    SituationReport,
-    SourceReference,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
     correlate_situation_report,
     normalize_timestamp,
     sanitize_provider_text,
+)
+from disaster_monitor.domain.disaster import (
+    CorrelationStatus,
+    DisasterEvent,
+    FactStatus,
+    ReportedFact,
+    SituationReport,
+    SourceReference,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,

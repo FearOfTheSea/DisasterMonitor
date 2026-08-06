@@ -5,15 +5,14 @@ from datetime import datetime, timedelta
 import httpx
 
 from disaster_monitor.application.disaster import (
-    DisasterEvent,
     DisasterQuery,
     ProviderBatch,
     ProviderIssue,
-    SourceReference,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
     normalize_timestamp,
 )
+from disaster_monitor.domain.disaster import DisasterEvent, Hazard, SourceReference
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
@@ -147,9 +146,9 @@ class UsgsEarthquakeAdapter:
             events.append(
                 DisasterEvent(
                     event_id=f"usgs:{event_id}",
-                    hazard="earthquake",
+                    hazard=Hazard.EARTHQUAKE,
                     location=_text(properties.get("place")) or "Japan",
-                    country="Japan",
+                    country=query.country,
                     event_time=event_time,
                     source=source,
                     latitude=latitude,

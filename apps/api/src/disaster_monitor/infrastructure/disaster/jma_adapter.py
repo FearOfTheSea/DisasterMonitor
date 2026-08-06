@@ -8,17 +8,20 @@ from urllib.parse import urljoin
 import httpx
 
 from disaster_monitor.application.disaster import (
-    DisasterEvent,
     DisasterQuery,
-    FactStatus,
     ProviderBatch,
     ProviderIssue,
-    ReportedFact,
-    SituationReport,
-    SourceReference,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
     normalize_timestamp,
+)
+from disaster_monitor.domain.disaster import (
+    DisasterEvent,
+    FactStatus,
+    Hazard,
+    ReportedFact,
+    SituationReport,
+    SourceReference,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
@@ -129,9 +132,9 @@ class JmaEarthquakeAdapter:
             events.append(
                 DisasterEvent(
                     event_id=f"jma:{event_id}",
-                    hazard="earthquake",
+                    hazard=Hazard.EARTHQUAKE,
                     location=location or "Japan",
-                    country="Japan",
+                    country=query.country,
                     event_time=event_time,
                     source=source,
                     latitude=latitude,
@@ -421,9 +424,9 @@ class JmaSignificantEarthquakeAdapter:
             events.append(
                 DisasterEvent(
                     event_id=f"jma:{event_id}",
-                    hazard="earthquake",
+                    hazard=Hazard.EARTHQUAKE,
                     location=cells[1] or "Japan",
-                    country="Japan",
+                    country=query.country,
                     event_time=event_time,
                     source=source,
                     latitude=latitude,

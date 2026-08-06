@@ -1,28 +1,32 @@
 # Current-disaster reporting
 
-The assistant has a deterministic current-disaster path for supported earthquake
-requests. The exact request below is classified before the language model is
-consulted:
+The assistant has a deterministic current-disaster path for recognized hazard and
+country requests. A `DisasterQueryParser` resolves exact hazard aliases and a
+packaged country catalog before the language model is consulted:
 
 > There was a recent earthquake in Japan. Please update me with the latest information about the damages in Japan.
 
 The flow is:
 
-1. Normalize the question and extract hazard, geography, time intent, focus, and
+1. Normalize the question and extract one typed hazard, one canonical country,
+   time intent, focus, and
    optional dates, coordinates, magnitude, prefecture, city, or event identifier.
-2. Query the bounded event-source ports for recent Japanese earthquake candidates.
-3. Rank candidates by maximum JMA intensity, magnitude, provider significance,
+2. Pass that same normalized query to the source-backed workflow. Explicit dates
+   use the configured country calendar boundary; Japan August 5 spans
+   `2026-08-04T15:00:00Z` through `2026-08-05T15:00:00Z`.
+3. Query the bounded event-source ports for candidate events.
+4. Rank candidates by maximum JMA intensity, magnitude, provider significance,
    recency, and an aftershock penalty. Magnitude and intensity materially outweigh
    a small age difference, so a destructive mainshock remains preferred to a later
    routine tremor. Explicit date, location, coordinate, magnitude, and event-ID
    discriminators override generic ranking. A
    materially ambiguous pair of unrelated events is disclosed instead of being
    silently conflated.
-4. Retrieve situation records for the selected event from the bounded situation
+5. Retrieve situation records for the selected event from the bounded situation
    sources.
-5. Reconcile typed facts by source priority and effective update time. Missing
+6. Reconcile typed facts by source priority and effective update time. Missing
    values remain missing; a missing damage figure is not rendered as zero.
-6. Render a deterministic source-backed report with structured sections, source
+7. Render a deterministic source-backed report with structured sections, source
    metadata, warnings, and retrieval time.
 
 The current report path does not use model memory for current facts. This keeps

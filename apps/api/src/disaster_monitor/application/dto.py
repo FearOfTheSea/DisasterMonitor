@@ -3,11 +3,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from disaster_monitor.application.disaster import (
-    ReportSection,
-    SelectedEventSummary,
-    SourceReference,
-)
+from disaster_monitor.application.disaster import ReportSection, SelectedEventSummary
+from disaster_monitor.domain.disaster import SourceReference
 
 
 @dataclass(frozen=True, slots=True)

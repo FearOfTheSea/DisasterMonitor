@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import asin, cos, radians, sin, sqrt
 
-from disaster_monitor.application.disaster import DisasterEvent, DisasterQuery
+from disaster_monitor.application.disaster import DisasterQuery
+from disaster_monitor.domain.disaster import DisasterEvent
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +143,7 @@ def resolve_recent_event(
         event
         for event in candidates
         if event.hazard == query.hazard
-        and event.country.lower() == query.geography.lower()
+        and event.country.alpha3_code == query.country.alpha3_code
         and window_start <= event.event_time <= window_end
         and (
             query.event_identifier is None

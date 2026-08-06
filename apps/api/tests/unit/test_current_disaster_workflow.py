@@ -3,21 +3,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from disaster_monitor.application.disaster import (
-    DisasterEvent,
     DisasterQuery,
-    FactStatus,
     ProviderBatch,
-    ReportedFact,
     RequestType,
-    SituationReport,
-    SourceReference,
 )
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
-from disaster_monitor.application.services.disaster_query import (
-    classify_request,
-    extract_disaster_query,
+from disaster_monitor.application.services.disaster_query_parser import (
+    DisasterQueryParser,
 )
 from disaster_monitor.application.services.event_resolution import resolve_recent_event
 from disaster_monitor.application.services.evidence_reconciliation import (
@@ -25,12 +19,27 @@ from disaster_monitor.application.services.evidence_reconciliation import (
     normalize_timestamp,
     sanitize_provider_text,
 )
+from disaster_monitor.domain.disaster import (
+    DisasterEvent,
+    FactStatus,
+    Hazard,
+    ReportedFact,
+    SituationReport,
+    SourceReference,
+)
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
 
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
 TARGET = (
     "There was a recent earthquake in Japan. Please update me with the latest "
     "information about the damages in Japan."
 )
+CATALOG = StaticCountryCatalog()
+PARSER = DisasterQueryParser(CATALOG)
+JAPAN = CATALOG.get_by_alpha3("JPN")
+assert JAPAN is not None
 
 
 def source(
@@ -63,9 +72,9 @@ def event(
     event_time = NOW - timedelta(hours=hours_old)
     return DisasterEvent(
         event_id=event_id,
-        hazard="earthquake",
+        hazard=Hazard.EARTHQUAKE,
         location="Honshu, Japan",
-        country="Japan",
+        country=JAPAN,
         event_time=event_time,
         source=source("JMA", f"Event {event_id}"),
         latitude=latitude,
@@ -82,9 +91,8 @@ def event(
 
 def query() -> DisasterQuery:
     return DisasterQuery(
-        hazard="earthquake",
-        geography="Japan",
-        country_code="JPN",
+        hazard=Hazard.EARTHQUAKE,
+        country=JAPAN,
         time_intent="recent",
         focus=("damage", "latest developments"),
     )
@@ -130,8 +138,8 @@ class FakeSituationProvider:
 
 
 def test_exact_target_is_current_disaster_and_query_is_normalized() -> None:
-    classification = classify_request(TARGET)
-    extracted = extract_disaster_query(TARGET)
+    classification = PARSER.classify(TARGET)
+    extracted = PARSER.parse(TARGET).query
 
     assert classification.request_type == RequestType.CURRENT_DISASTER
     assert extracted is not None
@@ -280,7 +288,7 @@ async def test_service_returns_source_backed_fallback() -> None:
         clock=lambda: NOW,
     )
 
-    result = await service.execute(TARGET)
+    result = await service.execute(query())
 
     assert result.response_type == "current_disaster"
     assert result.selected_event is not None
@@ -298,7 +306,7 @@ async def test_service_keeps_partial_result_and_surfaces_provider_failure() -> N
         clock=lambda: NOW,
     )
 
-    result = await service.execute(TARGET)
+    result = await service.execute(query())
 
     assert result.selected_event is not None
     assert result.partial is True

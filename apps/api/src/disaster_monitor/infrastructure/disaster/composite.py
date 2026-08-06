@@ -5,16 +5,15 @@ from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
 
 from disaster_monitor.application.disaster import (
-    DisasterEvent,
     DisasterQuery,
     ProviderBatch,
     ProviderIssue,
-    SituationReport,
 )
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
 )
+from disaster_monitor.domain.disaster import DisasterEvent, SituationReport
 from disaster_monitor.infrastructure.disaster.errors import DisasterProviderError
 
 _SAFE_MESSAGES = {

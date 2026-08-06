@@ -13,9 +13,10 @@ flowchart LR
     web --> osm["OpenStreetMap tiles"]
 ```
 
-OpenStreetMap is used only for the basic base map. The current-earthquake
-workflow has bounded JMA, USGS, and ReliefWeb source adapters; other live
-disaster datasets remain unimplemented. The browser retains the conversation for
+OpenStreetMap is used only for the basic base map. The current-disaster workflow
+normalizes a typed hazard and country before provider access. Japan earthquake
+adapters remain the current live scope while capability routing is being expanded;
+other live disaster datasets remain unimplemented. The browser retains the conversation for
 the current tab session; the API does not persist multi-user conversations.
 
 ## Backend request flow
@@ -34,7 +35,7 @@ sequenceDiagram
 
     Browser->>Route: POST /api/v1/assistant
     Route->>UseCase: validated question + map view
-    UseCase->>UseCase: deterministic classification
+    UseCase->>UseCase: parse hazard + country once
     alt current-disaster request
         UseCase->>Report: normalized query
         Report->>Events: bounded recent-event lookup
@@ -55,7 +56,12 @@ sequenceDiagram
     Route-->>Browser: stable JSON response
 ```
 
-The application layer depends on the `LanguageModel` protocol and provider-neutral DTOs. It does not import FastAPI, Ollama, `httpx`, or Pydantic. `main.create_app` is the composition root that selects the concrete adapter.
+The application layer depends on the `LanguageModel`, disaster-information, and
+country-catalog ports plus provider-neutral DTOs. Stable disaster facts live in
+`domain/disaster.py`; workflow results and `DisasterQuery` remain in the
+application layer. `DisasterQuery` contains one typed `Hazard` and one canonical
+`Country`, so country name and ISO code cannot diverge. The application does not
+import FastAPI, Ollama, `httpx`, or Pydantic. Composition selects concrete adapters.
 
 ## Frontend boundaries
 
@@ -82,6 +88,10 @@ DisasterEventProvider
 
 SituationReportProvider
   get_situation_reports(DisasterEvent, DisasterQuery, now) -> ProviderBatch[SituationReport]
+
+CountryCatalog
+  find_mentions(text) -> tuple[Country, ...]
+  contains(Country, latitude, longitude) -> bool
 ```
 
 `OllamaQwenAdapter` implements the model port. JMA, USGS, and ReliefWeb adapters
@@ -104,7 +114,16 @@ Transport schemas and Ollama payloads remain at the edges. The use case prepares
 
 ## Composition and testing
 
-`create_app(settings, model)` accepts an optional model for tests. Production construction builds `Settings`, then `OllamaQwenAdapter`, then `AnswerMapQuestion`. Backend tests use a fake model and `httpx.ASGITransport`; adapter tests use `httpx.MockTransport`. Frontend tests cover the client, session store, assistant states, and form submission. The Playwright system test starts the real Next.js UI against a FastAPI app with a fake model.
+`create_app` accepts optional adapters for tests. Production construction builds
+`Settings`, the packaged `StaticCountryCatalog`, `DisasterQueryParser`, source
+providers, `OllamaQwenAdapter`, and `AnswerMapQuestion`. Backend tests use a fake
+model and `httpx.ASGITransport`; adapter tests use `httpx.MockTransport`.
+
+The versioned MVP country resource currently recognizes Japan, Vietnam, and
+Venezuela by canonical English name, ISO alpha-2/alpha-3 code, and declared exact
+aliases. Its rectangular extents are Natural Earth-derived query approximations,
+not legal borders. Fixed calendar offsets are used for these three countries,
+which do not use seasonal daylight-saving transitions.
 
 ## Adding a future external-data capability
 

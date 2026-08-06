@@ -4,22 +4,17 @@ from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 
 from disaster_monitor.application.disaster import (
-    DisasterEvent,
+    DisasterQuery,
     DisasterReport,
     EvidencePacket,
-    FactStatus,
     ProviderBatch,
-    ReportedFact,
     ReportSection,
     SelectedEventSummary,
-    SituationReport,
-    SourceReference,
 )
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
 )
-from disaster_monitor.application.services.disaster_query import extract_disaster_query
 from disaster_monitor.application.services.event_resolution import (
     EventResolution,
     resolve_recent_event,
@@ -27,7 +22,13 @@ from disaster_monitor.application.services.event_resolution import (
 from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
 )
-from disaster_monitor.domain.errors import InvalidQuestionError
+from disaster_monitor.domain.disaster import (
+    DisasterEvent,
+    FactStatus,
+    ReportedFact,
+    SituationReport,
+    SourceReference,
+)
 
 
 def _now_utc() -> datetime:
@@ -225,12 +226,7 @@ class CurrentDisasterReportService:
         self._situation_report_provider = situation_report_provider
         self._clock = clock
 
-    async def execute(self, question: str) -> DisasterReport:
-        query = extract_disaster_query(question)
-        if query is None:
-            raise InvalidQuestionError(
-                "This request is not a supported current-disaster query."
-            )
+    async def execute(self, query: DisasterQuery) -> DisasterReport:
         retrieved_at = self._clock()
         if retrieved_at.tzinfo is None:
             retrieved_at = retrieved_at.replace(tzinfo=UTC)

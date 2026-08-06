@@ -8,6 +8,9 @@ from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
+from disaster_monitor.application.services.disaster_query_parser import (
+    DisasterQueryParser,
+)
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
@@ -25,6 +28,9 @@ from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
 )
 from disaster_monitor.infrastructure.disaster.usgs_adapter import UsgsEarthquakeAdapter
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
 from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAdapter
 
 
@@ -36,6 +42,11 @@ def build_language_model(settings: Settings) -> LanguageModel:
         timeout_seconds=settings.ollama_timeout_seconds,
         max_tokens=settings.ollama_max_tokens,
     )
+
+
+def build_disaster_query_parser() -> DisasterQueryParser:
+    """Construct deterministic disaster parsing with packaged country metadata."""
+    return DisasterQueryParser(StaticCountryCatalog())
 
 
 def build_current_disaster_report(settings: Settings) -> CurrentDisasterReportService:

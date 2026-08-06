@@ -12,6 +12,7 @@ from disaster_monitor.application.services.current_disaster_report import (  # n
 )
 from disaster_monitor.infrastructure.composition import (  # noqa: E402
     build_current_disaster_report,
+    build_disaster_query_parser,
 )
 from disaster_monitor.infrastructure.disaster.composite import (  # noqa: E402
     CompositeDisasterEventProvider,
@@ -25,7 +26,9 @@ QUESTIONS = (
 )
 
 
-def _print_provider_status(label: str, provider, counts: dict[str, int], issues) -> None:
+def _print_provider_status(
+    label: str, provider, counts: dict[str, int], issues
+) -> None:
     issue_by_provider = {issue.provider: issue for issue in issues}
     print(f"{label}_providers=")
     for item in provider.providers:
@@ -44,19 +47,31 @@ async def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")
     settings = Settings()
+    query_parser = build_disaster_query_parser()
     for question in QUESTIONS:
         service: CurrentDisasterReportService = build_current_disaster_report(settings)
         try:
-            result = await service.execute(question)
+            query = query_parser.parse(question).query
+            if query is None:
+                raise RuntimeError(
+                    f"Could not normalize live smoke question: {question}"
+                )
+            result = await service.execute(query)
             event_provider = service._event_provider  # noqa: SLF001
             situation_provider = service._situation_report_provider  # noqa: SLF001
             if isinstance(event_provider, CompositeDisasterEventProvider):
                 _print_provider_status(
-                    "event", event_provider, event_provider.last_record_counts, event_provider.last_diagnostics
+                    "event",
+                    event_provider,
+                    event_provider.last_record_counts,
+                    event_provider.last_diagnostics,
                 )
             if isinstance(situation_provider, CompositeSituationReportProvider):
                 _print_provider_status(
-                    "situation", situation_provider, situation_provider.last_record_counts, situation_provider.last_diagnostics
+                    "situation",
+                    situation_provider,
+                    situation_provider.last_record_counts,
+                    situation_provider.last_diagnostics,
                 )
                 if not settings.reliefweb_app_name:
                     print("- ReliefWeb: skipped (not configured)")
@@ -65,13 +80,17 @@ async def main() -> None:
         print(f"question={question}")
         print(f"response_type={result.response_type}")
         if result.selected_event is not None:
-            print(f"event={result.selected_event.event_id} {result.selected_event.location}")
+            print(
+                f"event={result.selected_event.event_id} {result.selected_event.location}"
+            )
             print(f"event_provider_ids={','.join(result.selected_event.provider_ids)}")
         print(f"retrieved_at={result.retrieval_time.isoformat()}")
         print("sources=")
         for source in result.sources:
             timestamp = source.updated_at or source.published_at or source.retrieved_at
-            print(f"- {source.publisher}: {source.canonical_url} latest={timestamp.isoformat()}")
+            print(
+                f"- {source.publisher}: {source.canonical_url} latest={timestamp.isoformat()}"
+            )
         for warning in result.warnings:
             print(f"warning={warning}")
 
