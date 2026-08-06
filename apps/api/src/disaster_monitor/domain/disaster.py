@@ -34,13 +34,41 @@ class GeographicArea:
     validation_quality: BoundaryValidationQuality = (
         BoundaryValidationQuality.BOUNDING_BOX
     )
+    polygons: tuple[tuple[tuple[float, float], ...], ...] = ()
 
     def contains(self, latitude: float, longitude: float) -> bool:
         """Return whether a coordinate lies in the represented area."""
-        return (
+        in_bounds = (
             self.min_latitude <= latitude <= self.max_latitude
             and self.min_longitude <= longitude <= self.max_longitude
         )
+        if not in_bounds or not self.polygons:
+            return in_bounds
+        return any(
+            _point_in_polygon(latitude, longitude, polygon) for polygon in self.polygons
+        )
+
+
+def _point_in_polygon(
+    latitude: float,
+    longitude: float,
+    polygon: tuple[tuple[float, float], ...],
+) -> bool:
+    """Return point membership using a deterministic ray-casting boundary test."""
+    inside = False
+    previous = polygon[-1]
+    for current in polygon:
+        current_latitude, current_longitude = current
+        previous_latitude, previous_longitude = previous
+        intersects = (current_latitude > latitude) != (previous_latitude > latitude)
+        if intersects:
+            boundary_longitude = (previous_longitude - current_longitude) * (
+                latitude - current_latitude
+            ) / (previous_latitude - current_latitude) + current_longitude
+            if longitude <= boundary_longitude:
+                inside = not inside
+        previous = current
+    return inside
 
 
 @dataclass(frozen=True, slots=True)

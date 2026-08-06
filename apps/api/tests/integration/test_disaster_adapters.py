@@ -43,7 +43,8 @@ from disaster_monitor.infrastructure.geography.static_country_catalog import (
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
 CATALOG = StaticCountryCatalog()
 JAPAN = CATALOG.get_by_alpha3("JPN")
-assert JAPAN is not None
+VENEZUELA = CATALOG.get_by_alpha3("VEN")
+assert JAPAN is not None and VENEZUELA is not None
 QUERY = DisasterQuery(
     hazard=Hazard.EARTHQUAKE,
     country=JAPAN,
@@ -121,12 +122,6 @@ async def test_usgs_adapter_translates_valid_geojson_and_missing_optional_fields
         ({"not": "geojson"}, "application/json", 1_000_000, 200),
         (b"not-json", "text/plain", 1_000_000, 200),
         (b"{}", "application/json", 1, 200),
-        (
-            {"type": "FeatureCollection", "features": [{}]},
-            "application/json",
-            1_000_000,
-            200,
-        ),
     ],
 )
 async def test_usgs_adapter_rejects_malformed_unexpected_or_oversized_payloads(
@@ -137,6 +132,21 @@ async def test_usgs_adapter_rejects_malformed_unexpected_or_oversized_payloads(
 
     with pytest.raises((DisasterProviderError, DisasterProviderResponseError)):
         await adapter.find_recent_events(QUERY, now=NOW)
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_keeps_valid_feature_when_sibling_is_malformed() -> None:
+    payload = usgs_payload()
+    payload["features"].append({})  # type: ignore[union-attr]
+    client = client_for(payload)
+
+    result = await UsgsEarthquakeAdapter(client=client).find_recent_events(
+        QUERY, now=NOW
+    )
+
+    assert [event.event_id for event in result.records] == ["usgs:us7000fixture"]
+    assert result.issues[0].reason_code == "invalid_record"
     await client.aclose()
 
 
@@ -315,8 +325,72 @@ async def test_usgs_generic_query_is_bounded_and_magnitude_ordered() -> None:
     assert query_params["orderby"] == "magnitude"
     assert query_params["limit"] == "50"
     assert query_params["minmagnitude"] == "4.5"
+    assert query_params["minlatitude"] == "20.0"
+    assert query_params["maxlatitude"] == "46.0"
+    assert query_params["minlongitude"] == "122.0"
+    assert query_params["maxlongitude"] == "154.0"
     assert "includeallorigins" not in query_params
     assert "includeallmagnitudes" not in query_params
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_uses_non_japan_bounds_and_canonical_country() -> None:
+    requests: list[httpx.Request] = []
+    payload = usgs_payload()
+    feature = payload["features"][0]  # type: ignore[index]
+    feature["properties"]["place"] = "Sucre, Venezuela"  # type: ignore[index]
+    feature["geometry"]["coordinates"] = [-63.5, 10.4, 12.0]  # type: ignore[index]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=json.dumps(payload).encode(),
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    query = DisasterQuery(
+        Hazard.EARTHQUAKE,
+        VENEZUELA,
+        "recent",
+        ("latest developments",),
+    )
+    result = await UsgsEarthquakeAdapter(client=client).find_recent_events(
+        query, now=NOW
+    )
+    params = dict(requests[0].url.params.multi_items())
+
+    assert params["minlatitude"] == "0.63"
+    assert params["maxlatitude"] == "12.2"
+    assert params["minlongitude"] == "-73.35"
+    assert params["maxlongitude"] == "-59.8"
+    assert result.records[0].country == VENEZUELA
+    assert result.records[0].event_id == "usgs:us7000fixture"
+    assert result.records[0].source.published_at == datetime(
+        2026, 8, 5, 10, 0, tzinfo=UTC
+    )
+    assert result.records[0].source.updated_at == datetime(
+        2026, 8, 5, 10, 5, tzinfo=UTC
+    )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_excludes_coordinate_inside_rectangle_but_outside_country() -> None:
+    payload = usgs_payload()
+    feature = payload["features"][0]  # type: ignore[index]
+    feature["geometry"]["coordinates"] = [123.0, 21.0, 20.0]  # type: ignore[index]
+    client = client_for(payload)
+
+    result = await UsgsEarthquakeAdapter(client=client).find_recent_events(
+        QUERY, now=NOW
+    )
+
+    assert result.records == ()
+    assert result.issues[0].reason_code == "country_mismatch"
     await client.aclose()
 
 

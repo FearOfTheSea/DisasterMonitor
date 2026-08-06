@@ -2,7 +2,6 @@
 
 from collections.abc import Iterable
 from datetime import datetime
-from math import asin, cos, radians, sin, sqrt
 from typing import cast
 
 from disaster_monitor.application.disaster import (
@@ -113,9 +112,7 @@ class CompositeDisasterEventProvider:
                     )
                 self.last_record_counts[name] = 0
         self.last_diagnostics = tuple(issues)
-        return ProviderBatch(
-            records=cluster_physical_events(tuple(records)), issues=tuple(issues)
-        )
+        return ProviderBatch(records=tuple(records), issues=tuple(issues))
 
     async def aclose(self) -> None:
         for provider in self.providers:
@@ -199,102 +196,3 @@ class CompositeSituationReportProvider:
             close = getattr(provider, "aclose", None)
             if close is not None:
                 await close()
-
-
-def _distance_km(first: DisasterEvent, second: DisasterEvent) -> float | None:
-    if None in (first.latitude, first.longitude, second.latitude, second.longitude):
-        return None
-    first_lat = radians(first.latitude or 0)
-    second_lat = radians(second.latitude or 0)
-    delta_lat = radians((second.latitude or 0) - (first.latitude or 0))
-    delta_lon = radians((second.longitude or 0) - (first.longitude or 0))
-    value = (
-        sin(delta_lat / 2) ** 2
-        + cos(first_lat) * cos(second_lat) * sin(delta_lon / 2) ** 2
-    )
-    return 6371 * 2 * asin(sqrt(value))
-
-
-def _same_physical_event(first: DisasterEvent, second: DisasterEvent) -> bool:
-    if set(first.provider_ids) & set(second.provider_ids):
-        return True
-    if first.event_id == second.event_id:
-        return True
-    if abs((first.event_time - second.event_time).total_seconds()) > 90:
-        return False
-    distance = _distance_km(first, second)
-    if distance is None or distance > 30:
-        return False
-    if (
-        first.magnitude is not None
-        and second.magnitude is not None
-        and abs(first.magnitude - second.magnitude) > 0.5
-    ):
-        return False
-    return True
-
-
-def _preferred_event(events: list[DisasterEvent]) -> DisasterEvent:
-    """Prefer the record with the richest official metadata, then USGS."""
-    return max(
-        events,
-        key=lambda event: (
-            event.magnitude is not None,
-            event.latitude is not None and event.longitude is not None,
-            event.significance or 0,
-            "usgs:" in event.event_id.lower(),
-        ),
-    )
-
-
-def _merge_event(events: list[DisasterEvent]) -> DisasterEvent:
-    preferred = _preferred_event(events)
-    richest = max(
-        events,
-        key=lambda event: (
-            event.intensity is not None,
-            event.depth_km is not None,
-            event.latitude is not None and event.longitude is not None,
-        ),
-    )
-    provider_ids = tuple(
-        dict.fromkeys(
-            identifier
-            for event in events
-            for identifier in (event.event_id, *event.provider_ids)
-        )
-    )
-    return DisasterEvent(
-        event_id=preferred.event_id,
-        hazard=preferred.hazard,
-        location=preferred.location,
-        country=preferred.country,
-        event_time=preferred.event_time,
-        source=preferred.source,
-        latitude=preferred.latitude,
-        longitude=preferred.longitude,
-        magnitude=preferred.magnitude,
-        magnitude_type=preferred.magnitude_type,
-        intensity=preferred.intensity or richest.intensity,
-        depth_km=preferred.depth_km or richest.depth_km,
-        significance=max((event.significance or 0) for event in events),
-        is_aftershock=any(event.is_aftershock for event in events),
-        parent_event_id=preferred.parent_event_id or richest.parent_event_id,
-        sequence_id=preferred.sequence_id or richest.sequence_id,
-        provider_ids=provider_ids,
-    )
-
-
-def cluster_physical_events(
-    events: tuple[DisasterEvent, ...],
-) -> tuple[DisasterEvent, ...]:
-    """Collapse equivalent provider observations without merging nearby quakes."""
-    clusters: list[list[DisasterEvent]] = []
-    for event in events:
-        for cluster in clusters:
-            if any(_same_physical_event(event, item) for item in cluster):
-                cluster.append(event)
-                break
-        else:
-            clusters.append([event])
-    return tuple(_merge_event(cluster) for cluster in clusters)

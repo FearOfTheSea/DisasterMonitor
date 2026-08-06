@@ -4,7 +4,11 @@ import json
 import re
 from importlib.resources import files
 
-from disaster_monitor.domain.disaster import Country, GeographicArea
+from disaster_monitor.domain.disaster import (
+    BoundaryValidationQuality,
+    Country,
+    GeographicArea,
+)
 
 
 class StaticCountryCatalog:
@@ -27,6 +31,15 @@ class StaticCountryCatalog:
                     max_latitude=item["bounds"][1],
                     min_longitude=item["bounds"][2],
                     max_longitude=item["bounds"][3],
+                    validation_quality=(
+                        BoundaryValidationQuality.POLYGON
+                        if item.get("polygons")
+                        else BoundaryValidationQuality.BOUNDING_BOX
+                    ),
+                    polygons=tuple(
+                        tuple((float(point[0]), float(point[1])) for point in polygon)
+                        for polygon in item.get("polygons", ())
+                    ),
                 ),
             )
             for item in payload["countries"]

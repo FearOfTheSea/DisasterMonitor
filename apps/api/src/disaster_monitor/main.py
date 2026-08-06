@@ -16,6 +16,7 @@ from disaster_monitor.application.services.disaster_query_parser import (
 )
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.infrastructure.composition import (
+    build_country_catalog,
     build_current_disaster_report,
     build_disaster_query_parser,
     build_language_model,
@@ -34,10 +35,11 @@ def create_app(
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
     language_model = model or build_language_model(app_settings)
+    country_catalog = build_country_catalog()
     disaster_report = current_disaster_report or build_current_disaster_report(
-        app_settings
+        app_settings, country_catalog
     )
-    query_parser = disaster_query_parser or build_disaster_query_parser()
+    query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

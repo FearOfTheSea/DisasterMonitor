@@ -47,12 +47,22 @@ def build_language_model(settings: Settings) -> LanguageModel:
     )
 
 
-def build_disaster_query_parser() -> DisasterQueryParser:
+def build_country_catalog() -> StaticCountryCatalog:
+    """Construct the packaged deterministic country/geography adapter."""
+    return StaticCountryCatalog()
+
+
+def build_disaster_query_parser(
+    country_catalog: StaticCountryCatalog | None = None,
+) -> DisasterQueryParser:
     """Construct deterministic disaster parsing with packaged country metadata."""
-    return DisasterQueryParser(StaticCountryCatalog())
+    return DisasterQueryParser(country_catalog or build_country_catalog())
 
 
-def build_current_disaster_report(settings: Settings) -> CurrentDisasterReportService:
+def build_current_disaster_report(
+    settings: Settings,
+    country_catalog: StaticCountryCatalog | None = None,
+) -> CurrentDisasterReportService:
     """Construct capability-registered live disaster providers."""
     jma_rolling = JmaEarthquakeAdapter(
         timeout_seconds=settings.disaster_provider_timeout_seconds,
@@ -62,7 +72,9 @@ def build_current_disaster_report(settings: Settings) -> CurrentDisasterReportSe
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
+    geography = country_catalog or build_country_catalog()
     usgs = UsgsEarthquakeAdapter(
+        geography=geography,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )

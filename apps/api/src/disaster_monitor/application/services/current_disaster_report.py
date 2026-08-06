@@ -16,8 +16,9 @@ from disaster_monitor.application.ports.disaster_information import (
     SituationReportProvider,
 )
 from disaster_monitor.application.services.event_resolution import (
+    EventPolicyRegistry,
     EventResolution,
-    resolve_recent_event,
+    default_event_policy_registry,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
@@ -225,11 +226,13 @@ class CurrentDisasterReportService:
         situation_report_provider: SituationReportProvider,
         *,
         provider_registry: ProviderRegistry | None = None,
+        event_policies: EventPolicyRegistry | None = None,
         clock: Callable[[], datetime] = _now_utc,
     ) -> None:
         self._event_provider = event_provider
         self._situation_report_provider = situation_report_provider
         self._provider_registry = provider_registry
+        self._event_policies = event_policies or default_event_policy_registry()
         self._clock = clock
 
     async def execute(self, query: DisasterQuery) -> DisasterReport:
@@ -293,7 +296,9 @@ class CurrentDisasterReportService:
                 partial=True,
             )
 
-        resolution = resolve_recent_event(event_batch.records, query, now=retrieved_at)
+        event_policy = self._event_policies.for_hazard(query.hazard)
+        clustered_events = event_policy.cluster(event_batch.records)
+        resolution = event_policy.resolve(clustered_events, query, now=retrieved_at)
         if resolution.selected is None:
             return self._ambiguous_report(resolution, retrieved_at, warnings)
         if resolution.ambiguous:

@@ -14,6 +14,7 @@ from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
 from disaster_monitor.application.services.event_resolution import (
+    cluster_physical_events,
     resolve_recent_event,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
@@ -28,9 +29,6 @@ from disaster_monitor.domain.disaster import (
     ReportedFact,
     SituationReport,
     SourceReference,
-)
-from disaster_monitor.infrastructure.disaster.composite import (
-    cluster_physical_events,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,

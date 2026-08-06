@@ -49,7 +49,10 @@ The initial provider set is deliberately narrow:
   warning history, which retains warning-level events beyond the rolling bulletin
   list. It is a durable discovery source, not a visual-map scrape.
 - `UsgsEarthquakeAdapter` queries the documented USGS FDSN GeoJSON catalog as an
-  independent earthquake event source. Generic searches use a bounded,
+  independent global earthquake event source. Requests use the normalized country's
+  geographic bounds, and returned coordinates are checked against packaged simplified
+  country polygons before the canonical query country is assigned. A malformed feature
+  becomes a record issue while valid sibling features remain. Generic searches use a bounded,
   magnitude-ordered query with a moderate minimum magnitude and do not request
   unused expanded origins or magnitude collections.
 - `FdmaSituationReportAdapter` matches the newest official Fire and Disaster
@@ -74,6 +77,12 @@ retain a stable reason code, retryability, and safe HTTP status for live diagnos
 No weather,
 flood, satellite, geocoding, news, authentication, or map-overlay provider is
 implemented by this feature.
+
+Physical-event clustering is application policy rather than transport composition.
+The earthquake policy can merge matching JMA and USGS observations while preserving
+both identifiers. It refuses to merge across hazards or countries and keeps nearby
+independent events separate. Hazards without a dedicated policy use a conservative
+newest-event policy with ambiguity disclosure.
 
 ## Evidence and freshness rules
 

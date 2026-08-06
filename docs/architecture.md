@@ -111,6 +111,13 @@ continue to isolate individual adapter failures. A recognized query with no even
 capability returns `current_disaster_coverage_unavailable` before situation lookup
 or language-model generation.
 
+Provider fan-out returns raw normalized records. Application-owned event policies
+decide physical-event equivalence, clustering, ranking, sequence relationships, and
+ambiguity. `EarthquakeEventPolicy` preserves magnitude, intensity, significance,
+recency, distance, and aftershock behavior. `DefaultEventPolicy` merges only strong
+shared identifiers, prefers newer matching events, and marks similarly recent
+independent events ambiguous.
+
 ## Dependency direction
 
 ```mermaid
@@ -134,8 +141,9 @@ model and `httpx.ASGITransport`; adapter tests use `httpx.MockTransport`.
 
 The versioned MVP country resource currently recognizes Japan, Vietnam, and
 Venezuela by canonical English name, ISO alpha-2/alpha-3 code, and declared exact
-aliases. Its rectangular extents are Natural Earth-derived query approximations,
-not legal borders. Fixed calendar offsets are used for these three countries,
+aliases. Its query rectangles and simplified polygons are Natural Earth-derived
+geographic approximations, not legal borders or maritime claims. Fixed calendar
+offsets are used for these three countries,
 which do not use seasonal daylight-saving transitions.
 
 ## Adding a future external-data capability
