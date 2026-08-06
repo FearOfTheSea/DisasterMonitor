@@ -77,6 +77,24 @@ describe('AssistantPanel', () => {
                   retrieved_at: '2026-08-05T12:00:00Z',
                 },
               ],
+              investigation: {
+                status: 'partial',
+                task_summary: 'Latest earthquake in Japan',
+                hazard: 'earthquake',
+                country: 'JPN',
+                information_needs: ['event_overview'],
+                output_modalities: ['text'],
+                actions: [
+                  'Selected JMA and USGS event sources.',
+                  'Selected the Ishikawa event.',
+                ],
+                source_ids: ['jma-rolling-earthquakes', 'usgs-earthquakes'],
+                evidence_count: 1,
+                capability_gaps: [
+                  'Trusted disaster-image retrieval is not implemented.',
+                ],
+                termination_reason: 'partial_evidence',
+              },
             },
           },
         ]}
@@ -95,5 +113,10 @@ describe('AssistantPanel', () => {
       screen.getByRole('link', { name: /JMA: Earthquake fixture/ }),
     ).toHaveAttribute('href', 'https://example.test/event');
     expect(screen.getByText(/Retrieved:/)).toBeInTheDocument();
+    expect(screen.getByText('Investigation details')).toBeInTheDocument();
+    expect(screen.getByText('Selected the Ishikawa event.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Trusted disaster-image retrieval is not implemented.'),
+    ).toBeInTheDocument();
   });
 });

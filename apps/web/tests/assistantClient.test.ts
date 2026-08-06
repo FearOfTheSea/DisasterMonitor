@@ -78,6 +78,19 @@ describe('AssistantClient', () => {
           sections: [{ title: 'Situation summary', content: 'Verified.' }],
           warnings: ['One source is unavailable.'],
           partial: true,
+          investigation: {
+            status: 'partial',
+            task_summary: 'Latest earthquake damage?',
+            hazard: 'earthquake',
+            country: 'JPN',
+            information_needs: ['physical_damage'],
+            output_modalities: ['text'],
+            actions: ['Selected the source-backed event jma:fixture.'],
+            source_ids: ['jma-rolling-earthquakes'],
+            evidence_count: 1,
+            capability_gaps: [],
+            termination_reason: 'partial_evidence',
+          },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
@@ -90,6 +103,43 @@ describe('AssistantClient', () => {
         centerLongitude: 105,
         zoom: 8,
       }),
-    ).resolves.toMatchObject({ response_type: 'current_disaster', partial: true });
+    ).resolves.toMatchObject({
+      response_type: 'current_disaster',
+      partial: true,
+      investigation: { status: 'partial' },
+    });
+  });
+
+  it('rejects investigation metadata containing an invalid action shape', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Unsafe shape',
+          conversation_id: 'session-1',
+          model: 'source-backed-agent',
+          investigation: {
+            status: 'completed',
+            task_summary: 'task',
+            information_needs: [],
+            output_modalities: [],
+            actions: [{ reasoning: 'hidden' }],
+            source_ids: [],
+            evidence_count: 0,
+            capability_gaps: [],
+            termination_reason: 'done',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Latest earthquake?', null, {
+        centerLatitude: 21,
+        centerLongitude: 105,
+        zoom: 8,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
   });
 });

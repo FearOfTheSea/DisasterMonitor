@@ -34,6 +34,21 @@ export type AssistantResponse = {
   warnings?: string[];
   sections?: ReportSection[];
   partial?: boolean;
+  investigation?: InvestigationSummary;
+};
+
+export type InvestigationSummary = {
+  status: string;
+  task_summary: string;
+  hazard?: string;
+  country?: string;
+  information_needs: string[];
+  output_modalities: string[];
+  actions: string[];
+  source_ids: string[];
+  evidence_count: number;
+  capability_gaps: string[];
+  termination_reason: string;
 };
 
 export type AssistantSource = {
@@ -70,6 +85,7 @@ export type AssistantReport = {
   warnings: string[];
   sections: ReportSection[];
   partial: boolean;
+  investigation?: InvestigationSummary;
 };
 
 export type ConversationState = {

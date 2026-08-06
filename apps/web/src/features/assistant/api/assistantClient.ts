@@ -93,6 +93,12 @@ export class AssistantClient {
       if (item.sources !== undefined && !this.isSources(item.sources)) {
         return false;
       }
+      if (
+        item.investigation !== undefined &&
+        !this.isInvestigation(item.investigation)
+      ) {
+        return false;
+      }
       return true;
     }
     return false;
@@ -132,6 +138,26 @@ export class AssistantClient {
       })
     );
   }
+
+  private isInvestigation(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const item = value as Record<string, unknown>;
+    return (
+      typeof item.status === 'string' &&
+      typeof item.task_summary === 'string' &&
+      (item.hazard === undefined || typeof item.hazard === 'string') &&
+      (item.country === undefined || typeof item.country === 'string') &&
+      this.isStringArray(item.information_needs) &&
+      this.isStringArray(item.output_modalities) &&
+      this.isStringArray(item.actions) &&
+      this.isStringArray(item.source_ids) &&
+      typeof item.evidence_count === 'number' &&
+      this.isStringArray(item.capability_gaps) &&
+      typeof item.termination_reason === 'string'
+    );
+  }
 }
 
 export function toAssistantReport(
@@ -148,5 +174,6 @@ export function toAssistantReport(
     warnings: response.warnings ?? [],
     sections: response.sections ?? [],
     partial: response.partial ?? false,
+    investigation: response.investigation,
   };
 }

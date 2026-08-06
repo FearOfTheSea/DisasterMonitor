@@ -19,7 +19,7 @@ const welcomeMessage: ConversationMessage = {
   id: 'welcome',
   role: 'assistant',
   content:
-    'Ask about the map or disaster-monitoring concepts. Live weather, flood, satellite, and geocoding data are not connected in this MVP.',
+    'Ask about the map, disaster concepts, or supported source-backed investigations. Image, satellite, and agent-controlled map-layer retrieval are not connected.',
 };
 
 export function useAssistantConversation() {

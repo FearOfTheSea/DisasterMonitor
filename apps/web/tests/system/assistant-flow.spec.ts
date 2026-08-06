@@ -17,6 +17,8 @@ test('submits the target current-disaster question and renders a source-backed r
   await expect(page.getByText('Buildings damaged: 4.').first()).toBeVisible();
   await expect(page.getByRole('link', { name: /ReliefWeb fixture/ })).toBeVisible();
   await expect(page.getByText(/Retrieved:/)).toBeVisible();
+  await page.getByText('Investigation details').click();
+  await expect(page.getByText(/Selected the source-backed event/)).toBeVisible();
   await expect(page.getByText(/Venezuela/i)).toHaveCount(0);
   await expect(page.getByText(/VENEZUELA-FOREIGN-EVIDENCE-SENTINEL/i)).toHaveCount(0);
   await expect(page.getByText(/TOKYO-UNRELATED-EVIDENCE-SENTINEL/i)).toHaveCount(0);

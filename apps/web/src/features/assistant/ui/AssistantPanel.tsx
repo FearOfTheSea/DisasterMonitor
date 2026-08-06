@@ -86,6 +86,37 @@ function DisasterReportView({
           ))}
         </div>
       )}
+      {report.investigation && (
+        <details className="investigation-summary">
+          <summary>Investigation details</summary>
+          <p>
+            Status: <strong>{report.investigation.status}</strong>
+          </p>
+          {report.investigation.actions.length > 0 && (
+            <>
+              <h3>Completed actions</h3>
+              <ul>
+                {report.investigation.actions.map((action) => (
+                  <li key={action}>{action}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {report.investigation.capability_gaps.length > 0 && (
+            <>
+              <h3>Capability gaps</h3>
+              <ul>
+                {report.investigation.capability_gaps.map((gap) => (
+                  <li key={gap}>{gap}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {report.investigation.source_ids.length > 0 && (
+            <p>Sources consulted: {report.investigation.source_ids.join(', ')}</p>
+          )}
+        </details>
+      )}
       <details className="report-text">
         <summary>Text report</summary>
         <p>{message}</p>
@@ -118,7 +149,7 @@ export function AssistantPanel({
     <aside className="assistant-panel" aria-label="Disaster Monitor assistant">
       <header className="assistant-panel-header">
         <h2>Map assistant</h2>
-        <p>Powered by your local Qwen model through Ollama.</p>
+        <p>Agent-first routing with local Qwen and trusted source tools.</p>
       </header>
       <div className="availability-note">
         Source-backed current disaster reports are available for recognized requests;
