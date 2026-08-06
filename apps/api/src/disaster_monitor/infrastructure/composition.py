@@ -71,9 +71,15 @@ def build_agent_model(settings: Settings) -> AgentModel:
     return StructuredAgentModel(build_language_model(settings))
 
 
-def build_source_catalog() -> StaticSourceCatalog:
+def build_source_catalog(settings: Settings | None = None) -> StaticSourceCatalog:
     """Construct the packaged maintained disaster-source catalog."""
-    return StaticSourceCatalog()
+    if settings is None:
+        return StaticSourceCatalog()
+    name = (settings.reliefweb_app_name or "").strip().lower()
+    configured = bool(
+        name and name not in {"disaster-monitor-local", "change-me", "your-app-name"}
+    )
+    return StaticSourceCatalog({"reliefweb-situation-reports": configured})
 
 
 def build_country_catalog() -> StaticCountryCatalog:
@@ -181,7 +187,9 @@ def build_current_disaster_report(
             ),
         )
     )
-    source_catalog = build_source_catalog()
+    source_catalog = StaticSourceCatalog(
+        {"reliefweb-situation-reports": reliefweb.configured}
+    )
     validate_provider_source_consistency(registry, source_catalog)
     event_provider = CompositeDisasterEventProvider(registry)
     situation_provider = CompositeSituationReportProvider(registry)

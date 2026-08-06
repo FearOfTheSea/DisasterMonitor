@@ -46,7 +46,7 @@ def create_app(
         app_settings, country_catalog
     )
     query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
-    source_catalog = build_source_catalog()
+    source_catalog = build_source_catalog(app_settings)
     configured_agent_model = (
         agent_model
         if agent_model is not None

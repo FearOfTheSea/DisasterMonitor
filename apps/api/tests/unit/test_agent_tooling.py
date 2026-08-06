@@ -347,6 +347,10 @@ def test_packaged_source_catalog_has_only_six_implemented_non_visual_sources() -
         and SourceInformationRole.MAP_LAYERS not in item.information_roles
         for item in catalog.sources()
     )
+    reliefweb = StaticSourceCatalog({"reliefweb-situation-reports": True}).get(
+        "reliefweb-situation-reports"
+    )
+    assert reliefweb is not None and reliefweb.configured
 
 
 def test_provider_source_consistency_detects_missing_metadata() -> None:

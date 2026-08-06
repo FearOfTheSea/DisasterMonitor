@@ -28,6 +28,10 @@ def validate_provider_source_consistency(
         descriptor = by_id[registration.source_id]
         if descriptor.provider_registration_name != registration.name:
             raise ValueError(f"Source metadata drift for provider {registration.name}.")
+        if descriptor.configured != registration.configured:
+            raise ValueError(
+                f"Configuration-state drift for provider {registration.name}."
+            )
         if not registration.capabilities.hazards.issubset(
             frozenset(descriptor.supported_hazards)
         ):

@@ -1,6 +1,7 @@
 """Static versioned source-intelligence catalog adapter."""
 
 import json
+from dataclasses import replace
 from importlib.resources import files
 from typing import cast
 
@@ -12,13 +13,20 @@ from disaster_monitor.domain.disaster import Hazard
 
 
 class StaticSourceCatalog:
-    def __init__(self) -> None:
+    def __init__(self, configured_overrides: dict[str, bool] | None = None) -> None:
         resource = files("disaster_monitor.infrastructure.sources.resources").joinpath(
             "disaster_sources.v1.json"
         )
         payload = json.loads(resource.read_text(encoding="utf-8"))
         self._version = str(payload["version"])
-        self._sources = tuple(_descriptor(item) for item in payload["sources"])
+        overrides = configured_overrides or {}
+        self._sources = tuple(
+            replace(
+                descriptor,
+                configured=overrides.get(descriptor.source_id, descriptor.configured),
+            )
+            for descriptor in (_descriptor(item) for item in payload["sources"])
+        )
         if len({item.source_id for item in self._sources}) != len(self._sources):
             raise ValueError("The packaged source catalog has duplicate source IDs.")
         self._by_id = {item.source_id: item for item in self._sources}
