@@ -17,7 +17,6 @@ from disaster_monitor.application.dto import (  # noqa: E402
 from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
     CurrentDisasterReportService,
 )
-from disaster_monitor.main import create_app  # noqa: E402
 from disaster_monitor.domain.disaster import (  # noqa: E402
     DisasterEvent,
     FactStatus,
@@ -29,6 +28,7 @@ from disaster_monitor.domain.disaster import (  # noqa: E402
 from disaster_monitor.infrastructure.geography.static_country_catalog import (  # noqa: E402
     StaticCountryCatalog,
 )
+from disaster_monitor.main import create_app  # noqa: E402
 
 NOW = datetime(2026, 8, 6, 3, 0, tzinfo=UTC)
 TARGET_TIME = datetime(2026, 8, 5, 14, 30, tzinfo=UTC)
