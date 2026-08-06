@@ -5,10 +5,13 @@ import pytest
 
 from disaster_monitor.application.agent.models import (
     AgentExecutionState,
+    AgentReview,
+    DisasterTaskDraft,
     InformationNeed,
     InvestigationPlan,
     OutputModality,
     PlanStep,
+    ReviewDecision,
     SourceDescriptor,
     SourceInformationRole,
     TaskKind,
@@ -295,6 +298,34 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     assert state.workspace.selected_event == event
     assert state.workspace.report is not None
     assert state.model_call_count == 0
+
+    class ReplanAgent:
+        async def interpret(self, question):
+            return DisasterTaskDraft(
+                True,
+                True,
+                ("earthquake",),
+                ("Japan",),
+                information_needs=("event_overview",),
+                output_modalities=("text",),
+            )
+
+        async def propose_plan(self, task, tool_descriptions):
+            return default_investigation_plan(task)
+
+        async def review_progress(self, task, completed_steps):
+            return AgentReview(ReviewDecision.REPLAN, "Try an alternative")
+
+    reviewed = await DisasterAgentRuntime(
+        country_catalog=catalog,
+        query_parser=DisasterQueryParser(catalog),
+        tool_registry=tools,
+        agent_model=ReplanAgent(),
+    ).run("Give me the latest earthquake information in Japan.")
+
+    assert reviewed.replan_count == 1
+    assert reviewed.model_call_count == 3
+    assert any("no distinct" in warning.lower() for warning in reviewed.warnings)
 
 
 def test_packaged_source_catalog_has_only_six_implemented_non_visual_sources() -> None:
