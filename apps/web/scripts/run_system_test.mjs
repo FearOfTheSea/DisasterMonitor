@@ -51,13 +51,23 @@ try {
   await page
     .getByLabel('Question')
     .fill(
-      'There was a recent earthquake in Japan. Please update me with the latest information about the damages in Japan.',
+      'Please give me the latest information about the earthquake in Japan on August 5, 2026.',
     );
   await page.getByRole('button', { name: 'Ask assistant' }).click();
   await page.getByText('Ishikawa, Japan', { exact: true }).waitFor({ timeout: 30_000 });
   await page.getByRole('heading', { name: 'Situation summary' }).waitFor();
   await page.getByText('Buildings damaged: 4.').first().waitFor();
   await page.getByRole('link', { name: /ReliefWeb fixture/ }).waitFor();
+  for (const sentinel of [
+    'Venezuela',
+    'VENEZUELA-FOREIGN-EVIDENCE-SENTINEL',
+    'TOKYO-UNRELATED-EVIDENCE-SENTINEL',
+    'GENERAL-MODEL-SENTINEL',
+  ]) {
+    if (await page.getByText(new RegExp(sentinel, 'i')).count()) {
+      throw new Error(`Unexpected decoy content rendered: ${sentinel}`);
+    }
+  }
   await page
     .getByText(/Retrieved:/)
     .first()

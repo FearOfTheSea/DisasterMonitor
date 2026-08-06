@@ -23,6 +23,7 @@ from system_test_backend import (  # noqa: E402
     FakeSystemEventProvider,
     FakeSystemModel,
     FakeSystemSituationProvider,
+    NOW,
 )
 from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
     CurrentDisasterReportService,
@@ -38,6 +39,7 @@ def main() -> int:
                 current_disaster_report=CurrentDisasterReportService(
                     CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
                     FakeSystemSituationProvider(),
+                    clock=lambda: NOW,
                 ),
             ),
             host="127.0.0.1",
@@ -58,7 +60,16 @@ def main() -> int:
         check=True,
     )
     web_process = subprocess.Popen(
-        [npm_command, "run", "start", "--", "--hostname", "127.0.0.1", "--port", "4173"],
+        [
+            npm_command,
+            "run",
+            "start",
+            "--",
+            "--hostname",
+            "127.0.0.1",
+            "--port",
+            "4173",
+        ],
         cwd=web_directory,
         env=web_environment,
     )

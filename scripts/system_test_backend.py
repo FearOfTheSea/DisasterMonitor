@@ -1,7 +1,7 @@
 """Deterministic FastAPI server used by the Playwright system test."""
 
 import sys
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import uvicorn
@@ -20,20 +20,22 @@ from disaster_monitor.application.disaster import (  # noqa: E402
 from disaster_monitor.application.dto import (  # noqa: E402
     ModelReadiness,
     ModelRequest,
-    ModelResponse,
 )
 from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
     CurrentDisasterReportService,
 )
 from disaster_monitor.main import create_app  # noqa: E402
 
+NOW = datetime(2026, 8, 6, 3, 0, tzinfo=UTC)
+TARGET_TIME = datetime(2026, 8, 5, 14, 30, tzinfo=UTC)
+FOREIGN_SENTINEL = "VENEZUELA-FOREIGN-EVIDENCE-SENTINEL"
+UNRELATED_SENTINEL = "TOKYO-UNRELATED-EVIDENCE-SENTINEL"
+MODEL_SENTINEL = "GENERAL-MODEL-SENTINEL"
+
 
 class FakeSystemModel:
-    async def generate(self, _request: ModelRequest) -> ModelResponse:
-        return ModelResponse(
-            text="Deterministic system-test response.",
-            model="fake-qwen",
-        )
+    async def generate(self, _request: ModelRequest):
+        raise AssertionError(f"{MODEL_SENTINEL}: source-backed request reached model")
 
     async def check_readiness(self) -> ModelReadiness:
         return ModelReadiness(True, True, "fake-qwen")
@@ -45,7 +47,7 @@ class FakeSystemEventProvider:
             publisher="JMA fixture",
             title="Deterministic JMA Japan earthquake event",
             canonical_url="https://example.test/system-jma-event",
-            published_at=now - timedelta(hours=2),
+            published_at=TARGET_TIME,
             updated_at=now - timedelta(minutes=10),
             retrieved_at=now,
         )
@@ -53,7 +55,7 @@ class FakeSystemEventProvider:
             publisher="USGS fixture",
             title="Deterministic USGS Japan earthquake event",
             canonical_url="https://example.test/system-usgs-event",
-            published_at=now - timedelta(hours=2),
+            published_at=TARGET_TIME,
             updated_at=now - timedelta(minutes=5),
             retrieved_at=now,
         )
@@ -61,8 +63,16 @@ class FakeSystemEventProvider:
             publisher="USGS fixture",
             title="Unrelated Tokyo earthquake event",
             canonical_url="https://example.test/system-unrelated-event",
-            published_at=now - timedelta(hours=3),
+            published_at=datetime(2026, 8, 5, 23, 15, tzinfo=UTC),
             updated_at=now - timedelta(minutes=5),
+            retrieved_at=now,
+        )
+        foreign_source = SourceReference(
+            publisher="USGS fixture",
+            title="More significant Venezuela earthquake event",
+            canonical_url="https://example.test/system-venezuela-event",
+            published_at=datetime(2026, 8, 6, 1, 45, tzinfo=UTC),
+            updated_at=now - timedelta(minutes=1),
             retrieved_at=now,
         )
         return ProviderBatch(
@@ -72,7 +82,7 @@ class FakeSystemEventProvider:
                     hazard="earthquake",
                     location="Ishikawa, Japan",
                     country="Japan",
-                    event_time=now - timedelta(hours=2),
+                    event_time=TARGET_TIME,
                     source=jma_source,
                     latitude=37.0,
                     longitude=137.0,
@@ -87,7 +97,7 @@ class FakeSystemEventProvider:
                     hazard="earthquake",
                     location="Ishikawa, Japan",
                     country="Japan",
-                    event_time=now - timedelta(hours=2),
+                    event_time=TARGET_TIME + timedelta(seconds=20),
                     source=usgs_source,
                     latitude=37.02,
                     longitude=137.01,
@@ -101,13 +111,26 @@ class FakeSystemEventProvider:
                     hazard="earthquake",
                     location="Tokyo, Japan",
                     country="Japan",
-                    event_time=now - timedelta(hours=3),
+                    event_time=datetime(2026, 8, 5, 23, 15, tzinfo=UTC),
                     source=unrelated_source,
                     latitude=35.7,
                     longitude=139.7,
-                    magnitude=5.8,
-                    significance=500,
+                    magnitude=9.5,
+                    significance=5_000,
                     provider_ids=("usgs:unrelated",),
+                ),
+                DisasterEvent(
+                    event_id="usgs:venezuela-decoy",
+                    hazard="earthquake",
+                    location="Sucre, Venezuela",
+                    country="Venezuela",
+                    event_time=datetime(2026, 8, 6, 1, 45, tzinfo=UTC),
+                    source=foreign_source,
+                    latitude=10.4,
+                    longitude=-63.5,
+                    magnitude=9.8,
+                    significance=6_000,
+                    provider_ids=("usgs:venezuela-decoy",),
                 ),
             )
         )
@@ -178,6 +201,25 @@ class FakeSystemSituationProvider:
                     source=source,
                     narrative="Tokyo suffered unrelated damage after another quake.",
                     event_id="usgs:unrelated",
+                ),
+                SituationReport(
+                    source=SourceReference(
+                        publisher="Foreign fixture",
+                        title="Venezuela decoy update",
+                        canonical_url="https://example.test/system-venezuela-situation",
+                        published_at=now - timedelta(minutes=3),
+                        updated_at=now - timedelta(minutes=1),
+                        retrieved_at=now,
+                    ),
+                    narrative=f"{FOREIGN_SENTINEL}: foreign impacts were reported.",
+                    event_id="usgs:venezuela-decoy",
+                    countries=("Venezuela",),
+                ),
+                SituationReport(
+                    source=source,
+                    narrative=f"{UNRELATED_SENTINEL}: unrelated Japan event damage.",
+                    event_id="usgs:unrelated",
+                    countries=("Japan",),
                 ),
             )
         )

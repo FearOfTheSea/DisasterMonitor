@@ -12,6 +12,7 @@ from disaster_monitor.application.disaster import (
     SituationReport,
     SourceReference,
 )
+from disaster_monitor.application.dto import ModelRequest
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -22,6 +23,10 @@ CURRENT_PROMPT = (
     "information about the damages in Japan."
 )
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
+AUGUST_2026_PROMPT = (
+    "Please give me the latest information about the earthquake in Japan on "
+    "August 5, 2026."
+)
 
 
 def build_current_service(*, situation_error: Exception | None = None):
@@ -189,6 +194,151 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     assert body["sources"][0]["canonical_url"] == "https://example.test/jma-event"
     assert any(source["publisher"] == "ReliefWeb" for source in body["sources"])
     assert body["sections"]
+
+
+@pytest.mark.asyncio
+async def test_current_disaster_routes_one_normalized_japan_query_without_model() -> (
+    None
+):
+    retrieval_time = datetime(2026, 8, 6, 3, 0, tzinfo=UTC)
+    target_time = datetime(2026, 8, 5, 14, 30, tzinfo=UTC)
+    received_event_queries = []
+    received_situation_queries = []
+
+    class FailIfCalledModel(FakeLanguageModel):
+        async def generate(self, request: ModelRequest):
+            self.requests.append(request)
+            raise AssertionError("GENERAL-MODEL-SENTINEL")
+
+    target_source = SourceReference(
+        publisher="JMA",
+        title="Ishikawa target event",
+        canonical_url="https://example.test/jma-ishikawa",
+        published_at=target_time,
+        updated_at=target_time,
+        retrieved_at=retrieval_time,
+    )
+    target_event = DisasterEvent(
+        event_id="jma:202608051430",
+        hazard="earthquake",
+        location="Ishikawa, Japan",
+        country="Japan",
+        event_time=target_time,
+        source=target_source,
+        latitude=37.0,
+        longitude=137.0,
+        magnitude=6.1,
+        intensity="JMA 6-",
+        provider_ids=("jma:202608051430", "usgs:fixture-ishikawa"),
+    )
+
+    class RecordingEventProvider:
+        async def find_recent_events(self, query, *, now):
+            received_event_queries.append(query)
+            return ProviderBatch(
+                (
+                    DisasterEvent(
+                        event_id="usgs:venezuela-decoy",
+                        hazard="earthquake",
+                        location="Sucre, Venezuela",
+                        country="Venezuela",
+                        event_time=datetime(2026, 8, 5, 18, 0, tzinfo=UTC),
+                        source=target_source,
+                        magnitude=9.8,
+                        significance=6_000,
+                    ),
+                    DisasterEvent(
+                        event_id="usgs:tokyo-decoy",
+                        hazard="earthquake",
+                        location="Tokyo, Japan",
+                        country="Japan",
+                        event_time=datetime(2026, 8, 6, 1, 0, tzinfo=UTC),
+                        source=target_source,
+                        magnitude=9.5,
+                        significance=5_000,
+                    ),
+                    target_event,
+                )
+            )
+
+    class RecordingSituationProvider:
+        async def get_situation_reports(self, event, query, *, now):
+            received_situation_queries.append(query)
+            source = SourceReference(
+                publisher="FDMA",
+                title="Ishikawa impact report",
+                canonical_url="https://example.test/fdma-ishikawa",
+                published_at=now,
+                updated_at=now,
+                retrieved_at=now,
+            )
+            return ProviderBatch(
+                (
+                    SituationReport(
+                        source=source,
+                        narrative="Four buildings were damaged in Ishikawa.",
+                        facts=(
+                            ReportedFact(
+                                category="buildings",
+                                label="Buildings damaged",
+                                value="4",
+                                status=FactStatus.CONFIRMED,
+                                source=source,
+                                event_id=target_event.event_id,
+                                claim_id="buildings",
+                            ),
+                        ),
+                        event_id=target_event.event_id,
+                    ),
+                    SituationReport(
+                        source=source,
+                        narrative="VENEZUELA-FOREIGN-EVIDENCE-SENTINEL",
+                        event_id="usgs:venezuela-decoy",
+                    ),
+                    SituationReport(
+                        source=source,
+                        narrative="TOKYO-UNRELATED-EVIDENCE-SENTINEL",
+                        event_id="usgs:tokyo-decoy",
+                    ),
+                )
+            )
+
+    model = FailIfCalledModel()
+    service = CurrentDisasterReportService(
+        RecordingEventProvider(),
+        RecordingSituationProvider(),
+        clock=lambda: retrieval_time,
+    )
+    app = create_app(model=model, current_disaster_report=service)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant", json={"question": AUGUST_2026_PROMPT}
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["response_type"] == "current_disaster"
+    assert body["selected_event"]["location"] == "Ishikawa, Japan"
+    assert body["selected_event"]["provider_ids"] == [
+        "jma:202608051430",
+        "usgs:fixture-ishikawa",
+    ]
+    assert "Buildings damaged: 4" in body["message"]
+    assert "VENEZUELA-FOREIGN-EVIDENCE-SENTINEL" not in body["message"]
+    assert "TOKYO-UNRELATED-EVIDENCE-SENTINEL" not in body["message"]
+    assert len(received_event_queries) == 1
+    assert len(received_situation_queries) == 1
+    event_query = received_event_queries[0]
+    situation_query = received_situation_queries[0]
+    assert event_query is situation_query
+    assert event_query.hazard == "earthquake"
+    assert event_query.country_code == "JPN"
+    assert event_query.geography == "Japan"
+    assert event_query.date_from == datetime(2026, 8, 4, 15, 0, tzinfo=UTC)
+    assert event_query.date_to == datetime(2026, 8, 5, 15, 0, tzinfo=UTC)
+    assert model.requests == []
 
 
 @pytest.mark.asyncio

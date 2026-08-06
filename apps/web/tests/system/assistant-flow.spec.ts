@@ -8,7 +8,7 @@ test('submits the target current-disaster question and renders a source-backed r
   await page
     .getByLabel('Question')
     .fill(
-      'There was a recent earthquake in Japan. Please update me with the latest information about the damages in Japan.',
+      'Please give me the latest information about the earthquake in Japan on August 5, 2026.',
     );
   await page.getByRole('button', { name: 'Ask assistant' }).click();
 
@@ -17,4 +17,8 @@ test('submits the target current-disaster question and renders a source-backed r
   await expect(page.getByText('Buildings damaged: 4.').first()).toBeVisible();
   await expect(page.getByRole('link', { name: /ReliefWeb fixture/ })).toBeVisible();
   await expect(page.getByText(/Retrieved:/)).toBeVisible();
+  await expect(page.getByText(/Venezuela/i)).toHaveCount(0);
+  await expect(page.getByText(/VENEZUELA-FOREIGN-EVIDENCE-SENTINEL/i)).toHaveCount(0);
+  await expect(page.getByText(/TOKYO-UNRELATED-EVIDENCE-SENTINEL/i)).toHaveCount(0);
+  await expect(page.getByText(/GENERAL-MODEL-SENTINEL/i)).toHaveCount(0);
 });
