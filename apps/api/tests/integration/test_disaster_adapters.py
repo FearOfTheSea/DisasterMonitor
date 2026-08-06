@@ -107,7 +107,7 @@ async def test_usgs_adapter_translates_valid_geojson_and_missing_optional_fields
     payload = usgs_payload()
     payload["features"][0]["properties"].pop("mmi")  # type: ignore[index]
     client = client_for(payload)
-    adapter = UsgsEarthquakeAdapter(client=client)
+    adapter = UsgsEarthquakeAdapter(geography=CATALOG, client=client)
 
     result = await adapter.find_recent_events(QUERY, now=NOW)
 
@@ -131,7 +131,9 @@ async def test_usgs_adapter_rejects_malformed_unexpected_or_oversized_payloads(
     payload, content_type, max_bytes, status
 ) -> None:
     client = client_for(payload, content_type=content_type, status=status)
-    adapter = UsgsEarthquakeAdapter(client=client, max_response_bytes=max_bytes)
+    adapter = UsgsEarthquakeAdapter(
+        geography=CATALOG, client=client, max_response_bytes=max_bytes
+    )
 
     with pytest.raises((DisasterProviderError, DisasterProviderResponseError)):
         await adapter.find_recent_events(QUERY, now=NOW)
@@ -144,9 +146,9 @@ async def test_usgs_keeps_valid_feature_when_sibling_is_malformed() -> None:
     payload["features"].append({})  # type: ignore[union-attr]
     client = client_for(payload)
 
-    result = await UsgsEarthquakeAdapter(client=client).find_recent_events(
-        QUERY, now=NOW
-    )
+    result = await UsgsEarthquakeAdapter(
+        geography=CATALOG, client=client
+    ).find_recent_events(QUERY, now=NOW)
 
     assert [event.event_id for event in result.records] == ["usgs:us7000fixture"]
     assert result.issues[0].reason_code == "invalid_record"
@@ -156,7 +158,7 @@ async def test_usgs_keeps_valid_feature_when_sibling_is_malformed() -> None:
 @pytest.mark.asyncio
 async def test_usgs_adapter_surfaces_http_failure() -> None:
     client = client_for({"error": "offline"}, status=503)
-    adapter = UsgsEarthquakeAdapter(client=client)
+    adapter = UsgsEarthquakeAdapter(geography=CATALOG, client=client)
 
     with pytest.raises(DisasterProviderError):
         await adapter.find_recent_events(QUERY, now=NOW)
@@ -408,7 +410,7 @@ async def test_usgs_generic_query_is_bounded_and_magnitude_ordered() -> None:
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    adapter = UsgsEarthquakeAdapter(client=client)
+    adapter = UsgsEarthquakeAdapter(geography=CATALOG, client=client)
     await adapter.find_recent_events(QUERY, now=NOW)
     query_params = dict(requests[0].url.params.multi_items())
     assert query_params["orderby"] == "magnitude"
@@ -447,9 +449,9 @@ async def test_usgs_uses_non_japan_bounds_and_canonical_country() -> None:
         "recent",
         ("latest developments",),
     )
-    result = await UsgsEarthquakeAdapter(client=client).find_recent_events(
-        query, now=NOW
-    )
+    result = await UsgsEarthquakeAdapter(
+        geography=CATALOG, client=client
+    ).find_recent_events(query, now=NOW)
     params = dict(requests[0].url.params.multi_items())
 
     assert params["minlatitude"] == "0.63"
@@ -474,9 +476,9 @@ async def test_usgs_excludes_coordinate_inside_rectangle_but_outside_country() -
     feature["geometry"]["coordinates"] = [123.0, 21.0, 20.0]  # type: ignore[index]
     client = client_for(payload)
 
-    result = await UsgsEarthquakeAdapter(client=client).find_recent_events(
-        QUERY, now=NOW
-    )
+    result = await UsgsEarthquakeAdapter(
+        geography=CATALOG, client=client
+    ).find_recent_events(QUERY, now=NOW)
 
     assert result.records == ()
     assert result.issues[0].reason_code == "country_mismatch"
@@ -515,7 +517,9 @@ async def test_http_failures_keep_typed_issue_and_bounded_retry(
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    composite = CompositeDisasterEventProvider((UsgsEarthquakeAdapter(client=client),))
+    composite = CompositeDisasterEventProvider(
+        (UsgsEarthquakeAdapter(geography=CATALOG, client=client),)
+    )
     result = await composite.find_recent_events(QUERY, now=NOW)
     assert attempts == expected_attempts
     assert result.records == ()
@@ -591,7 +595,7 @@ async def test_durable_jma_history_survives_rolling_list_limit_and_clusters_usgs
         (
             JmaEarthquakeAdapter(client=client),
             JmaSignificantEarthquakeAdapter(client=client),
-            UsgsEarthquakeAdapter(client=client),
+            UsgsEarthquakeAdapter(geography=CATALOG, client=client),
         )
     )
     events = await event_provider.find_recent_events(QUERY, now=NOW)

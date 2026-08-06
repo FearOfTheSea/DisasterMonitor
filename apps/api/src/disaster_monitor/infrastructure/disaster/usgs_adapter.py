@@ -24,9 +24,6 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
 from disaster_monitor.infrastructure.disaster.http import get_json
-from disaster_monitor.infrastructure.geography.static_country_catalog import (
-    StaticCountryCatalog,
-)
 
 USGS_QUERY_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
@@ -93,12 +90,12 @@ class UsgsEarthquakeAdapter:
     def __init__(
         self,
         *,
-        geography: CountryCatalog | None = None,
+        geography: CountryCatalog,
         client: httpx.AsyncClient | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 1_000_000,
     ) -> None:
-        self._geography = geography or StaticCountryCatalog()
+        self._geography = geography
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._max_response_bytes = max_response_bytes

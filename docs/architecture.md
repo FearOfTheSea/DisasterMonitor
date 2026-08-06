@@ -138,6 +138,11 @@ flowchart TB
 
 Transport schemas and Ollama payloads remain at the edges. The use case prepares a deterministic system prompt that prevents claims about unavailable live data and strips common hidden-reasoning wrappers from model output.
 
+AST dependency tests enforce that domain modules import only the standard library,
+application modules do not import infrastructure, presentation, FastAPI, HTTP/PDF
+clients, Pydantic, or Ollama, and concrete adapters are constructed only in composition
+or bootstrap modules.
+
 ## Composition and testing
 
 `create_app` accepts optional adapters for tests. Production construction builds
