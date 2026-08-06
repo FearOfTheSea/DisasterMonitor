@@ -32,6 +32,8 @@ from disaster_monitor.infrastructure.disaster.fdma_adapter import (
 from disaster_monitor.infrastructure.disaster.jma_adapter import (
     JmaEarthquakeAdapter,
     JmaSignificantEarthquakeAdapter,
+    JmaTsunamiSituationAdapter,
+    _detail_coordinates,
 )
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
@@ -364,6 +366,97 @@ def test_reliefweb_request_preserves_explicit_date_range() -> None:
     assert params["filter[conditions][2][value][to]"] == "2026-08-05"
 
 
+def test_reliefweb_request_does_not_require_external_provider_identifiers() -> None:
+    event = DisasterEvent(
+        "usgs:us6000fixture",
+        Hazard.EARTHQUAKE,
+        "Ishikawa, Japan",
+        JAPAN,
+        NOW,
+        _source_for_test(),
+        provider_ids=("usgs:us6000fixture", "jma:20260805180000"),
+    )
+
+    params = build_reliefweb_params(event, QUERY, now=NOW, app_name="approved-test")
+
+    search = str(params["query[value]"])
+    assert "Ishikawa" in search
+    assert "us6000fixture" not in search
+    assert "20260805180000" not in search
+
+
+@pytest.mark.asyncio
+async def test_reliefweb_local_identifier_correlates_by_event_metadata() -> None:
+    payload = {
+        "data": [
+            {
+                "fields": {
+                    "title": "Ishikawa earthquake update",
+                    "url": "https://reliefweb.int/report/japan/realistic",
+                    "date": {"created": "2026-08-05T10:30:00Z"},
+                    "disaster": [{"id": "RW-12345", "date": "2026-08-05T09:00:00Z"}],
+                    "location": [{"name": "Ishikawa"}],
+                    "country": [{"name": "Japan"}],
+                    "body": "Four buildings were damaged in Ishikawa.",
+                }
+            }
+        ]
+    }
+    client = client_for(payload)
+    event = DisasterEvent(
+        "usgs:us6000fixture",
+        Hazard.EARTHQUAKE,
+        "Ishikawa, Japan",
+        JAPAN,
+        datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
+        _source_for_test(),
+        provider_ids=("usgs:us6000fixture",),
+    )
+
+    result = await ReliefWebSituationAdapter(
+        client=client, app_name="approved-test"
+    ).get_situation_reports(event, QUERY, now=NOW)
+
+    assert result.records[0].provider_event_ids == ("reliefweb:RW-12345",)
+    assert result.records[0].correlation == CorrelationStatus.MATCHED
+    await client.aclose()
+
+
+def test_jma_detail_coordinates_support_decimal_and_degree_minutes() -> None:
+    assert _detail_coordinates("北緯35.5度 東経139.75度 深さ10km") == (
+        35.5,
+        139.75,
+        10.0,
+    )
+    assert _detail_coordinates("震源 北緯35度30.0分 東経139度45.0分 深さ20km") == (
+        35.5,
+        139.75,
+        20.0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_missing_jma_tsunami_bulletin_is_neutral() -> None:
+    client = client_for([{"eid": "another-event"}])
+    event = DisasterEvent(
+        "jma:20260805180000",
+        Hazard.EARTHQUAKE,
+        "Ishikawa, Japan",
+        JAPAN,
+        NOW,
+        _source_for_test(),
+        provider_ids=("jma:20260805180000",),
+    )
+
+    result = await JmaTsunamiSituationAdapter(client=client).get_situation_reports(
+        event, QUERY, now=NOW
+    )
+
+    assert result.records == ()
+    assert result.issues == ()
+    await client.aclose()
+
+
 def _source_for_test() -> SourceReference:
     return SourceReference(
         "Provider", "Event", "https://example.test/event", NOW, NOW, NOW
@@ -677,6 +770,45 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
         for fact in result.records[0].facts
     )
     assert not any(fact.value == "999" for fact in result.records[0].facts)
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_fdma_matches_japan_calendar_date_and_normalizes_publication_time() -> (
+    None
+):
+    index = """
+    <ul><li><a href="/disaster/info/items/20260806-ishikawa.html">
+    2026/08/06 Ishikawa earthquake report 1</a></li></ul>
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        content = index if request.url.path.endswith("/info/") else "Fatalities 2"
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            content=content.encode(),
+            request=request,
+        )
+
+    event = DisasterEvent(
+        "usgs:jst-boundary",
+        Hazard.EARTHQUAKE,
+        "Ishikawa, Japan",
+        JAPAN,
+        datetime(2026, 8, 5, 15, 30, tzinfo=UTC),
+        _source_for_test(),
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    result = await FdmaSituationReportAdapter(client=client).get_situation_reports(
+        event, QUERY, now=NOW
+    )
+
+    assert len(result.records) == 1
+    assert result.records[0].source.published_at == datetime(
+        2026, 8, 5, 15, 0, tzinfo=UTC
+    )
     await client.aclose()
 
 

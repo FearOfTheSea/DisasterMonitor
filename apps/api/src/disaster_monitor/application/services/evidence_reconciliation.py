@@ -70,9 +70,15 @@ def correlate_situation_report(
     report_ids = {
         item.lower() for item in (report.event_id, *report.provider_event_ids) if item
     }
-    if report_ids & event_ids:
+    comparable_pairs = {
+        (report_id, event_id)
+        for report_id in report_ids
+        for event_id in event_ids
+        if _identifier_namespace(report_id) == _identifier_namespace(event_id)
+    }
+    if any(report_id == event_id for report_id, event_id in comparable_pairs):
         return CorrelationStatus.MATCHED
-    if report_ids:
+    if comparable_pairs:
         return CorrelationStatus.UNMATCHED
     if report.hazard is not None and report.hazard != event.hazard:
         return CorrelationStatus.UNMATCHED
@@ -127,6 +133,12 @@ def correlate_situation_report(
     if (date_matches and (country_matches or magnitude_matches)) or location_matches:
         return CorrelationStatus.POSSIBLE
     return CorrelationStatus.UNMATCHED
+
+
+def _identifier_namespace(identifier: str) -> str:
+    """Return an identifier namespace without equating unrelated providers."""
+    prefix, separator, _ = identifier.partition(":")
+    return prefix if separator else "unqualified"
 
 
 def _has_correlation_metadata(report: SituationReport) -> bool:

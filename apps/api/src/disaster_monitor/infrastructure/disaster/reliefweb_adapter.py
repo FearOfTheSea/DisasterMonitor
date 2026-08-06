@@ -79,12 +79,9 @@ def build_reliefweb_params(
     )
     start = query.date_from or now - timedelta(days=query.time_window_days)
     end = query.date_to or now + timedelta(minutes=5)
-    identifiers = " ".join((event.event_id, *event.provider_ids))
     params: dict[str, HttpParam] = {
         "appname": app_name,
-        "query[value]": (
-            f"{_RELIEFWEB_HAZARDS[query.hazard]} {event.location} {identifiers}"
-        ).strip(),
+        "query[value]": f"{_RELIEFWEB_HAZARDS[query.hazard]} {event.location}".strip(),
         "query[operator]": "AND",
         "filter[operator]": "AND",
         "filter[conditions][0][field]": "country.name",

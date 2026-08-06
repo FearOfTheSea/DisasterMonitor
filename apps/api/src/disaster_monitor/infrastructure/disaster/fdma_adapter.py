@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta, timezone
 from html.parser import HTMLParser
 from io import BytesIO
 from urllib.parse import urljoin
@@ -37,6 +37,7 @@ from disaster_monitor.infrastructure.disaster.errors import (
 from disaster_monitor.infrastructure.disaster.http import get_bytes, get_text
 
 FDMA_INDEX_URL = "https://www.fdma.go.jp/disaster/info/"
+JAPAN_TIMEZONE = timezone(timedelta(hours=9))
 _NUMBER = r"([0-9][0-9,]*)"
 _LOCATION_ALIASES = {
     "kumamoto": ("\u718a\u672c",),
@@ -364,7 +365,13 @@ def _extract_pdf_text(payload: bytes) -> str:
 def _entry_matches(
     entry: _IndexEntry, event: DisasterEvent, query: DisasterQuery
 ) -> bool:
-    if entry.event_date is None or entry.event_date.date() != event.event_time.date():
+    event_time = event.event_time
+    if event_time.tzinfo is None:
+        event_time = event_time.replace(tzinfo=UTC)
+    if (
+        entry.event_date is None
+        or entry.event_date.date() != event_time.astimezone(JAPAN_TIMEZONE).date()
+    ):
         return False
     haystack = entry.title.lower()
     location_text = " ".join(
@@ -485,7 +492,7 @@ class FdmaSituationReportAdapter:
             return ProviderBatch(issues=tuple(issues))
         publication_date = selected.published_at or selected.event_date
         published_at = (
-            publication_date.replace(tzinfo=now.tzinfo)
+            publication_date.replace(tzinfo=JAPAN_TIMEZONE).astimezone(UTC)
             if publication_date is not None
             else None
         )

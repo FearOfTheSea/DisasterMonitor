@@ -259,16 +259,7 @@ class JmaTsunamiSituationAdapter:
                 )
             )
         if not reports:
-            return ProviderBatch(
-                issues=(
-                    ProviderIssue(
-                        self.provider_name,
-                        f"{self.provider_name}: The provider returned no matching "
-                        "records.",
-                        reason_code="empty_result",
-                    ),
-                )
-            )
+            return ProviderBatch(records=())
         return ProviderBatch(records=tuple(reports))
 
     async def aclose(self) -> None:
@@ -344,14 +335,29 @@ def _history_event_id(href: str, event_time: datetime) -> str:
 
 
 def _detail_coordinates(text: str) -> tuple[float | None, float | None, float | None]:
-    latitude = re.search(r"(?:北緯|latitude)\D{0,30}(\d+(?:\.\d+)?)", text, re.I)
-    longitude = re.search(r"(?:東経|longitude)\D{0,30}(\d+(?:\.\d+)?)", text, re.I)
+    latitude = _degree_coordinate(text, r"(?:北緯|latitude)")
+    longitude = _degree_coordinate(text, r"(?:東経|longitude)")
     depth = re.search(r"(?:深さ|depth)\D{0,30}(\d+(?:\.\d+)?)", text, re.I)
     return (
-        float(latitude.group(1)) if latitude else None,
-        float(longitude.group(1)) if longitude else None,
+        latitude,
+        longitude,
         float(depth.group(1)) if depth else None,
     )
+
+
+def _degree_coordinate(text: str, label: str) -> float | None:
+    """Parse decimal degrees or Japanese degree/minute coordinates."""
+    match = re.search(
+        rf"{label}\s*(\d+(?:\.\d+)?)\s*(?:度|degrees?)"
+        rf"(?:\s*(\d+(?:\.\d+)?)\s*(?:分|minutes?))?",
+        text,
+        re.I,
+    )
+    if not match:
+        return None
+    degrees = float(match.group(1))
+    minutes = float(match.group(2)) if match.group(2) else 0.0
+    return degrees + minutes / 60
 
 
 class JmaSignificantEarthquakeAdapter:
