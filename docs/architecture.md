@@ -1,5 +1,10 @@
 # Architecture
 
+The assistant is agent-first. See [Agent architecture](agent-architecture.md) for
+structured interpretation, deterministic validation, bounded tools, the evidence
+workspace, safe action logs, and Phase 4 exclusions. The provider architecture below
+remains the trusted data plane.
+
 ## System context
 
 ```mermaid
@@ -25,8 +30,8 @@ the current tab session; the API does not persist multi-user conversations.
 sequenceDiagram
     participant Browser
     participant Route as FastAPI route
-    participant UseCase as AnswerMapQuestion
-    participant Report as CurrentDisasterReportService
+    participant UseCase as RunDisasterAgent
+    participant Report as Agent tools / compatibility facade
     participant Registry as ProviderRegistry
     participant Events as JMA/USGS event ports
     participant Situation as JMA/ReliefWeb situation ports
@@ -36,9 +41,9 @@ sequenceDiagram
 
     Browser->>Route: POST /api/v1/assistant
     Route->>UseCase: validated question + map view
-    UseCase->>UseCase: parse hazard + country once
-    alt current-disaster request
-        UseCase->>Report: normalized query
+    UseCase->>UseCase: interpret then deterministically validate
+    alt disaster investigation
+        UseCase->>Report: validated task + bounded plan
         Report->>Registry: select event providers by capability
         alt no event capability
             Report-->>UseCase: coverage-unavailable report
@@ -50,7 +55,7 @@ sequenceDiagram
         Situation-->>Report: normalized facts + issues
         Report-->>UseCase: deterministic source-backed report
         end
-    else ordinary request
+    else clearly non-disaster or general knowledge
     UseCase->>UseCase: normalize and prepare deterministic messages
     UseCase->>Port: generate(ModelRequest)
     Port->>Adapter: provider-neutral call
@@ -62,8 +67,9 @@ sequenceDiagram
     Route-->>Browser: stable JSON response
 ```
 
-The application layer depends on the `LanguageModel`, disaster-information, and
-country-catalog ports plus provider-neutral DTOs. Stable disaster facts live in
+The application layer depends on separate `AgentModel` and `LanguageModel` ports,
+disaster-information, source-catalog, and country-catalog ports plus provider-neutral
+DTOs. Stable disaster facts live in
 `domain/disaster.py`; workflow results and `DisasterQuery` remain in the
 application layer. `DisasterQuery` contains one typed `Hazard` and one canonical
 `Country`, so country name and ISO code cannot diverge. The application does not
@@ -88,6 +94,14 @@ The application uses these meaningful ports:
 LanguageModel
   generate(ModelRequest) -> ModelResponse
   check_readiness() -> ModelReadiness
+
+AgentModel
+  interpret(question) -> DisasterTaskDraft
+  propose_plan(task, tools) -> InvestigationPlan
+  review_progress(task, completed) -> AgentReview
+
+SourceCatalog
+  sources() -> tuple[SourceDescriptor, ...]
 
 DisasterEventProvider
   find_recent_events(DisasterQuery, now) -> ProviderBatch[DisasterEvent]

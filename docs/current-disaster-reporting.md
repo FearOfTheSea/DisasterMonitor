@@ -1,8 +1,8 @@
 # Current-disaster reporting
 
-The assistant has a deterministic current-disaster path for recognized hazard and
-country requests. A `DisasterQueryParser` resolves exact hazard aliases and a
-packaged country catalog before the language model is consulted:
+The agent-first assistant has a deterministic current-disaster path for recognized
+hazard and country requests. A `DisasterQueryParser` resolves exact hazard aliases and
+a packaged country catalog before source-backed tool execution:
 
 > There was a recent earthquake in Japan. Please update me with the latest information about the damages in Japan.
 
@@ -36,6 +36,14 @@ The current report path does not use model memory for current facts. This keeps
 the report useful when Ollama is unavailable and prevents generated prose from
 introducing unsupported live claims. Ordinary assistant and map questions still
 use the existing local Qwen path.
+
+Every request enters the disaster-agent use case before delegation. A structured local
+agent model may interpret and propose the bounded plan, while the deterministic safety
+gate and validator control factual routing. If agent inference is unavailable or
+invalid, the five-step default tool plan runs without Ollama. The legacy report service
+is a compatibility facade over those same tools. Responses may add safe actions,
+source IDs, evidence count, gaps, and termination status; they never expose hidden
+reasoning, prompts, raw model/provider output, secrets, or stack traces.
 
 ## Implemented providers
 

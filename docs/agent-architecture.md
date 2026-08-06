@@ -1,0 +1,63 @@
+# Agent architecture (Phases 1–3)
+
+Disaster Monitor follows **LLM-first orchestration, evidence-first truth**. The local
+agent model may interpret intent and propose a bounded plan. Deterministic validation,
+allowlisted tools, provider capabilities, and normalized evidence alone establish
+current facts.
+
+```mermaid
+flowchart TD
+  request[User request] --> interpret[Agent task interpreter]
+  interpret --> validate[Deterministic validator and safety gate]
+  validate -->|Non-disaster or general knowledge| general[General model]
+  validate --> plan[Bounded investigation planner]
+  plan --> tools[Trusted tool registry]
+  tools --> providers[Source-backed provider tools]
+  providers --> workspace[Evidence workspace]
+  workspace --> review[Sufficiency review]
+  review --> compose[Grounded focused composer]
+```
+
+Every assistant request enters `RunDisasterAgent`. The agent adapter requests JSON
+only, validates exact fields and enums, bounds text and lists, and permits one repair.
+It cannot create trusted countries, providers, authorities, URLs, imports, commands,
+SQL, or code. Packaged metadata canonicalizes hazards, countries, and calendar dates.
+A safety gate retains factual disaster requests even when model interpretation fails.
+
+The deterministic fallback plan is available without Ollama:
+
+1. `list_sources_for_task`
+2. `find_disaster_event`
+3. `retrieve_situation_evidence`
+4. `reconcile_disaster_evidence`
+5. `compose_disaster_answer`
+
+Execution permits at most eight plan steps, twelve tool calls, four bounded model
+operations, and one replan decision. There is no recursion, worker, background job,
+dynamic import, filesystem discovery, arbitrary URL selection, or generated-code
+execution. Tools enforce prerequisites and store normalized artifacts in a
+request-scoped evidence workspace. `CurrentDisasterReportService` is a compatibility
+facade over the same tools.
+
+Current answers are composed by application code from `EvidencePacket`. Focused
+casualty answers include event identity, source, freshness, conflict, and explicit
+missing-evidence language; absence is never rendered as zero. The optional API
+investigation summary exposes status, normalized task fields, actions, source IDs,
+evidence count, gaps, and termination reason. It excludes prompts, raw model/provider
+output, chain-of-thought, configuration, stack traces, and secrets.
+
+The executable provider registry remains selection authority. A versioned static
+source catalog adds semantic roles, jurisdiction, authority, hazard/country scope,
+configuration, freshness wording, attribution, limitations, tool links, and provider
+names. Startup validates all six executable source IDs and feasible capability drift.
+ReliefWeb remains supplementary, never event verification or an official national
+total.
+
+Exactly one hazard and one catalog country may be investigated. Multiple values
+request clarification; unknown countries return a catalog limitation; combinations
+without event discovery return coverage unavailable. Image and agent-controlled map
+requests are recorded as honest capability gaps while supported text may continue.
+
+Phase 4 remains absent: disaster image retrieval, satellite/aerial imagery, raster or
+vector COP artifacts, agent-controlled map layers, CARTO, TerraLabo, dynamic source
+discovery, and arbitrary generated retrieval code are not implemented.

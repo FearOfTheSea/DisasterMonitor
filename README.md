@@ -4,6 +4,11 @@ Disaster Monitor is a local-first MVP for exploring a basic interactive map and
 asking a locally running Qwen model map or disaster-monitoring questions. It also
 has a bounded, source-backed current-earthquake reporting workflow for Japan.
 
+Assistant requests enter a bounded agent-first control plane. Current facts are
+composed only from normalized trusted-source evidence; local Qwen interpretation and
+planning cannot create providers, countries, URLs, or facts. See
+[`docs/agent-architecture.md`](docs/agent-architecture.md).
+
 ## Current MVP
 
 - Next.js and OpenLayers frontend with an OpenStreetMap base layer centered on Hanoi.

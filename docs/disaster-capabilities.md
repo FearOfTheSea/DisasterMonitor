@@ -6,6 +6,11 @@ verification and situation evidence are separate roles: an event can be verified
 when no impact source supports it. If no event provider supports the combination, the
 API returns `current_disaster_coverage_unavailable` and makes no live factual claim.
 
+A versioned source-intelligence catalog links every executable provider to a stable
+`source_id` and a maintained playbook under `docs/sources/`. Source listing joins this
+semantic metadata with capability selection; catalog data never dynamically imports or
+constructs providers.
+
 ## Current live capability matrix
 
 | Provider | Role | Hazards | Countries | Additional requirement |
@@ -23,6 +28,10 @@ national situation providers. Tsunami, flood, wildfire, landslide, and tropical
 cyclone requests are recognized but currently return coverage unavailable because no
 event-discovery provider for those hazards is registered. ReliefWeb alone cannot verify
 an event and is never treated as an official national total.
+
+Image retrieval, satellite/aerial imagery, raster/vector COP products,
+agent-controlled map layers, CARTO, TerraLabo, and dynamic online source discovery are
+explicitly unsupported Phase 4 capabilities.
 
 ## Extension procedure
 
