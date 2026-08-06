@@ -74,6 +74,17 @@ try {
     .getByText(/Retrieved:/)
     .first()
     .waitFor();
+  await page
+    .getByLabel('Question')
+    .fill(
+      'How many fatalities were reported for the August 5, 2026 earthquake in Japan?',
+    );
+  await page.getByRole('button', { name: 'Ask assistant' }).click();
+  await page.getByRole('heading', { name: 'Focused answer' }).waitFor();
+  await page
+    .getByText(/Fatalities: 2/)
+    .first()
+    .waitFor();
   await browser.close();
   console.log('System test passed: source-backed current-disaster report rendered.');
 } finally {

@@ -23,4 +23,13 @@ test('submits the target current-disaster question and renders a source-backed r
   await expect(page.getByText(/VENEZUELA-FOREIGN-EVIDENCE-SENTINEL/i)).toHaveCount(0);
   await expect(page.getByText(/TOKYO-UNRELATED-EVIDENCE-SENTINEL/i)).toHaveCount(0);
   await expect(page.getByText(/GENERAL-MODEL-SENTINEL/i)).toHaveCount(0);
+
+  await page
+    .getByLabel('Question')
+    .fill(
+      'How many fatalities were reported for the August 5, 2026 earthquake in Japan?',
+    );
+  await page.getByRole('button', { name: 'Ask assistant' }).click();
+  await expect(page.getByRole('heading', { name: 'Focused answer' })).toBeVisible();
+  await expect(page.getByText(/Fatalities: 2/).first()).toBeVisible();
 });
