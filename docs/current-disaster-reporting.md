@@ -11,7 +11,10 @@ The flow is:
 1. Normalize the question and extract one typed hazard, one canonical country,
    time intent, focus, and
    optional dates, coordinates, magnitude, prefecture, city, or event identifier.
-2. Pass that same normalized query to the source-backed workflow. Explicit dates
+2. Pass that same normalized query to the source-backed workflow. A provider
+   registry selects event sources by role, hazard, country scope, and configuration.
+   If no event source supports the combination, return
+   `current_disaster_coverage_unavailable` without invoking the model. Explicit dates
    use the configured country calendar boundary; Japan August 5 spans
    `2026-08-04T15:00:00Z` through `2026-08-05T15:00:00Z`.
 3. Query the bounded event-source ports for candidate events.
@@ -59,10 +62,14 @@ The initial provider set is deliberately narrow:
   extracts only bounded, clearly preliminary narrative facts. ReliefWeb values
   are not treated as official totals.
 
-The rolling JMA, durable JMA, and USGS event adapters are composed together. FDMA
-is the primary human-impact source, with JMA tsunami and optionally configured
-ReliefWeb as supplementary sources. Each source can fail independently; partial
-results expose a safe warning rather than hiding the failure. Provider diagnostics
+The rolling JMA and durable JMA registrations advertise earthquake event discovery
+for `JPN`; USGS advertises global earthquake event discovery. FDMA advertises Japan
+earthquake situation evidence. JMA tsunami evidence additionally requires a selected
+event carrying a JMA identifier. ReliefWeb advertises configured global supplementary
+situation evidence for recognized hazards. Disabled ReliefWeb is retained as a typed
+configuration limitation rather than being misreported as a network failure. Each
+selected source can fail independently; partial results expose a safe warning rather
+than hiding the failure. Provider diagnostics
 retain a stable reason code, retryability, and safe HTTP status for live diagnostics.
 No weather,
 flood, satellite, geocoding, news, authentication, or map-overlay provider is

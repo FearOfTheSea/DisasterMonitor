@@ -1,9 +1,5 @@
 """Manual composition root for the local API."""
 
-from disaster_monitor.application.ports.disaster_information import (
-    DisasterEventProvider,
-    SituationReportProvider,
-)
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
@@ -11,6 +7,13 @@ from disaster_monitor.application.services.current_disaster_report import (
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
+from disaster_monitor.application.services.provider_registry import (
+    ProviderCapabilities,
+    ProviderRegistration,
+    ProviderRegistry,
+    ProviderRole,
+)
+from disaster_monitor.domain.disaster import Hazard
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
@@ -50,50 +53,81 @@ def build_disaster_query_parser() -> DisasterQueryParser:
 
 
 def build_current_disaster_report(settings: Settings) -> CurrentDisasterReportService:
-    """Construct the small live provider set used by current earthquake reports."""
-    event_provider: DisasterEventProvider = CompositeDisasterEventProvider(
+    """Construct capability-registered live disaster providers."""
+    jma_rolling = JmaEarthquakeAdapter(
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    jma_significant = JmaSignificantEarthquakeAdapter(
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    usgs = UsgsEarthquakeAdapter(
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    fdma = FdmaSituationReportAdapter(
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    jma_tsunami = JmaTsunamiSituationAdapter(
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    reliefweb = ReliefWebSituationAdapter(
+        app_name=settings.reliefweb_app_name,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    event_japan = ProviderCapabilities(
+        roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+        hazards=frozenset({Hazard.EARTHQUAKE}),
+        country_codes=frozenset({"JPN"}),
+    )
+    situation_japan = ProviderCapabilities(
+        roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
+        hazards=frozenset({Hazard.EARTHQUAKE}),
+        country_codes=frozenset({"JPN"}),
+    )
+    registry = ProviderRegistry(
         (
-            JmaEarthquakeAdapter(
-                timeout_seconds=settings.disaster_provider_timeout_seconds,
-                max_response_bytes=settings.disaster_provider_max_response_bytes,
+            ProviderRegistration("JMA rolling earthquake", jma_rolling, event_japan),
+            ProviderRegistration(
+                "JMA significant earthquake", jma_significant, event_japan
             ),
-            JmaSignificantEarthquakeAdapter(
-                timeout_seconds=settings.disaster_provider_timeout_seconds,
-                max_response_bytes=settings.disaster_provider_max_response_bytes,
+            ProviderRegistration(
+                "USGS",
+                usgs,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    hazards=frozenset({Hazard.EARTHQUAKE}),
+                    country_codes=None,
+                ),
             ),
-            UsgsEarthquakeAdapter(
-                timeout_seconds=settings.disaster_provider_timeout_seconds,
-                max_response_bytes=settings.disaster_provider_max_response_bytes,
+            ProviderRegistration("FDMA", fdma, situation_japan),
+            ProviderRegistration(
+                "JMA tsunami status",
+                jma_tsunami,
+                situation_japan,
+                event_eligibility=lambda event: event.jma_event_id is not None,
+            ),
+            ProviderRegistration(
+                "ReliefWeb",
+                reliefweb,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                    hazards=frozenset(Hazard),
+                    country_codes=None,
+                    requires_configuration=True,
+                ),
+                configured=reliefweb.configured,
             ),
         )
     )
-    situation_providers: list[SituationReportProvider] = [
-        FdmaSituationReportAdapter(
-            timeout_seconds=settings.disaster_provider_timeout_seconds,
-            max_response_bytes=settings.disaster_provider_max_response_bytes,
-        ),
-        JmaTsunamiSituationAdapter(
-            timeout_seconds=settings.disaster_provider_timeout_seconds,
-            max_response_bytes=settings.disaster_provider_max_response_bytes,
-        ),
-    ]
-    if (
-        settings.reliefweb_app_name
-        and settings.reliefweb_app_name.strip().lower()
-        not in {
-            "disaster-monitor-local",
-            "change-me",
-            "your-app-name",
-        }
-    ):
-        situation_providers.append(
-            ReliefWebSituationAdapter(
-                app_name=settings.reliefweb_app_name,
-                timeout_seconds=settings.disaster_provider_timeout_seconds,
-                max_response_bytes=settings.disaster_provider_max_response_bytes,
-            )
-        )
-    situation_provider: SituationReportProvider = CompositeSituationReportProvider(
-        tuple(situation_providers)
+    event_provider = CompositeDisasterEventProvider(registry)
+    situation_provider = CompositeSituationReportProvider(registry)
+    return CurrentDisasterReportService(
+        event_provider,
+        situation_provider,
+        provider_registry=registry,
     )
-    return CurrentDisasterReportService(event_provider, situation_provider)

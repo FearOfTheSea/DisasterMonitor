@@ -22,6 +22,10 @@ from disaster_monitor.application.services.event_resolution import (
 from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
 )
+from disaster_monitor.application.services.provider_registry import (
+    ProviderRegistry,
+    ProviderRole,
+)
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
     FactStatus,
@@ -220,10 +224,12 @@ class CurrentDisasterReportService:
         event_provider: DisasterEventProvider,
         situation_report_provider: SituationReportProvider,
         *,
+        provider_registry: ProviderRegistry | None = None,
         clock: Callable[[], datetime] = _now_utc,
     ) -> None:
         self._event_provider = event_provider
         self._situation_report_provider = situation_report_provider
+        self._provider_registry = provider_registry
         self._clock = clock
 
     async def execute(self, query: DisasterQuery) -> DisasterReport:
@@ -231,6 +237,20 @@ class CurrentDisasterReportService:
         if retrieved_at.tzinfo is None:
             retrieved_at = retrieved_at.replace(tzinfo=UTC)
         warnings: list[str] = []
+        if self._provider_registry is not None:
+            event_selection = self._provider_registry.select(
+                query, ProviderRole.EVENT_DISCOVERY
+            )
+            if not event_selection.registrations:
+                return self._coverage_unavailable_report(
+                    query,
+                    retrieved_at,
+                    event_selection.unavailable_configuration,
+                )
+            warnings.extend(
+                f"{name} is unavailable because required configuration is missing."
+                for name in event_selection.unavailable_configuration
+            )
         event_batch = ProviderBatch[DisasterEvent]()
         try:
             event_batch = _as_batch(
@@ -283,17 +303,34 @@ class CurrentDisasterReportService:
             )
         event = resolution.selected
         situation_batch = ProviderBatch[SituationReport]()
-        try:
-            situation_batch = _as_batch(
-                await self._situation_report_provider.get_situation_reports(
-                    event, query, now=retrieved_at
+        situation_available = True
+        if self._provider_registry is not None:
+            situation_selection = self._provider_registry.select(
+                query, ProviderRole.SITUATION_EVIDENCE, event=event
+            )
+            warnings.extend(
+                f"{name} is unavailable because required configuration is missing."
+                for name in situation_selection.unavailable_configuration
+            )
+            situation_available = bool(situation_selection.registrations)
+            if not situation_available:
+                warnings.append(
+                    "No configured source-backed situation provider supports "
+                    f"{query.hazard.value} in {query.country.canonical_name}; "
+                    "the verified event is reported with partial coverage."
                 )
-            )
-        except Exception:
-            warnings.append(
-                "The situation-report source could not be reached or returned "
-                "invalid data."
-            )
+        if situation_available:
+            try:
+                situation_batch = _as_batch(
+                    await self._situation_report_provider.get_situation_reports(
+                        event, query, now=retrieved_at
+                    )
+                )
+            except Exception:
+                warnings.append(
+                    "The situation-report source could not be reached or returned "
+                    "invalid data."
+                )
         warnings.extend(issue.message for issue in situation_batch.issues)
         packet = build_evidence_packet(
             query,
@@ -322,6 +359,52 @@ class CurrentDisasterReportService:
             warnings=packet.warnings,
             sections=sections,
             partial=packet.partial,
+        )
+
+    @staticmethod
+    def _coverage_unavailable_report(
+        query: DisasterQuery,
+        retrieved_at: datetime,
+        unavailable_configuration: tuple[str, ...],
+    ) -> DisasterReport:
+        configured_detail = ""
+        if unavailable_configuration:
+            configured_detail = (
+                " Relevant providers unavailable due to configuration: "
+                + ", ".join(unavailable_configuration)
+                + "."
+            )
+        content = (
+            f"I recognized a request for current {query.hazard.value} information "
+            f"in {query.country.canonical_name}, but no configured source-backed "
+            "event provider supports this combination."
+            f"{configured_detail} No live factual claim is being made."
+        )
+        sections = (
+            ReportSection("Situation summary", content),
+            ReportSection(
+                "Uncertainties and information gaps",
+                "Event verification is unavailable, so damage, impact, and response "
+                "claims are intentionally omitted.",
+            ),
+            ReportSection(
+                "Report freshness",
+                f"Coverage checked at {_format_timestamp(retrieved_at)}.",
+            ),
+        )
+        return DisasterReport(
+            message="\n\n".join(
+                f"## {section.title}\n{section.content}" for section in sections
+            ),
+            response_type="current_disaster_coverage_unavailable",
+            selected_event=None,
+            retrieval_time=retrieved_at,
+            sources=(),
+            warnings=tuple(
+                f"{name} requires configuration." for name in unavailable_configuration
+            ),
+            sections=sections,
+            partial=True,
         )
 
     @staticmethod

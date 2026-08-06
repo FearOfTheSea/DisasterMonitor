@@ -27,6 +27,7 @@ sequenceDiagram
     participant Route as FastAPI route
     participant UseCase as AnswerMapQuestion
     participant Report as CurrentDisasterReportService
+    participant Registry as ProviderRegistry
     participant Events as JMA/USGS event ports
     participant Situation as JMA/ReliefWeb situation ports
     participant Port as LanguageModel port
@@ -38,12 +39,17 @@ sequenceDiagram
     UseCase->>UseCase: parse hazard + country once
     alt current-disaster request
         UseCase->>Report: normalized query
+        Report->>Registry: select event providers by capability
+        alt no event capability
+            Report-->>UseCase: coverage-unavailable report
+        else event capability exists
         Report->>Events: bounded recent-event lookup
         Events-->>Report: normalized candidates + issues
         Report->>Report: rank event and reconcile evidence
         Report->>Situation: selected event lookup
         Situation-->>Report: normalized facts + issues
         Report-->>UseCase: deterministic source-backed report
+        end
     else ordinary request
     UseCase->>UseCase: normalize and prepare deterministic messages
     UseCase->>Port: generate(ModelRequest)
@@ -97,6 +103,13 @@ CountryCatalog
 `OllamaQwenAdapter` implements the model port. JMA, USGS, and ReliefWeb adapters
 implement the disaster ports. Tests inject deterministic implementations. No
 speculative ports exist for weather, satellite, geocoding, or remote providers.
+
+`ProviderRegistry` holds registrations with role, typed hazard, country scope,
+configuration requirements, and optional selected-event eligibility. `None` country
+scope means global. The fan-out composites invoke only the registry selection and
+continue to isolate individual adapter failures. A recognized query with no event
+capability returns `current_disaster_coverage_unavailable` before situation lookup
+or language-model generation.
 
 ## Dependency direction
 

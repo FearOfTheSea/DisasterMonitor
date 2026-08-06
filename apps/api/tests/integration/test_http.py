@@ -401,3 +401,26 @@ async def test_current_disaster_is_honest_when_event_source_has_no_match() -> No
     assert body["response_type"] == "current_disaster_verification_failed"
     assert body["selected_event"] is None
     assert "could not verify" in body["message"]
+
+
+@pytest.mark.asyncio
+async def test_recognized_unsupported_hazard_returns_coverage_unavailable() -> None:
+    model = FakeLanguageModel(error=AssertionError("model must not be called"))
+    app = create_app(model=model)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={"question": "Please give me the latest flood in Vietnam."},
+        )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["response_type"] == "current_disaster_coverage_unavailable"
+    assert body["selected_event"] is None
+    assert "flood" in body["message"]
+    assert "Vietnam" in body["message"]
+    assert "No live factual claim" in body["message"]
+    assert model.requests == []

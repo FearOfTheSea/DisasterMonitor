@@ -11,9 +11,9 @@ class StaticCountryCatalog:
     """Resolve exact aliases from the versioned packaged metadata resource."""
 
     def __init__(self) -> None:
-        resource = files("disaster_monitor.infrastructure.geography.resources").joinpath(
-            "countries.v1.json"
-        )
+        resource = files(
+            "disaster_monitor.infrastructure.geography.resources"
+        ).joinpath("countries.v1.json")
         payload = json.loads(resource.read_text(encoding="utf-8"))
         self.metadata = payload["metadata"]
         self._countries = tuple(

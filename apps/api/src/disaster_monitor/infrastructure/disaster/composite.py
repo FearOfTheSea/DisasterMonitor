@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
+from typing import cast
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
@@ -12,6 +13,10 @@ from disaster_monitor.application.disaster import (
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
+)
+from disaster_monitor.application.services.provider_registry import (
+    ProviderRegistry,
+    ProviderRole,
 )
 from disaster_monitor.domain.disaster import DisasterEvent, SituationReport
 from disaster_monitor.infrastructure.disaster.errors import DisasterProviderError
@@ -47,14 +52,27 @@ def _issue(provider: str, error: DisasterProviderError) -> ProviderIssue:
 class CompositeDisasterEventProvider:
     """Query a small ordered list of event sources and retain partial success."""
 
-    def __init__(self, providers: Iterable[DisasterEventProvider]) -> None:
-        self._providers = tuple(providers)
+    def __init__(
+        self, providers: Iterable[DisasterEventProvider] | ProviderRegistry
+    ) -> None:
+        if isinstance(providers, ProviderRegistry):
+            self._registry: ProviderRegistry | None = providers
+            self._providers: tuple[DisasterEventProvider, ...] = ()
+        else:
+            self._registry = None
+            self._providers = tuple(providers)
         self.last_diagnostics: tuple[ProviderIssue, ...] = ()
         self.last_record_counts: dict[str, int] = {}
 
     @property
     def providers(self) -> tuple[DisasterEventProvider, ...]:
-        return self._providers
+        if self._registry is None:
+            return self._providers
+        return tuple(
+            cast(DisasterEventProvider, registration.provider)
+            for registration in self._registry.registrations
+            if ProviderRole.EVENT_DISCOVERY in registration.capabilities.roles
+        )
 
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
@@ -62,7 +80,15 @@ class CompositeDisasterEventProvider:
         records: list[DisasterEvent] = []
         issues: list[ProviderIssue] = []
         self.last_record_counts = {}
-        for provider in self._providers:
+        providers = self._providers
+        if self._registry is not None:
+            providers = tuple(
+                cast(DisasterEventProvider, registration.provider)
+                for registration in self._registry.select(
+                    query, ProviderRole.EVENT_DISCOVERY
+                ).registrations
+            )
+        for provider in providers:
             name = getattr(provider, "provider_name", provider.__class__.__name__)
             try:
                 result = await provider.find_recent_events(query, now=now)
@@ -92,7 +118,7 @@ class CompositeDisasterEventProvider:
         )
 
     async def aclose(self) -> None:
-        for provider in self._providers:
+        for provider in self.providers:
             close = getattr(provider, "aclose", None)
             if close is not None:
                 await close()
@@ -101,14 +127,27 @@ class CompositeDisasterEventProvider:
 class CompositeSituationReportProvider:
     """Query official and supplementary situation sources with bounded fan-out."""
 
-    def __init__(self, providers: Iterable[SituationReportProvider]) -> None:
-        self._providers = tuple(providers)
+    def __init__(
+        self, providers: Iterable[SituationReportProvider] | ProviderRegistry
+    ) -> None:
+        if isinstance(providers, ProviderRegistry):
+            self._registry: ProviderRegistry | None = providers
+            self._providers: tuple[SituationReportProvider, ...] = ()
+        else:
+            self._registry = None
+            self._providers = tuple(providers)
         self.last_diagnostics: tuple[ProviderIssue, ...] = ()
         self.last_record_counts: dict[str, int] = {}
 
     @property
     def providers(self) -> tuple[SituationReportProvider, ...]:
-        return self._providers
+        if self._registry is None:
+            return self._providers
+        return tuple(
+            cast(SituationReportProvider, registration.provider)
+            for registration in self._registry.registrations
+            if ProviderRole.SITUATION_EVIDENCE in registration.capabilities.roles
+        )
 
     async def get_situation_reports(
         self,
@@ -120,7 +159,15 @@ class CompositeSituationReportProvider:
         records: list[SituationReport] = []
         issues: list[ProviderIssue] = []
         self.last_record_counts = {}
-        for provider in self._providers:
+        providers = self._providers
+        if self._registry is not None:
+            providers = tuple(
+                cast(SituationReportProvider, registration.provider)
+                for registration in self._registry.select(
+                    query, ProviderRole.SITUATION_EVIDENCE, event=event
+                ).registrations
+            )
+        for provider in providers:
             name = getattr(provider, "provider_name", provider.__class__.__name__)
             try:
                 result = await provider.get_situation_reports(event, query, now=now)
@@ -148,7 +195,7 @@ class CompositeSituationReportProvider:
         return ProviderBatch(records=tuple(records), issues=tuple(issues))
 
     async def aclose(self) -> None:
-        for provider in self._providers:
+        for provider in self.providers:
             close = getattr(provider, "aclose", None)
             if close is not None:
                 await close()
