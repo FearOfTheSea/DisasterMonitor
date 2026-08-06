@@ -39,6 +39,23 @@ class AssistantResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     sections: list["ReportSectionResponse"] = Field(default_factory=list)
     partial: bool = False
+    investigation: "InvestigationResponse | None" = None
+
+
+class InvestigationResponse(BaseModel):
+    """Inspectable agent actions without prompts, reasoning, or raw payloads."""
+
+    status: str
+    task_summary: str
+    hazard: str | None = None
+    country: str | None = None
+    information_needs: list[str] = Field(default_factory=list)
+    output_modalities: list[str] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=list)
+    source_ids: list[str] = Field(default_factory=list)
+    evidence_count: int = 0
+    capability_gaps: list[str] = Field(default_factory=list)
+    termination_reason: str
 
 
 class SourceResponse(BaseModel):

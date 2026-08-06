@@ -1,5 +1,6 @@
 """Manual composition root for the local API."""
 
+from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
@@ -21,6 +22,9 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRegistration,
     ProviderRegistry,
     ProviderRole,
+)
+from disaster_monitor.application.services.source_consistency import (
+    validate_provider_source_consistency,
 )
 from disaster_monitor.domain.disaster import Hazard
 from disaster_monitor.infrastructure.configuration import Settings
@@ -44,6 +48,12 @@ from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
 from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAdapter
+from disaster_monitor.infrastructure.llm.structured_agent_model import (
+    StructuredAgentModel,
+)
+from disaster_monitor.infrastructure.sources.static_source_catalog import (
+    StaticSourceCatalog,
+)
 
 
 def build_language_model(settings: Settings) -> LanguageModel:
@@ -54,6 +64,16 @@ def build_language_model(settings: Settings) -> LanguageModel:
         timeout_seconds=settings.ollama_timeout_seconds,
         max_tokens=settings.ollama_max_tokens,
     )
+
+
+def build_agent_model(settings: Settings) -> AgentModel:
+    """Construct a separate structured-agent abstraction over local Qwen."""
+    return StructuredAgentModel(build_language_model(settings))
+
+
+def build_source_catalog() -> StaticSourceCatalog:
+    """Construct the packaged maintained disaster-source catalog."""
+    return StaticSourceCatalog()
 
 
 def build_country_catalog() -> StaticCountryCatalog:
@@ -112,9 +132,17 @@ def build_current_disaster_report(
     )
     registry = ProviderRegistry(
         (
-            ProviderRegistration("JMA rolling earthquake", jma_rolling, event_japan),
             ProviderRegistration(
-                "JMA significant earthquake", jma_significant, event_japan
+                "JMA rolling earthquake",
+                jma_rolling,
+                event_japan,
+                source_id="jma-rolling-earthquakes",
+            ),
+            ProviderRegistration(
+                "JMA significant earthquake",
+                jma_significant,
+                event_japan,
+                source_id="jma-significant-earthquakes",
             ),
             ProviderRegistration(
                 "USGS",
@@ -124,12 +152,19 @@ def build_current_disaster_report(
                     hazards=frozenset({Hazard.EARTHQUAKE}),
                     country_codes=None,
                 ),
+                source_id="usgs-earthquakes",
             ),
-            ProviderRegistration("FDMA", fdma, situation_japan),
+            ProviderRegistration(
+                "FDMA",
+                fdma,
+                situation_japan,
+                source_id="fdma-situation-reports",
+            ),
             ProviderRegistration(
                 "JMA tsunami status",
                 jma_tsunami,
                 situation_japan,
+                source_id="jma-tsunami-status",
                 event_eligibility=lambda event: event.jma_event_id is not None,
             ),
             ProviderRegistration(
@@ -141,10 +176,13 @@ def build_current_disaster_report(
                     country_codes=None,
                     requires_configuration=True,
                 ),
+                source_id="reliefweb-situation-reports",
                 configured=reliefweb.configured,
             ),
         )
     )
+    source_catalog = build_source_catalog()
+    validate_provider_source_consistency(registry, source_catalog)
     event_provider = CompositeDisasterEventProvider(registry)
     situation_provider = CompositeSituationReportProvider(registry)
     return CurrentDisasterReportService(
@@ -154,4 +192,5 @@ def build_current_disaster_report(
         event_policies=default_event_policy_registry(),
         evidence_reconciler=EvidenceReconciler(),
         renderer=DisasterReportRenderer(),
+        source_catalog=source_catalog,
     )

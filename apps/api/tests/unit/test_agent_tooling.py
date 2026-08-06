@@ -1,0 +1,347 @@
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
+import pytest
+
+from disaster_monitor.application.agent.models import (
+    AgentExecutionState,
+    InformationNeed,
+    InvestigationPlan,
+    OutputModality,
+    PlanStep,
+    SourceDescriptor,
+    SourceInformationRole,
+    TaskKind,
+    ValidatedDisasterTask,
+)
+from disaster_monitor.application.agent.planning import (
+    default_investigation_plan,
+    validate_plan,
+)
+from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
+from disaster_monitor.application.agent.tooling import (
+    DisasterToolDependencies,
+    ToolDescription,
+    ToolRegistry,
+    build_disaster_tool_registry,
+    execute_plan,
+)
+from disaster_monitor.application.disaster import DisasterQuery, ProviderBatch
+from disaster_monitor.application.services.disaster_query_parser import (
+    DisasterQueryParser,
+)
+from disaster_monitor.application.services.disaster_report_renderer import (
+    DisasterReportRenderer,
+)
+from disaster_monitor.application.services.event_resolution import (
+    default_event_policy_registry,
+)
+from disaster_monitor.application.services.evidence_reconciliation import (
+    EvidenceReconciler,
+)
+from disaster_monitor.application.services.provider_registry import (
+    ProviderCapabilities,
+    ProviderRegistration,
+    ProviderRegistry,
+    ProviderRole,
+)
+from disaster_monitor.application.services.source_consistency import (
+    validate_provider_source_consistency,
+)
+from disaster_monitor.domain.disaster import (
+    Country,
+    DisasterEvent,
+    GeographicArea,
+    Hazard,
+    SourceReference,
+)
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
+from disaster_monitor.infrastructure.sources.static_source_catalog import (
+    StaticSourceCatalog,
+)
+
+NOW = datetime(2026, 8, 5, 12, tzinfo=UTC)
+
+
+class DummyTool:
+    description = ToolDescription("dummy", "test tool", (), (), (), (), False)
+
+    async def execute(self, state: AgentExecutionState) -> str:
+        return "ran dummy"
+
+
+def test_tool_registry_rejects_duplicate_and_unknown_names() -> None:
+    with pytest.raises(ValueError, match="Duplicate"):
+        ToolRegistry((DummyTool(), DummyTool()))
+    registry = ToolRegistry((DummyTool(),))
+    with pytest.raises(ValueError, match="Unknown"):
+        registry.resolve("generated_python_tool")
+
+
+def test_plan_validation_rejects_unknown_tools_and_invalid_dependencies() -> None:
+    unknown = InvestigationPlan(
+        "p",
+        "test",
+        (PlanStep("one", "generated_python_tool", (), "unsafe"),),
+    )
+    sequencing = InvestigationPlan(
+        "p",
+        "test",
+        (PlanStep("one", "dummy", (), "bad", ("missing",)),),
+    )
+    with pytest.raises(ValueError, match="Unknown"):
+        validate_plan(unknown, allowed_tools=frozenset({"dummy"}))
+    with pytest.raises(ValueError, match="sequencing"):
+        validate_plan(sequencing, allowed_tools=frozenset({"dummy"}))
+
+
+@pytest.mark.asyncio
+async def test_tool_execution_enforces_call_budget() -> None:
+    country = Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1), "UTC")
+    query = DisasterQuery(Hazard.FLOOD, country, "recent", ("latest",))
+    task = ValidatedDisasterTask(
+        "test",
+        TaskKind.INVESTIGATION,
+        True,
+        Hazard.FLOOD,
+        country,
+        query=query,
+    )
+    steps = tuple(
+        PlanStep(
+            f"s{index}",
+            "dummy",
+            (),
+            "bounded",
+            () if index == 0 else (f"s{index - 1}",),
+        )
+        for index in range(13)
+    )
+    state = AgentExecutionState(task, InvestigationPlan("p", "test", steps, 20))
+
+    with pytest.raises(RuntimeError, match="budget"):
+        await execute_plan(state, ToolRegistry((DummyTool(),)))
+
+    assert state.tool_call_count == 12
+
+
+@dataclass
+class FakeCatalog:
+    descriptor: SourceDescriptor
+    version: str = "test"
+
+    def sources(self) -> tuple[SourceDescriptor, ...]:
+        return (self.descriptor,)
+
+    def get(self, source_id: str) -> SourceDescriptor | None:
+        return self.descriptor if source_id == self.descriptor.source_id else None
+
+
+class NewFloodProvider:
+    provider_name = "Testland flood authority"
+
+    def __init__(self, event: DisasterEvent) -> None:
+        self.event = event
+        self.calls = 0
+
+    async def find_recent_events(self, query, *, now):
+        self.calls += 1
+        return ProviderBatch((self.event,))
+
+
+class EmptySituationProvider:
+    async def get_situation_reports(self, event, query, *, now):
+        return ProviderBatch()
+
+
+@pytest.mark.asyncio
+async def test_new_country_and_hazard_provider_is_discovered_without_agent_branch() -> (
+    None
+):
+    country = Country("TST", "Testland", (), GeographicArea(0, 10, 0, 10), "UTC")
+    source = SourceReference(
+        "Test authority", "Flood event", "https://example.test/flood", NOW, NOW, NOW
+    )
+    event = DisasterEvent(
+        "test:flood-1", Hazard.FLOOD, "Test City", country, NOW, source
+    )
+    provider = NewFloodProvider(event)
+    registration = ProviderRegistration(
+        "Testland flood authority",
+        provider,
+        ProviderCapabilities(
+            frozenset({ProviderRole.EVENT_DISCOVERY}),
+            frozenset({Hazard.FLOOD}),
+            frozenset({"TST"}),
+        ),
+        source_id="testland-floods",
+    )
+    registry = ProviderRegistry((registration,))
+    descriptor = SourceDescriptor(
+        "testland-floods",
+        "Test authority",
+        "Test floods",
+        "Testland",
+        "national_authority",
+        (SourceInformationRole.EVENT_DISCOVERY,),
+        (Hazard.FLOOD,),
+        ("TST",),
+        ("en",),
+        "test",
+        False,
+        True,
+        "unknown",
+        "Attribute to test authority.",
+        (),
+        ("find_disaster_event",),
+        "Testland flood authority",
+        "implemented",
+    )
+    query = DisasterQuery(Hazard.FLOOD, country, "recent", ("latest",))
+    task = ValidatedDisasterTask(
+        "Latest flood in Testland",
+        TaskKind.INVESTIGATION,
+        True,
+        Hazard.FLOOD,
+        country,
+        information_needs=(InformationNeed.EVENT_OVERVIEW,),
+        output_modalities=(OutputModality.TEXT,),
+        query=query,
+    )
+    tools = build_disaster_tool_registry(
+        DisasterToolDependencies(
+            registry,
+            FakeCatalog(descriptor),
+            provider,
+            EmptySituationProvider(),
+            default_event_policy_registry(),
+            EvidenceReconciler(),
+            DisasterReportRenderer(),
+            lambda: NOW,
+        )
+    )
+    plan = InvestigationPlan(
+        "p",
+        "discover",
+        (
+            PlanStep("sources", "list_sources_for_task", (), "list"),
+            PlanStep("event", "find_disaster_event", (), "find", ("sources",)),
+        ),
+    )
+    state = AgentExecutionState(task, plan)
+
+    await execute_plan(state, tools)
+
+    assert state.workspace.source_selection is not None
+    assert state.workspace.source_selection.configured_source_ids == (
+        "testland-floods",
+    )
+    assert state.workspace.selected_event == event
+    assert provider.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable() -> (
+    None
+):
+    catalog = StaticCountryCatalog()
+    japan = catalog.get_by_alpha3("JPN")
+    assert japan is not None
+    source = SourceReference(
+        "JMA", "Event", "https://example.test/event", NOW, NOW, NOW
+    )
+    event = DisasterEvent(
+        "jma:fallback", Hazard.EARTHQUAKE, "Ishikawa, Japan", japan, NOW, source
+    )
+    provider = NewFloodProvider(event)
+    registry = ProviderRegistry(
+        (
+            ProviderRegistration(
+                "JMA rolling earthquake",
+                provider,
+                ProviderCapabilities(
+                    frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    frozenset({Hazard.EARTHQUAKE}),
+                    frozenset({"JPN"}),
+                ),
+                source_id="jma-rolling-earthquakes",
+            ),
+        )
+    )
+    tools = build_disaster_tool_registry(
+        DisasterToolDependencies(
+            registry,
+            StaticSourceCatalog(),
+            provider,
+            EmptySituationProvider(),
+            default_event_policy_registry(),
+            EvidenceReconciler(),
+            DisasterReportRenderer(),
+            lambda: NOW,
+        )
+    )
+    runtime = DisasterAgentRuntime(
+        country_catalog=catalog,
+        query_parser=DisasterQueryParser(catalog),
+        tool_registry=tools,
+        agent_model=None,
+    )
+
+    state = await runtime.run("Give me the latest earthquake information in Japan.")
+
+    assert state.plan == default_investigation_plan(state.task)
+    assert state.workspace.selected_event == event
+    assert state.workspace.report is not None
+    assert state.model_call_count == 0
+
+
+def test_packaged_source_catalog_has_only_six_implemented_non_visual_sources() -> None:
+    catalog = StaticSourceCatalog()
+
+    assert {item.source_id for item in catalog.sources()} == {
+        "jma-rolling-earthquakes",
+        "jma-significant-earthquakes",
+        "usgs-earthquakes",
+        "fdma-situation-reports",
+        "jma-tsunami-status",
+        "reliefweb-situation-reports",
+    }
+    assert all(
+        item.implementation_status == "implemented" for item in catalog.sources()
+    )
+    assert all(
+        SourceInformationRole.IMAGERY not in item.information_roles
+        and SourceInformationRole.MAP_LAYERS not in item.information_roles
+        for item in catalog.sources()
+    )
+
+
+def test_provider_source_consistency_detects_missing_metadata() -> None:
+    country = Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1), "UTC")
+    event = DisasterEvent(
+        "test:event",
+        Hazard.FLOOD,
+        "Testland",
+        country,
+        NOW,
+        SourceReference("Test", "Event", "https://example.test/event", NOW, NOW, NOW),
+    )
+    registry = ProviderRegistry(
+        (
+            ProviderRegistration(
+                "Missing source",
+                NewFloodProvider(event),
+                ProviderCapabilities(
+                    frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    frozenset({Hazard.FLOOD}),
+                    frozenset({"TST"}),
+                ),
+                source_id="not-in-catalog",
+            ),
+        )
+    )
+
+    with pytest.raises(ValueError, match="no matching source descriptor"):
+        validate_provider_source_consistency(registry, StaticSourceCatalog())

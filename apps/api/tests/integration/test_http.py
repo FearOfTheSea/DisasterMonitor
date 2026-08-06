@@ -37,7 +37,13 @@ VENEZUELA = CATALOG.get_by_alpha3("VEN")
 assert JAPAN is not None and VENEZUELA is not None
 
 
-def build_current_service(*, situation_error: Exception | None = None):
+def build_current_service(
+    *,
+    situation_error: Exception | None = None,
+    fact_category: str = "buildings",
+    fact_label: str = "Buildings damaged",
+    fact_value: str = "4",
+):
     event_source = SourceReference(
         publisher="JMA",
         title="Fixture earthquake",
@@ -80,16 +86,16 @@ def build_current_service(*, situation_error: Exception | None = None):
                 (
                     SituationReport(
                         source=situation_source,
-                        narrative="Four buildings were damaged.",
+                        narrative=f"{fact_label}: {fact_value}.",
                         facts=(
                             ReportedFact(
-                                category="buildings",
-                                label="Buildings damaged",
-                                value="4",
+                                category=fact_category,
+                                label=fact_label,
+                                value=fact_value,
                                 status=FactStatus.CONFIRMED,
                                 source=situation_source,
                                 event_id=event.event_id,
-                                claim_id="buildings",
+                                claim_id=fact_category,
                             ),
                         ),
                         event_id=event.event_id,
@@ -423,4 +429,171 @@ async def test_recognized_unsupported_hazard_returns_coverage_unavailable() -> N
     assert "flood" in body["message"]
     assert "Vietnam" in body["message"]
     assert "No live factual claim" in body["message"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("question", "expected_type", "expected_text"),
+    (
+        (
+            "Give me the latest earthquake information in Thailand.",
+            "current_disaster_coverage_unavailable",
+            "maintained geographic and source catalog",
+        ),
+        (
+            "Compare the latest earthquakes in Japan and Venezuela.",
+            "current_disaster_clarification",
+            "one country",
+        ),
+        (
+            "Give me the latest earthquake information.",
+            "current_disaster_coverage_unavailable",
+            "requested place",
+        ),
+    ),
+)
+async def test_unsafe_disaster_ambiguity_never_escapes_to_general_model(
+    question: str, expected_type: str, expected_text: str
+) -> None:
+    model = FakeLanguageModel(error=AssertionError("general model must not be called"))
+    app = create_app(model=model)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/assistant", json={"question": question})
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["response_type"] == expected_type
+    assert expected_text in body["message"]
     assert model.requests == []
+    assert body["investigation"]["actions"] == []
+
+
+@pytest.mark.asyncio
+async def test_general_disaster_knowledge_delegates_without_live_source_claim() -> None:
+    model = FakeLanguageModel(response_text="Earthquakes result from fault movement.")
+    app = create_app(model=model)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant", json={"question": "What causes earthquakes?"}
+        )
+
+    assert response.json() == {
+        "message": "Earthquakes result from fault movement.",
+        "conversation_id": response.json()["conversation_id"],
+        "model": "fake-qwen",
+    }
+    assert len(model.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_fatality_request_is_focused_and_missing_is_not_zero() -> None:
+    model = FakeLanguageModel(error=AssertionError("general model must not be called"))
+    app = create_app(
+        model=model,
+        current_disaster_report=build_current_service(
+            fact_category="fatalities",
+            fact_label="Fatalities",
+            fact_value="2",
+        ),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={
+                "question": (
+                    "How many fatalities were reported for the August 5, 2026 "
+                    "earthquake in Japan?"
+                )
+            },
+        )
+
+    body = response.json()
+    assert "Fatalities: 2" in body["message"]
+    assert [section["title"] for section in body["sections"]] == [
+        "Focused answer",
+        "Event details",
+        "Conflicts and uncertainty",
+        "Report freshness",
+    ]
+    assert body["investigation"]["information_needs"] == ["fatalities"]
+    assert model.requests == []
+
+
+@pytest.mark.asyncio
+async def test_image_request_runs_supported_text_path_and_reports_capability_gap() -> (
+    None
+):
+    model = FakeLanguageModel(error=AssertionError("general model must not be called"))
+    app = create_app(model=model, current_disaster_report=build_current_service())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={
+                "question": (
+                    "Show me pictures of the damage from the August 5, 2026 "
+                    "Japan earthquake."
+                )
+            },
+        )
+
+    body = response.json()
+    assert body["selected_event"]["event_id"] == "jma:fixture-event"
+    assert body["investigation"]["output_modalities"] == ["text", "images"]
+    assert any(
+        "image" in gap.lower() for gap in body["investigation"]["capability_gaps"]
+    )
+    assert "http" not in " ".join(body["investigation"]["capability_gaps"])
+    assert model.requests == []
+
+
+@pytest.mark.asyncio
+async def test_invalid_agent_model_output_uses_default_plan_not_general_model() -> None:
+    class BrokenAgentModel:
+        calls = 0
+
+        async def interpret(self, question):
+            self.calls += 1
+            raise ValueError("malformed structured output")
+
+        async def propose_plan(self, task, tool_descriptions):
+            self.calls += 1
+            raise ValueError("unknown tool")
+
+        async def review_progress(self, task, completed_steps):
+            self.calls += 1
+            raise ValueError("malformed review")
+
+    agent_model = BrokenAgentModel()
+    general = FakeLanguageModel(
+        error=AssertionError("general model must not be called")
+    )
+    app = create_app(
+        model=general,
+        agent_model=agent_model,
+        current_disaster_report=build_current_service(),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant", json={"question": CURRENT_PROMPT}
+        )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["selected_event"]["event_id"] == "jma:fixture-event"
+    assert len(body["investigation"]["actions"]) == 5
+    assert agent_model.calls == 3
+    assert general.requests == []
+    forbidden = {"reasoning", "prompt", "raw_model_output", "chain_of_thought"}
+    assert forbidden.isdisjoint(body["investigation"])

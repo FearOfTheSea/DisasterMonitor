@@ -7,6 +7,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
+from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
@@ -15,11 +17,14 @@ from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
+from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.infrastructure.composition import (
+    build_agent_model,
     build_country_catalog,
     build_current_disaster_report,
     build_disaster_query_parser,
     build_language_model,
+    build_source_catalog,
 )
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.presentation.http.error_handlers import register_error_handlers
@@ -31,6 +36,7 @@ def create_app(
     model: LanguageModel | None = None,
     current_disaster_report: CurrentDisasterReportService | None = None,
     disaster_query_parser: DisasterQueryParser | None = None,
+    agent_model: AgentModel | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -40,6 +46,19 @@ def create_app(
         app_settings, country_catalog
     )
     query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
+    source_catalog = build_source_catalog()
+    configured_agent_model = (
+        agent_model
+        if agent_model is not None
+        else (build_agent_model(app_settings) if model is None else None)
+    )
+    agent_runtime = DisasterAgentRuntime(
+        country_catalog=country_catalog,
+        query_parser=query_parser,
+        tool_registry=disaster_report.build_agent_tools(source_catalog),
+        agent_model=configured_agent_model,
+    )
+    disaster_agent = RunDisasterAgent(agent_runtime, language_model)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -50,6 +69,9 @@ def create_app(
         close_disaster = getattr(app.state.current_disaster_report, "aclose", None)
         if close_disaster is not None:
             await close_disaster()
+        close_agent = getattr(app.state.agent_model, "aclose", None)
+        if close_agent is not None:
+            await close_agent()
 
     app = FastAPI(
         title=app_settings.app_name,
@@ -65,8 +87,12 @@ def create_app(
     )
     app.state.language_model = language_model
     app.state.current_disaster_report = disaster_report
+    app.state.agent_model = configured_agent_model
     app.state.answer_map_question = AnswerMapQuestion(
-        language_model, disaster_report, query_parser
+        language_model,
+        disaster_report,
+        query_parser,
+        disaster_agent=disaster_agent,
     )
     app.include_router(router, prefix="/api/v1")
     register_error_handlers(app)

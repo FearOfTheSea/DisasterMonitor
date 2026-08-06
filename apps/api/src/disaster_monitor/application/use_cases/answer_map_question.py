@@ -16,6 +16,7 @@ from disaster_monitor.application.services.prompt_preparation import (
     normalize_question,
     prepare_model_request,
 )
+from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.domain.errors import ModelResponseError, ModelRuntimeError
 from disaster_monitor.domain.models import MapQuestion, MapView
 
@@ -28,10 +29,12 @@ class AnswerMapQuestion:
         language_model: LanguageModel,
         current_disaster_report: CurrentDisasterReportService | None = None,
         disaster_query_parser: DisasterQueryParser | None = None,
+        disaster_agent: RunDisasterAgent | None = None,
     ) -> None:
         self._language_model = language_model
         self._current_disaster_report = current_disaster_report
         self._disaster_query_parser = disaster_query_parser
+        self._disaster_agent = disaster_agent
 
     async def execute(
         self,
@@ -40,6 +43,10 @@ class AnswerMapQuestion:
         map_view: MapView | None = None,
     ) -> AssistantAnswer:
         """Return a stable answer while keeping model details behind the port."""
+        if self._disaster_agent is not None:
+            return await self._disaster_agent.execute(
+                question, conversation_id=conversation_id, map_view=map_view
+            )
         normalized_question = normalize_question(question)
         normalized_conversation_id = normalize_conversation_id(conversation_id)
         classification = (

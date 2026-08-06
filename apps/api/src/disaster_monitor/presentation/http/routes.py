@@ -12,6 +12,7 @@ from disaster_monitor.presentation.http.schemas import (
     AssistantRequest,
     AssistantResponse,
     HealthResponse,
+    InvestigationResponse,
     ReadinessResponse,
     ReportSectionResponse,
     SelectedEventResponse,
@@ -78,6 +79,23 @@ async def assistant(
             )
         ),
     )
+    investigation = (
+        None
+        if result.investigation is None
+        else InvestigationResponse(
+            status=result.investigation.status,
+            task_summary=result.investigation.task_summary,
+            hazard=result.investigation.hazard,
+            country=result.investigation.country,
+            information_needs=list(result.investigation.information_needs),
+            output_modalities=list(result.investigation.output_modalities),
+            actions=list(result.investigation.actions),
+            source_ids=list(result.investigation.source_ids),
+            evidence_count=result.investigation.evidence_count,
+            capability_gaps=list(result.investigation.capability_gaps),
+            termination_reason=result.investigation.termination_reason,
+        )
+    )
     if result.response_type == "assistant":
         return AssistantResponse(
             message=result.message,
@@ -130,4 +148,5 @@ async def assistant(
             for section in result.sections
         ],
         partial=result.partial,
+        investigation=investigation,
     )

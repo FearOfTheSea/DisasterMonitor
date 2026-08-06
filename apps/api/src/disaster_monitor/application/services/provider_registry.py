@@ -42,6 +42,7 @@ class ProviderRegistration:
     name: str
     provider: object
     capabilities: ProviderCapabilities
+    source_id: str | None = None
     configured: bool = True
     event_eligibility: Callable[[DisasterEvent], bool] | None = None
 

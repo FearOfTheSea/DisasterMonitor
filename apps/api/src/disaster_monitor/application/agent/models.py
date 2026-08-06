@@ -78,6 +78,20 @@ class ReviewDecision(StrEnum):
     CLARIFY = "clarify"
 
 
+class SourceInformationRole(StrEnum):
+    EVENT_DISCOVERY = "event_discovery"
+    SCIENTIFIC_EVENT_VERIFICATION = "scientific_event_verification"
+    OFFICIAL_WARNING = "official_warning"
+    CASUALTY_REPORTING = "casualty_reporting"
+    PHYSICAL_DAMAGE = "physical_damage"
+    INFRASTRUCTURE_STATUS = "infrastructure_status"
+    EMERGENCY_RESPONSE = "emergency_response"
+    HUMANITARIAN_REPORTING = "humanitarian_situation_reporting"
+    TSUNAMI_STATUS = "tsunami_status"
+    IMAGERY = "imagery"
+    MAP_LAYERS = "map_layers"
+
+
 @dataclass(frozen=True, slots=True)
 class DisasterTaskDraft:
     disaster_related: bool
@@ -140,6 +154,8 @@ class InvestigationAction:
 class SourceSelectionSummary:
     configured_source_ids: tuple[str, ...] = ()
     unconfigured_source_ids: tuple[str, ...] = ()
+    known_not_executable_source_ids: tuple[str, ...] = ()
+    supplementary_source_ids: tuple[str, ...] = ()
     unsupported_roles: tuple[str, ...] = ()
     coverage_gaps: tuple[str, ...] = ()
 
@@ -186,7 +202,7 @@ class SourceDescriptor:
     display_name: str
     jurisdiction: str
     authority_level: str
-    information_roles: tuple[str, ...]
+    information_roles: tuple[SourceInformationRole, ...]
     supported_hazards: tuple[Hazard, ...]
     country_codes: tuple[str, ...] | None
     supported_languages: tuple[str, ...]

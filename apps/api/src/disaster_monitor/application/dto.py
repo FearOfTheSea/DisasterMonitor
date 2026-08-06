@@ -8,6 +8,23 @@ from disaster_monitor.domain.disaster import SourceReference
 
 
 @dataclass(frozen=True, slots=True)
+class InvestigationSummary:
+    """User-safe agent activity; never model reasoning or raw payloads."""
+
+    status: str
+    task_summary: str
+    hazard: str | None
+    country: str | None
+    information_needs: tuple[str, ...]
+    output_modalities: tuple[str, ...]
+    actions: tuple[str, ...]
+    source_ids: tuple[str, ...]
+    evidence_count: int
+    capability_gaps: tuple[str, ...]
+    termination_reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class ModelMessage:
     """Provider-neutral chat message."""
 
@@ -53,3 +70,4 @@ class AssistantAnswer:
     warnings: tuple[str, ...] = ()
     sections: tuple[ReportSection, ...] = ()
     partial: bool = False
+    investigation: InvestigationSummary | None = None
