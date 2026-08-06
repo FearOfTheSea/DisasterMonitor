@@ -1,0 +1,35 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "published": "2026-08-06",
+    "sources": [
+      "ISO 3166-1 country codes and English short names",
+      "Natural Earth 1:110m Admin 0 country extents"
+    ],
+    "license": "ISO country names/codes are factual identifiers; Natural Earth data is public domain.",
+    "note": "Bounds are rectangular query approximations, not legal borders. Timezones are deterministic calendar defaults for the listed MVP countries."
+  },
+  "countries": [
+    {
+      "alpha3": "JPN",
+      "name": "Japan",
+      "aliases": ["JP", "Nippon", "Nihon"],
+      "timezone": "UTC+09:00",
+      "bounds": [20.0, 46.0, 122.0, 154.0]
+    },
+    {
+      "alpha3": "VNM",
+      "name": "Vietnam",
+      "aliases": ["VN", "Viet Nam"],
+      "timezone": "UTC+07:00",
+      "bounds": [8.18, 23.4, 102.14, 109.47]
+    },
+    {
+      "alpha3": "VEN",
+      "name": "Venezuela",
+      "aliases": ["VE", "Bolivarian Republic of Venezuela"],
+      "timezone": "UTC-04:00",
+      "bounds": [0.63, 12.2, -73.35, -59.8]
+    }
+  ]
+}
