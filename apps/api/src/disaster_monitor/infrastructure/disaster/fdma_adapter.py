@@ -27,6 +27,7 @@ from disaster_monitor.domain.disaster import (
     FactStatus,
     ReportedFact,
     SituationReport,
+    SourceAuthority,
     SourceReference,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
@@ -495,6 +496,7 @@ class FdmaSituationReportAdapter:
             published_at=published_at,
             updated_at=published_at,
             retrieved_at=now,
+            authority=SourceAuthority.NATIONAL_AUTHORITY,
         )
         report = SituationReport(
             source=source,
@@ -502,7 +504,9 @@ class FdmaSituationReportAdapter:
             facts=_extract_facts(text, source, event, published_at),
             reported_event_time=event.event_time,
             locations=(event.location,),
-            countries=("Japan",),
+            countries=(query.country.canonical_name,),
+            country_codes=(query.country.alpha3_code,),
+            hazard=query.hazard,
             magnitude=event.magnitude,
             provider_event_ids=event.provider_ids,
         )
@@ -520,6 +524,8 @@ class FdmaSituationReportAdapter:
                     reported_event_time=report.reported_event_time,
                     locations=report.locations,
                     countries=report.countries,
+                    country_codes=report.country_codes,
+                    hazard=report.hazard,
                     magnitude=report.magnitude,
                     provider_event_ids=report.provider_event_ids,
                 ),

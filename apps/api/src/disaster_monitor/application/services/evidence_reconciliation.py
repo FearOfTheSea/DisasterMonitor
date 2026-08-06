@@ -11,6 +11,7 @@ from disaster_monitor.domain.disaster import (
     FactStatus,
     ReportedFact,
     SituationReport,
+    SourceAuthority,
     SourceReference,
 )
 
@@ -73,6 +74,12 @@ def correlate_situation_report(
         return CorrelationStatus.MATCHED
     if report_ids:
         return CorrelationStatus.UNMATCHED
+    if report.hazard is not None and report.hazard != event.hazard:
+        return CorrelationStatus.UNMATCHED
+    if report.country_codes and event.country.alpha3_code not in {
+        code.upper() for code in report.country_codes
+    }:
+        return CorrelationStatus.UNMATCHED
 
     if report.reported_event_time is not None:
         time_delta = abs(
@@ -85,20 +92,33 @@ def correlate_situation_report(
     source_text = " ".join(
         (report.source.title, report.narrative, *report.locations, *report.countries)
     ).lower()
+    ignored_location_words = {
+        "near",
+        "prefecture",
+        "island",
+        *re.findall(r"[a-z][a-z-]{1,}", event.country.canonical_name.lower()),
+        *(alias.lower() for alias in event.country.aliases),
+    }
     event_location_words = {
         word
         for word in re.findall(r"[a-z][a-z-]{2,}", event.location.lower())
-        if word not in {"japan", "near", "prefecture", "island"}
+        if word not in ignored_location_words
     }
     location_matches = bool(
         event_location_words
         and any(word in source_text for word in event_location_words)
     )
-    country_matches = any(
-        country.lower() in {"japan", "jpn"} for country in report.countries
+    country_terms = {
+        event.country.alpha3_code.lower(),
+        event.country.canonical_name.lower(),
+        *(alias.lower() for alias in event.country.aliases),
+    }
+    country_matches = bool(
+        {country.lower() for country in report.countries} & country_terms
     )
     magnitude_matches = (
-        report.magnitude is not None
+        event.hazard.value == "earthquake"
+        and report.magnitude is not None
         and event.magnitude is not None
         and abs(report.magnitude - event.magnitude) <= 0.3
     )
@@ -116,6 +136,8 @@ def _has_correlation_metadata(report: SituationReport) -> bool:
         or report.reported_event_time
         or report.locations
         or report.countries
+        or report.country_codes
+        or report.hazard is not None
         or report.magnitude is not None
     )
 
@@ -125,16 +147,22 @@ def _source_key(source: SourceReference) -> str:
 
 
 def _source_priority(source: SourceReference) -> int:
-    publisher = source.publisher.lower()
-    if "fire and disaster management" in publisher or publisher == "fdma":
-        return 5
-    if "japan meteorological agency" in publisher or publisher == "jma":
-        return 4
-    if "united states geological survey" in publisher or publisher == "usgs":
-        return 4
-    if "reliefweb" in publisher:
-        return 2
-    return 1
+    return {
+        SourceAuthority.NATIONAL_AUTHORITY: 4,
+        SourceAuthority.SCIENTIFIC_AUTHORITY: 3,
+        SourceAuthority.HUMANITARIAN_AGGREGATOR: 2,
+        SourceAuthority.SECONDARY: 1,
+    }[source.authority]
+
+
+def _fact_status_priority(status: FactStatus) -> int:
+    return {
+        FactStatus.CONFIRMED: 5,
+        FactStatus.PRELIMINARY: 4,
+        FactStatus.ESTIMATED: 3,
+        FactStatus.DISPUTED: 2,
+        FactStatus.UNKNOWN: 1,
+    }[status]
 
 
 def _fact_key(fact: ReportedFact) -> str:
@@ -170,19 +198,32 @@ def build_evidence_packet(
     correlated_reports: list[SituationReport] = []
     correlation_warnings: list[str] = []
     for report in reports:
-        status = report.correlation or correlate_situation_report(report, event)
+        hard_scope_mismatch = (
+            report.hazard is not None
+            and report.hazard != query.hazard
+            or bool(report.country_codes)
+            and query.country.alpha3_code
+            not in {code.upper() for code in report.country_codes}
+        )
+        status = (
+            CorrelationStatus.UNMATCHED
+            if hard_scope_mismatch
+            else report.correlation or correlate_situation_report(report, event)
+        )
         if report.correlation is not None or _has_correlation_metadata(report):
             if status == CorrelationStatus.MATCHED:
                 correlated_reports.append(report)
             elif status == CorrelationStatus.POSSIBLE:
                 correlation_warnings.append(
                     f"A {report.source.publisher} report may describe a different "
-                    "earthquake and was excluded from event facts."
+                    f"{query.hazard.value} event in "
+                    f"{query.country.canonical_name} and was excluded from event facts."
                 )
             else:
                 correlation_warnings.append(
                     f"A {report.source.publisher} report did not match the selected "
-                    "earthquake and was excluded."
+                    f"{query.hazard.value} event in "
+                    f"{query.country.canonical_name} and was excluded."
                 )
         else:
             correlated_reports.append(report)
@@ -216,7 +257,7 @@ def build_evidence_packet(
             key=lambda fact: (
                 _source_priority(fact.source),
                 fact.source.effective_at,
-                fact.status == FactStatus.CONFIRMED,
+                _fact_status_priority(fact.status),
             ),
             reverse=True,
         )
@@ -324,3 +365,24 @@ def build_evidence_packet(
         completeness=completeness,
         partial=partial,
     )
+
+
+class EvidenceReconciler:
+    """Injectable application service for deterministic evidence reconciliation."""
+
+    def build(
+        self,
+        query: DisasterQuery,
+        event: DisasterEvent,
+        reports: tuple[SituationReport, ...],
+        *,
+        warnings: tuple[str, ...],
+        retrieved_at: datetime,
+    ) -> EvidencePacket:
+        return build_evidence_packet(
+            query,
+            event,
+            reports,
+            warnings=warnings,
+            retrieved_at=retrieved_at,
+        )

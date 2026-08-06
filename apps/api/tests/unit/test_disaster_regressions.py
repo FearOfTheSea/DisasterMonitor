@@ -8,10 +8,12 @@ from disaster_monitor.application.disaster import (
 )
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
-    render_source_backed_report,
 )
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
+)
+from disaster_monitor.application.services.disaster_report_renderer import (
+    render_source_backed_report,
 )
 from disaster_monitor.application.services.event_resolution import (
     cluster_physical_events,

@@ -86,12 +86,13 @@ newest-event policy with ambiguity disclosure.
 
 ## Evidence and freshness rules
 
-Human-impact precedence is newest matching FDMA report, then another newer
-event-specific Japanese government source, then an event-specific ReliefWeb report,
-then other explicitly configured supplementary sources. Every normalized fact retains its source, canonical URL, event identifier, and
-the available event, publication, update, and retrieval timestamps. Official JMA
-and USGS facts have higher priority than supplementary reports, and newer
-official figures replace older official figures for the same claim. Different
+Evidence precedence uses adapter-assigned `SourceAuthority`: national authority,
+scientific authority, humanitarian aggregator, then secondary. Within that ordering,
+effective source time and typed fact status break ties. Publisher-name substring
+matching is not used. Every normalized fact retains its source, canonical URL, event
+identifier, and the available event, publication, update, and retrieval timestamps.
+Official JMA/FDMA and scientific USGS records have higher priority than supplementary
+reports, and newer official figures replace older official figures for the same claim. Different
 values are retained as a conflict warning rather than silently discarded.
 
 Provider text is bounded, stripped of markup, and filtered for instruction-like
@@ -111,7 +112,13 @@ environment:
 - `DISASTER_PROVIDER_TIMEOUT_SECONDS` (default `10`)
 - `DISASTER_PROVIDER_MAX_RESPONSE_BYTES` (default `1000000`)
 - `RELIEFWEB_APP_NAME` (unset by default). If set, it must be a pre-approved
-  ReliefWeb application name; placeholder names do not compose the adapter.
+  ReliefWeb application name. Placeholder or missing names keep the registration
+  disabled and visible as a configuration limitation.
+
+ReliefWeb requests use the normalized country name, a typed hazard-to-ReliefWeb mapping,
+the normalized date range, selected-event location, and provider identifiers. Nested
+filter conditions are built in one tested request builder. ReliefWeb remains
+supplementary and its extracted figures are not promoted to official national totals.
 
 The default unit, adapter, HTTP, and system tests use deterministic fixtures and
 do not require network access, Ollama, or cloud credentials. The Playwright

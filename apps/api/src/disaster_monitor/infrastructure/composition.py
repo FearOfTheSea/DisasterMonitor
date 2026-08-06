@@ -7,6 +7,15 @@ from disaster_monitor.application.services.current_disaster_report import (
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
+from disaster_monitor.application.services.disaster_report_renderer import (
+    DisasterReportRenderer,
+)
+from disaster_monitor.application.services.event_resolution import (
+    default_event_policy_registry,
+)
+from disaster_monitor.application.services.evidence_reconciliation import (
+    EvidenceReconciler,
+)
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
@@ -142,4 +151,7 @@ def build_current_disaster_report(
         event_provider,
         situation_provider,
         provider_registry=registry,
+        event_policies=default_event_policy_registry(),
+        evidence_reconciler=EvidenceReconciler(),
+        renderer=DisasterReportRenderer(),
     )

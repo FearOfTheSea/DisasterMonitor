@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import httpx
@@ -34,6 +35,7 @@ from disaster_monitor.infrastructure.disaster.jma_adapter import (
 )
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
+    build_reliefweb_params,
 )
 from disaster_monitor.infrastructure.disaster.usgs_adapter import UsgsEarthquakeAdapter
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
@@ -44,7 +46,8 @@ NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
 CATALOG = StaticCountryCatalog()
 JAPAN = CATALOG.get_by_alpha3("JPN")
 VENEZUELA = CATALOG.get_by_alpha3("VEN")
-assert JAPAN is not None and VENEZUELA is not None
+VIETNAM = CATALOG.get_by_alpha3("VNM")
+assert JAPAN is not None and VENEZUELA is not None and VIETNAM is not None
 QUERY = DisasterQuery(
     hazard=Hazard.EARTHQUAKE,
     country=JAPAN,
@@ -302,6 +305,92 @@ async def test_reliefweb_adapter_correlates_reports_to_selected_event() -> None:
     )
     assert [fact.value for fact in packet.facts] == ["4"]
     assert all("Tokyo" not in narrative for narrative in packet.narratives)
+    await client.aclose()
+
+
+@pytest.mark.parametrize(
+    ("hazard", "country", "expected_hazard"),
+    [
+        (Hazard.EARTHQUAKE, JAPAN, "Earthquake"),
+        (Hazard.EARTHQUAKE, VENEZUELA, "Earthquake"),
+        (Hazard.FLOOD, VIETNAM, "Flood"),
+        (Hazard.WILDFIRE, VENEZUELA, "Wild Fire"),
+    ],
+)
+def test_reliefweb_request_uses_normalized_country_and_hazard(
+    hazard, country, expected_hazard
+) -> None:
+    query = DisasterQuery(hazard, country, "recent", ("latest",))
+    event = DisasterEvent(
+        "provider:event",
+        hazard,
+        f"Target area, {country.canonical_name}",
+        country,
+        NOW,
+        SourceReference(
+            "Provider", "Event", "https://example.test/event", NOW, NOW, NOW
+        ),
+        provider_ids=("provider:event",),
+    )
+
+    params = build_reliefweb_params(event, query, now=NOW, app_name="approved-test")
+
+    assert params["filter[conditions][0][field]"] == "country.name"
+    assert params["filter[conditions][0][value]"] == country.canonical_name
+    assert params["filter[conditions][1][field]"] == "disaster_type.name"
+    assert params["filter[conditions][1][value]"] == expected_hazard
+    assert expected_hazard in str(params["query[value]"])
+
+
+def test_reliefweb_request_preserves_explicit_date_range() -> None:
+    query = replace(
+        QUERY,
+        date_from=datetime(2026, 8, 4, 15, 0, tzinfo=UTC),
+        date_to=datetime(2026, 8, 5, 15, 0, tzinfo=UTC),
+    )
+    event = DisasterEvent(
+        "jma:event",
+        Hazard.EARTHQUAKE,
+        "Ishikawa, Japan",
+        JAPAN,
+        NOW,
+        _source_for_test(),
+    )
+    params = build_reliefweb_params(event, query, now=NOW, app_name="approved-test")
+
+    assert params["filter[conditions][2][value][from]"] == "2026-08-04"
+    assert params["filter[conditions][2][value][to]"] == "2026-08-05"
+
+
+def _source_for_test() -> SourceReference:
+    return SourceReference(
+        "Provider", "Event", "https://example.test/event", NOW, NOW, NOW
+    )
+
+
+@pytest.mark.asyncio
+async def test_disabled_reliefweb_makes_no_request() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(500, request=request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    event = DisasterEvent(
+        "jma:event",
+        Hazard.EARTHQUAKE,
+        "Ishikawa, Japan",
+        JAPAN,
+        NOW,
+        _source_for_test(),
+    )
+    result = await ReliefWebSituationAdapter(client=client).get_situation_reports(
+        event, QUERY, now=NOW
+    )
+
+    assert result.records == ()
+    assert requests == []
     await client.aclose()
 
 

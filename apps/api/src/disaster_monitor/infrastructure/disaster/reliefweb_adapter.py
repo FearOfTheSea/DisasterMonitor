@@ -21,8 +21,10 @@ from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     DisasterEvent,
     FactStatus,
+    Hazard,
     ReportedFact,
     SituationReport,
+    SourceAuthority,
     SourceReference,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
@@ -47,6 +49,57 @@ _NUMBER_WORDS = {
     "nine": "9",
     "ten": "10",
 }
+_RELIEFWEB_HAZARDS = {
+    Hazard.EARTHQUAKE: "Earthquake",
+    Hazard.TSUNAMI: "Tsunami",
+    Hazard.FLOOD: "Flood",
+    Hazard.WILDFIRE: "Wild Fire",
+    Hazard.LANDSLIDE: "Land Slide",
+    Hazard.TROPICAL_CYCLONE: "Tropical Cyclone",
+}
+
+
+def build_reliefweb_params(
+    event: DisasterEvent,
+    query: DisasterQuery,
+    *,
+    now: datetime,
+    app_name: str,
+) -> dict[str, HttpParam]:
+    """Build documented nested ReliefWeb filters for one normalized query."""
+    fields = (
+        "title",
+        "body",
+        "url",
+        "date",
+        "disaster",
+        "country",
+        "source",
+        "location",
+    )
+    start = query.date_from or now - timedelta(days=query.time_window_days)
+    end = query.date_to or now + timedelta(minutes=5)
+    identifiers = " ".join((event.event_id, *event.provider_ids))
+    params: dict[str, HttpParam] = {
+        "appname": app_name,
+        "query[value]": (
+            f"{_RELIEFWEB_HAZARDS[query.hazard]} {event.location} {identifiers}"
+        ).strip(),
+        "query[operator]": "AND",
+        "filter[operator]": "AND",
+        "filter[conditions][0][field]": "country.name",
+        "filter[conditions][0][value]": query.country.canonical_name,
+        "filter[conditions][1][field]": "disaster_type.name",
+        "filter[conditions][1][value]": _RELIEFWEB_HAZARDS[query.hazard],
+        "filter[conditions][2][field]": "date.created",
+        "filter[conditions][2][value][from]": start.date().isoformat(),
+        "filter[conditions][2][value][to]": end.date().isoformat(),
+        "limit": 20,
+        "sort[]": "date.created:desc",
+    }
+    for index, field in enumerate(fields):
+        params[f"fields[include][{index}]"] = field
+    return params
 
 
 def _text(value: object) -> str:
@@ -186,37 +239,8 @@ class ReliefWebSituationAdapter:
     ) -> ProviderBatch[SituationReport]:
         if not self.configured:
             return ProviderBatch(records=())
-        fields = (
-            "title",
-            "body",
-            "url",
-            "date",
-            "disaster",
-            "country",
-            "source",
-            "location",
-        )
-        params: dict[str, HttpParam] = {
-            "appname": self._app_name,
-            "query[value]": f"{query.hazard} {event.location}",
-            "query[operator]": "AND",
-            "filter[field]": "country.name",
-            "filter[value]": "Japan",
-            "filter[operator]": "AND",
-            "filter[field][]": ("date.created", "country.name"),
-            "filter[value][from]": (
-                query.date_from or now - timedelta(days=query.time_window_days)
-            )
-            .date()
-            .isoformat(),
-            "filter[value][to]": (query.date_to or now + timedelta(minutes=5))
-            .date()
-            .isoformat(),
-            "limit": 20,
-            "sort[]": "date.created:desc",
-        }
-        for index, field in enumerate(fields):
-            params[f"fields[include][{index}]"] = field
+        assert self._app_name is not None
+        params = build_reliefweb_params(event, query, now=now, app_name=self._app_name)
         payload = await get_json(
             self._client,
             RELIEFWEB_REPORTS_URL,
@@ -260,6 +284,7 @@ class ReliefWebSituationAdapter:
                 published_at=published_at,
                 updated_at=updated_at,
                 retrieved_at=now,
+                authority=SourceAuthority.HUMANITARIAN_AGGREGATOR,
             )
             raw_body = fields.get("body") or ""
             if not raw_body:
@@ -276,6 +301,7 @@ class ReliefWebSituationAdapter:
                 reported_event_time=reported_event_time,
                 locations=locations,
                 countries=countries,
+                hazard=query.hazard,
                 provider_event_ids=provider_event_ids,
             )
             status = correlate_situation_report(report, event)

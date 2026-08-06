@@ -21,6 +21,7 @@ from disaster_monitor.domain.disaster import (
     Hazard,
     ReportedFact,
     SituationReport,
+    SourceAuthority,
     SourceReference,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
@@ -122,6 +123,7 @@ class JmaEarthquakeAdapter:
                 published_at=published_at,
                 updated_at=published_at,
                 retrieved_at=now,
+                authority=SourceAuthority.NATIONAL_AUTHORITY,
             )
             magnitude = None
             try:
@@ -222,6 +224,7 @@ class JmaTsunamiSituationAdapter:
                 published_at=published_at,
                 updated_at=published_at,
                 retrieved_at=now,
+                authority=SourceAuthority.NATIONAL_AUTHORITY,
             )
             kinds = item.get("kind")
             labels = []
@@ -250,6 +253,9 @@ class JmaTsunamiSituationAdapter:
                         ),
                     ),
                     event_id=event.event_id,
+                    countries=(query.country.canonical_name,),
+                    country_codes=(query.country.alpha3_code,),
+                    hazard=query.hazard,
                 )
             )
         if not reports:
@@ -420,6 +426,7 @@ class JmaSignificantEarthquakeAdapter:
                 published_at=event_time,
                 updated_at=event_time,
                 retrieved_at=now,
+                authority=SourceAuthority.NATIONAL_AUTHORITY,
             )
             events.append(
                 DisasterEvent(

@@ -118,6 +118,12 @@ recency, distance, and aftershock behavior. `DefaultEventPolicy` merges only str
 shared identifiers, prefers newer matching events, and marks similarly recent
 independent events ambiguous.
 
+`CurrentDisasterReportService` orchestrates only the workflow. `EvidenceReconciler`
+performs correlation and fact precedence, `DisasterReportRenderer` renders normalized
+evidence, and `report_profiles.py` supplies earthquake-specific or generic section
+configuration. Generic rendering reads the query hazard/country and selected event;
+it contains no unconditional Japan or earthquake wording.
+
 ## Dependency direction
 
 ```mermaid

@@ -121,8 +121,9 @@ export function AssistantPanel({
         <p>Powered by your local Qwen model through Ollama.</p>
       </header>
       <div className="availability-note">
-        Source-backed current earthquake reports are available for supported requests.
-        Other live datasets remain unconnected.
+        Source-backed current disaster reports are available for recognized requests;
+        unsupported coverage is reported explicitly. Other live datasets remain
+        unconnected.
       </div>
       <div className="message-list" aria-live="polite">
         {messages.length === 0 ? (
