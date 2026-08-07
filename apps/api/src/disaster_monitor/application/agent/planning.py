@@ -77,8 +77,9 @@ def validate_plan(
             )
         seen_steps.add(step.step_id)
         seen_tools.add(step.tool_name)
-    if seen_tools.intersection(_BUILTIN_TOOL_PREREQUISITES) and (
-        "compose_disaster_answer" not in seen_tools
+    if (
+        seen_tools.intersection(_BUILTIN_TOOL_PREREQUISITES)
+        and "compose_disaster_answer" not in seen_tools
     ):
         raise ValueError(
             "The investigation plan has invalid sequencing; trusted disaster plans "
