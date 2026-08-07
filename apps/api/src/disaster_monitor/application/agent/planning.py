@@ -69,7 +69,8 @@ def validate_plan(
         required_tools = _BUILTIN_TOOL_PREREQUISITES.get(step.tool_name, ())
         if any(required_tool not in seen_tools for required_tool in required_tools):
             raise ValueError(
-                "The investigation plan has invalid sequencing for trusted disaster tools."
+                "The investigation plan has invalid sequencing for trusted "
+                "disaster tools."
             )
         if step.arguments:
             raise ValueError(
