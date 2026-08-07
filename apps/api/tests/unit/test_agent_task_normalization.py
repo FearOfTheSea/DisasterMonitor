@@ -39,10 +39,21 @@ def test_safety_gate_keeps_factual_disaster_requests_out_of_general_model() -> N
         "How many fatalities were caused by the earthquake in Japan?",
         "Show me pictures of the recent earthquake in Japan.",
         "Give me the latest flood information in Vietnam.",
+        "Tell me about the August 5, 2026 earthquake in Japan.",
+        "Tell me about the earthquake in Japan on 5/8/2026.",
     )
     assert all(disaster_safety_gate(question) for question in guarded)
     assert not disaster_safety_gate("What causes earthquakes?")
     assert not disaster_safety_gate("What is this map for?")
+
+
+def test_explicit_dated_event_is_an_investigation_without_model_help() -> None:
+    task = validate("Tell me about the August 5, 2026 earthquake in Japan.")
+
+    assert task.kind == TaskKind.INVESTIGATION
+    assert task.query is not None
+    assert task.query.date_from is not None
+    assert task.query.date_from.isoformat() == "2026-08-04T15:00:00+00:00"
 
 
 def test_canonicalizes_supported_current_disaster_task_and_information_scope() -> None:
