@@ -29,9 +29,13 @@ _HAZARDS: dict[Hazard, tuple[str, ...]] = {
 _EVIDENCE_MARKERS = re.compile(
     r"\b(?:latest|recent|current|today|now|reported|caused|fatalit(?:y|ies)|"
     r"killed|dead|injur(?:y|ies|ed)|missing|evacuat\w*|damage\w*|warning\w*|"
-    r"response|pictures?|images?|photos?|timeline|map layers?|on\s+(?:january|"
-    r"february|march|april|may|june|july|august|september|october|november|"
-    r"december)|20\d{2}-\d{2}-\d{2})\b",
+    r"response|pictures?|images?|photos?|timeline|map layers?)\b",
+    re.I,
+)
+_EVENT_DATE_MARKER = re.compile(
+    r"\b(?:20\d{2}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]20\d{2}|"
+    r"(?:january|february|march|april|may|june|july|august|september|october|"
+    r"november|december)\s+\d{1,2}(?:st|nd|rd|th)?\s*,?\s*20\d{2})\b",
     re.I,
 )
 _PLACE_AFTER_IN = re.compile(
@@ -43,7 +47,10 @@ _KNOWN_UNCATALOGED_COUNTRIES = ("Thailand",)
 def disaster_safety_gate(question: str) -> bool:
     """Conservatively retain factual disaster requests in the trusted path."""
     hazards = _hazard_mentions(question)
-    return bool(hazards and _EVIDENCE_MARKERS.search(question))
+    evidence_marker = _EVIDENCE_MARKERS.search(question) or _EVENT_DATE_MARKER.search(
+        question
+    )
+    return bool(hazards and evidence_marker)
 
 
 def deterministic_task_draft(question: str) -> DisasterTaskDraft:
