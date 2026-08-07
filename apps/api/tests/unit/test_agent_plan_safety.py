@@ -1,7 +1,10 @@
 import pytest
 
 from disaster_monitor.application.agent.models import InvestigationPlan, PlanStep
-from disaster_monitor.application.agent.planning import DEFAULT_TOOL_ORDER, validate_plan
+from disaster_monitor.application.agent.planning import (
+    DEFAULT_TOOL_ORDER,
+    validate_plan,
+)
 
 
 def test_plan_validation_rejects_incomplete_trusted_disaster_pipeline() -> None:
