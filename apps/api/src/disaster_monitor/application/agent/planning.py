@@ -16,6 +16,14 @@ DEFAULT_TOOL_ORDER = (
     "compose_disaster_answer",
 )
 
+_BUILTIN_TOOL_PREREQUISITES = {
+    "list_sources_for_task": (),
+    "find_disaster_event": ("list_sources_for_task",),
+    "retrieve_situation_evidence": ("find_disaster_event",),
+    "reconcile_disaster_evidence": ("retrieve_situation_evidence",),
+    "compose_disaster_answer": ("reconcile_disaster_evidence",),
+}
+
 
 def default_investigation_plan(task: ValidatedDisasterTask) -> InvestigationPlan:
     plan_id = str(uuid5(NAMESPACE_URL, f"disaster-monitor:{task.question}"))
@@ -49,17 +57,31 @@ def validate_plan(
 ) -> InvestigationPlan:
     if not plan.steps or len(plan.steps) > min(plan.maximum_steps, 8):
         raise ValueError("The investigation plan has an invalid step count.")
-    seen: set[str] = set()
+    seen_steps: set[str] = set()
+    seen_tools: set[str] = set()
     for step in plan.steps:
-        if step.step_id in seen:
+        if step.step_id in seen_steps:
             raise ValueError("The investigation plan has duplicate step IDs.")
         if step.tool_name not in allowed_tools:
             raise ValueError(f"Unknown agent tool: {step.tool_name}")
-        if any(dependency not in seen for dependency in step.dependencies):
+        if any(dependency not in seen_steps for dependency in step.dependencies):
             raise ValueError("The investigation plan has invalid sequencing.")
+        required_tools = _BUILTIN_TOOL_PREREQUISITES.get(step.tool_name, ())
+        if any(required_tool not in seen_tools for required_tool in required_tools):
+            raise ValueError(
+                "The investigation plan has invalid sequencing for trusted disaster tools."
+            )
         if step.arguments:
             raise ValueError(
                 "Model-provided tool arguments are not accepted in phase 3."
             )
-        seen.add(step.step_id)
+        seen_steps.add(step.step_id)
+        seen_tools.add(step.tool_name)
+    if seen_tools.intersection(_BUILTIN_TOOL_PREREQUISITES) and (
+        "compose_disaster_answer" not in seen_tools
+    ):
+        raise ValueError(
+            "The investigation plan has invalid sequencing; trusted disaster plans "
+            "must compose a grounded answer."
+        )
     return plan
