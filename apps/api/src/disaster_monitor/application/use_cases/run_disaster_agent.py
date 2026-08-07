@@ -2,7 +2,11 @@
 
 from uuid import uuid4
 
-from disaster_monitor.application.agent.models import AgentExecutionState, TaskKind
+from disaster_monitor.application.agent.models import (
+    AgentExecutionState,
+    AgentStatus,
+    TaskKind,
+)
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
 from disaster_monitor.application.ports.language_model import LanguageModel
@@ -45,11 +49,7 @@ class RunDisasterAgent:
                 message=message,
                 conversation_id=_conversation_id(conversation),
                 model="disaster-agent",
-                response_type=(
-                    "current_disaster_clarification"
-                    if state.final_status.value == "clarification_required"
-                    else "current_disaster_coverage_unavailable"
-                ),
+                response_type=_response_type_without_report(state.final_status),
                 warnings=tuple(state.warnings),
                 partial=True,
                 investigation=_summary(state),
@@ -88,6 +88,14 @@ class RunDisasterAgent:
 
 def _conversation_id(value: str) -> str:
     return str(uuid4()) if value == "local-session" else value
+
+
+def _response_type_without_report(status: AgentStatus) -> str:
+    if status == AgentStatus.CLARIFICATION_REQUIRED:
+        return "current_disaster_clarification"
+    if status == AgentStatus.COVERAGE_UNAVAILABLE:
+        return "current_disaster_coverage_unavailable"
+    return "current_disaster_investigation_failed"
 
 
 def _summary(state: AgentExecutionState) -> InvestigationSummary:
