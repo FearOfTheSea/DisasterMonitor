@@ -113,7 +113,7 @@ function DisasterReportView({
             </>
           )}
           {report.investigation.source_ids.length > 0 && (
-            <p>Sources consulted: {report.investigation.source_ids.join(', ')}</p>
+            <p>Sources considered: {report.investigation.source_ids.join(', ')}</p>
           )}
         </details>
       )}
