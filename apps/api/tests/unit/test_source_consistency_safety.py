@@ -75,9 +75,7 @@ def registration(
     )
 
 
-def validate(
-    descriptor: SourceDescriptor, provider: ProviderRegistration
-) -> None:
+def validate(descriptor: SourceDescriptor, provider: ProviderRegistration) -> None:
     validate_provider_source_consistency(
         ProviderRegistry((provider,)),
         FakeCatalog(descriptor),
@@ -123,7 +121,10 @@ def test_rejects_missing_situation_role_and_wrong_tool_metadata() -> None:
     )
     with pytest.raises(ValueError, match="Tool metadata drift"):
         validate(
-            replace(situation_descriptor, registered_tool_names=("find_disaster_event",)),
+            replace(
+                situation_descriptor,
+                registered_tool_names=("find_disaster_event",),
+            ),
             provider,
         )
 
