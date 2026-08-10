@@ -23,6 +23,9 @@ only, validates exact fields and enums, bounds text and lists, and permits one r
 It cannot create trusted countries, providers, authorities, URLs, imports, commands,
 SQL, or code. Packaged metadata canonicalizes hazards, countries, and calendar dates.
 A safety gate retains factual disaster requests even when model interpretation fails.
+The deterministic triage lexicon also recognizes bounded English, Spanish,
+Vietnamese, and Japanese hazard and information-need phrases. This changes request
+routing only; it does not expand declared provider coverage or source authority.
 
 The deterministic fallback plan is available without Ollama:
 
@@ -89,3 +92,7 @@ retrieval code remain absent.
 
 EW state also remains request-scoped: there is no database, continuous ingestion,
 background revision monitor, cross-request state recovery, or LLM probability model.
+
+The frozen Triage evaluation begins in `tests/evaluation/test_triage.py`. TR-A covers
+information-need classification and evidence-path retention with deterministic
+multilingual, paraphrase, and adversarial cases.

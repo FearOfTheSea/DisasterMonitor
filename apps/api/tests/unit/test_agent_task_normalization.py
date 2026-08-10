@@ -110,3 +110,33 @@ def test_image_request_records_capability_modality_without_faking_it() -> None:
     )
     assert InformationNeed.IMAGES in task.information_needs
     assert OutputModality.IMAGES in task.output_modalities
+
+
+def test_multilingual_operational_needs_stay_on_the_evidence_path() -> None:
+    cases = (
+        ("Muertos del terremoto reciente en Japón.", InformationNeed.FATALITIES),
+        (
+            "Số người bị thương do động đất gần đây ở Việt Nam.",
+            InformationNeed.INJURIES,
+        ),
+        ("日本の地震で行方不明の人はいますか？", InformationNeed.MISSING_PERSONS),
+    )
+
+    for question, need in cases:
+        task = validate(question)
+        assert task.kind == TaskKind.INVESTIGATION
+        assert task.requires_evidence
+        assert need in task.information_needs
+
+
+def test_educational_and_transformative_prompts_do_not_claim_current_evidence() -> None:
+    cases = (
+        "What causes earthquakes in general?",
+        "¿Qué es un terremoto?",
+        "Động đất là gì?",
+        "地震とは何ですか？",
+        "Write a story about earthquake fatalities.",
+        "Translate 'earthquake warning' into Spanish.",
+    )
+
+    assert all(not disaster_safety_gate(question) for question in cases)

@@ -24,11 +24,42 @@ _MAP_TERMS = re.compile(
     re.IGNORECASE,
 )
 _HAZARD_ALIASES: dict[Hazard, tuple[str, ...]] = {
-    Hazard.EARTHQUAKE: ("earthquake", "earthquakes", "quake", "quakes"),
-    Hazard.TSUNAMI: ("tsunami", "tsunamis"),
-    Hazard.FLOOD: ("flood", "floods", "flooding"),
-    Hazard.WILDFIRE: ("wildfire", "wildfires", "forest fire", "forest fires"),
-    Hazard.LANDSLIDE: ("landslide", "landslides"),
+    Hazard.EARTHQUAKE: (
+        "earthquake",
+        "earthquakes",
+        "quake",
+        "quakes",
+        "terremoto",
+        "terremotos",
+        "động đất",
+        "地震",
+    ),
+    Hazard.TSUNAMI: ("tsunami", "tsunamis", "sóng thần", "津波"),
+    Hazard.FLOOD: (
+        "flood",
+        "floods",
+        "flooding",
+        "inundación",
+        "inundaciones",
+        "lũ lụt",
+        "洪水",
+    ),
+    Hazard.WILDFIRE: (
+        "wildfire",
+        "wildfires",
+        "forest fire",
+        "forest fires",
+        "incendio forestal",
+        "cháy rừng",
+        "山火事",
+    ),
+    Hazard.LANDSLIDE: (
+        "landslide",
+        "landslides",
+        "deslizamiento de tierra",
+        "sạt lở đất",
+        "地滑り",
+    ),
     Hazard.TROPICAL_CYCLONE: (
         "typhoon",
         "typhoons",
@@ -38,6 +69,10 @@ _HAZARD_ALIASES: dict[Hazard, tuple[str, ...]] = {
         "cyclones",
         "tropical cyclone",
         "tropical cyclones",
+        "tifón",
+        "huracán",
+        "bão nhiệt đới",
+        "台風",
     ),
 }
 _ISO_DATE = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
@@ -75,7 +110,10 @@ _EVENT_ID = re.compile(r"\b(?:us\d{6,}|jma[:_-]?[A-Za-z0-9_-]+)\b", re.I)
 
 
 def _matches_alias(text: str, alias: str) -> bool:
-    return bool(re.search(rf"(?<![\w]){re.escape(alias)}(?![\w])", text, re.I))
+    boundary = r"[A-Za-z0-9_]" if not alias.isascii() else r"\w"
+    return bool(
+        re.search(rf"(?<!{boundary}){re.escape(alias)}(?!{boundary})", text, re.I)
+    )
 
 
 def _extract_day(text: str) -> date | None:

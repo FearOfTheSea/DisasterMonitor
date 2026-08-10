@@ -1,0 +1,354 @@
+{
+  "fixture_version": "dm-tr-a-v1",
+  "cases": [
+    {
+      "id": "overview-en-current",
+      "text": "Give me the latest earthquake overview in Japan.",
+      "needs": ["event_overview"],
+      "requires_evidence": true
+    },
+    {
+      "id": "overview-es-current",
+      "text": "Resumen actual del terremoto en Japón.",
+      "needs": ["event_overview"],
+      "requires_evidence": true
+    },
+    {
+      "id": "overview-vi-current",
+      "text": "Tình hình động đất mới nhất tại Việt Nam.",
+      "needs": ["event_overview"],
+      "requires_evidence": true
+    },
+    {
+      "id": "overview-ja-current",
+      "text": "日本の最新の地震状況を教えてください。",
+      "needs": ["event_overview"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "fatalities-en",
+      "text": "How many fatalities were caused by the earthquake in Japan?",
+      "needs": ["fatalities"],
+      "requires_evidence": true
+    },
+    {
+      "id": "fatalities-es",
+      "text": "¿Cuántos muertos se reportaron tras el terremoto reciente en Japón?",
+      "needs": ["fatalities"],
+      "requires_evidence": true
+    },
+    {
+      "id": "fatalities-vi",
+      "text": "Có bao nhiêu người chết trong trận động đất mới nhất ở Việt Nam?",
+      "needs": ["fatalities"],
+      "requires_evidence": true
+    },
+    {
+      "id": "fatalities-ja",
+      "text": "日本の地震の死者は何人ですか？",
+      "needs": ["fatalities"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "injuries-en",
+      "text": "Report the injured and wounded after the current Japan earthquake.",
+      "needs": ["injuries"],
+      "requires_evidence": true
+    },
+    {
+      "id": "injuries-es",
+      "text": "Heridos confirmados por el terremoto actual en Venezuela.",
+      "needs": ["injuries"],
+      "requires_evidence": true
+    },
+    {
+      "id": "injuries-vi",
+      "text": "Số người bị thương do động đất gần đây ở Việt Nam.",
+      "needs": ["injuries"],
+      "requires_evidence": true
+    },
+    {
+      "id": "injuries-ja",
+      "text": "最近の日本の地震で負傷した人を報告して。",
+      "needs": ["injuries"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "missing-en",
+      "text": "Who remains missing or unaccounted for after the recent earthquake in Japan?",
+      "needs": ["missing_persons"],
+      "requires_evidence": true
+    },
+    {
+      "id": "missing-es",
+      "text": "Personas desaparecidas tras el terremoto reciente en Venezuela.",
+      "needs": ["missing_persons"],
+      "requires_evidence": true
+    },
+    {
+      "id": "missing-vi",
+      "text": "Có người mất tích sau động đất hiện tại ở Việt Nam không?",
+      "needs": ["missing_persons"],
+      "requires_evidence": true
+    },
+    {
+      "id": "missing-ja",
+      "text": "日本の地震で行方不明の人はいますか？",
+      "needs": ["missing_persons"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "evacuations-en",
+      "text": "How many people were evacuated or displaced by today's Japan earthquake?",
+      "needs": ["evacuations"],
+      "requires_evidence": true
+    },
+    {
+      "id": "evacuations-es",
+      "text": "Evacuados y desplazados por el terremoto reciente en Venezuela.",
+      "needs": ["evacuations"],
+      "requires_evidence": true
+    },
+    {
+      "id": "evacuations-vi",
+      "text": "Tình hình sơ tán do động đất mới nhất ở Việt Nam.",
+      "needs": ["evacuations"],
+      "requires_evidence": true
+    },
+    {
+      "id": "evacuations-ja",
+      "text": "現在の日本の地震による避難状況は？",
+      "needs": ["evacuations"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "damage-en",
+      "text": "Which homes were damaged, destroyed, or collapsed in the latest Japan earthquake?",
+      "needs": ["physical_damage"],
+      "requires_evidence": true
+    },
+    {
+      "id": "damage-es",
+      "text": "Daños y edificios destruidos por el terremoto actual en Venezuela.",
+      "needs": ["physical_damage"],
+      "requires_evidence": true
+    },
+    {
+      "id": "damage-vi",
+      "text": "Thiệt hại và nhà bị phá hủy do động đất gần đây ở Việt Nam.",
+      "needs": ["physical_damage"],
+      "requires_evidence": true
+    },
+    {
+      "id": "damage-ja",
+      "text": "日本の最近の地震による建物被害と倒壊を確認して。",
+      "needs": ["physical_damage"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "infrastructure-en",
+      "text": "Current infrastructure, power outage, road, and bridge status after the Japan earthquake.",
+      "needs": ["infrastructure_disruption"],
+      "requires_evidence": true
+    },
+    {
+      "id": "infrastructure-es",
+      "text": "Estado actual de infraestructura, carreteras y puentes tras el terremoto en Venezuela.",
+      "needs": ["infrastructure_disruption"],
+      "requires_evidence": true
+    },
+    {
+      "id": "infrastructure-vi",
+      "text": "Cơ sở hạ tầng, mất điện, đường và cầu sau động đất hiện tại ở Việt Nam.",
+      "needs": ["infrastructure_disruption"],
+      "requires_evidence": true
+    },
+    {
+      "id": "infrastructure-ja",
+      "text": "日本の地震による現在のインフラ、停電、道路、橋の状況。",
+      "needs": ["infrastructure_disruption"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "warnings-en",
+      "text": "Are any warnings, watches, or advisories current for the Japan earthquake?",
+      "needs": ["warnings"],
+      "requires_evidence": true
+    },
+    {
+      "id": "warnings-es",
+      "text": "Alertas y advertencias actuales por el terremoto en Venezuela.",
+      "needs": ["warnings"],
+      "requires_evidence": true
+    },
+    {
+      "id": "warnings-vi",
+      "text": "Cảnh báo hiện tại sau động đất ở Việt Nam.",
+      "needs": ["warnings"],
+      "requires_evidence": true
+    },
+    {
+      "id": "warnings-ja",
+      "text": "日本の地震について現在の警報と注意報は？",
+      "needs": ["warnings"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "response-en",
+      "text": "What emergency response, rescue, and relief operations followed the recent Japan earthquake?",
+      "needs": ["emergency_response"],
+      "requires_evidence": true
+    },
+    {
+      "id": "response-es",
+      "text": "Respuesta, rescate y ayuda tras el terremoto reciente en Venezuela.",
+      "needs": ["emergency_response"],
+      "requires_evidence": true
+    },
+    {
+      "id": "response-vi",
+      "text": "Ứng phó, cứu hộ và cứu trợ sau động đất gần đây ở Việt Nam.",
+      "needs": ["emergency_response"],
+      "requires_evidence": true
+    },
+    {
+      "id": "response-ja",
+      "text": "最近の日本の地震への対応、救助、支援は？",
+      "needs": ["emergency_response"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "general-en",
+      "text": "What causes earthquakes in general?",
+      "needs": ["general_information"],
+      "requires_evidence": false
+    },
+    {
+      "id": "general-es",
+      "text": "¿Qué es un terremoto?",
+      "needs": ["general_information"],
+      "requires_evidence": false
+    },
+    {
+      "id": "general-vi",
+      "text": "Động đất là gì?",
+      "needs": ["general_information"],
+      "requires_evidence": false
+    },
+    {
+      "id": "general-ja",
+      "text": "地震とは何ですか？",
+      "needs": ["general_information"],
+      "requires_evidence": false
+    },
+
+    {
+      "id": "images-en",
+      "text": "Show current photos and satellite imagery of damage from the Japan earthquake.",
+      "needs": ["physical_damage", "images"],
+      "requires_evidence": true
+    },
+    {
+      "id": "images-es",
+      "text": "Fotos e imágenes actuales del daño por el terremoto en Venezuela.",
+      "needs": ["physical_damage", "images"],
+      "requires_evidence": true
+    },
+    {
+      "id": "images-vi",
+      "text": "Hình ảnh thiệt hại do động đất gần đây ở Việt Nam.",
+      "needs": ["physical_damage", "images"],
+      "requires_evidence": true
+    },
+    {
+      "id": "images-ja",
+      "text": "日本の最近の地震被害の画像と写真を見せて。",
+      "needs": ["physical_damage", "images"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "map-en",
+      "text": "Map the latest earthquake damage in Japan.",
+      "needs": ["physical_damage", "map_visualization"],
+      "requires_evidence": true
+    },
+    {
+      "id": "map-es",
+      "text": "Mapa actual de daños del terremoto en Venezuela.",
+      "needs": ["physical_damage", "map_visualization"],
+      "requires_evidence": true
+    },
+    {
+      "id": "map-vi",
+      "text": "Bản đồ thiệt hại động đất mới nhất ở Việt Nam.",
+      "needs": ["physical_damage", "map_visualization"],
+      "requires_evidence": true
+    },
+    {
+      "id": "map-ja",
+      "text": "日本の最新の地震被害を地図で表示して。",
+      "needs": ["physical_damage", "map_visualization"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "timeline-en",
+      "text": "Build a timeline or chronology of the recent Japan earthquake response.",
+      "needs": ["emergency_response", "timeline"],
+      "requires_evidence": true
+    },
+    {
+      "id": "timeline-es",
+      "text": "Cronología de la respuesta al terremoto reciente en Venezuela.",
+      "needs": ["emergency_response", "timeline"],
+      "requires_evidence": true
+    },
+    {
+      "id": "timeline-vi",
+      "text": "Dòng thời gian ứng phó động đất gần đây ở Việt Nam.",
+      "needs": ["emergency_response", "timeline"],
+      "requires_evidence": true
+    },
+    {
+      "id": "timeline-ja",
+      "text": "最近の日本の地震対応を時系列で示して。",
+      "needs": ["emergency_response", "timeline"],
+      "requires_evidence": true
+    },
+
+    {
+      "id": "adversarial-fiction",
+      "text": "Write a story about earthquake fatalities.",
+      "needs": ["fatalities"],
+      "requires_evidence": false
+    },
+    {
+      "id": "adversarial-translation",
+      "text": "Translate 'earthquake warning' into Spanish.",
+      "needs": ["warnings"],
+      "requires_evidence": false
+    },
+    {
+      "id": "adversarial-education",
+      "text": "How are earthquake injuries counted in general?",
+      "needs": ["injuries", "general_information"],
+      "requires_evidence": false
+    },
+    {
+      "id": "adversarial-no-hazard",
+      "text": "Show the current emergency response map for Japan.",
+      "needs": ["emergency_response", "map_visualization"],
+      "requires_evidence": false
+    }
+  ]
+}

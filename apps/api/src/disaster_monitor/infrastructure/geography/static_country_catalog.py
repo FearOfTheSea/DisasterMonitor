@@ -57,10 +57,7 @@ class StaticCountryCatalog:
                 country.alpha3_code,
                 *country.aliases,
             )
-            if any(
-                re.search(rf"(?<![\w]){re.escape(term)}(?![\w])", text, re.I)
-                for term in terms
-            ):
+            if any(_matches_term(text, term) for term in terms):
                 found.append(country)
         return tuple(found)
 
@@ -69,3 +66,10 @@ class StaticCountryCatalog:
 
     def contains(self, country: Country, latitude: float, longitude: float) -> bool:
         return country.geographic_area.contains(latitude, longitude)
+
+
+def _matches_term(text: str, term: str) -> bool:
+    boundary = r"[A-Za-z0-9_]" if not term.isascii() else r"\w"
+    return bool(
+        re.search(rf"(?<!{boundary}){re.escape(term)}(?!{boundary})", text, re.I)
+    )

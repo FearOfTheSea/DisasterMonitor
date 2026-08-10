@@ -19,17 +19,84 @@ from disaster_monitor.application.services.disaster_query_parser import (
 from disaster_monitor.domain.disaster import Hazard
 
 _HAZARDS: dict[Hazard, tuple[str, ...]] = {
-    Hazard.EARTHQUAKE: ("earthquake", "earthquakes", "quake", "quakes"),
-    Hazard.TSUNAMI: ("tsunami", "tsunamis"),
-    Hazard.FLOOD: ("flood", "floods", "flooding"),
-    Hazard.WILDFIRE: ("wildfire", "wildfires", "forest fire"),
-    Hazard.LANDSLIDE: ("landslide", "landslides"),
-    Hazard.TROPICAL_CYCLONE: ("typhoon", "hurricane", "cyclone"),
+    Hazard.EARTHQUAKE: (
+        "earthquake",
+        "earthquakes",
+        "quake",
+        "quakes",
+        "terremoto",
+        "terremotos",
+        "động đất",
+        "地震",
+    ),
+    Hazard.TSUNAMI: ("tsunami", "tsunamis", "sóng thần", "津波"),
+    Hazard.FLOOD: (
+        "flood",
+        "floods",
+        "flooding",
+        "inundación",
+        "inundaciones",
+        "lũ lụt",
+        "洪水",
+    ),
+    Hazard.WILDFIRE: (
+        "wildfire",
+        "wildfires",
+        "forest fire",
+        "incendio forestal",
+        "cháy rừng",
+        "山火事",
+    ),
+    Hazard.LANDSLIDE: (
+        "landslide",
+        "landslides",
+        "deslizamiento de tierra",
+        "sạt lở đất",
+        "地滑り",
+    ),
+    Hazard.TROPICAL_CYCLONE: (
+        "typhoon",
+        "hurricane",
+        "cyclone",
+        "tropical cyclone",
+        "tifón",
+        "huracán",
+        "bão nhiệt đới",
+        "台風",
+    ),
 }
+_CURRENT_EVENT_MARKERS = re.compile(
+    r"(?:\b(?:latest|recent|current|today|now|ongoing|reported|confirmed|"
+    r"this week|as of|struck|hit|occurred)\b|"
+    r"\b(?:actual|reciente|hoy|ahora|reportad[oa]s?|confirmad[oa]s?)\b|"
+    r"(?:mới nhất|gần đây|hiện tại|hôm nay|đã báo cáo|đã xác nhận|"
+    r"最新|最近|現在|今日|報告|確認))",
+    re.I,
+)
 _EVIDENCE_MARKERS = re.compile(
-    r"\b(?:latest|recent|current|today|now|reported|caused|fatalit(?:y|ies)|"
-    r"killed|dead|injur(?:y|ies|ed)|missing|evacuat\w*|damage\w*|warning\w*|"
-    r"response|pictures?|images?|photos?|timeline|map layers?)\b",
+    r"(?:\b(?:fatalit(?:y|ies)|death toll|killed|dead|injur(?:y|ies|ed)|hurt|"
+    r"wounded|missing|unaccounted|evacuat\w*|displaced|shelter\w*|damage\w*|"
+    r"destroyed|collapsed|infrastructure|outage\w*|utilities|road\w*|bridge\w*|"
+    r"warning\w*|alert\w*|advisory|watch|response|responders?|relief|rescue|aid|"
+    r"pictures?|images?|photos?|imagery|timeline|chronology|map layers?)\b|"
+    r"\b(?:muert(?:e|es|os)|fallecid[oa]s?|herid[oa]s?|desaparecid[oa]s?|"
+    r"evacuad[oa]s?|desplazad[oa]s?|daños?|destruid[oa]s?|infraestructura|"
+    r"cortes?|carreteras?|puentes?|alertas?|advertencias?|respuesta|rescate|"
+    r"ayuda|fotos?|imágenes?|mapas?|cronología)\b|"
+    r"(?:tử vong|người chết|bị thương|mất tích|sơ tán|di dời|thiệt hại|"
+    r"phá hủy|cơ sở hạ tầng|mất điện|đường|cầu|cảnh báo|ứng phó|cứu hộ|"
+    r"cứu trợ|hình ảnh|bản đồ|dòng thời gian|"
+    r"死者|死亡|負傷|けが|行方不明|避難|被害|倒壊|インフラ|停電|道路|橋|"
+    r"警報|注意報|対応|救助|支援|画像|写真|地図|時系列))",
+    re.I,
+)
+_GENERAL_KNOWLEDGE_MARKERS = re.compile(
+    r"(?:\b(?:what causes|why (?:do|does)|how (?:do|does|are|is)|"
+    r"what (?:is|are) (?:an? )?|define|definition|in general|hypothetical|"
+    r"write (?:a )?(?:story|poem)|translate)\b|"
+    r"\b(?:qué (?:es|son)|por qué|cómo (?:se|funciona)|en general|hipotétic[oa])\b|"
+    r"(?:là gì|tại sao|hoạt động như thế nào|nói chung|"
+    r"とは何|なぜ|仕組み|一般的))",
     re.I,
 )
 _EVENT_DATE_MARKER = re.compile(
@@ -47,10 +114,13 @@ _KNOWN_UNCATALOGED_COUNTRIES = ("Thailand",)
 def disaster_safety_gate(question: str) -> bool:
     """Conservatively retain factual disaster requests in the trusted path."""
     hazards = _hazard_mentions(question)
-    evidence_marker = _EVIDENCE_MARKERS.search(question) or _EVENT_DATE_MARKER.search(
-        question
-    )
-    return bool(hazards and evidence_marker)
+    if not hazards:
+        return False
+    if _CURRENT_EVENT_MARKERS.search(question) or _EVENT_DATE_MARKER.search(question):
+        return True
+    if _GENERAL_KNOWLEDGE_MARKERS.search(question):
+        return False
+    return bool(_EVIDENCE_MARKERS.search(question))
 
 
 def deterministic_task_draft(question: str) -> DisasterTaskDraft:
@@ -229,29 +299,81 @@ def _hazard_mentions(text: str) -> tuple[Hazard, ...]:
     return tuple(
         hazard
         for hazard, aliases in _HAZARDS.items()
-        if any(
-            re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", text, re.I)
-            for alias in aliases
-        )
+        if any(_matches_alias(text, alias) for alias in aliases)
     )
 
 
 def _information_needs(text: str) -> tuple[InformationNeed, ...]:
     patterns = (
-        (InformationNeed.FATALITIES, r"\b(?:fatalit(?:y|ies)|killed|dead)\b"),
-        (InformationNeed.INJURIES, r"\binjur(?:y|ies|ed)\b"),
-        (InformationNeed.MISSING_PERSONS, r"\bmissing\b"),
-        (InformationNeed.EVACUATIONS, r"\bevacuat\w*\b"),
-        (InformationNeed.PHYSICAL_DAMAGE, r"\bdamage\w*\b"),
+        (
+            InformationNeed.FATALITIES,
+            r"(?:\b(?:fatalit(?:y|ies)|death toll|killed|dead|lives lost)\b|"
+            r"\b(?:muert(?:e|es|os)|fallecid[oa]s?)\b|"
+            r"(?:tử vong|người chết|死者|死亡))",
+        ),
+        (
+            InformationNeed.INJURIES,
+            r"(?:\b(?:injur(?:y|ies|ed)|hurt|wounded)\b|"
+            r"\b(?:herid[oa]s?|lesionad[oa]s?)\b|(?:bị thương|負傷|けが))",
+        ),
+        (
+            InformationNeed.MISSING_PERSONS,
+            r"(?:\b(?:missing|unaccounted for|unlocated)\b|"
+            r"\bdesaparecid[oa]s?\b|(?:mất tích|行方不明))",
+        ),
+        (
+            InformationNeed.EVACUATIONS,
+            r"(?:\b(?:evacuat\w*|displaced|shelter(?:ed|ing)?)\b|"
+            r"\b(?:evacuad[oa]s?|desplazad[oa]s?)\b|(?:sơ tán|di dời|避難))",
+        ),
+        (
+            InformationNeed.PHYSICAL_DAMAGE,
+            r"(?:\b(?:damage\w*|destroyed|collapsed|structural loss|homes? lost)\b|"
+            r"\b(?:daños?|destruid[oa]s?|colapsad[oa]s?)\b|"
+            r"(?:thiệt hại|phá hủy|sụp đổ|被害|倒壊))",
+        ),
         (
             InformationNeed.INFRASTRUCTURE_DISRUPTION,
-            r"\b(?:infrastructure|outage|road|bridge)\w*\b",
+            r"(?:\b(?:infrastructure|outage\w*|utilities|power|water service|"
+            r"telecom\w*|road\w*|bridge\w*|airport\w*|hospital\w*)\b|"
+            r"\b(?:infraestructura|cortes?|servicios?|carreteras?|puentes?|"
+            r"aeropuertos?|hospitales?)\b|(?:cơ sở hạ tầng|mất điện|đường|cầu|"
+            r"インフラ|停電|断水|道路|橋))",
         ),
-        (InformationNeed.WARNINGS, r"\bwarning\w*\b"),
-        (InformationNeed.EMERGENCY_RESPONSE, r"\b(?:emergency|government|response)\b"),
-        (InformationNeed.IMAGES, r"\b(?:pictures?|images?|photos?)\b"),
-        (InformationNeed.MAP_VISUALIZATION, r"\b(?:map|layers?)\b"),
-        (InformationNeed.TIMELINE, r"\btimeline\b"),
+        (
+            InformationNeed.WARNINGS,
+            r"(?:\b(?:warning\w*|alert\w*|advisory|advisories|watch|watches)\b|"
+            r"\b(?:alertas?|advertencias?|avisos?)\b|(?:cảnh báo|警報|注意報))",
+        ),
+        (
+            InformationNeed.EMERGENCY_RESPONSE,
+            r"(?:\b(?:emergency response|response|responders?|relief operations?|"
+            r"rescue|government response|aid delivery)\b|"
+            r"\b(?:respuesta|rescate|socorro|ayuda)\b|"
+            r"(?:ứng phó|cứu hộ|cứu trợ|対応|救助|支援))",
+        ),
+        (
+            InformationNeed.GENERAL_INFORMATION,
+            r"(?:\b(?:what causes|why (?:do|does)|how (?:do|does|are|is)|"
+            r"definition|in general)\b|\b(?:qué es|por qué|cómo se)\b|"
+            r"(?:là gì|tại sao|とは何|なぜ))",
+        ),
+        (
+            InformationNeed.IMAGES,
+            r"(?:\b(?:pictures?|images?|photos?|imagery)\b|"
+            r"\b(?:fotos?|imágenes?)\b|(?:hình ảnh|画像|写真))",
+        ),
+        (
+            InformationNeed.MAP_VISUALIZATION,
+            r"(?:\b(?:map|maps|map layers?|geospatial view)\b|"
+            r"\bmapas?\b|(?:bản đồ|地図))",
+        ),
+        (
+            InformationNeed.TIMELINE,
+            r"(?:\b(?:timeline|chronology|sequence of events)\b|"
+            r"\b(?:cronología|secuencia temporal)\b|"
+            r"(?:dòng thời gian|時系列))",
+        ),
     )
     found = tuple(need for need, pattern in patterns if re.search(pattern, text, re.I))
     return found or (InformationNeed.EVENT_OVERVIEW,)
@@ -270,6 +392,13 @@ def _output_modalities(text: str) -> tuple[OutputModality, ...]:
     if re.search(r"\btimeline\b", text, re.I):
         modalities.append(OutputModality.TIMELINE)
     return tuple(dict.fromkeys(modalities))
+
+
+def _matches_alias(text: str, alias: str) -> bool:
+    boundary = r"[A-Za-z0-9_]" if not alias.isascii() else r"\w"
+    return bool(
+        re.search(rf"(?<!{boundary}){re.escape(alias)}(?!{boundary})", text, re.I)
+    )
 
 
 def _extract_raw_places(text: str) -> tuple[str, ...]:
