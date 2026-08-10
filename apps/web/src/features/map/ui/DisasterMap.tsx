@@ -64,6 +64,7 @@ export function DisasterMap({
                       <small>
                         Feature: {feature.status} · {feature.uncertainty}
                       </small>
+                      <small>Attribution: {feature.attribution}</small>
                     </span>
                   </li>
                 );

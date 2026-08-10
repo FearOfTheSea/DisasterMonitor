@@ -19,15 +19,22 @@ from disaster_monitor.domain.multimodal import (
 )
 
 _PROHIBITED_QUESTION = re.compile(
-    r"\b(?:casualt(?:y|ies)|deaths?|dead|killed|fatalit(?:y|ies)|identity|"
-    r"identify\s+(?:the\s+)?person|who\s+is|missing\s+person|official\s+warning|"
-    r"evacuation\s+order|government\s+decision|authoritative\s+total)\b",
+    r"\b(?:casualt(?:y|ies)|deaths?|dead|killed|fatalit(?:y|ies)|identit(?:y|ies)|"
+    r"identify|recognize\s+(?:the\s+)?person|who\s+is|person(?:'s)?\s+name|"
+    r"name\s+of\s+(?:the\s+)?(?:person|individual|man|woman)|missing\s+person|"
+    r"official|warnings?|advisories?|evacuat(?:e|ion)|government\s+(?:decision|"
+    r"order)|authoritative\s+(?:figure|number|total))\b",
     re.I,
 )
-_UNSAFE_NUMERIC_CLAIM = re.compile(
+_UNSAFE_OUTPUT = re.compile(
     r"\b\d+\b.{0,24}\b(?:dead|deaths?|killed|fatalit(?:y|ies)|casualt(?:y|ies)|"
     r"missing\s+people)\b|\b(?:dead|deaths?|killed|fatalit(?:y|ies)|"
-    r"casualt(?:y|ies)|missing\s+people)\b.{0,24}\b\d+\b",
+    r"casualt(?:y|ies)|missing\s+people)\b.{0,24}\b\d+\b|"
+    r"\b(?:identity|name)\s+is\b|\b(?:person|individual|man|woman)\b.{0,24}"
+    r"\b(?:named|identified\s+as)\s+[A-Z][a-z]+|\bperson\b.{0,12}"
+    r"\bis\s+[A-Z][a-z]+\s+[A-Z][a-z]+\b|\b(?:official\s+)?"
+    r"(?:warning|advisory|evacuation\s+order)\s+(?:is|was|has\s+been)\b|"
+    r"\bgovernment\s+(?:decided|ordered|announced)\b",
     re.I,
 )
 
@@ -39,7 +46,7 @@ class VisualSafetyPolicy:
         return bool(question and _PROHIBITED_QUESTION.search(question))
 
     def unsafe_answer(self, answer: str | None) -> bool:
-        return bool(answer and _UNSAFE_NUMERIC_CLAIM.search(answer))
+        return bool(answer and _UNSAFE_OUTPUT.search(answer))
 
 
 class VisualAnalysisService:
@@ -76,9 +83,17 @@ class VisualAnalysisService:
         now = self._clock()
         if now.tzinfo is None:
             now = now.replace(tzinfo=UTC)
+        unsafe_prediction = any(
+            self._safety.unsafe_answer(value)
+            for value in (
+                prediction.answer,
+                *prediction.damage_cues,
+                *prediction.answer_cues,
+            )
+        )
         damage_status = (
             VisualObservationStatus.ABSTAINED
-            if prediction.damage_level == DamageLevel.UNKNOWN
+            if prediction.damage_level == DamageLevel.UNKNOWN or unsafe_prediction
             else VisualObservationStatus.PRODUCED
         )
         observations = [
@@ -87,19 +102,27 @@ class VisualAnalysisService:
                 association,
                 kind=VisualObservationKind.DAMAGE_ASSESSMENT,
                 status=damage_status,
-                damage_level=prediction.damage_level,
+                damage_level=(
+                    DamageLevel.UNKNOWN
+                    if unsafe_prediction
+                    else prediction.damage_level
+                ),
                 question=None,
                 answer=None,
                 answerable=None,
                 confidence=prediction.damage_confidence,
-                cues=prediction.damage_cues,
+                cues=() if unsafe_prediction else prediction.damage_cues,
                 configuration=prediction.configuration,
                 now=now,
-                safety_rules=(),
+                safety_rules=(
+                    ("mm.visual.unsafe_output_blocked",) if unsafe_prediction else ()
+                ),
             )
         ]
         if normalized_question is not None:
-            unsafe_answer = self._safety.unsafe_answer(prediction.answer)
+            unsafe_answer = unsafe_prediction or self._safety.unsafe_answer(
+                prediction.answer
+            )
             blocked = prohibited or unsafe_answer
             answerable = False if blocked else prediction.answerable
             status = (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SessionConversationStore } from '@/shared/storage/sessionConversationStore';
+import { commonOperationalPicture, multimodalState } from './fixtures/multimodal';
 
 function storage() {
   const values = new Map<string, string>();
@@ -28,6 +29,39 @@ describe('SessionConversationStore', () => {
   it('ignores malformed stored data', () => {
     const browserStorage = storage();
     browserStorage.setItem('disaster-monitor.conversation.v1', '{bad json');
+
+    expect(new SessionConversationStore(browserStorage).load()).toEqual({
+      conversationId: null,
+      messages: [],
+    });
+  });
+
+  it('rejects stored COP data that bypasses transport provenance validation', () => {
+    const browserStorage = storage();
+    const unsafe = structuredClone(commonOperationalPicture);
+    unsafe.layers[0].features[0].authority = 'official_source' as never;
+    browserStorage.setItem(
+      'disaster-monitor.conversation.v1',
+      JSON.stringify({
+        conversationId: 'session-unsafe',
+        messages: [
+          {
+            id: 'unsafe',
+            role: 'assistant',
+            content: 'unsafe',
+            report: {
+              responseType: 'current_disaster',
+              sources: [],
+              warnings: [],
+              sections: [],
+              partial: false,
+              multimodal: multimodalState,
+              commonOperationalPicture: unsafe,
+            },
+          },
+        ],
+      }),
+    );
 
     expect(new SessionConversationStore(browserStorage).load()).toEqual({
       conversationId: null,

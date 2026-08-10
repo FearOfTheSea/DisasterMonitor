@@ -192,8 +192,8 @@ def _updated_at(
     created_at: datetime,
 ) -> datetime:
     return max(
-        (feature.updated_at or feature.created_at for feature in features),
-        default=created_at,
+        created_at,
+        *(feature.updated_at or feature.created_at for feature in features),
     )
 
 

@@ -121,6 +121,7 @@ def multimodal_state_response(
                     analysis_version=item.configuration.analysis_version,
                     prompt_version=item.configuration.prompt_version,
                     preprocessing_version=item.configuration.preprocessing_version,
+                    maximum_output_tokens=(item.configuration.maximum_output_tokens),
                     temperature=item.configuration.temperature,
                     seed=item.configuration.seed,
                 ),

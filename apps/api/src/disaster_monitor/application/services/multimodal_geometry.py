@@ -4,6 +4,8 @@ from math import asin, cos, radians, sin, sqrt
 
 from disaster_monitor.domain.multimodal import GeoPoint, GeoPolygon, MapGeometry
 
+MAX_POLYGON_POINTS = 4_096
+
 
 class MultimodalGeometryPolicy:
     """Validate bounded geometry before it reaches association or rendering."""
@@ -28,11 +30,29 @@ class MultimodalGeometryPolicy:
         """Reject degenerate or self-intersecting polygon rings."""
         if not isinstance(geometry, GeoPolygon):
             return
+        if sum(len(ring) for ring in geometry.rings) > MAX_POLYGON_POINTS:
+            raise ValueError("Polygon geometry exceeds the bounded point count.")
         for ring in geometry.rings:
             if abs(_signed_area(ring)) < 1e-12:
                 raise ValueError("Polygon rings must enclose a non-zero area.")
             if _self_intersects(ring):
                 raise ValueError("Polygon rings must not self-intersect.")
+        exterior = geometry.rings[0]
+        holes = geometry.rings[1:]
+        for hole in holes:
+            if _rings_intersect(exterior, hole) or any(
+                _point_on_ring(point, exterior) or not _point_in_ring(point, exterior)
+                for point in hole[:-1]
+            ):
+                raise ValueError("Polygon holes must remain inside the exterior ring.")
+        for first_index, first in enumerate(holes):
+            for second in holes[first_index + 1 :]:
+                if (
+                    _rings_intersect(first, second)
+                    or _point_in_ring(first[0], second)
+                    or _point_in_ring(second[0], first)
+                ):
+                    raise ValueError("Polygon holes must not overlap.")
 
     def contains(self, polygon: GeoPolygon, point: GeoPoint) -> bool:
         """Return point-in-polygon membership including the exterior boundary."""
@@ -120,6 +140,14 @@ def _self_intersects(ring: tuple[GeoPoint, ...]) -> bool:
             if _segments_intersect(first_start, first_end, second_start, second_end):
                 return True
     return False
+
+
+def _rings_intersect(first: tuple[GeoPoint, ...], second: tuple[GeoPoint, ...]) -> bool:
+    return any(
+        _segments_intersect(first_start, first_end, second_start, second_end)
+        for first_start, first_end in zip(first, first[1:], strict=False)
+        for second_start, second_end in zip(second, second[1:], strict=False)
+    )
 
 
 def _point_on_ring(point: GeoPoint, ring: tuple[GeoPoint, ...]) -> bool:

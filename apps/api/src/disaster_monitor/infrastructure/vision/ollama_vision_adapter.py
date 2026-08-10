@@ -212,6 +212,7 @@ class OllamaVisionAdapter:
                 analysis_version=ANALYSIS_VERSION,
                 prompt_version=VISUAL_ANALYSIS_PROMPT_VERSION,
                 preprocessing_version=PREPROCESSING_VERSION,
+                maximum_output_tokens=self._max_tokens,
                 temperature=TEMPERATURE,
                 seed=SEED,
             ),

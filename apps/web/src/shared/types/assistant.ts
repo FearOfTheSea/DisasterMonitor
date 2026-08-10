@@ -167,6 +167,7 @@ export type VisualAnalysisConfiguration = {
   analysis_version: string;
   prompt_version: string;
   preprocessing_version: string;
+  maximum_output_tokens: number;
   temperature: number;
   seed: number;
 };

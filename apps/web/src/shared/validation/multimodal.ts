@@ -147,6 +147,8 @@ function isConfiguration(value: UnknownObject): value is VisualAnalysisConfigura
       'prompt_version',
       'preprocessing_version',
     ]) &&
+    typeof value.maximum_output_tokens === 'number' &&
+    value.maximum_output_tokens > 0 &&
     typeof value.temperature === 'number' &&
     typeof value.seed === 'number'
   );
@@ -283,22 +285,12 @@ function isGeometry(value: unknown): value is CopGeometry {
     return (
       Array.isArray(value.coordinates) &&
       value.coordinates.length >= 2 &&
+      value.coordinates.length <= 4_096 &&
       value.coordinates.every(isCoordinate)
     );
   }
   if (value.type === 'Polygon') {
-    return (
-      Array.isArray(value.coordinates) &&
-      value.coordinates.length > 0 &&
-      value.coordinates.every(
-        (ring) =>
-          Array.isArray(ring) &&
-          ring.length >= 4 &&
-          ring.every(isCoordinate) &&
-          ring[0][0] === ring[ring.length - 1][0] &&
-          ring[0][1] === ring[ring.length - 1][1],
-      )
-    );
+    return isPolygonCoordinates(value.coordinates);
   }
   return false;
 }
@@ -313,6 +305,163 @@ function isCoordinate(value: unknown): value is [number, number] {
     value[1] >= -90 &&
     value[1] <= 90
   );
+}
+
+function isPolygonCoordinates(value: unknown): value is [number, number][][] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 8) return false;
+  if (
+    value.some(
+      (ring) =>
+        !Array.isArray(ring) ||
+        ring.length < 4 ||
+        !ring.every(isCoordinate) ||
+        ring[0][0] !== ring[ring.length - 1][0] ||
+        ring[0][1] !== ring[ring.length - 1][1],
+    )
+  ) {
+    return false;
+  }
+  const rings = value as [number, number][][];
+  if (
+    rings.reduce((total, ring) => total + ring.length, 0) > 4_096 ||
+    rings.some((ring) => Math.abs(signedArea(ring)) < 1e-12 || selfIntersects(ring))
+  ) {
+    return false;
+  }
+  const [exterior, ...holes] = rings;
+  if (
+    holes.some(
+      (hole) =>
+        ringsIntersect(exterior, hole) ||
+        hole.slice(0, -1).some((point) => !pointInRing(point, exterior)),
+    )
+  ) {
+    return false;
+  }
+  return !holes.some((first, index) =>
+    holes
+      .slice(index + 1)
+      .some(
+        (second) =>
+          ringsIntersect(first, second) ||
+          pointInRing(first[0], second) ||
+          pointInRing(second[0], first),
+      ),
+  );
+}
+
+function signedArea(ring: [number, number][]): number {
+  return (
+    ring
+      .slice(0, -1)
+      .reduce(
+        (area, point, index) =>
+          area + point[0] * ring[index + 1][1] - ring[index + 1][0] * point[1],
+        0,
+      ) / 2
+  );
+}
+
+function orientation(
+  first: [number, number],
+  second: [number, number],
+  third: [number, number],
+): number {
+  return (
+    (second[0] - first[0]) * (third[1] - first[1]) -
+    (second[1] - first[1]) * (third[0] - first[0])
+  );
+}
+
+function onSegment(
+  first: [number, number],
+  second: [number, number],
+  point: [number, number],
+): boolean {
+  return (
+    point[0] >= Math.min(first[0], second[0]) &&
+    point[0] <= Math.max(first[0], second[0]) &&
+    point[1] >= Math.min(first[1], second[1]) &&
+    point[1] <= Math.max(first[1], second[1]) &&
+    Math.abs(orientation(first, second, point)) < 1e-12
+  );
+}
+
+function segmentsIntersect(
+  first: [number, number],
+  second: [number, number],
+  third: [number, number],
+  fourth: [number, number],
+): boolean {
+  const values = [
+    orientation(first, second, third),
+    orientation(first, second, fourth),
+    orientation(third, fourth, first),
+    orientation(third, fourth, second),
+  ];
+  if (values[0] * values[1] < 0 && values[2] * values[3] < 0) return true;
+  return (
+    (Math.abs(values[0]) < 1e-12 && onSegment(first, second, third)) ||
+    (Math.abs(values[1]) < 1e-12 && onSegment(first, second, fourth)) ||
+    (Math.abs(values[2]) < 1e-12 && onSegment(third, fourth, first)) ||
+    (Math.abs(values[3]) < 1e-12 && onSegment(third, fourth, second))
+  );
+}
+
+function selfIntersects(ring: [number, number][]): boolean {
+  const lastSegment = ring.length - 2;
+  for (let first = 0; first < ring.length - 1; first += 1) {
+    for (let second = first + 1; second < ring.length - 1; second += 1) {
+      if (second === first + 1 || (first === 0 && second === lastSegment)) {
+        continue;
+      }
+      if (
+        segmentsIntersect(ring[first], ring[first + 1], ring[second], ring[second + 1])
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function ringsIntersect(
+  first: [number, number][],
+  second: [number, number][],
+): boolean {
+  return first
+    .slice(0, -1)
+    .some((point, firstIndex) =>
+      second
+        .slice(0, -1)
+        .some((other, secondIndex) =>
+          segmentsIntersect(
+            point,
+            first[firstIndex + 1],
+            other,
+            second[secondIndex + 1],
+          ),
+        ),
+    );
+}
+
+function pointInRing(point: [number, number], ring: [number, number][]): boolean {
+  if (
+    ring.slice(0, -1).some((first, index) => onSegment(first, ring[index + 1], point))
+  ) {
+    return false;
+  }
+  let inside = false;
+  for (let index = 0; index < ring.length - 1; index += 1) {
+    const first = ring[index];
+    const second = ring[index + 1];
+    if (first[1] > point[1] === second[1] > point[1]) continue;
+    const boundary =
+      first[0] +
+      ((point[1] - first[1]) * (second[0] - first[0])) / (second[1] - first[1]);
+    if (point[0] < boundary) inside = !inside;
+  }
+  return inside;
 }
 
 function optionalConfidence(value: unknown): boolean {

@@ -4,6 +4,7 @@ import hashlib
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from disaster_monitor.application.multimodal import AssetAdmissionInput
@@ -40,6 +41,7 @@ from disaster_monitor.domain.multimodal import (
     CaptureRole,
     DamageLevel,
     EventAssociationStatus,
+    VisualAnalysisConfiguration,
     VisualObservationKind,
     VisualObservationStatus,
 )
@@ -80,6 +82,8 @@ class ReleaseEvaluation:
     evaluated_at: str
     model: dict[str, Any]
     sample_count: int
+    model_call_count: int
+    evaluation_runtime_seconds: float
     dataset_families: tuple[str, ...]
     metrics: dict[str, Any]
     capability_passed: bool
@@ -143,6 +147,9 @@ async def evaluate_locked_release(
     expected_geotemporal: list[tuple[bool | None, bool | None]] = []
     predicted_geotemporal: list[tuple[bool | None, bool | None]] = []
     map_features: list[MapFeatureEvaluation] = []
+    configurations: set[VisualAnalysisConfiguration] = set()
+    model_call_count = 0
+    started_at = perf_counter()
 
     for sample in samples:
         physical_event = _physical_event(sample, now)
@@ -171,6 +178,8 @@ async def evaluate_locked_release(
             if task == "visual_question_answering"
             else None,
         )
+        model_call_count += 1
+        configurations.update(item.configuration for item in observations)
         damage = next(
             (
                 item
@@ -242,14 +251,29 @@ async def evaluate_locked_release(
             cop = cop_builder.build(multimodal_state, created_at=now)
             if cop is not None:
                 for layer in cop.layers:
+                    layer_type = (
+                        "analytical"
+                        if isinstance(layer, AnalyticalMapLayer)
+                        else "source"
+                    )
+                    map_features.append(
+                        MapFeatureEvaluation(
+                            layer_type=layer_type,
+                            authority=f"{layer_type}_layer",
+                            source_asset_ids=layer.source_asset_ids,
+                            observation_ids=getattr(
+                                layer, "visual_observation_ids", ()
+                            ),
+                            attribution=layer.attribution,
+                            status=layer.status.value,
+                            uncertainty=layer.uncertainty,
+                            artifact_type="layer",
+                        )
+                    )
                     for feature in layer.features:
                         map_features.append(
                             MapFeatureEvaluation(
-                                layer_type=(
-                                    "analytical"
-                                    if isinstance(layer, AnalyticalMapLayer)
-                                    else "source"
-                                ),
+                                layer_type=layer_type,
                                 authority=feature.authority.value,
                                 source_asset_ids=feature.source_asset_ids,
                                 observation_ids=getattr(
@@ -284,14 +308,30 @@ async def evaluate_locked_release(
     gate = MultimodalGateScore(
         damage_score, baseline_score, vqa_score, association_score, map_score
     )
+    if len(configurations) != 1:
+        raise MultimodalReleaseError(
+            "visual analysis configuration changed within the locked release run"
+        )
+    configuration = next(iter(configurations))
+    model_metadata = asdict(readiness)
+    model_metadata.update(
+        {
+            "analysis_version": configuration.analysis_version,
+            "maximum_output_tokens": configuration.maximum_output_tokens,
+            "temperature": configuration.temperature,
+            "seed": configuration.seed,
+        }
+    )
     return ReleaseEvaluation(
         manifest_version=str(manifest["manifest_version"]),
         manifest_sha256=_sha256(manifest_file),
         specification_version=str(specification["specification_version"]),
         specification_sha256=_sha256(specification_file),
         evaluated_at=now.isoformat(),
-        model=asdict(readiness),
+        model=model_metadata,
         sample_count=len(samples),
+        model_call_count=model_call_count,
+        evaluation_runtime_seconds=perf_counter() - started_at,
         dataset_families=tuple(
             sorted({str(item["dataset_family"]) for item in samples})
         ),

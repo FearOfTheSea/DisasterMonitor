@@ -50,4 +50,23 @@ describe('multimodal transport validation', () => {
     stale.multimodal_state_version = 'multimodal-state:other';
     expect(copMatchesMultimodalState(stale, multimodalState)).toBe(false);
   });
+
+  it('rejects a closed but self-intersecting renderer polygon', () => {
+    const unsafe = clone(commonOperationalPicture);
+    unsafe.layers[0].features[0].geometry = {
+      type: 'Polygon',
+      crs: 'EPSG:4326',
+      coordinates: [
+        [
+          [136.8, 34.8],
+          [137.2, 35.2],
+          [136.8, 35.2],
+          [137.2, 34.8],
+          [136.8, 34.8],
+        ],
+      ],
+    };
+
+    expect(isCommonOperationalPicture(unsafe)).toBe(false);
+  });
 });

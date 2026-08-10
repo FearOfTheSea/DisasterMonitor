@@ -71,6 +71,7 @@ class MapFeatureEvaluation:
     attribution: str
     status: str
     uncertainty: str
+    artifact_type: str = "feature"
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,19 +246,13 @@ def score_associations(
 
 def score_map_features(features: list[MapFeatureEvaluation]) -> MapScore:
     if not features:
-        raise ValueError("Map scoring requires at least one displayed feature.")
+        raise ValueError("Map scoring requires at least one displayed map artifact.")
     attribution_correct = 0
     provenance_complete = 0
     status_uncertainty_complete = 0
     authority_violations = 0
     for feature in features:
-        expected_authorities = (
-            {"official_source", "source_supplied"}
-            if feature.layer_type == "source"
-            else {"analytical_generated"}
-            if feature.layer_type == "analytical"
-            else set()
-        )
+        expected_authorities = _expected_map_authorities(feature)
         authority_ok = feature.authority in expected_authorities
         attribution_correct += authority_ok and bool(feature.attribution.strip())
         authority_violations += not authority_ok
@@ -274,6 +269,26 @@ def score_map_features(features: list[MapFeatureEvaluation]) -> MapScore:
         visible_status_uncertainty=status_uncertainty_complete / total,
         authority_violations=authority_violations,
         feature_total=total,
+    )
+
+
+def _expected_map_authorities(feature: MapFeatureEvaluation) -> set[str]:
+    if feature.artifact_type == "layer":
+        return (
+            {"source_layer"}
+            if feature.layer_type == "source"
+            else {"analytical_layer"}
+            if feature.layer_type == "analytical"
+            else set()
+        )
+    if feature.artifact_type != "feature":
+        return set()
+    return (
+        {"official_source", "source_supplied"}
+        if feature.layer_type == "source"
+        else {"analytical_generated"}
+        if feature.layer_type == "analytical"
+        else set()
     )
 
 

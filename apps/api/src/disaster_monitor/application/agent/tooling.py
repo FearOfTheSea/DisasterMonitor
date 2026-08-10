@@ -165,7 +165,7 @@ class ListSourcesForTaskTool(_BaseTool):
                 or task.country.alpha3_code in source.country_codes
             )
         }
-        unsupported = tuple(
+        unsupported_roles = tuple(
             role.value
             for role in requested_roles
             if not any(
@@ -173,6 +173,19 @@ class ListSourcesForTaskTool(_BaseTool):
                 for source in self.dependencies.source_catalog.sources()
                 if source.source_id in catalog_matches
             )
+        )
+        satisfied_by_admitted_assets = (
+            {
+                SourceInformationRole.IMAGERY.value,
+                SourceInformationRole.MAP_LAYERS.value,
+            }
+            if state.workspace.multimodal_assets
+            else set()
+        )
+        unsupported = tuple(
+            role
+            for role in unsupported_roles
+            if role not in satisfied_by_admitted_assets
         )
         executable_ids = set(configured) | set(unconfigured)
         known_not_executable = tuple(sorted(catalog_matches - executable_ids))

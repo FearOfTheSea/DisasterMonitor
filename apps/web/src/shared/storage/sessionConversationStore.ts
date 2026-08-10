@@ -1,4 +1,9 @@
 import type { ConversationMessage, ConversationState } from '@/shared/types/assistant';
+import {
+  copMatchesMultimodalState,
+  isCommonOperationalPicture,
+  isMultimodalEvidenceState,
+} from '@/shared/validation/multimodal';
 
 const STORAGE_KEY = 'disaster-monitor.conversation.v1';
 
@@ -61,8 +66,35 @@ export class SessionConversationStore {
       return (
         typeof item.id === 'string' &&
         (item.role === 'user' || item.role === 'assistant') &&
-        typeof item.content === 'string'
+        typeof item.content === 'string' &&
+        this.isStoredReport(item.report)
       );
     });
+  }
+
+  private isStoredReport(value: unknown): boolean {
+    if (value === undefined) return true;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const report = value as Record<string, unknown>;
+    if (
+      typeof report.responseType !== 'string' ||
+      !Array.isArray(report.sources) ||
+      !Array.isArray(report.warnings) ||
+      !Array.isArray(report.sections) ||
+      typeof report.partial !== 'boolean'
+    ) {
+      return false;
+    }
+    const multimodal = report.multimodal;
+    const cop = report.commonOperationalPicture;
+    if (multimodal !== undefined && !isMultimodalEvidenceState(multimodal)) {
+      return false;
+    }
+    if (cop !== undefined && !isCommonOperationalPicture(cop)) return false;
+    return (
+      cop === undefined ||
+      (isMultimodalEvidenceState(multimodal) &&
+        copMatchesMultimodalState(cop, multimodal))
+    );
   }
 }

@@ -82,7 +82,10 @@ function VisualEvidenceView({ state }: { state: MultimodalEvidenceState }) {
               <p>
                 Model: {observation.configuration.model_id} · Analysis:{' '}
                 {observation.configuration.analysis_version} · Prompt:{' '}
-                {observation.configuration.prompt_version}
+                {observation.configuration.prompt_version} · Output cap:{' '}
+                {observation.configuration.maximum_output_tokens} tokens · Temperature:{' '}
+                {observation.configuration.temperature} · Seed:{' '}
+                {observation.configuration.seed}
               </p>
               {observation.visual_cues.length > 0 && (
                 <p>Visible cues: {observation.visual_cues.join('; ')}</p>

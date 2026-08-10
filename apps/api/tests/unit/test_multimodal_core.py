@@ -53,6 +53,7 @@ from disaster_monitor.domain.multimodal import (
     VisualObservationKind,
     VisualObservationStatus,
 )
+from disaster_monitor.presentation.http.multimodal_serialization import cop_response
 
 NOW = datetime(2026, 8, 5, 12, tzinfo=UTC)
 PNG = base64.b64decode(
@@ -129,8 +130,14 @@ def _physical_event(*, event_time: datetime = NOW):
 
 
 class FakeVisualAnalyzer:
-    def __init__(self, *, answer: str | None = "a bridge is visibly damaged") -> None:
+    def __init__(
+        self,
+        *,
+        answer: str | None = "a bridge is visibly damaged",
+        damage_cues: tuple[str, ...] = ("collapsed roof",),
+    ) -> None:
         self.answer = answer
+        self.damage_cues = damage_cues
         self.requests: list[VisualAnalysisRequest] = []
 
     async def analyze(self, request: VisualAnalysisRequest) -> VisualModelPrediction:
@@ -138,7 +145,7 @@ class FakeVisualAnalyzer:
         return VisualModelPrediction(
             damage_level=DamageLevel.MAJOR_DAMAGE,
             damage_confidence=0.91,
-            damage_cues=("collapsed roof",),
+            damage_cues=self.damage_cues,
             answer=self.answer if request.question is not None else None,
             answerable=request.question is not None,
             answer_confidence=0.84 if request.question is not None else None,
@@ -166,6 +173,7 @@ def _configuration() -> VisualAnalysisConfiguration:
         analysis_version="analysis-v1",
         prompt_version="dm-visual-analysis-v1",
         preprocessing_version="original-png-jpeg-bytes-v1",
+        maximum_output_tokens=384,
         temperature=0,
         seed=7,
     )
@@ -184,6 +192,13 @@ def test_asset_admission_derives_identity_and_preserves_unknown_metadata() -> No
     changed_metadata = _asset(captured_at=NOW + timedelta(hours=3))
     assert changed_metadata.content_sha256 == asset.content_sha256
     assert changed_metadata.asset_id != asset.asset_id
+    changed_source = _asset(dataset_id="different-dataset-v2")
+    assert changed_source.content_sha256 == asset.content_sha256
+    assert changed_source.asset_id != asset.asset_id
+
+    contradictory = _asset(parent_asset_ids=(asset.asset_id,))
+    assert contradictory.eligibility == AssetEligibility.REJECTED
+    assert "raw_asset_has_parent_lineage" in contradictory.eligibility_reasons
 
 
 def test_missing_or_malformed_asset_metadata_cannot_become_analysis_eligible() -> None:
@@ -204,6 +219,20 @@ def test_missing_or_malformed_asset_metadata_cannot_become_analysis_eligible() -
 
     with pytest.raises(MultimodalInputError, match="PNG|JPEG"):
         _admission().admit(AssetAdmissionInput(b"not-an-image", "Test source"))
+
+    outside_hole = _asset(
+        footprint_coordinates=(
+            FOOTPRINT[0],
+            (
+                (140.0, 40.0),
+                (140.1, 40.0),
+                (140.1, 40.1),
+                (140.0, 40.0),
+            ),
+        )
+    )
+    assert outside_hole.eligibility == AssetEligibility.REJECTED
+    assert "invalid_georeference" in outside_hole.eligibility_reasons
 
 
 @pytest.mark.parametrize(
@@ -302,6 +331,33 @@ async def test_visual_safety_abstains_from_casualty_questions_before_model() -> 
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "question",
+    (
+        "What is the name of the person?",
+        "Is an evacuation advisory active?",
+        "What government decision was made?",
+        "Is an official warning in effect?",
+    ),
+)
+async def test_visual_safety_blocks_other_unauthorized_claim_classes_before_model(
+    question: str,
+) -> None:
+    analyzer = FakeVisualAnalyzer()
+    asset = _asset()
+    association = MultimodalEventAssociator().associate(asset, _physical_event())
+
+    observations = await VisualAnalysisService(analyzer, clock=lambda: NOW).analyze(
+        asset, association, question=question
+    )
+
+    assert analyzer.requests[0].question is None
+    assert observations[1].status == VisualObservationStatus.ABSTAINED
+    assert observations[1].answer is None
+    assert observations[1].safety_rule_ids == ("mm.visual.prohibited_question",)
+
+
+@pytest.mark.asyncio
 async def test_visual_safety_blocks_an_unsafe_numeric_model_answer() -> None:
     analyzer = FakeVisualAnalyzer(answer="12 people were killed")
     asset = _asset()
@@ -314,9 +370,28 @@ async def test_visual_safety_blocks_an_unsafe_numeric_model_answer() -> None:
     )
 
     answer = observations[1]
+    assert observations[0].status == VisualObservationStatus.ABSTAINED
+    assert observations[0].damage_level == DamageLevel.UNKNOWN
     assert answer.status == VisualObservationStatus.ABSTAINED
     assert answer.answer is None
     assert answer.safety_rule_ids == ("mm.visual.unsafe_output_blocked",)
+
+
+@pytest.mark.asyncio
+async def test_visual_safety_discards_unsafe_model_cues() -> None:
+    analyzer = FakeVisualAnalyzer(damage_cues=("12 people were killed",))
+    asset = _asset()
+    association = MultimodalEventAssociator().associate(asset, _physical_event())
+
+    observations = await VisualAnalysisService(analyzer, clock=lambda: NOW).analyze(
+        asset, association, question=None
+    )
+
+    damage = observations[0]
+    assert damage.status == VisualObservationStatus.ABSTAINED
+    assert damage.damage_level == DamageLevel.UNKNOWN
+    assert damage.visual_cues == ()
+    assert damage.safety_rule_ids == ("mm.visual.unsafe_output_blocked",)
 
 
 @pytest.mark.asyncio
@@ -356,6 +431,12 @@ async def test_multimodal_state_and_cop_preserve_ew_and_geometry_lineage() -> No
     assert feature.source_asset_ids == (asset.asset_id,)
     assert feature.visual_observation_ids == (observations[0].observation_id,)
     assert feature.uncertainty
+    assert layer.source_asset_ids == (asset.asset_id,)
+    assert layer.visual_observation_ids == (observations[0].observation_id,)
+    assert layer.status == CopStatus.CURRENT
+    assert layer.uncertainty
+    with pytest.raises(ValueError, match="asset lineage"):
+        replace(layer, source_asset_ids=("asset:wrong",))
 
     changed = build_multimodal_evidence_state(
         ew_state,
@@ -405,6 +486,13 @@ async def test_official_and_analytical_map_features_are_structurally_separate() 
     assert isinstance(cop.layers[0].features[0], SourceMapFeature)
     assert cop.layers[0].features[0].authority == "official_source"
     assert isinstance(cop.layers[1].features[0], AnalyticalMapFeature)
+    serialized = cop_response(cop)
+    assert serialized is not None
+    assert serialized.layers[0].layer_type == "source"
+    assert serialized.layers[0].source_asset_ids == [asset.asset_id]
+    assert serialized.layers[0].features[0].authority == "official_source"
+    assert serialized.layers[1].layer_type == "analytical"
+    assert serialized.layers[1].features[0].authority == "analytical_generated"
     with pytest.raises(TypeError, match="authority"):
         AnalyticalMapFeature(
             feature_id="unsafe",

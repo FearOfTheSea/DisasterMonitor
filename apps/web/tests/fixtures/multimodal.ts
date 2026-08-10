@@ -85,6 +85,7 @@ export const multimodalState: MultimodalEvidenceState = {
         analysis_version: 'bounded-damage-vqa-v1',
         prompt_version: 'dm-visual-analysis-v1',
         preprocessing_version: 'original-png-jpeg-bytes-v1',
+        maximum_output_tokens: 384,
         temperature: 0,
         seed: 7,
       },

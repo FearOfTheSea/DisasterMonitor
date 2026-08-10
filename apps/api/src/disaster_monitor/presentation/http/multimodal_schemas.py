@@ -116,6 +116,7 @@ class VisualAnalysisConfigurationResponse(BaseModel):
     analysis_version: str
     prompt_version: str
     preprocessing_version: str
+    maximum_output_tokens: int
     temperature: float
     seed: int
 

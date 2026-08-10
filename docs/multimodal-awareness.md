@@ -33,7 +33,8 @@ discarded. Model confidence never confers source authority.
 
 The default adapter is the local Ollama model `qwen3-vl:2b`. It is lazy in the sense
 that no inference occurs on text-only requests. Ordinary tests use a fake visual port
-and do not require Ollama. Install the real model separately:
+and do not require Ollama. Its default output cap is 384 tokens, temperature is zero,
+and seed is 7; each observation records these values. Install the real model separately:
 
 ```powershell
 ollama pull qwen3-vl:2b

@@ -640,6 +640,7 @@ async def test_operator_image_crosses_real_http_boundary_into_typed_cop() -> Non
                     analysis_version="bounded-damage-vqa-v1",
                     prompt_version="dm-visual-analysis-v1",
                     preprocessing_version="original-png-jpeg-bytes-v1",
+                    maximum_output_tokens=384,
                     temperature=0,
                     seed=7,
                 ),
@@ -718,6 +719,9 @@ async def test_operator_image_crosses_real_http_boundary_into_typed_cop() -> Non
     assert feature["source_asset_ids"] == [body["multimodal"]["assets"][0]["asset_id"]]
     assert feature["visual_observation_ids"]
     assert feature["uncertainty"]
+    gaps = body["investigation"]["capability_gaps"]
+    assert not any("image" in gap.casefold() for gap in gaps)
+    assert not any("map layer" in gap.casefold() for gap in gaps)
 
 
 @pytest.mark.asyncio

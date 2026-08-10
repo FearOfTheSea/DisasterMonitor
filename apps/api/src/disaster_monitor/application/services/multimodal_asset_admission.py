@@ -101,6 +101,12 @@ class MultimodalAssetAdmissionService:
             reasons.append("unknown_capture_role")
         if item.parent_asset_ids and not (item.processing_level or "").strip():
             reasons.append("derived_asset_missing_processing_level")
+        if (
+            item.parent_asset_ids
+            and (item.processing_level or "").strip().casefold() == "raw"
+        ):
+            reasons.append("raw_asset_has_parent_lineage")
+            rejected = True
         if item.processing_level and item.processing_level.strip().casefold() != "raw":
             if not item.parent_asset_ids:
                 reasons.append("derived_asset_missing_parent_lineage")
@@ -149,6 +155,10 @@ class MultimodalAssetAdmissionService:
             (
                 OPERATOR_ASSET_SOURCE_ID,
                 checksum,
+                source.attribution,
+                source.canonical_url or "",
+                source.dataset_id or "",
+                source.license_name or "",
                 captured_material,
                 item.declared_hazard.value if item.declared_hazard else "unknown",
                 country_code or "unknown",

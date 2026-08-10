@@ -242,8 +242,13 @@ class VisualAnalysisConfiguration:
     analysis_version: str
     prompt_version: str
     preprocessing_version: str
+    maximum_output_tokens: int
     temperature: float
     seed: int
+
+    def __post_init__(self) -> None:
+        if self.maximum_output_tokens <= 0:
+            raise ValueError("Visual analysis requires a positive output-token cap.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,6 +282,12 @@ class VisualObservation:
             raise ValueError("Visual confidence must be between zero and one.")
         if self.status == VisualObservationStatus.ABSTAINED and self.answerable is True:
             raise ValueError("An abstained visual answer cannot be marked answerable.")
+        if (
+            self.kind == VisualObservationKind.DAMAGE_ASSESSMENT
+            and self.status == VisualObservationStatus.ABSTAINED
+            and self.damage_level != DamageLevel.UNKNOWN
+        ):
+            raise ValueError("An abstained damage assessment must remain unknown.")
 
 
 @dataclass(frozen=True, slots=True)

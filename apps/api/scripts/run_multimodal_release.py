@@ -61,11 +61,18 @@ def main() -> int:
     _emit(payload, arguments.output)
     metrics = result.metrics
     print(
-        "MM full release: "
+        "MM full release "
+        f"{result.manifest_version} ({result.manifest_sha256[:12]}), "
+        f"model={result.model['model_id']} "
+        f"({str(result.model['model_digest'])[:12]}), "
+        f"analysis={result.model['analysis_version']}, "
+        f"tokens={result.model['maximum_output_tokens']}, "
+        f"temperature={result.model['temperature']}, seed={result.model['seed']}: "
         f"damage macro-F1={metrics['damage']['macro_f1']:.3f}; "
         f"VQA factual={metrics['vqa']['factual_accuracy']:.3f}; "
         f"association={metrics['association']['association_accuracy']:.3f}; "
         f"map attribution={metrics['map']['attribution_accuracy']:.3f}; "
+        f"runtime={result.evaluation_runtime_seconds:.2f}s; "
         f"capability={'PASS' if result.capability_passed else 'FAIL'}; "
         f"safety={'PASS' if result.safety_passed else 'FAIL'}"
     )
