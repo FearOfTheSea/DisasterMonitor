@@ -28,6 +28,13 @@ APPROVED_ANALYTICAL_TUNING_V1 = AnalyticalTuningParameters(
     multimodal_review_weight=3.0,
     routine_monitoring_weight=1.0,
 )
+DRIFT_ADAPTED_ANALYTICAL_TUNING_V2 = AnalyticalTuningParameters(
+    parameter_set_id="analytical-tuning:v2-drift-adapted",
+    evidence_gap_weight=2.0,
+    material_conflict_weight=5.0,
+    multimodal_review_weight=4.0,
+    routine_monitoring_weight=0.5,
+)
 _CANDIDATES = (
     APPROVED_ANALYTICAL_TUNING_V1,
     AnalyticalTuningParameters(
@@ -51,7 +58,8 @@ class AnalyticalFollowupRanker:
     """Rank an inspectable analytical focus without affecting authority or safety."""
 
     def __init__(
-        self, parameters: AnalyticalTuningParameters = APPROVED_ANALYTICAL_TUNING_V1
+        self,
+        parameters: AnalyticalTuningParameters = DRIFT_ADAPTED_ANALYTICAL_TUNING_V2,
     ) -> None:
         self.parameters = parameters
 
@@ -239,6 +247,16 @@ def load_locked_trajectories(
                 )
             )
     return dataset_version, tuple(trajectories)
+
+
+def evaluate_parameters(
+    parameters: AnalyticalTuningParameters,
+    trajectories: tuple[LearningTrajectory, ...],
+) -> LearningEvaluation:
+    """Evaluate one immutable parameter set on an already locked trajectory set."""
+    if not trajectories:
+        raise ValueError("Learning evaluation requires trajectories.")
+    return _evaluate(parameters, trajectories)
 
 
 def _evaluate(

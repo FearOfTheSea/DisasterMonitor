@@ -82,8 +82,9 @@ The flow is:
     finding/iteration overruns preserve the already-completed default plan. The API
     exposes status, artifact identity, provenance, checklist, bounded rationale, and
     termination reason without specialist scratch work or chain-of-thought. The first
-    highlighted analytical follow-up uses the approved `analytical-tuning:v1` parameter
-    set learned offline from locked, provenance-complete train/dev/test trajectories.
+    highlighted analytical follow-up uses the drift-approved
+    `analytical-tuning:v2-drift-adapted` parameter set, built on the CL-A offline release
+    and checked against locked historical and seeded shifted trajectories.
     The weights affect display priority only; they cannot change the checklist, facts,
     source authority, permissions, safety thresholds, termination, or actions.
 12. When the request contains admitted image bytes, associate each asset to the selected

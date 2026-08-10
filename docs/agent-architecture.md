@@ -112,6 +112,15 @@ set. The weights can only order conflict, gap, multimodal, or routine analytical
 attention; they cannot affect facts, trust, permissions, thresholds, sufficiency,
 termination, or action authority.
 
+Distribution drift is evaluated from typed metadata for new hazards, languages,
+provider schemas, source latency, and image domains. The detector cannot change source
+authority or policy. Adapted display weights require at least 90% seeded-shift recall,
+shifted-set improvement, no critical-safety regression, and no more than one point of
+historical task degradation. A severe missed shift with unsupported-output risk or a
+damaged critical baseline retains the prior `analytical-tuning:v1` parameters in
+non-adaptive safe mode. The current approved set is
+`analytical-tuning:v2-drift-adapted`.
+
 Current answers are composed by application code from `EvidencePacket`. Focused
 casualty answers include event identity, source, freshness, conflict, and explicit
 missing-evidence language; absence is never rendered as zero. The optional API
@@ -184,3 +193,6 @@ The frozen Continuous Learning evaluation begins in
 `tests/evaluation/test_continuous_learning.py`. CL-A measures locked partition and
 provenance separation, paired task improvement, non-compensatory safety/grounding
 gates, rejected-candidate rollback, and the closed non-authority parameter schema.
+CL-B measures seeded drift recall across five shift families, shifted/historical
+performance, authority separation, and non-adaptive safe mode under severe missed drift
+or critical baseline damage.

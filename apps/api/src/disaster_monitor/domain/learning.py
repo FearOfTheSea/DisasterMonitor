@@ -24,6 +24,19 @@ class LearningReleaseStatus(StrEnum):
     REJECTED_NO_SIGNIFICANT_IMPROVEMENT = "rejected_no_significant_improvement"
 
 
+class DriftType(StrEnum):
+    NEW_HAZARD = "new_hazard"
+    LANGUAGE = "language"
+    PROVIDER_SCHEMA = "provider_schema"
+    SOURCE_LATENCY = "source_latency"
+    IMAGE_DOMAIN = "image_domain"
+
+
+class DriftAdaptationStatus(StrEnum):
+    ADAPTED = "adapted"
+    NON_ADAPTIVE_SAFE_MODE = "non_adaptive_safe_mode"
+
+
 @dataclass(frozen=True, slots=True)
 class AnalyticalTuningParameters:
     parameter_set_id: str
@@ -159,3 +172,95 @@ class OfflineLearningRelease:
                 )
         elif self.approved_parameters != self.baseline_parameters:
             raise ValueError("Rejected learning release must retain prior parameters.")
+
+
+@dataclass(frozen=True, slots=True)
+class DriftObservation:
+    observation_id: str
+    drift_type: DriftType
+    expected_drift: bool
+    severity: float
+    unknown_hazard: bool
+    unknown_language: bool
+    unknown_provider_schema: bool
+    source_latency_ratio: float
+    image_domain_distance: float
+    unsupported_claim_if_undetected: bool
+    provenance_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.observation_id or not self.provenance_ids:
+            raise ValueError("Drift observation requires identity and provenance.")
+        if not 0 <= self.severity <= 1:
+            raise ValueError("Drift severity must be bounded.")
+        if self.source_latency_ratio < 0 or not 0 <= self.image_domain_distance <= 1:
+            raise ValueError("Drift observation features must be bounded.")
+
+
+@dataclass(frozen=True, slots=True)
+class DriftAssessment:
+    observation_id: str
+    drift_type: DriftType
+    detected: bool
+    severe: bool
+    signal_ids: tuple[str, ...]
+    provenance_ids: tuple[str, ...]
+    can_change_source_authority: bool = False
+    can_change_safety_policy: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.observation_id or not self.provenance_ids:
+            raise ValueError("Drift assessment requires observation provenance.")
+        if self.detected and not self.signal_ids:
+            raise ValueError("Detected drift requires visible typed signals.")
+        if self.can_change_source_authority or self.can_change_safety_policy:
+            raise ValueError("Drift detection cannot change authority or policy.")
+
+
+@dataclass(frozen=True, slots=True)
+class DriftAdaptationRelease:
+    release_id: str
+    dataset_version: str
+    status: DriftAdaptationStatus
+    prior_parameters: AnalyticalTuningParameters
+    candidate_parameters: AnalyticalTuningParameters
+    approved_parameters: AnalyticalTuningParameters
+    assessments: tuple[DriftAssessment, ...]
+    drift_recall: float
+    shifted_baseline_evaluation: LearningEvaluation
+    shifted_candidate_evaluation: LearningEvaluation
+    historical_baseline_evaluation: LearningEvaluation
+    historical_candidate_evaluation: LearningEvaluation
+    safe_mode_reason: str | None
+    provenance_ids: tuple[str, ...]
+    reversible: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.release_id or not self.dataset_version or not self.provenance_ids:
+            raise ValueError("Drift adaptation requires stable release provenance.")
+        if not 0 <= self.drift_recall <= 1 or not self.reversible:
+            raise ValueError("Drift adaptation must be bounded and reversible.")
+        historical_degradation = (
+            self.historical_baseline_evaluation.task_accuracy
+            - self.historical_candidate_evaluation.task_accuracy
+        )
+        safety_regression = (
+            self.historical_candidate_evaluation.critical_safety_rate
+            < self.historical_baseline_evaluation.critical_safety_rate
+        )
+        if self.status == DriftAdaptationStatus.ADAPTED:
+            if (
+                self.approved_parameters != self.candidate_parameters
+                or self.drift_recall < 0.90
+                or self.shifted_candidate_evaluation.task_accuracy
+                <= self.shifted_baseline_evaluation.task_accuracy
+                or historical_degradation > 0.01
+                or safety_regression
+                or self.safe_mode_reason is not None
+            ):
+                raise ValueError("Approved drift adaptation failed its release gate.")
+        elif (
+            self.approved_parameters != self.prior_parameters
+            or self.safe_mode_reason is None
+        ):
+            raise ValueError("Safe mode must retain prior approved parameters.")
