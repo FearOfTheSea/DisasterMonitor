@@ -228,7 +228,11 @@ export class AssistantClient {
       (item.coordination_final_rationale == null ||
         typeof item.coordination_final_rationale === 'string') &&
       (item.coordination_evidence_ids == null ||
-        this.isStringArray(item.coordination_evidence_ids))
+        this.isStringArray(item.coordination_evidence_ids)) &&
+      (item.coordination_analytical_focus == null ||
+        typeof item.coordination_analytical_focus === 'string') &&
+      (item.coordination_analytical_parameter_set_id == null ||
+        typeof item.coordination_analytical_parameter_set_id === 'string')
     );
   }
 }

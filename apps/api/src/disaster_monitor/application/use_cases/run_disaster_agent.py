@@ -218,4 +218,10 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
             supervision.final_rationale if supervision else None
         ),
         coordination_evidence_ids=(supervision.evidence_ids if supervision else ()),
+        coordination_analytical_focus=(
+            supervision.analytical_focus if supervision else None
+        ),
+        coordination_analytical_parameter_set_id=(
+            supervision.analytical_parameter_set_id if supervision else None
+        ),
     )

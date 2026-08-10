@@ -102,6 +102,16 @@ supervision ID, status, required/missing keys, evidence IDs, final templated rat
 and termination reason are user-inspectable; prompts, scratch work, and chain-of-thought
 are neither stored nor returned.
 
+The supervisor's first analytical follow-up focus is the only learned production
+parameter at CL-A. `OfflineTrajectoryLearner` selects bounded focus weights on locked
+train/dev partitions and evaluates once on the locked test partition. Release requires
+a significant paired task improvement, no critical-safety regression, and at most a
+0.5 percentage-point grounding regression. Dataset/provenance identities and partition
+hashes are stored in the release artifact. Rejection keeps the prior approved parameter
+set. The weights can only order conflict, gap, multimodal, or routine analytical
+attention; they cannot affect facts, trust, permissions, thresholds, sufficiency,
+termination, or action authority.
+
 Current answers are composed by application code from `EvidencePacket`. Focused
 casualty answers include event identity, source, freshness, conflict, and explicit
 missing-evidence language; absence is never rendered as zero. The optional API
@@ -169,3 +179,8 @@ multimodal packets, and single-supervisor fallback under loop, policy, provenanc
 deadlock attacks. CO-C measures pass^8 on eligible internal episodes, correct
 sufficiency/termination under outages and adversarial specialists, zero critical policy
 violations, budget fallback, and inspectable final artifacts without hidden reasoning.
+
+The frozen Continuous Learning evaluation begins in
+`tests/evaluation/test_continuous_learning.py`. CL-A measures locked partition and
+provenance separation, paired task improvement, non-compensatory safety/grounding
+gates, rejected-candidate rollback, and the closed non-authority parameter schema.

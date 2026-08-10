@@ -128,6 +128,8 @@ describe('AssistantPanel', () => {
                 coordination_termination_reason: 'sufficient_analytical_end_state',
                 coordination_final_rationale: 'The bounded checklist is complete.',
                 coordination_evidence_ids: ['physical-event:fixture'],
+                coordination_analytical_focus: 'material_conflicts',
+                coordination_analytical_parameter_set_id: 'analytical-tuning:v1',
               },
             },
           },
@@ -162,7 +164,7 @@ describe('AssistantPanel', () => {
       'completed / 5 findings / 1 iteration(s)',
     );
     expect(screen.getByText(/Coordination supervisor:/)).toHaveTextContent(
-      'autonomous_complete / sufficient / sufficient_analytical_end_state',
+      'autonomous_complete / sufficient / sufficient_analytical_end_state / focus material_conflicts / analytical-tuning:v1',
     );
     expect(screen.getByText('The bounded checklist is complete.')).toBeInTheDocument();
     expect(

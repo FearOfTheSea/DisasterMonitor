@@ -81,7 +81,11 @@ The flow is:
     outages, missing findings, policy/provenance violations, deadlocks, and handoff/
     finding/iteration overruns preserve the already-completed default plan. The API
     exposes status, artifact identity, provenance, checklist, bounded rationale, and
-    termination reason without specialist scratch work or chain-of-thought.
+    termination reason without specialist scratch work or chain-of-thought. The first
+    highlighted analytical follow-up uses the approved `analytical-tuning:v1` parameter
+    set learned offline from locked, provenance-complete train/dev/test trajectories.
+    The weights affect display priority only; they cannot change the checklist, facts,
+    source authority, permissions, safety thresholds, termination, or actions.
 12. When the request contains admitted image bytes, associate each asset to the selected
     physical event using explicit hazard, country, capture-time, capture-role, event-ID,
     and WGS84 footprint metadata. Only uniquely associated assets enter bounded local

@@ -269,6 +269,12 @@ function DisasterReportView({
               {report.investigation.coordination_missing_finding_keys?.length
                 ? ` / missing ${report.investigation.coordination_missing_finding_keys.join(', ')}`
                 : ''}
+              {report.investigation.coordination_analytical_focus
+                ? ` / focus ${report.investigation.coordination_analytical_focus}`
+                : ''}
+              {report.investigation.coordination_analytical_parameter_set_id
+                ? ` / ${report.investigation.coordination_analytical_parameter_set_id}`
+                : ''}
             </p>
           )}
           {report.investigation.coordination_final_rationale && (

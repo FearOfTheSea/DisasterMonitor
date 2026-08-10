@@ -8,6 +8,9 @@ from disaster_monitor.application.services.collaborative_investigation import (
     single_supervisor_fallback,
     validate_collaborative_investigation,
 )
+from disaster_monitor.application.services.offline_learning import (
+    AnalyticalFollowupRanker,
+)
 from disaster_monitor.domain.coordination import (
     CollaborativeInvestigationStatus,
     CoordinationSupervision,
@@ -16,7 +19,11 @@ from disaster_monitor.domain.coordination import (
     SpecialistHandoff,
 )
 from disaster_monitor.domain.decision import DecisionSupportArtifact
-from disaster_monitor.domain.disaster import EvidenceDisposition, EvidenceWorldState
+from disaster_monitor.domain.disaster import (
+    EvidenceAvailability,
+    EvidenceDisposition,
+    EvidenceWorldState,
+)
 from disaster_monitor.domain.multimodal import MultimodalEvidenceState
 
 
@@ -30,6 +37,7 @@ class CoordinationSupervisor:
         max_handoffs: int = 4,
         max_findings: int = 24,
         max_iterations: int = 2,
+        focus_ranker: AnalyticalFollowupRanker | None = None,
     ) -> None:
         if min(max_handoffs, max_findings, max_iterations) <= 0:
             raise ValueError("Coordination supervisor budgets must be positive.")
@@ -37,6 +45,7 @@ class CoordinationSupervisor:
         self._max_handoffs = max_handoffs
         self._max_findings = max_findings
         self._max_iterations = max_iterations
+        self._focus_ranker = focus_ranker or AnalyticalFollowupRanker()
 
     def run(
         self,
@@ -92,6 +101,10 @@ class CoordinationSupervisor:
             )
 
         required = _required_findings(state, decision_support, multimodal_state)
+        focus_signals = _analytical_focus_signals(
+            state, decision_support, multimodal_state
+        )
+        analytical_focus = self._focus_ranker.select(**focus_signals)
         actual = {item.finding_key for item in collaboration.findings}
         missing = tuple(key for key in required if key not in actual)
         sufficient = (
@@ -108,7 +121,8 @@ class CoordinationSupervisor:
             rationale = (
                 "The bounded specialist artifacts satisfy every declared finding key; "
                 "coordination terminated without changing evidence, permissions, or "
-                "safety policy."
+                f"safety policy. The analytical follow-up focus is "
+                f"{analytical_focus.value}."
             )
         else:
             status = CoordinationSupervisorStatus.DEFAULT_PLAN_FALLBACK
@@ -131,6 +145,8 @@ class CoordinationSupervisor:
                 reason,
                 *required,
                 *missing,
+                analytical_focus.value,
+                self._focus_ranker.parameters.parameter_set_id,
             )
         )
         supervision = CoordinationSupervision(
@@ -155,12 +171,17 @@ class CoordinationSupervisor:
             max_findings=self._max_findings,
             max_iterations=self._max_iterations,
             safety_policy_fingerprint=SAFETY_POLICY_FINGERPRINT,
+            analytical_focus=analytical_focus.value,
+            analytical_parameter_set_id=(
+                self._focus_ranker.parameters.parameter_set_id
+            ),
         )
         validate_coordination_supervision(
             supervision,
             state=state,
             decision_support=decision_support,
             multimodal_state=multimodal_state,
+            focus_ranker=self._focus_ranker,
         )
         return supervision
 
@@ -171,6 +192,7 @@ def validate_coordination_supervision(
     state: EvidenceWorldState,
     decision_support: DecisionSupportArtifact | None,
     multimodal_state: MultimodalEvidenceState | None,
+    focus_ranker: AnalyticalFollowupRanker | None = None,
 ) -> None:
     if supervision.evidence_state_version != state.state_version:
         raise ValueError("Coordination supervisor escaped canonical evidence state.")
@@ -185,6 +207,16 @@ def validate_coordination_supervision(
     required = _required_findings(state, decision_support, multimodal_state)
     if supervision.required_finding_keys != required:
         raise ValueError("Coordination supervisor changed its sufficiency checklist.")
+    resolved_ranker = focus_ranker or AnalyticalFollowupRanker()
+    expected_focus = resolved_ranker.select(
+        **_analytical_focus_signals(state, decision_support, multimodal_state)
+    )
+    if (
+        supervision.analytical_focus != expected_focus.value
+        or supervision.analytical_parameter_set_id
+        != resolved_ranker.parameters.parameter_set_id
+    ):
+        raise ValueError("Coordination supervisor escaped approved analytical tuning.")
     known_evidence, known_sources = _known_provenance(
         state, decision_support, multimodal_state
     )
@@ -204,6 +236,8 @@ def render_coordination_supervision(supervision: CoordinationSupervision) -> str
     return (
         f"Supervisor status: {supervision.status.value}; sufficiency checklist: "
         f"{checklist}; termination: {supervision.termination_reason}. "
+        f"Focus: {supervision.analytical_focus} "
+        f"({supervision.analytical_parameter_set_id}). "
         f"{supervision.final_rationale}"
     )
 
@@ -227,6 +261,31 @@ def _required_findings(
     if multimodal_state is not None:
         keys.extend(("multimodal_provenance", "visual_observation_count"))
     return tuple(dict.fromkeys(keys))
+
+
+def _analytical_focus_signals(
+    state: EvidenceWorldState,
+    decision_support: DecisionSupportArtifact | None,
+    multimodal_state: MultimodalEvidenceState | None,
+) -> dict[str, float]:
+    gap_present = (
+        bool(decision_support.evidence_gaps)
+        if decision_support is not None
+        else any(
+            claim.availability == EvidenceAvailability.ABSENT for claim in state.claims
+        )
+    )
+    conflict_present = any(
+        item.disposition == EvidenceDisposition.CONFLICTING
+        for claim in state.claims
+        for item in claim.history
+    )
+    return {
+        "evidence_gap_signal": float(gap_present),
+        "material_conflict_signal": float(conflict_present),
+        "multimodal_signal": float(multimodal_state is not None),
+        "routine_signal": 1.0,
+    }
 
 
 def _result_provenance(

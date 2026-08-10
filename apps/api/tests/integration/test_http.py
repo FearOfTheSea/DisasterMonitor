@@ -619,6 +619,16 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     )
     assert body["investigation"]["coordination_final_rationale"]
     assert body["investigation"]["coordination_evidence_ids"]
+    assert body["investigation"]["coordination_analytical_focus"] in {
+        "evidence_gaps",
+        "material_conflicts",
+        "multimodal_review",
+        "routine_monitoring",
+    }
+    assert (
+        body["investigation"]["coordination_analytical_parameter_set_id"]
+        == "analytical-tuning:v1"
+    )
     assert model.requests == []
 
 

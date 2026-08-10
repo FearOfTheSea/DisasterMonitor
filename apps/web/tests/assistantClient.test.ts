@@ -121,6 +121,8 @@ describe('AssistantClient', () => {
             coordination_termination_reason: 'sufficient_analytical_end_state',
             coordination_final_rationale: 'The bounded checklist is complete.',
             coordination_evidence_ids: ['physical-event:fixture'],
+            coordination_analytical_focus: 'material_conflicts',
+            coordination_analytical_parameter_set_id: 'analytical-tuning:v1',
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
