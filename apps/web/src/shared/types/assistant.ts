@@ -52,6 +52,7 @@ export type InvestigationSummary = {
 };
 
 export type AssistantSource = {
+  source_id: string;
   publisher: string;
   title: string;
   canonical_url: string;

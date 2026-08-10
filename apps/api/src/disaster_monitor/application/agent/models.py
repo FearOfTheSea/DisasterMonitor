@@ -215,3 +215,4 @@ class SourceDescriptor:
     registered_tool_names: tuple[str, ...]
     provider_registration_name: str
     implementation_status: str
+    allowed_hosts: tuple[str, ...] = ()

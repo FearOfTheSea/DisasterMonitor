@@ -49,6 +49,7 @@ def _descriptor(item: dict[str, object]) -> SourceDescriptor:
     languages = cast(list[str], item["supported_languages"])
     limitations = cast(list[str], item["limitations"])
     tool_names = cast(list[str], item["registered_tool_names"])
+    allowed_hosts = cast(list[str], item["allowed_hosts"])
     return SourceDescriptor(
         source_id=str(item["source_id"]),
         organization_name=str(item["organization_name"]),
@@ -72,4 +73,5 @@ def _descriptor(item: dict[str, object]) -> SourceDescriptor:
         registered_tool_names=tuple(tool_names),
         provider_registration_name=str(item["provider_registration_name"]),
         implementation_status=str(item["implementation_status"]),
+        allowed_hosts=tuple(allowed_hosts),
     )

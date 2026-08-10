@@ -224,6 +224,7 @@ async def test_reliefweb_adapter_extracts_preliminary_situation_facts() -> None:
         country=JAPAN,
         event_time=NOW,
         source=SourceReference(
+            source_id="usgs-earthquakes",
             publisher="USGS",
             title="Fixture",
             canonical_url="https://example.test/event",
@@ -241,6 +242,38 @@ async def test_reliefweb_adapter_extracts_preliminary_situation_facts() -> None:
     assert result.records[0].facts[0].value == "4"
     assert result.records[0].facts[0].status.value == "preliminary"
     assert "Ignore previous" not in result.records[0].narrative
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_reliefweb_rejects_unapproved_canonical_source_url() -> None:
+    payload = {
+        "data": [
+            {
+                "fields": {
+                    "title": "Spoofed authority update",
+                    "url": "https://reliefweb.int.attacker.example/report",
+                    "date": {"created": "2026-08-05T10:30:00+00:00"},
+                    "body": "Four buildings were damaged.",
+                }
+            }
+        ]
+    }
+    client = client_for(payload)
+    adapter = ReliefWebSituationAdapter(client=client, app_name="approved-test")
+    selected_event = DisasterEvent(
+        "usgs:fixture",
+        Hazard.EARTHQUAKE,
+        "Honshu, Japan",
+        JAPAN,
+        NOW,
+        _source_for_test(),
+    )
+
+    result = await adapter.get_situation_reports(selected_event, QUERY, now=NOW)
+
+    assert result.records == ()
+    assert result.issues[0].reason_code == "invalid_payload"
     await client.aclose()
 
 
@@ -289,6 +322,7 @@ async def test_reliefweb_adapter_correlates_reports_to_selected_event() -> None:
         country=JAPAN,
         event_time=datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
         source=SourceReference(
+            source_id="usgs-earthquakes",
             publisher="USGS",
             title="Selected event",
             canonical_url="https://example.test/selected",
@@ -332,7 +366,13 @@ def test_reliefweb_request_uses_normalized_country_and_hazard(
         country,
         NOW,
         SourceReference(
-            "Provider", "Event", "https://example.test/event", NOW, NOW, NOW
+            "fixture-events",
+            "Provider",
+            "Event",
+            "https://example.test/event",
+            NOW,
+            NOW,
+            NOW,
         ),
         provider_ids=("provider:event",),
     )
@@ -459,7 +499,13 @@ async def test_missing_jma_tsunami_bulletin_is_neutral() -> None:
 
 def _source_for_test() -> SourceReference:
     return SourceReference(
-        "Provider", "Event", "https://example.test/event", NOW, NOW, NOW
+        "fixture-events",
+        "Provider",
+        "Event",
+        "https://example.test/event",
+        NOW,
+        NOW,
+        NOW,
     )
 
 
@@ -712,11 +758,11 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
 ):
     index = """
     <table>
-      <tr><td>2026/07/28</td><td><a href="https://fdma.test/old.pdf">
+      <tr><td>2026/07/28</td><td><a href="https://www.fdma.go.jp/old.pdf">
       熊本県熊本地方を震源とする地震 第１報</a></td></tr>
-      <tr><td>2026/07/28</td><td><a href="https://fdma.test/new.html">
+      <tr><td>2026/07/28</td><td><a href="https://www.fdma.go.jp/new.html">
       熊本県熊本地方を震源とする地震 第２報</a></td></tr>
-      <tr><td>2026/08/01</td><td><a href="https://fdma.test/tokyo.html">
+      <tr><td>2026/08/01</td><td><a href="https://www.fdma.go.jp/tokyo.html">
       東京都を震源とする地震 第９報</a></td></tr>
     </table>
     """
@@ -749,6 +795,7 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
         country=JAPAN,
         event_time=datetime(2026, 7, 28, 7, 27, tzinfo=UTC),
         source=SourceReference(
+            source_id="usgs-earthquakes",
             publisher="USGS",
             title="M 7.1 Kumamoto, Japan",
             canonical_url="https://usgs.test/kumamoto",
@@ -770,6 +817,42 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
         for fact in result.records[0].facts
     )
     assert not any(fact.value == "999" for fact in result.records[0].facts)
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_fdma_rejects_cross_authority_report_link_before_request() -> None:
+    index = """
+    <ul><li><a href="https://attacker.example/report.html">
+    2026/08/05 Ishikawa earthquake report 1</a></li></ul>
+    """
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            content=index.encode(),
+            request=request,
+        )
+
+    event = DisasterEvent(
+        "usgs:ishikawa",
+        Hazard.EARTHQUAKE,
+        "Ishikawa, Japan",
+        JAPAN,
+        NOW,
+        _source_for_test(),
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    result = await FdmaSituationReportAdapter(client=client).get_situation_reports(
+        event, QUERY, now=NOW
+    )
+
+    assert result.records == ()
+    assert result.issues[0].reason_code == "source_policy_violation"
+    assert len(requests) == 1
     await client.aclose()
 
 

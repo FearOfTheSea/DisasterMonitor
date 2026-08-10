@@ -14,8 +14,14 @@ from disaster_monitor.application.ports.disaster_information import (
     SituationReportProvider,
 )
 from disaster_monitor.application.services.provider_registry import (
+    ProviderRegistration,
     ProviderRegistry,
     ProviderRole,
+)
+from disaster_monitor.application.services.source_evidence_policy import (
+    SourceEvidencePolicyError,
+    validate_event_evidence,
+    validate_situation_evidence,
 )
 from disaster_monitor.domain.disaster import DisasterEvent, SituationReport
 from disaster_monitor.infrastructure.disaster.errors import DisasterProviderError
@@ -32,6 +38,7 @@ _SAFE_MESSAGES = {
     "malformed_json": "The provider returned malformed JSON.",
     "invalid_payload": "The provider returned an unsupported payload.",
     "empty_result": "The provider returned no matching records.",
+    "source_policy_violation": "The provider record violated source policy.",
 }
 
 
@@ -45,6 +52,31 @@ def _issue(provider: str, error: DisasterProviderError) -> ProviderIssue:
         retryable=failure.retryable,
         http_status=failure.http_status,
         detail=failure.detail,
+    )
+
+
+def _policy_issue(provider: str, error: SourceEvidencePolicyError) -> ProviderIssue:
+    return ProviderIssue(
+        provider=provider,
+        message=f"{provider}: {_SAFE_MESSAGES['source_policy_violation']}",
+        reason_code="source_policy_violation",
+        detail=str(error),
+    )
+
+
+def _safe_batch_issues(
+    provider: str, value: tuple[object, ...]
+) -> tuple[ProviderIssue, ...]:
+    issues = tuple(item for item in value if isinstance(item, ProviderIssue))
+    if len(issues) == len(value):
+        return issues
+    return (
+        *issues,
+        ProviderIssue(
+            provider,
+            f"{provider}: {_SAFE_MESSAGES['invalid_payload']}",
+            reason_code="invalid_payload",
+        ),
     )
 
 
@@ -79,15 +111,17 @@ class CompositeDisasterEventProvider:
         records: list[DisasterEvent] = []
         issues: list[ProviderIssue] = []
         self.last_record_counts = {}
-        providers = self._providers
+        selected: tuple[
+            tuple[ProviderRegistration | None, DisasterEventProvider], ...
+        ] = tuple((None, provider) for provider in self._providers)
         if self._registry is not None:
-            providers = tuple(
-                cast(DisasterEventProvider, registration.provider)
+            selected = tuple(
+                (registration, cast(DisasterEventProvider, registration.provider))
                 for registration in self._registry.select(
                     query, ProviderRole.EVENT_DISCOVERY
                 ).registrations
             )
-        for provider in providers:
+        for registration, provider in selected:
             name = getattr(provider, "provider_name", provider.__class__.__name__)
             try:
                 result = await provider.find_recent_events(query, now=now)
@@ -96,12 +130,34 @@ class CompositeDisasterEventProvider:
                     if isinstance(result, ProviderBatch)
                     else ProviderBatch(tuple(result))
                 )
-                records.extend(batch.records)
-                issues.extend(batch.issues)
-                self.last_record_counts[name] = len(batch.records)
+                accepted: list[DisasterEvent] = []
+                for record in batch.records:
+                    if registration is None:
+                        if not isinstance(record, DisasterEvent):
+                            raise SourceEvidencePolicyError(
+                                "The event provider returned a wrong record type."
+                            )
+                        accepted.append(record)
+                        continue
+                    try:
+                        accepted.append(
+                            validate_event_evidence(
+                                record,
+                                query,
+                                source_id=registration.source_id or "",
+                                allowed_hosts=registration.allowed_hosts,
+                            )
+                        )
+                    except SourceEvidencePolicyError as error:
+                        issues.append(_policy_issue(name, error))
+                records.extend(accepted)
+                issues.extend(_safe_batch_issues(name, tuple(batch.issues)))
+                self.last_record_counts[name] = len(accepted)
             except Exception as error:
                 if isinstance(error, DisasterProviderError):
                     issues.append(_issue(name, error))
+                elif isinstance(error, SourceEvidencePolicyError):
+                    issues.append(_policy_issue(name, error))
                 else:
                     issues.append(
                         ProviderIssue(
@@ -156,15 +212,20 @@ class CompositeSituationReportProvider:
         records: list[SituationReport] = []
         issues: list[ProviderIssue] = []
         self.last_record_counts = {}
-        providers = self._providers
+        selected: tuple[
+            tuple[ProviderRegistration | None, SituationReportProvider], ...
+        ] = tuple((None, provider) for provider in self._providers)
         if self._registry is not None:
-            providers = tuple(
-                cast(SituationReportProvider, registration.provider)
+            selected = tuple(
+                (
+                    registration,
+                    cast(SituationReportProvider, registration.provider),
+                )
                 for registration in self._registry.select(
                     query, ProviderRole.SITUATION_EVIDENCE, event=event
                 ).registrations
             )
-        for provider in providers:
+        for registration, provider in selected:
             name = getattr(provider, "provider_name", provider.__class__.__name__)
             try:
                 result = await provider.get_situation_reports(event, query, now=now)
@@ -173,12 +234,34 @@ class CompositeSituationReportProvider:
                     if isinstance(result, ProviderBatch)
                     else ProviderBatch(tuple(result))
                 )
-                records.extend(batch.records)
-                issues.extend(batch.issues)
-                self.last_record_counts[name] = len(batch.records)
+                accepted: list[SituationReport] = []
+                for record in batch.records:
+                    if registration is None:
+                        if not isinstance(record, SituationReport):
+                            raise SourceEvidencePolicyError(
+                                "The situation provider returned a wrong record type."
+                            )
+                        accepted.append(record)
+                        continue
+                    try:
+                        accepted.append(
+                            validate_situation_evidence(
+                                record,
+                                query,
+                                source_id=registration.source_id or "",
+                                allowed_hosts=registration.allowed_hosts,
+                            )
+                        )
+                    except SourceEvidencePolicyError as error:
+                        issues.append(_policy_issue(name, error))
+                records.extend(accepted)
+                issues.extend(_safe_batch_issues(name, tuple(batch.issues)))
+                self.last_record_counts[name] = len(accepted)
             except Exception as error:
                 if isinstance(error, DisasterProviderError):
                     issues.append(_issue(name, error))
+                elif isinstance(error, SourceEvidencePolicyError):
+                    issues.append(_policy_issue(name, error))
                 else:
                     issues.append(
                         ProviderIssue(

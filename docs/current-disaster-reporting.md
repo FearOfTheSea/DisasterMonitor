@@ -82,6 +82,11 @@ configuration limitation rather than being misreported as a network failure. Eac
 selected source can fail independently; partial results expose a safe warning rather
 than hiding the failure. Provider diagnostics
 retain a stable reason code, retryability, and safe HTTP status for live diagnostics.
+Each registration also owns its allowed HTTPS hosts. The shared transport rejects a
+target before making a request when it is outside that set, and the composite rejects
+normalized records whose stable source ID or canonical source URL does not match the
+registration. Startup validation keeps the packaged catalog, registration, and adapter
+source policies aligned.
 No weather,
 flood, satellite, geocoding, news, authentication, or map-overlay provider is
 implemented by this feature.
@@ -98,7 +103,8 @@ Evidence precedence uses adapter-assigned `SourceAuthority`: national authority,
 scientific authority, humanitarian aggregator, then secondary. Within that ordering,
 effective source time and typed fact status break ties. Publisher-name substring
 matching is not used. Every normalized fact retains its source, canonical URL, event
-identifier, and the available event, publication, update, and retrieval timestamps.
+identifier, stable source ID, and the available event, publication, update, and retrieval
+timestamps.
 Official JMA/FDMA and scientific USGS records have higher priority than supplementary
 reports, and newer official figures replace older official figures for the same claim. Different
 values are retained as a conflict warning rather than silently discarded.
@@ -132,6 +138,26 @@ The default unit, adapter, HTTP, and system tests use deterministic fixtures and
 do not require network access, Ollama, or cloud credentials. The Playwright
 system test starts fake JMA and ReliefWeb providers and submits the exact target
 request.
+
+## Source Intelligence evaluation
+
+The executable SI gates run with:
+
+```powershell
+uv run --directory apps/api pytest -q tests/evaluation
+```
+
+The suite uses the frozen files under
+`apps/api/tests/evaluation/fixtures/source_intelligence/`. It covers the packaged
+coverage matrix, event-conditioned selection, source-policy mutations, provider fault
+episodes, revision and missing-value outcomes, and adversarial source-candidate cases.
+It is collected by the normal backend test command and therefore runs in CI.
+
+Candidate assessment consumes structured metadata only. `SourceScout` infers supported
+roles, screens unsafe or misleading identities, and writes records to a candidate-only
+store. Those records cannot enter the trusted catalog or disaster evidence types, and a
+positive assessment remains pending human approval. Online crawling and automatic
+catalog promotion are not connected.
 
 ## Optional live-provider smoke test
 

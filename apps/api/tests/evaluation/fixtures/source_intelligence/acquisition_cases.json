@@ -1,0 +1,10 @@
+{
+  "cases": [
+    {"kind": "timeout_with_recovery", "count": 100, "obtainable": true},
+    {"kind": "malformed_with_recovery", "count": 60, "obtainable": true},
+    {"kind": "partial_source_loss", "count": 40, "obtainable": true},
+    {"kind": "complete_outage", "count": 20, "obtainable": false},
+    {"kind": "contradictory_revision", "count": 20, "obtainable": true},
+    {"kind": "missing_value", "count": 20, "obtainable": true}
+  ]
+}

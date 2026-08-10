@@ -51,6 +51,7 @@ def source(
     url: str | None = None,
 ) -> SourceReference:
     return SourceReference(
+        source_id=f"test-{publisher.lower().replace(' ', '-')}",
         publisher=publisher,
         title=title,
         canonical_url=url or f"https://example.test/{publisher.lower()}",

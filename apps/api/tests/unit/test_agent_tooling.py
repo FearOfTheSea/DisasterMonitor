@@ -165,7 +165,13 @@ async def test_new_country_and_hazard_provider_is_discovered_without_agent_branc
 ):
     country = Country("TST", "Testland", (), GeographicArea(0, 10, 0, 10), "UTC")
     source = SourceReference(
-        "Test authority", "Flood event", "https://example.test/flood", NOW, NOW, NOW
+        "testland-floods",
+        "Test authority",
+        "Flood event",
+        "https://example.test/flood",
+        NOW,
+        NOW,
+        NOW,
     )
     event = DisasterEvent(
         "test:flood-1", Hazard.FLOOD, "Test City", country, NOW, source
@@ -253,7 +259,13 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     japan = catalog.get_by_alpha3("JPN")
     assert japan is not None
     source = SourceReference(
-        "JMA", "Event", "https://example.test/event", NOW, NOW, NOW
+        "jma-rolling-earthquakes",
+        "JMA",
+        "Event",
+        "https://example.test/event",
+        NOW,
+        NOW,
+        NOW,
     )
     event = DisasterEvent(
         "jma:fallback", Hazard.EARTHQUAKE, "Ishikawa, Japan", japan, NOW, source
@@ -361,7 +373,15 @@ def test_provider_source_consistency_detects_missing_metadata() -> None:
         "Testland",
         country,
         NOW,
-        SourceReference("Test", "Event", "https://example.test/event", NOW, NOW, NOW),
+        SourceReference(
+            "not-in-catalog",
+            "Test",
+            "Event",
+            "https://example.test/event",
+            NOW,
+            NOW,
+            NOW,
+        ),
     )
     registry = ProviderRegistry(
         (

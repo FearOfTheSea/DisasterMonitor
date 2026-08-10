@@ -68,6 +68,7 @@ describe('AssistantClient', () => {
           retrieval_time: '2026-08-05T12:00:00Z',
           sources: [
             {
+              source_id: 'jma-rolling-earthquakes',
               publisher: 'JMA',
               title: 'Fixture event',
               canonical_url: 'https://example.test/event',

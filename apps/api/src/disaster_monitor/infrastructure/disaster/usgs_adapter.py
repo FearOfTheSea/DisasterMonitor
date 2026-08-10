@@ -23,7 +23,10 @@ from disaster_monitor.domain.disaster import (
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
-from disaster_monitor.infrastructure.disaster.http import get_json
+from disaster_monitor.infrastructure.disaster.http import (
+    get_json,
+    validate_network_target,
+)
 
 USGS_QUERY_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
@@ -86,6 +89,8 @@ class UsgsEarthquakeAdapter:
     """Find country-validated earthquake candidates from USGS GeoJSON."""
 
     provider_name = "USGS"
+    source_id = "usgs-earthquakes"
+    allowed_hosts = frozenset({"earthquake.usgs.gov"})
 
     def __init__(
         self,
@@ -143,10 +148,13 @@ class UsgsEarthquakeAdapter:
                 detail=f"feature[{index}] coordinate failed country validation",
             )
         url = _text(properties.get("url"))
-        if not url.startswith("https://"):
+        try:
+            validate_network_target(url, self.allowed_hosts)
+        except DisasterProviderResponseError:
             url = f"https://earthquake.usgs.gov/earthquakes/eventpage/{event_id}"
         updated_at = normalize_timestamp(properties.get("updated"))
         source = SourceReference(
+            source_id=self.source_id,
             publisher="United States Geological Survey",
             title=_text(properties.get("title")) or "USGS earthquake event",
             canonical_url=url,
@@ -188,6 +196,7 @@ class UsgsEarthquakeAdapter:
         payload = await get_json(
             self._client,
             USGS_QUERY_URL,
+            allowed_hosts=self.allowed_hosts,
             params=build_usgs_params(query, now=now),
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,

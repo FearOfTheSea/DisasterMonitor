@@ -7,9 +7,9 @@ when no impact source supports it. If no event provider supports the combination
 API returns `current_disaster_coverage_unavailable` and makes no live factual claim.
 
 A versioned source-intelligence catalog links every executable provider to a stable
-`source_id` and a maintained playbook under `docs/sources/`. Source listing joins this
-semantic metadata with capability selection; catalog data never dynamically imports or
-constructs providers.
+`source_id`, exact HTTPS authorities, and a maintained playbook under `docs/sources/`.
+Source listing joins this semantic metadata with capability selection; catalog data
+never dynamically imports or constructs providers.
 
 ## Current live capability matrix
 
@@ -30,8 +30,9 @@ event-discovery provider for those hazards is registered. ReliefWeb alone cannot
 an event and is never treated as an official national total.
 
 Image retrieval, satellite/aerial imagery, raster/vector COP products,
-agent-controlled map layers, CARTO, TerraLabo, and dynamic online source discovery are
-explicitly unsupported Phase 4 capabilities.
+agent-controlled map layers, CARTO, TerraLabo, and online source crawling are explicitly
+unsupported Phase 4 capabilities. Structured source-candidate metadata can be screened
+into a separate review queue, but it cannot alter this matrix or contribute evidence.
 
 ## Extension procedure
 

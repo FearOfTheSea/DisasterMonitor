@@ -61,6 +61,7 @@ class InvestigationResponse(BaseModel):
 class SourceResponse(BaseModel):
     """Source metadata exposed to the browser."""
 
+    source_id: str
     publisher: str
     title: str
     canonical_url: str

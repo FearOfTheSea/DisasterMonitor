@@ -45,6 +45,7 @@ class ProviderRegistration:
     source_id: str | None = None
     configured: bool = True
     event_eligibility: Callable[[DisasterEvent], bool] | None = None
+    allowed_hosts: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)

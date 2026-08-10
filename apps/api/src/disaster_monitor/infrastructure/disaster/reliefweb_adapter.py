@@ -30,7 +30,11 @@ from disaster_monitor.domain.disaster import (
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
-from disaster_monitor.infrastructure.disaster.http import HttpParam, get_json
+from disaster_monitor.infrastructure.disaster.http import (
+    HttpParam,
+    get_json,
+    validate_network_target,
+)
 
 RELIEFWEB_REPORTS_URL = "https://api.reliefweb.int/v2/reports"
 _NUMBER = (
@@ -199,6 +203,10 @@ class ReliefWebSituationAdapter:
     """Retrieve supplementary reports without treating them as official totals."""
 
     provider_name = "ReliefWeb"
+    source_id = "reliefweb-situation-reports"
+    allowed_hosts = frozenset(
+        {"api.reliefweb.int", "reliefweb.int", "www.reliefweb.int"}
+    )
 
     def __init__(
         self,
@@ -241,6 +249,7 @@ class ReliefWebSituationAdapter:
         payload = await get_json(
             self._client,
             RELIEFWEB_REPORTS_URL,
+            allowed_hosts=self.allowed_hosts,
             params=params,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
@@ -262,6 +271,11 @@ class ReliefWebSituationAdapter:
             if not title or not url or not url.startswith("https://"):
                 malformed = True
                 continue
+            try:
+                validate_network_target(url, self.allowed_hosts)
+            except DisasterProviderResponseError:
+                malformed = True
+                continue
             published_at = normalize_timestamp(
                 fields.get("date", {}).get("created")
                 if isinstance(fields.get("date"), dict)
@@ -275,6 +289,7 @@ class ReliefWebSituationAdapter:
                 else None
             )
             source = SourceReference(
+                source_id=self.source_id,
                 publisher="ReliefWeb",
                 title=title,
                 canonical_url=url,

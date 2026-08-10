@@ -36,6 +36,9 @@ asyncio_mode = "auto"
 target-version = "py312"
 line-length = 88
 
+[tool.ruff.format]
+line-ending = "lf"
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 

@@ -45,6 +45,7 @@ def build_current_service(
     fact_value: str = "4",
 ):
     event_source = SourceReference(
+        source_id="fixture-events",
         publisher="JMA",
         title="Fixture earthquake",
         canonical_url="https://example.test/jma-event",
@@ -75,6 +76,7 @@ def build_current_service(
             if situation_error:
                 raise situation_error
             situation_source = SourceReference(
+                source_id="fixture-situation-reports",
                 publisher="ReliefWeb",
                 title="Fixture situation update",
                 canonical_url="https://example.test/reliefweb-update",
@@ -205,6 +207,7 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     assert body["selected_event"]["event_id"] == "jma:fixture-event"
     assert "Situation summary" in body["message"]
     assert body["retrieval_time"] == NOW.isoformat().replace("+00:00", "Z")
+    assert body["sources"][0]["source_id"] == "fixture-events"
     assert body["sources"][0]["canonical_url"] == "https://example.test/jma-event"
     assert any(source["publisher"] == "ReliefWeb" for source in body["sources"])
     assert body["sections"]
@@ -225,6 +228,7 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
             raise AssertionError("GENERAL-MODEL-SENTINEL")
 
     target_source = SourceReference(
+        source_id="fixture-events",
         publisher="JMA",
         title="Ishikawa target event",
         canonical_url="https://example.test/jma-ishikawa",
@@ -279,6 +283,7 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
         async def get_situation_reports(self, event, query, *, now):
             received_situation_queries.append(query)
             source = SourceReference(
+                source_id="fixture-situation-reports",
                 publisher="FDMA",
                 title="Ishikawa impact report",
                 canonical_url="https://example.test/fdma-ishikawa",

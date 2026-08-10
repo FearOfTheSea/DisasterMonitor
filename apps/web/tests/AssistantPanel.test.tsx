@@ -70,6 +70,7 @@ describe('AssistantPanel', () => {
               ],
               sources: [
                 {
+                  source_id: 'jma-rolling-earthquakes',
                   publisher: 'JMA',
                   title: 'Earthquake fixture',
                   canonical_url: 'https://example.test/event',

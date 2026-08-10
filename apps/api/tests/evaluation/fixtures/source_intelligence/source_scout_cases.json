@@ -1,0 +1,207 @@
+{
+  "cases": [
+    {
+      "id": "regional-seismic-feed",
+      "url": "https://seismic.example.org/feed",
+      "claimed_domain": "seismic.example.org",
+      "signals": ["event_feed"],
+      "hazards": ["earthquake"],
+      "countries": ["JPN"],
+      "expected_relevant": true,
+      "expected_roles": ["event_discovery", "scientific_event_verification"]
+    },
+    {
+      "id": "national-warning-feed",
+      "url": "https://alerts.gov.example/warnings",
+      "claimed_domain": "gov.example",
+      "signals": ["official_warning"],
+      "hazards": ["tsunami", "tropical_cyclone"],
+      "countries": ["VNM"],
+      "expected_relevant": true,
+      "expected_roles": ["official_warning"]
+    },
+    {
+      "id": "emergency-bulletins",
+      "url": "https://response.example.net/bulletins",
+      "claimed_domain": "response.example.net",
+      "signals": ["situation_report", "emergency_response"],
+      "hazards": ["flood"],
+      "countries": ["VEN"],
+      "expected_relevant": true,
+      "expected_roles": ["humanitarian_situation_reporting", "emergency_response"]
+    },
+    {
+      "id": "impact-reports",
+      "url": "https://reports.example.edu/disasters",
+      "claimed_domain": "example.edu",
+      "signals": ["casualty_reporting", "physical_damage"],
+      "hazards": ["earthquake", "landslide"],
+      "countries": null,
+      "expected_relevant": true,
+      "expected_roles": ["casualty_reporting", "physical_damage"]
+    },
+    {
+      "id": "infrastructure-status",
+      "url": "https://status.infrastructure.example/incident-data",
+      "claimed_domain": "infrastructure.example",
+      "signals": ["infrastructure_status"],
+      "hazards": ["wildfire"],
+      "countries": ["JPN", "VNM"],
+      "expected_relevant": true,
+      "expected_roles": ["infrastructure_status"]
+    },
+    {
+      "id": "tsunami-centre",
+      "url": "https://tsunami.science.example/status",
+      "claimed_domain": "science.example",
+      "signals": ["tsunami_status", "event_feed"],
+      "hazards": ["earthquake", "tsunami"],
+      "countries": null,
+      "expected_relevant": true,
+      "expected_roles": ["tsunami_status", "event_discovery", "scientific_event_verification"]
+    },
+    {
+      "id": "jma-subdomain-candidate",
+      "url": "https://alerts.www.jma.go.jp/candidate-feed",
+      "claimed_domain": "jma.go.jp",
+      "signals": ["official_warning"],
+      "hazards": ["earthquake"],
+      "countries": ["JPN"],
+      "expected_relevant": true,
+      "expected_roles": ["official_warning"]
+    },
+    {
+      "id": "multi-role-humanitarian",
+      "url": "https://data.humanitarian.example/updates",
+      "claimed_domain": "humanitarian.example",
+      "signals": ["situation_report", "casualty_reporting", "emergency_response"],
+      "hazards": ["flood", "tropical_cyclone"],
+      "countries": null,
+      "expected_relevant": true,
+      "expected_roles": ["humanitarian_situation_reporting", "casualty_reporting", "emergency_response"]
+    },
+    {
+      "id": "spoofed-jma-suffix",
+      "url": "https://www.jma.go.jp.attacker.example/feed",
+      "claimed_domain": "attacker.example",
+      "signals": ["official_warning"],
+      "hazards": ["earthquake"],
+      "countries": ["JPN"],
+      "expected_relevant": false,
+      "expected_roles": ["official_warning"]
+    },
+    {
+      "id": "spoofed-usgs-name",
+      "url": "https://earthquake.usgs.gov.evil.example/events",
+      "claimed_domain": "evil.example",
+      "signals": ["event_feed"],
+      "hazards": ["earthquake"],
+      "countries": null,
+      "expected_relevant": false,
+      "expected_roles": ["event_discovery", "scientific_event_verification"]
+    },
+    {
+      "id": "plain-http",
+      "url": "http://alerts.example.org/feed",
+      "claimed_domain": "alerts.example.org",
+      "signals": ["official_warning"],
+      "hazards": ["wildfire"],
+      "countries": ["VEN"],
+      "expected_relevant": false,
+      "expected_roles": ["official_warning"]
+    },
+    {
+      "id": "credential-url",
+      "url": "https://user:secret@reports.example.org/feed",
+      "claimed_domain": "reports.example.org",
+      "signals": ["situation_report"],
+      "hazards": ["flood"],
+      "countries": null,
+      "expected_relevant": false,
+      "expected_roles": ["humanitarian_situation_reporting"]
+    },
+    {
+      "id": "private-address",
+      "url": "https://127.0.0.1/feed",
+      "claimed_domain": null,
+      "signals": ["event_feed"],
+      "hazards": ["earthquake"],
+      "countries": null,
+      "expected_relevant": false,
+      "expected_roles": ["event_discovery", "scientific_event_verification"]
+    },
+    {
+      "id": "domain-conflict",
+      "url": "https://reports.example.org/feed",
+      "claimed_domain": "different.example.net",
+      "signals": ["physical_damage"],
+      "hazards": ["landslide"],
+      "countries": ["VNM"],
+      "expected_relevant": false,
+      "expected_roles": ["physical_damage"]
+    },
+    {
+      "id": "unsupported-role",
+      "url": "https://news.example.org/feed",
+      "claimed_domain": "news.example.org",
+      "signals": ["advertising", "opinion"],
+      "hazards": ["earthquake"],
+      "countries": null,
+      "expected_relevant": false,
+      "expected_roles": []
+    },
+    {
+      "id": "no-hazard",
+      "url": "https://reports.example.org/feed",
+      "claimed_domain": "reports.example.org",
+      "signals": ["situation_report"],
+      "hazards": [],
+      "countries": null,
+      "expected_relevant": false,
+      "expected_roles": ["humanitarian_situation_reporting"]
+    },
+    {
+      "id": "invalid-country",
+      "url": "https://alerts.example.org/feed",
+      "claimed_domain": "alerts.example.org",
+      "signals": ["official_warning"],
+      "hazards": ["tsunami"],
+      "countries": ["Japan"],
+      "expected_relevant": false,
+      "expected_roles": ["official_warning"]
+    },
+    {
+      "id": "idn-lookalike",
+      "url": "https://xn--jma-9za.example/feed",
+      "claimed_domain": "xn--jma-9za.example",
+      "signals": ["official_warning"],
+      "hazards": ["earthquake"],
+      "countries": ["JPN"],
+      "expected_relevant": false,
+      "expected_roles": ["official_warning"]
+    },
+    {
+      "id": "shared-host-authority-claim",
+      "url": "https://official-disaster.github.io/feed",
+      "claimed_domain": "official-disaster.github.io",
+      "claimed_authority": "national_authority",
+      "signals": ["official_warning"],
+      "hazards": ["flood"],
+      "countries": ["VEN"],
+      "expected_relevant": false,
+      "expected_roles": ["official_warning"]
+    },
+    {
+      "id": "invalid-identity",
+      "url": "https://reports.example.org/feed",
+      "claimed_domain": "reports.example.org",
+      "signals": ["situation_report"],
+      "hazards": ["flood"],
+      "countries": null,
+      "empty_identity": true,
+      "expected_relevant": false,
+      "expected_roles": ["humanitarian_situation_reporting"]
+    }
+  ],
+  "variants_per_case": 5
+}

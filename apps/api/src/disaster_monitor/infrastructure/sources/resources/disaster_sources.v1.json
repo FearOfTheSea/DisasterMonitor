@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "sources": [
     {
       "source_id": "jma-rolling-earthquakes",
@@ -19,7 +19,8 @@
       "limitations": ["The rolling list has a bounded retention window."],
       "registered_tool_names": ["find_disaster_event"],
       "provider_registration_name": "JMA rolling earthquake",
-      "implementation_status": "implemented"
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.jma.go.jp"]
     },
     {
       "source_id": "jma-significant-earthquakes",
@@ -39,7 +40,8 @@
       "limitations": ["Only significant events retained by the JMA history are covered."],
       "registered_tool_names": ["find_disaster_event"],
       "provider_registration_name": "JMA significant earthquake",
-      "implementation_status": "implemented"
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.data.jma.go.jp"]
     },
     {
       "source_id": "usgs-earthquakes",
@@ -59,7 +61,8 @@
       "limitations": ["Country membership uses packaged bounds and simplified polygons."],
       "registered_tool_names": ["find_disaster_event"],
       "provider_registration_name": "USGS",
-      "implementation_status": "implemented"
+      "implementation_status": "implemented",
+      "allowed_hosts": ["earthquake.usgs.gov"]
     },
     {
       "source_id": "fdma-situation-reports",
@@ -79,7 +82,8 @@
       "limitations": ["Only extractable text and recognized report layouts are supported."],
       "registered_tool_names": ["retrieve_situation_evidence"],
       "provider_registration_name": "FDMA",
-      "implementation_status": "implemented"
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.fdma.go.jp"]
     },
     {
       "source_id": "jma-tsunami-status",
@@ -99,7 +103,8 @@
       "limitations": ["Requires a selected event with a JMA identifier; no bulletin is neutral."],
       "registered_tool_names": ["retrieve_situation_evidence"],
       "provider_registration_name": "JMA tsunami status",
-      "implementation_status": "implemented"
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.jma.go.jp"]
     },
     {
       "source_id": "reliefweb-situation-reports",
@@ -119,7 +124,8 @@
       "limitations": ["Not an event-verification source.", "Provider-local IDs are not comparable to JMA or USGS IDs."],
       "registered_tool_names": ["retrieve_situation_evidence"],
       "provider_registration_name": "ReliefWeb",
-      "implementation_status": "implemented"
+      "implementation_status": "implemented",
+      "allowed_hosts": ["api.reliefweb.int", "reliefweb.int", "www.reliefweb.int"]
     }
   ]
 }

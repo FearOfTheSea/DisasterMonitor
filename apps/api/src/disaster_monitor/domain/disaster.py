@@ -113,6 +113,7 @@ class SourceAuthority(StrEnum):
 class SourceReference:
     """A canonical source and the distinct timestamps attached to it."""
 
+    source_id: str
     publisher: str
     title: str
     canonical_url: str
@@ -120,6 +121,12 @@ class SourceReference:
     updated_at: datetime | None
     retrieved_at: datetime
     authority: SourceAuthority = SourceAuthority.SECONDARY
+
+    def __post_init__(self) -> None:
+        if not self.source_id.strip():
+            raise ValueError("A source reference requires a stable source ID.")
+        if not self.canonical_url.startswith("https://"):
+            raise ValueError("A source reference requires a canonical HTTPS URL.")
 
     @property
     def effective_at(self) -> datetime:

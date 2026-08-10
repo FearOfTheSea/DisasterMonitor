@@ -117,6 +117,7 @@ export class AssistantClient {
         }
         const source = item as Record<string, unknown>;
         return (
+          typeof source.source_id === 'string' &&
           typeof source.publisher === 'string' &&
           typeof source.title === 'string' &&
           typeof source.canonical_url === 'string' &&

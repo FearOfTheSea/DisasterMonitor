@@ -143,12 +143,14 @@ def build_current_disaster_report(
                 jma_rolling,
                 event_japan,
                 source_id="jma-rolling-earthquakes",
+                allowed_hosts=jma_rolling.allowed_hosts,
             ),
             ProviderRegistration(
                 "JMA significant earthquake",
                 jma_significant,
                 event_japan,
                 source_id="jma-significant-earthquakes",
+                allowed_hosts=jma_significant.allowed_hosts,
             ),
             ProviderRegistration(
                 "USGS",
@@ -159,12 +161,14 @@ def build_current_disaster_report(
                     country_codes=None,
                 ),
                 source_id="usgs-earthquakes",
+                allowed_hosts=usgs.allowed_hosts,
             ),
             ProviderRegistration(
                 "FDMA",
                 fdma,
                 situation_japan,
                 source_id="fdma-situation-reports",
+                allowed_hosts=fdma.allowed_hosts,
             ),
             ProviderRegistration(
                 "JMA tsunami status",
@@ -172,6 +176,7 @@ def build_current_disaster_report(
                 situation_japan,
                 source_id="jma-tsunami-status",
                 event_eligibility=lambda event: event.jma_event_id is not None,
+                allowed_hosts=jma_tsunami.allowed_hosts,
             ),
             ProviderRegistration(
                 "ReliefWeb",
@@ -184,6 +189,7 @@ def build_current_disaster_report(
                 ),
                 source_id="reliefweb-situation-reports",
                 configured=reliefweb.configured,
+                allowed_hosts=reliefweb.allowed_hosts,
             ),
         )
     )

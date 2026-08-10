@@ -52,6 +52,7 @@ class FakeSystemModel:
 class FakeSystemEventProvider:
     async def find_recent_events(self, _query, *, now):
         jma_source = SourceReference(
+            source_id="system-jma-events",
             publisher="JMA fixture",
             title="Deterministic JMA Japan earthquake event",
             canonical_url="https://example.test/system-jma-event",
@@ -60,6 +61,7 @@ class FakeSystemEventProvider:
             retrieved_at=now,
         )
         usgs_source = SourceReference(
+            source_id="system-usgs-events",
             publisher="USGS fixture",
             title="Deterministic USGS Japan earthquake event",
             canonical_url="https://example.test/system-usgs-event",
@@ -68,6 +70,7 @@ class FakeSystemEventProvider:
             retrieved_at=now,
         )
         unrelated_source = SourceReference(
+            source_id="system-usgs-events",
             publisher="USGS fixture",
             title="Unrelated Tokyo earthquake event",
             canonical_url="https://example.test/system-unrelated-event",
@@ -76,6 +79,7 @@ class FakeSystemEventProvider:
             retrieved_at=now,
         )
         foreign_source = SourceReference(
+            source_id="system-usgs-events",
             publisher="USGS fixture",
             title="More significant Venezuela earthquake event",
             canonical_url="https://example.test/system-venezuela-event",
@@ -147,6 +151,7 @@ class FakeSystemEventProvider:
 class FakeSystemSituationProvider:
     async def get_situation_reports(self, event, _query, *, now):
         source = SourceReference(
+            source_id="system-situation-reports",
             publisher="ReliefWeb fixture",
             title="Deterministic situation update",
             canonical_url="https://example.test/system-situation",
@@ -186,6 +191,7 @@ class FakeSystemSituationProvider:
                 ),
                 SituationReport(
                     source=SourceReference(
+                        source_id="system-tsunami-status",
                         publisher="JMA tsunami fixture",
                         title="Official tsunami status for system event",
                         canonical_url="https://example.test/system-tsunami",
@@ -201,6 +207,7 @@ class FakeSystemSituationProvider:
                             value="No tsunami warning issued",
                             status=FactStatus.CONFIRMED,
                             source=SourceReference(
+                                source_id="system-tsunami-status",
                                 publisher="JMA tsunami fixture",
                                 title="Official tsunami status for system event",
                                 canonical_url="https://example.test/system-tsunami",
@@ -221,6 +228,7 @@ class FakeSystemSituationProvider:
                 ),
                 SituationReport(
                     source=SourceReference(
+                        source_id="system-foreign-reports",
                         publisher="Foreign fixture",
                         title="Venezuela decoy update",
                         canonical_url="https://example.test/system-venezuela-situation",

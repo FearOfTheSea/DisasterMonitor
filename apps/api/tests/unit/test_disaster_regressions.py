@@ -49,6 +49,7 @@ assert JAPAN is not None
 
 def _source(publisher: str, title: str) -> SourceReference:
     return SourceReference(
+        source_id=f"test-{publisher.lower().replace(' ', '-')}",
         publisher=publisher,
         title=title,
         canonical_url=f"https://example.test/{title.replace(' ', '-')}",
@@ -307,8 +308,45 @@ async def test_http_rejects_oversize_before_reading_and_stops_chunked_read() -> 
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(DisasterProviderResponseError, match="size limit"):
-            await get_json(client, "https://example.test/declared", max_bytes=10)
+            await get_json(
+                client,
+                "https://example.test/declared",
+                allowed_hosts=frozenset({"example.test"}),
+                max_bytes=10,
+            )
         with pytest.raises(DisasterProviderResponseError, match="size limit"):
-            await get_json(client, "https://example.test/chunked", max_bytes=2)
+            await get_json(
+                client,
+                "https://example.test/chunked",
+                allowed_hosts=frozenset({"example.test"}),
+                max_bytes=2,
+            )
     assert declared.reads == 0
     assert chunked.reads == 2
+
+
+@pytest.mark.asyncio
+async def test_http_recovers_from_one_transient_network_failure() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise httpx.ConnectError("transient", request=request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=b'{"status":"ok"}',
+            request=request,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        payload = await get_json(
+            client,
+            "https://example.test/feed",
+            allowed_hosts=frozenset({"example.test"}),
+        )
+
+    assert payload == {"status": "ok"}
+    assert attempts == 2

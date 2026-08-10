@@ -20,7 +20,15 @@ CATALOG = StaticCountryCatalog()
 JAPAN = CATALOG.get_by_alpha3("JPN")
 VENEZUELA = CATALOG.get_by_alpha3("VEN")
 assert JAPAN is not None and VENEZUELA is not None
-SOURCE = SourceReference("USGS", "Fixture", "https://example.test/event", NOW, NOW, NOW)
+SOURCE = SourceReference(
+    "usgs-earthquakes",
+    "USGS",
+    "Fixture",
+    "https://example.test/event",
+    NOW,
+    NOW,
+    NOW,
+)
 
 
 def _event(event_id: str, **changes: object) -> DisasterEvent:

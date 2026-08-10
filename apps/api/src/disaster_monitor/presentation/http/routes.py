@@ -121,6 +121,7 @@ async def assistant(
                 depth_km=selected_event.depth_km,
                 provider_ids=list(selected_event.provider_ids),
                 source=SourceResponse(
+                    source_id=selected_event.source.source_id,
                     publisher=selected_event.source.publisher,
                     title=selected_event.source.title,
                     canonical_url=selected_event.source.canonical_url,
@@ -133,6 +134,7 @@ async def assistant(
         retrieval_time=result.retrieval_time,
         sources=[
             SourceResponse(
+                source_id=source.source_id,
                 publisher=source.publisher,
                 title=source.title,
                 canonical_url=source.canonical_url,

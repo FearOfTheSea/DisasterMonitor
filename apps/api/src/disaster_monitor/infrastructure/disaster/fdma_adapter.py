@@ -401,6 +401,8 @@ class FdmaSituationReportAdapter:
     """Retrieve the newest matching official FDMA earthquake situation report."""
 
     provider_name = "FDMA"
+    source_id = "fdma-situation-reports"
+    allowed_hosts = frozenset({"www.fdma.go.jp"})
 
     def __init__(
         self,
@@ -423,6 +425,7 @@ class FdmaSituationReportAdapter:
         markup = await get_text(
             self._client,
             FDMA_INDEX_URL,
+            allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
         )
@@ -467,6 +470,7 @@ class FdmaSituationReportAdapter:
             payload = await get_bytes(
                 self._client,
                 selected.url,
+                allowed_hosts=self.allowed_hosts,
                 max_bytes=self._max_response_bytes,
                 provider_name=self.provider_name,
             )
@@ -497,6 +501,7 @@ class FdmaSituationReportAdapter:
             else None
         )
         source = SourceReference(
+            source_id=self.source_id,
             publisher="Fire and Disaster Management Agency of Japan",
             title=selected.title,
             canonical_url=selected.url,

@@ -28,7 +28,11 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
     DisasterProviderResponseError,
 )
-from disaster_monitor.infrastructure.disaster.http import get_json, get_text
+from disaster_monitor.infrastructure.disaster.http import (
+    get_json,
+    get_text,
+    validate_network_target,
+)
 
 JMA_EARTHQUAKE_LIST_URL = "https://www.jma.go.jp/bosai/quake/data/list.json"
 JMA_TSUNAMI_LIST_URL = "https://www.jma.go.jp/bosai/tsunami/data/list.json"
@@ -70,6 +74,8 @@ class JmaEarthquakeAdapter:
     """Identify recent Japanese earthquakes from the official JMA JSON list."""
 
     provider_name = "JMA"
+    source_id = "jma-rolling-earthquakes"
+    allowed_hosts = frozenset({"www.jma.go.jp"})
 
     def __init__(
         self,
@@ -88,6 +94,7 @@ class JmaEarthquakeAdapter:
         payload = await get_json(
             self._client,
             JMA_EARTHQUAKE_LIST_URL,
+            allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
         )
@@ -112,6 +119,7 @@ class JmaEarthquakeAdapter:
             published_at = normalize_timestamp(item.get("rdt")) or event_time
             detail_name = _safe_string(item.get("json"))
             source = SourceReference(
+                source_id=self.source_id,
                 publisher="Japan Meteorological Agency",
                 title=(
                     f"{_safe_string(item.get('en_ttl')) or 'Earthquake information'}"
@@ -172,6 +180,8 @@ class JmaTsunamiSituationAdapter:
     """Retrieve official tsunami status messages related to a selected event."""
 
     provider_name = "JMA tsunami"
+    source_id = "jma-tsunami-status"
+    allowed_hosts = frozenset({"www.jma.go.jp"})
 
     def __init__(
         self,
@@ -194,6 +204,7 @@ class JmaTsunamiSituationAdapter:
         payload = await get_json(
             self._client,
             JMA_TSUNAMI_LIST_URL,
+            allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
         )
@@ -214,6 +225,7 @@ class JmaTsunamiSituationAdapter:
             published_at = normalize_timestamp(item.get("rdt"))
             detail_name = _safe_string(item.get("json"))
             source = SourceReference(
+                source_id=self.source_id,
                 publisher="Japan Meteorological Agency",
                 title=_safe_string(item.get("en_ttl")) or "Tsunami information",
                 canonical_url=(
@@ -364,6 +376,8 @@ class JmaSignificantEarthquakeAdapter:
     """Discover warning-level JMA earthquakes retained beyond the rolling list."""
 
     provider_name = "JMA significant"
+    source_id = "jma-significant-earthquakes"
+    allowed_hosts = frozenset({"www.data.jma.go.jp"})
 
     def __init__(
         self,
@@ -382,6 +396,7 @@ class JmaSignificantEarthquakeAdapter:
         markup = await get_text(
             self._client,
             JMA_EEW_HISTORY_URL,
+            allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
         )
@@ -412,11 +427,17 @@ class JmaSignificantEarthquakeAdapter:
             longitude = _number_from_attr(attrs, "longitude")
             depth_km = _number_from_attr(attrs, "depth")
             detail_url = urljoin(JMA_EEW_HISTORY_URL, href) if href else None
+            if detail_url is not None:
+                try:
+                    validate_network_target(detail_url, self.allowed_hosts)
+                except DisasterProviderError:
+                    detail_url = None
             if detail_url and (latitude is None or longitude is None):
                 try:
                     detail = await get_text(
                         self._client,
                         detail_url,
+                        allowed_hosts=self.allowed_hosts,
                         max_bytes=self._max_response_bytes,
                         provider_name=self.provider_name,
                     )
@@ -426,6 +447,7 @@ class JmaSignificantEarthquakeAdapter:
                     # The index is still a valid significant-event record.
                     pass
             source = SourceReference(
+                source_id=self.source_id,
                 publisher="Japan Meteorological Agency",
                 title=f"Emergency earthquake warning history — {cells[1]}",
                 canonical_url=detail_url or JMA_EEW_HISTORY_URL,

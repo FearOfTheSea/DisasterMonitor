@@ -88,6 +88,14 @@ class CurrentDisasterReportService:
         self._source_catalog = source_catalog or _EmptySourceCatalog()
         self._agent_tools = self.build_agent_tools(self._source_catalog)
 
+    @property
+    def provider_registry(self) -> ProviderRegistry:
+        return self._provider_registry
+
+    @property
+    def source_catalog(self) -> SourceCatalog:
+        return self._source_catalog
+
     def build_agent_tools(self, source_catalog: SourceCatalog) -> ToolRegistry:
         """Expose this facade's exact dependencies through bounded agent tools."""
         return build_disaster_tool_registry(

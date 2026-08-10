@@ -37,6 +37,7 @@ def _source(
 ) -> SourceReference:
     timestamp = NOW - age
     return SourceReference(
+        f"test-{publisher.lower().replace(' ', '-')}",
         publisher,
         f"{publisher} update",
         f"https://example.test/{publisher.lower()}",

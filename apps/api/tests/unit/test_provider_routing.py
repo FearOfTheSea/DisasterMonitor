@@ -35,13 +35,15 @@ def _query(hazard: Hazard, country=JAPAN) -> DisasterQuery:
 
 
 class RecordingEventProvider:
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, source_id: str) -> None:
         self.provider_name = name
+        self.source_id = source_id
         self.queries: list[DisasterQuery] = []
 
     async def find_recent_events(self, query: DisasterQuery, *, now: datetime):
         self.queries.append(query)
         source = SourceReference(
+            self.source_id,
             self.provider_name,
             f"{self.provider_name} event",
             f"https://example.test/{self.provider_name}",
@@ -81,8 +83,8 @@ class RecordingSituationProvider:
 
 
 def _registry():
-    jma = RecordingEventProvider("JMA")
-    usgs = RecordingEventProvider("USGS")
+    jma = RecordingEventProvider("JMA", "jma-events")
+    usgs = RecordingEventProvider("USGS", "usgs-events")
     fdma = RecordingSituationProvider()
     event_japan = ProviderCapabilities(
         frozenset({ProviderRole.EVENT_DISCOVERY}),
@@ -91,7 +93,13 @@ def _registry():
     )
     registry = ProviderRegistry(
         (
-            ProviderRegistration("JMA", jma, event_japan),
+            ProviderRegistration(
+                "JMA",
+                jma,
+                event_japan,
+                source_id="jma-events",
+                allowed_hosts=frozenset({"example.test"}),
+            ),
             ProviderRegistration(
                 "USGS",
                 usgs,
@@ -100,6 +108,8 @@ def _registry():
                     frozenset({Hazard.EARTHQUAKE}),
                     None,
                 ),
+                source_id="usgs-events",
+                allowed_hosts=frozenset({"example.test"}),
             ),
             ProviderRegistration(
                 "FDMA",
@@ -109,6 +119,8 @@ def _registry():
                     frozenset({Hazard.EARTHQUAKE}),
                     frozenset({"JPN"}),
                 ),
+                source_id="fdma-reports",
+                allowed_hosts=frozenset({"example.test"}),
             ),
             ProviderRegistration(
                 "ReliefWeb",
@@ -119,7 +131,9 @@ def _registry():
                     None,
                     requires_configuration=True,
                 ),
+                source_id="reliefweb-reports",
                 configured=False,
+                allowed_hosts=frozenset({"example.test"}),
             ),
         )
     )

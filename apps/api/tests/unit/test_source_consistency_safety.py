@@ -32,6 +32,12 @@ class FakeCatalog:
         return None
 
 
+@dataclass(frozen=True)
+class FakeProvider:
+    source_id: str
+    allowed_hosts: frozenset[str]
+
+
 def event_descriptor() -> SourceDescriptor:
     return SourceDescriptor(
         source_id="test-events",
@@ -52,6 +58,7 @@ def event_descriptor() -> SourceDescriptor:
         registered_tool_names=("find_disaster_event",),
         provider_registration_name="Test event provider",
         implementation_status="implemented",
+        allowed_hosts=("events.example",),
     )
 
 
@@ -61,10 +68,11 @@ def registration(
     hazards: frozenset[Hazard] = frozenset({Hazard.EARTHQUAKE}),
     countries: frozenset[str] | None = frozenset({"TST"}),
     requires_configuration: bool = False,
+    allowed_hosts: frozenset[str] = frozenset({"events.example"}),
 ) -> ProviderRegistration:
     return ProviderRegistration(
         "Test event provider",
-        object(),
+        FakeProvider("test-events", allowed_hosts),
         ProviderCapabilities(
             roles,
             hazards,
@@ -72,6 +80,7 @@ def registration(
             requires_configuration=requires_configuration,
         ),
         source_id="test-events",
+        allowed_hosts=allowed_hosts,
     )
 
 
@@ -103,6 +112,15 @@ def test_rejects_configuration_requirement_drift() -> None:
             replace(event_descriptor(), requires_configuration=True),
             registration(),
         )
+
+
+def test_rejects_network_authority_drift() -> None:
+    descriptor = event_descriptor()
+
+    with pytest.raises(ValueError, match="Network-authority drift"):
+        validate(descriptor, registration(allowed_hosts=frozenset({"other.example"})))
+
+    validate(descriptor, registration())
 
 
 def test_rejects_missing_situation_role_and_wrong_tool_metadata() -> None:

@@ -49,9 +49,15 @@ output, chain-of-thought, configuration, stack traces, and secrets.
 The executable provider registry remains selection authority. A versioned static
 source catalog adds semantic roles, jurisdiction, authority, hazard/country scope,
 configuration, freshness wording, attribution, limitations, tool links, and provider
-names. Startup validates all six executable source IDs and feasible capability drift.
+names. It also fixes each provider's allowed network hosts. Startup validates all six
+executable source IDs, adapter identities, network authorities, and feasible capability
+drift.
 ReliefWeb remains supplementary, never event verification or an official national
 total.
+
+Source-candidate assessment uses a separate application artifact and store. Candidate
+metadata can be classified and queued for human review, but it cannot create a provider,
+`SourceReference`, catalog descriptor, or trusted authority at runtime.
 
 Exactly one hazard and one catalog country may be investigated. Multiple values
 request clarification; unknown countries return a catalog limitation; combinations
@@ -59,5 +65,5 @@ without event discovery return coverage unavailable. Image and agent-controlled 
 requests are recorded as honest capability gaps while supported text may continue.
 
 Phase 4 remains absent: disaster image retrieval, satellite/aerial imagery, raster or
-vector COP artifacts, agent-controlled map layers, CARTO, TerraLabo, dynamic source
-discovery, and arbitrary generated retrieval code are not implemented.
+vector COP artifacts, agent-controlled map layers, CARTO, TerraLabo, online source
+crawling, and arbitrary generated retrieval code are not implemented.

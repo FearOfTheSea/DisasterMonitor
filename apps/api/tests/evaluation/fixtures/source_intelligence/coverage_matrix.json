@@ -1,0 +1,60 @@
+{
+  "countries": ["JPN", "VNM", "VEN"],
+  "hazards": [
+    "earthquake",
+    "tsunami",
+    "flood",
+    "wildfire",
+    "landslide",
+    "tropical_cyclone"
+  ],
+  "roles": ["event_discovery", "situation_evidence"],
+  "non_empty": [
+    {
+      "country": "JPN",
+      "hazard": "earthquake",
+      "role": "event_discovery",
+      "source_ids": [
+        "jma-rolling-earthquakes",
+        "jma-significant-earthquakes",
+        "usgs-earthquakes"
+      ]
+    },
+    {
+      "country": "JPN",
+      "hazard": "earthquake",
+      "role": "situation_evidence",
+      "source_ids": ["fdma-situation-reports", "jma-tsunami-status"]
+    },
+    {
+      "country": "VNM",
+      "hazard": "earthquake",
+      "role": "event_discovery",
+      "source_ids": ["usgs-earthquakes"]
+    },
+    {
+      "country": "VEN",
+      "hazard": "earthquake",
+      "role": "event_discovery",
+      "source_ids": ["usgs-earthquakes"]
+    }
+  ],
+  "event_conditioned": [
+    {
+      "country": "JPN",
+      "hazard": "earthquake",
+      "event_source_id": "jma-rolling-earthquakes",
+      "event_id": "jma:fixture",
+      "provider_ids": ["jma:fixture"],
+      "source_ids": ["fdma-situation-reports", "jma-tsunami-status"]
+    },
+    {
+      "country": "JPN",
+      "hazard": "earthquake",
+      "event_source_id": "usgs-earthquakes",
+      "event_id": "usgs:fixture",
+      "provider_ids": ["usgs:fixture"],
+      "source_ids": ["fdma-situation-reports"]
+    }
+  ]
+}
