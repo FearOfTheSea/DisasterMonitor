@@ -17,8 +17,12 @@ The flow is:
    `current_disaster_coverage_unavailable` without invoking the model. Explicit dates
    use the configured country calendar boundary; Japan August 5 spans
    `2026-08-04T15:00:00Z` through `2026-08-05T15:00:00Z`.
-3. Query the bounded event-source ports for candidate events.
-4. Rank candidates by maximum JMA intensity, magnitude, provider significance,
+3. Query the bounded event-source ports for candidate observations and construct an
+   auditable physical-event partition. The partition preserves each observation and
+   its assignment rationale. Equivalence components must be pairwise complete, so a
+   transitive A-B-C chain cannot merge unrelated A and C events. Ambiguous assignments
+   remain separate and provider ordering does not change the result.
+4. Rank physical-event candidates by maximum JMA intensity, magnitude, provider significance,
    recency, and an aftershock penalty. Magnitude and intensity materially outweigh
    a small age difference, so a destructive mainshock remains preferred to a later
    routine tremor. Explicit date, location, coordinate, magnitude, and event-ID
@@ -27,10 +31,17 @@ The flow is:
    silently conflated.
 5. Retrieve situation records for the selected event from the bounded situation
    sources.
-6. Reconcile typed facts by source priority and effective update time. Missing
-   values remain missing; a missing damage figure is not rendered as zero.
-7. Render a deterministic source-backed report with structured sections, source
+6. Build canonical temporal evidence state. Every accepted observation retains its
+   `ReportedFact`, `SituationReport`, `SourceReference`, observation/publication/update/
+   retrieval times, and typed lifecycle state. Same-source corrections supersede but
+   never delete history; cross-source disagreements remain conflicts; explicit unknown
+   stays missing; explicit zero remains an observed zero. A later report that omits a
+   prior claim records that omission without silently retracting the prior value.
+7. Project the canonical state into the backward-compatible `EvidencePacket`, then
+   render a deterministic source-backed report with structured sections, source
    metadata, warnings, and retrieval time.
+8. Derive a bounded internal hypothesis artifact from canonical state. It remains
+   machine-typed as inferred and is not included in verified current-fact rendering.
 
 The current report path does not use model memory for current facts. This keeps
 the report useful when Ollama is unavailable and prevents generated prose from
@@ -101,13 +112,16 @@ newest-event policy with ambiguity disclosure.
 
 Evidence precedence uses adapter-assigned `SourceAuthority`: national authority,
 scientific authority, humanitarian aggregator, then secondary. Within that ordering,
-effective source time and typed fact status break ties. Publisher-name substring
+effective source time and typed fact status break ties, followed by a stable key.
+Effective claim chronology uses update time, publication time, observation time, then
+retrieval time. Publisher-name substring
 matching is not used. Every normalized fact retains its source, canonical URL, event
 identifier, stable source ID, and the available event, publication, update, and retrieval
 timestamps.
 Official JMA/FDMA and scientific USGS records have higher priority than supplementary
-reports, and newer official figures replace older official figures for the same claim. Different
-values are retained as a conflict warning rather than silently discarded.
+reports, and newer same-source official figures become current while older revisions
+remain in history. Different cross-source values are retained as typed conflicts and a
+compatibility warning rather than silently discarded.
 
 Provider text is bounded, stripped of markup, and filtered for instruction-like
 content before it can enter the evidence packet. The renderer never infers
@@ -158,6 +172,29 @@ roles, screens unsafe or misleading identities, and writes records to a candidat
 store. Those records cannot enter the trusted catalog or disaster evidence types, and a
 positive assessment remains pending human approval. Online crawling and automatic
 catalog promotion are not connected.
+
+## Evidence / World-State evaluation
+
+The executable EW-A, EW-B, and EW-C gates run with:
+
+```powershell
+uv run --directory apps/api pytest -q tests/evaluation/test_evidence_world_state.py
+```
+
+Frozen fixtures are separate from Source Intelligence under
+`apps/api/tests/evaluation/fixtures/evidence_world_state/`. They cover physical-event
+identity, temporal revisions/conflicts/missingness/freshness, and labeled hypothesis
+outcomes. The evaluator calculates assignment and ambiguity rates, prohibited
+conflations, per-class temporal metrics, ECE, and Brier score against a fixed 0.5 naive
+baseline. Fault-injection regressions prove detection of cross-event merging,
+destructive history replacement, missing-as-zero conversion, miscalibration, and
+hypothesis promotion into observed products.
+
+The initial hypothesis rule is deliberately narrow and deterministic. It evaluates a
+material-human-impact proposition from fresh numeric fatality, injury, and missing-
+person observations. It does not retrieve data, forecast future impacts, use Ollama,
+or appear in the API report. EW state is request-scoped; persistence, continuous
+monitoring, multimodal state, and learned causal reasoning remain future work.
 
 ## Optional live-provider smoke test
 

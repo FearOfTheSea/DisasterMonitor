@@ -132,11 +132,32 @@ recency, distance, and aftershock behavior. `DefaultEventPolicy` merges only str
 shared identifiers, prefers newer matching events, and marks similarly recent
 independent events ambiguous.
 
+Event identity is represented by `PhysicalEventIdentity`, not only by a merged
+`DisasterEvent`. Each identity has a deterministic physical-event ID, the conservative
+representative used by the existing report path, every normalized provider observation,
+and an assignment record explaining its status and compatible observations. A connected
+set is merged only when every observation pair satisfies the hazard policy. A
+non-transitive A-B-C match therefore remains separate with typed ambiguous assignments;
+input/provider ordering cannot choose a different partition. Hazard and ISO country
+scope are unconditional identity boundaries for every policy.
+
 `CurrentDisasterReportService` orchestrates only the workflow. `EvidenceReconciler`
-performs correlation and fact precedence, `DisasterReportRenderer` renders normalized
-evidence, and `report_profiles.py` supplies earthquake-specific or generic section
-configuration. Generic rendering reads the query hazard/country and selected event;
-it contains no unconditional Japan or earthquake wording.
+first constructs an immutable `EvidenceWorldState`. It retains accepted reports and
+every fact observation, then classifies each claim history as current, superseded,
+conflicting, duplicate, or unusable plus fresh or stale. Effective chronology is
+centralized as source update, publication, fact observation, then retrieval time.
+Selection uses typed authority, effective chronology, fact status, and a stable
+tie-break. A later same-source omission is recorded but does not erase or convert the
+prior observation to zero. The legacy `EvidencePacket` fields are a deterministic
+projection of this state, so `DisasterReportRenderer` and focused answers have no
+second reconciliation decision. `report_profiles.py` supplies earthquake-specific or
+generic section configuration.
+
+`HypothesisGenerator` consumes only `EvidenceWorldState` and writes separate
+`HypothesisArtifact` values to `EvidenceWorkspace`. A hypothesis has an `inferred`
+truth type, deterministic key, probability, evidence references, state version,
+evaluation time, and public rule features. It cannot enter `EvidencePacket.facts`, and
+the current API/report renderer does not display hypotheses as verified facts.
 
 ## Dependency direction
 
@@ -156,6 +177,17 @@ AST dependency tests enforce that domain modules import only the standard librar
 application modules do not import infrastructure, presentation, FastAPI, HTTP/PDF
 clients, Pydantic, or Ollama, and concrete adapters are constructed only in composition
 or bootstrap modules.
+
+The Evidence / World-State release evaluations live under
+`tests/evaluation/fixtures/evidence_world_state/` and run with:
+
+```powershell
+uv run --directory apps/api pytest -q tests/evaluation/test_evidence_world_state.py
+```
+
+The canonical state remains request-scoped. This implementation does not claim a
+persistent event store, continuous monitoring, multimodal evidence, learned causal
+forecasting, or autonomous user-visible hypotheses.
 
 ## Composition and testing
 

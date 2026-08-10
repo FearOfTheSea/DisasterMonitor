@@ -1,7 +1,7 @@
 """Allowlisted typed tools exposing the existing trusted disaster workflow."""
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -29,6 +29,9 @@ from disaster_monitor.application.services.disaster_report_renderer import (
 from disaster_monitor.application.services.event_resolution import EventPolicyRegistry
 from disaster_monitor.application.services.evidence_reconciliation import (
     EvidenceReconciler,
+)
+from disaster_monitor.application.services.hypothesis_reasoning import (
+    HypothesisGenerator,
 )
 from disaster_monitor.application.services.provider_registry import (
     ProviderRegistry,
@@ -94,6 +97,9 @@ class DisasterToolDependencies:
     evidence_reconciler: EvidenceReconciler
     renderer: DisasterReportRenderer
     clock: Callable[[], datetime]
+    hypothesis_generator: HypothesisGenerator = field(
+        default_factory=HypothesisGenerator
+    )
 
 
 def build_disaster_tool_registry(
@@ -237,10 +243,12 @@ class FindDisasterEventTool(_BaseTool):
         )
         policy = self.dependencies.event_policies.for_hazard(task.query.hazard)
         resolution = policy.resolve(
-            policy.cluster(state.workspace.event_batch.records),
+            state.workspace.event_batch.records,
             task.query,
             now=self.now(),
         )
+        state.workspace.physical_events = resolution.physical_events
+        state.workspace.selected_physical_event = resolution.selected_physical_event
         state.workspace.selected_event = resolution.selected
         state.workspace.alternatives = resolution.alternatives
         if resolution.selected is None:
@@ -330,7 +338,13 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
             reports.records,
             warnings=tuple(dict.fromkeys(state.warnings)),
             retrieved_at=self.now(),
+            physical_event=state.workspace.selected_physical_event,
         )
+        state.workspace.evidence_state = packet.world_state
+        if packet.world_state is not None:
+            state.workspace.hypotheses = (
+                self.dependencies.hypothesis_generator.generate(packet.world_state)
+            )
         state.workspace.evidence_packet = packet
         return (
             f"Reconciled {len(packet.facts)} facts from {len(packet.sources)} sources."

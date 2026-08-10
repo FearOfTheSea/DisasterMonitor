@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0",
+  "permutations_per_episode": 6,
+  "episodes": [
+    {
+      "id": "same-authority-correction",
+      "reports": [
+        {"id": "old", "source_id": "national", "authority": "national_authority", "published_hours_ago": 6, "facts": [{"claim": "fatalities", "value": "1", "status": "confirmed"}]},
+        {"id": "new", "source_id": "national", "authority": "national_authority", "published_hours_ago": 1, "facts": [{"claim": "fatalities", "value": "2", "status": "confirmed"}]}
+      ],
+      "claims": {"fatalities": {"availability": "present", "current": "2", "dispositions": {"old": "superseded", "new": "current"}, "freshness": {"old": "fresh", "new": "fresh"}}}
+    },
+    {
+      "id": "later-lower-authority-disagreement",
+      "reports": [
+        {"id": "official", "source_id": "national", "authority": "national_authority", "published_hours_ago": 6, "facts": [{"claim": "fatalities", "value": "3", "status": "confirmed"}]},
+        {"id": "later-low", "source_id": "humanitarian", "authority": "humanitarian_aggregator", "published_hours_ago": 1, "facts": [{"claim": "fatalities", "value": "5", "status": "preliminary"}]}
+      ],
+      "claims": {"fatalities": {"availability": "present", "current": "3", "dispositions": {"official": "current", "later-low": "conflicting"}, "freshness": {"official": "fresh", "later-low": "fresh"}}}
+    },
+    {
+      "id": "older-higher-authority-disagreement",
+      "reports": [
+        {"id": "older-high", "source_id": "science", "authority": "scientific_authority", "published_hours_ago": 12, "facts": [{"claim": "injuries", "value": "7", "status": "confirmed"}]},
+        {"id": "newer-low", "source_id": "secondary", "authority": "secondary", "published_hours_ago": 1, "facts": [{"claim": "injuries", "value": "11", "status": "confirmed"}]}
+      ],
+      "claims": {"injuries": {"availability": "present", "current": "7", "dispositions": {"older-high": "current", "newer-low": "conflicting"}, "freshness": {"older-high": "fresh", "newer-low": "fresh"}}}
+    },
+    {
+      "id": "equal-authority-conflict",
+      "reports": [
+        {"id": "equal-old", "source_id": "authority-a", "authority": "national_authority", "published_hours_ago": 4, "facts": [{"claim": "missing", "value": "2", "status": "confirmed"}]},
+        {"id": "equal-new", "source_id": "authority-b", "authority": "national_authority", "published_hours_ago": 1, "facts": [{"claim": "missing", "value": "3", "status": "confirmed"}]}
+      ],
+      "claims": {"missing": {"availability": "present", "current": "3", "dispositions": {"equal-old": "conflicting", "equal-new": "current"}, "freshness": {"equal-old": "fresh", "equal-new": "fresh"}}}
+    },
+    {
+      "id": "source-reversion",
+      "reports": [
+        {"id": "revision-1", "source_id": "national", "authority": "national_authority", "published_hours_ago": 6, "facts": [{"claim": "fatalities", "value": "1", "status": "confirmed"}]},
+        {"id": "revision-2", "source_id": "national", "authority": "national_authority", "published_hours_ago": 4, "facts": [{"claim": "fatalities", "value": "2", "status": "confirmed"}]},
+        {"id": "revision-3", "source_id": "national", "authority": "national_authority", "published_hours_ago": 1, "facts": [{"claim": "fatalities", "value": "1", "status": "confirmed"}]}
+      ],
+      "claims": {"fatalities": {"availability": "present", "current": "1", "dispositions": {"revision-1": "superseded", "revision-2": "superseded", "revision-3": "current"}, "freshness": {"revision-1": "fresh", "revision-2": "fresh", "revision-3": "fresh"}}}
+    },
+    {
+      "id": "syndicated-duplicate",
+      "reports": [
+        {"id": "syndicated-old", "source_id": "aggregator-a", "authority": "humanitarian_aggregator", "published_hours_ago": 3, "narrative": "A deliberately long syndicated fixture narrative reporting four damaged buildings in the affected area.", "facts": [{"claim": "buildings", "value": "4", "status": "preliminary"}]},
+        {"id": "syndicated-new", "source_id": "aggregator-b", "authority": "humanitarian_aggregator", "published_hours_ago": 2, "narrative": "A deliberately long syndicated fixture narrative reporting four damaged buildings in the affected area.", "facts": [{"claim": "buildings", "value": "4", "status": "preliminary"}]}
+      ],
+      "claims": {"buildings": {"availability": "present", "current": "4", "dispositions": {"syndicated-old": "duplicate", "syndicated-new": "current"}, "freshness": {"syndicated-old": "fresh", "syndicated-new": "fresh"}}}
+    },
+    {
+      "id": "identical-timestamp-status-tie-break",
+      "reports": [
+        {"id": "preliminary", "source_id": "authority-a", "authority": "national_authority", "published_hours_ago": 2, "facts": [{"claim": "evacuations", "value": "80", "status": "preliminary"}]},
+        {"id": "confirmed", "source_id": "authority-b", "authority": "national_authority", "published_hours_ago": 2, "facts": [{"claim": "evacuations", "value": "75", "status": "confirmed"}]}
+      ],
+      "claims": {"evacuations": {"availability": "present", "current": "75", "dispositions": {"preliminary": "conflicting", "confirmed": "current"}, "freshness": {"preliminary": "fresh", "confirmed": "fresh"}}}
+    },
+    {
+      "id": "identical-timestamp-stable-source-tie-break",
+      "reports": [
+        {"id": "same-time-a", "source_id": "authority-a", "authority": "national_authority", "published_hours_ago": 2, "facts": [{"claim": "rescued", "value": "10", "status": "confirmed"}]},
+        {"id": "same-time-b", "source_id": "authority-b", "authority": "national_authority", "published_hours_ago": 2, "facts": [{"claim": "rescued", "value": "11", "status": "confirmed"}]}
+      ],
+      "claims": {"rescued": {"availability": "present", "current": "11", "dispositions": {"same-time-a": "conflicting", "same-time-b": "current"}, "freshness": {"same-time-a": "fresh", "same-time-b": "fresh"}}}
+    },
+    {
+      "id": "stale-followed-by-fresh-confirmation",
+      "reports": [
+        {"id": "stale-copy", "source_id": "authority-a", "authority": "national_authority", "published_hours_ago": 30, "facts": [{"claim": "shelters", "value": "6", "status": "confirmed"}]},
+        {"id": "fresh-confirmation", "source_id": "authority-b", "authority": "national_authority", "published_hours_ago": 1, "facts": [{"claim": "shelters", "value": "6", "status": "confirmed"}]}
+      ],
+      "claims": {"shelters": {"availability": "present", "current": "6", "dispositions": {"stale-copy": "duplicate", "fresh-confirmation": "current"}, "freshness": {"stale-copy": "stale", "fresh-confirmation": "fresh"}}}
+    },
+    {
+      "id": "later-report-omits-value",
+      "reports": [
+        {"id": "value-present", "source_id": "national", "authority": "national_authority", "published_hours_ago": 3, "facts": [{"claim": "fatalities", "value": "2", "status": "confirmed"}]},
+        {"id": "later-omission", "source_id": "national", "authority": "national_authority", "published_hours_ago": 1, "facts": []}
+      ],
+      "claims": {"fatalities": {"availability": "present", "current": "2", "dispositions": {"value-present": "current"}, "freshness": {"value-present": "fresh"}, "omissions": ["later-omission"]}}
+    },
+    {
+      "id": "explicit-unknown-is-missing",
+      "reports": [
+        {"id": "unknown", "source_id": "national", "authority": "national_authority", "published_hours_ago": 1, "facts": [{"claim": "fatalities", "value": "unknown", "status": "unknown"}]}
+      ],
+      "claims": {"fatalities": {"availability": "absent", "current": null, "dispositions": {"unknown": "unusable"}, "freshness": {"unknown": "fresh"}}}
+    },
+    {
+      "id": "explicit-zero-is-observed",
+      "reports": [
+        {"id": "zero", "source_id": "national", "authority": "national_authority", "published_hours_ago": 1, "facts": [{"claim": "fatalities", "value": "0", "status": "confirmed"}]}
+      ],
+      "claims": {"fatalities": {"availability": "present", "current": "0", "dispositions": {"zero": "current"}, "freshness": {"zero": "fresh"}}}
+    },
+    {
+      "id": "wrong-event-excluded",
+      "reports": [
+        {"id": "matched", "source_id": "national-a", "authority": "national_authority", "published_hours_ago": 2, "event_id": "fixture:event", "correlation": "matched", "facts": [{"claim": "fatalities", "value": "2", "status": "confirmed"}]},
+        {"id": "wrong-event", "source_id": "national-b", "authority": "national_authority", "published_hours_ago": 1, "event_id": "other:event", "correlation": "unmatched", "facts": [{"claim": "fatalities", "value": "99", "status": "confirmed"}]}
+      ],
+      "claims": {"fatalities": {"availability": "present", "current": "2", "dispositions": {"matched": "current"}, "freshness": {"matched": "fresh"}}}
+    },
+    {
+      "id": "wrong-hazard-excluded",
+      "reports": [
+        {"id": "matched-hazard", "source_id": "national-a", "authority": "national_authority", "published_hours_ago": 2, "hazard": "earthquake", "correlation": "matched", "facts": [{"claim": "injuries", "value": "4", "status": "confirmed"}]},
+        {"id": "wrong-hazard", "source_id": "national-b", "authority": "national_authority", "published_hours_ago": 1, "hazard": "flood", "correlation": "matched", "facts": [{"claim": "injuries", "value": "40", "status": "confirmed"}]}
+      ],
+      "claims": {"injuries": {"availability": "present", "current": "4", "dispositions": {"matched-hazard": "current"}, "freshness": {"matched-hazard": "fresh"}}}
+    },
+    {
+      "id": "chronology-precedence",
+      "reports": [
+        {"id": "updated", "source_id": "authority-a", "authority": "national_authority", "published_hours_ago": 10, "updated_hours_ago": 2, "observed_hours_ago": 1, "facts": [{"claim": "roads", "value": "12 closed", "status": "confirmed"}]},
+        {"id": "published", "source_id": "authority-b", "authority": "national_authority", "published_hours_ago": 3, "observed_hours_ago": 0, "facts": [{"claim": "roads", "value": "15 closed", "status": "confirmed"}]}
+      ],
+      "claims": {"roads": {"availability": "present", "current": "12 closed", "dispositions": {"updated": "current", "published": "conflicting"}, "freshness": {"updated": "fresh", "published": "fresh"}}}
+    },
+    {
+      "id": "stale-current-observation",
+      "reports": [
+        {"id": "stale-current", "source_id": "national", "authority": "national_authority", "published_hours_ago": 25, "facts": [{"claim": "utilities", "value": "outage", "status": "confirmed"}]}
+      ],
+      "claims": {"utilities": {"availability": "present", "current": "outage", "dispositions": {"stale-current": "current"}, "freshness": {"stale-current": "stale"}}}
+    }
+  ]
+}

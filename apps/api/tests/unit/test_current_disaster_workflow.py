@@ -21,6 +21,8 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 )
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
+    EvidenceAvailability,
+    EvidenceDisposition,
     FactStatus,
     Hazard,
     ReportedFact,
@@ -208,6 +210,14 @@ def test_evidence_reconciliation_replaces_older_secondary_and_keeps_conflict() -
     assert packet.facts[0].source == official_new
     assert packet.conflicts
     assert "3" in packet.conflicts[0]
+    assert packet.world_state is not None
+    claim = packet.world_state.claim("fatalities")
+    assert claim.current is not None and claim.current.fact == packet.facts[0]
+    assert {item.disposition for item in claim.history} == {
+        EvidenceDisposition.CURRENT,
+        EvidenceDisposition.SUPERSEDED,
+        EvidenceDisposition.CONFLICTING,
+    }
 
 
 def test_missing_is_not_zero_and_instruction_like_text_is_removed() -> None:
@@ -232,6 +242,11 @@ def test_missing_is_not_zero_and_instruction_like_text_is_removed() -> None:
     )
     assert all(item.category != "fatalities" for item in packet.facts)
     assert "not confirmation of zero impact" not in " ".join(packet.narratives)
+    assert packet.world_state is not None
+    assert (
+        packet.world_state.claim("fatalities").availability
+        == EvidenceAvailability.ABSENT
+    )
 
 
 def test_duplicate_syndicated_narratives_are_collapsed_and_stale_data_is_labelled() -> (

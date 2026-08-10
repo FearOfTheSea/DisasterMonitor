@@ -1,13 +1,22 @@
 """Hazard-specific event equivalence, ranking, and ambiguity policies."""
 
 import re
+from collections import deque
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from math import asin, cos, radians, sin, sqrt
 from typing import Protocol
 
 from disaster_monitor.application.disaster import DisasterQuery
-from disaster_monitor.domain.disaster import DisasterEvent, Hazard
+from disaster_monitor.domain.disaster import (
+    DisasterEvent,
+    EventAssignmentStatus,
+    EventObservationAssignment,
+    Hazard,
+    PhysicalEventIdentity,
+    PhysicalEventIdentityResult,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +27,9 @@ class EventResolution:
     alternatives: tuple[DisasterEvent, ...]
     ambiguous: bool
     rationale: str
+    physical_events: tuple[PhysicalEventIdentity, ...] = ()
+    selected_physical_event: PhysicalEventIdentity | None = None
+    ambiguous_assignments: tuple[EventObservationAssignment, ...] = ()
 
 
 class EventPolicy(Protocol):
@@ -40,6 +52,10 @@ class EventPolicy(Protocol):
     def cluster(
         self, events: tuple[DisasterEvent, ...]
     ) -> tuple[DisasterEvent, ...]: ...
+
+    def identify(
+        self, events: tuple[DisasterEvent, ...]
+    ) -> PhysicalEventIdentityResult: ...
 
     def resolve(
         self,
@@ -104,8 +120,48 @@ def _intensity_score(value: str | None) -> float:
     return 0.0
 
 
+def _qualified_identifier(event: DisasterEvent, identifier: str) -> str:
+    normalized = identifier.strip().lower()
+    if ":" in normalized:
+        return normalized
+    return f"{event.source.source_id.lower()}:{normalized}"
+
+
 def _provider_identifiers(event: DisasterEvent) -> set[str]:
-    return {event.event_id.lower(), *(item.lower() for item in event.provider_ids)}
+    return {
+        _qualified_identifier(event, item)
+        for item in (event.event_id, *event.provider_ids)
+        if item.strip()
+    }
+
+
+def event_observation_key(event: DisasterEvent) -> str:
+    """Return a stable key for one normalized provider observation."""
+    timestamp = event.event_time.astimezone(UTC).isoformat()
+    material = "|".join(
+        (
+            event.source.source_id.lower(),
+            event.event_id.lower(),
+            event.hazard.value,
+            event.country.alpha3_code.lower(),
+            timestamp,
+            event.location.casefold(),
+            str(event.latitude),
+            str(event.longitude),
+            event.source.canonical_url.lower(),
+        )
+    )
+    digest = sha256(material.encode("utf-8")).hexdigest()[:16]
+    return f"observation:{event.source.source_id.lower()}:{digest}"
+
+
+def _event_order_key(event: DisasterEvent) -> tuple[str, str, str, str]:
+    return (
+        event.hazard.value,
+        event.country.alpha3_code,
+        event.event_time.astimezone(UTC).isoformat(),
+        event_observation_key(event),
+    )
 
 
 def _preferred_event(events: list[DisasterEvent]) -> DisasterEvent:
@@ -116,11 +172,13 @@ def _preferred_event(events: list[DisasterEvent]) -> DisasterEvent:
             event.latitude is not None and event.longitude is not None,
             event.significance or 0,
             "usgs:" in event.event_id.lower(),
+            event_observation_key(event),
         ),
     )
 
 
 def _merge_event(events: list[DisasterEvent]) -> DisasterEvent:
+    events = sorted(events, key=_event_order_key)
     if len(events) == 1:
         return events[0]
     preferred = _preferred_event(events)
@@ -143,12 +201,24 @@ def _merge_event(events: list[DisasterEvent]) -> DisasterEvent:
         parent_event_id=preferred.parent_event_id or richest.parent_event_id,
         sequence_id=preferred.sequence_id or richest.sequence_id,
         provider_ids=tuple(
-            dict.fromkeys(
-                identifier
-                for event in events
-                for identifier in (event.event_id, *event.provider_ids)
+            sorted(
+                set(
+                    identifier
+                    for event in events
+                    for identifier in (event.event_id, *event.provider_ids)
+                )
             )
         ),
+    )
+
+
+def _physical_event_id(events: tuple[DisasterEvent, ...]) -> str:
+    first = events[0]
+    material = "|".join(event_observation_key(event) for event in events)
+    digest = sha256(material.encode("utf-8")).hexdigest()[:20]
+    return (
+        f"physical-event:{first.hazard.value}:"
+        f"{first.country.alpha3_code.lower()}:{digest}"
     )
 
 
@@ -164,21 +234,123 @@ class BaseEventPolicy:
         raise NotImplementedError
 
     def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
-        return bool(_provider_identifiers(first) & _provider_identifiers(second))
+        if (
+            first.hazard != second.hazard
+            or first.country.alpha3_code != second.country.alpha3_code
+        ):
+            return False
+        return bool(
+            _provider_identifiers(first) & _provider_identifiers(second)
+            and abs((first.event_time - second.event_time).total_seconds()) <= 24 * 3600
+        )
 
     def same_sequence(self, first: DisasterEvent, second: DisasterEvent) -> bool:
         return self.same_physical_event(first, second)
 
     def cluster(self, events: tuple[DisasterEvent, ...]) -> tuple[DisasterEvent, ...]:
-        clusters: list[list[DisasterEvent]] = []
-        for event in events:
-            for cluster in clusters:
-                if any(self.same_physical_event(event, item) for item in cluster):
-                    cluster.append(event)
-                    break
-            else:
-                clusters.append([event])
-        return tuple(_merge_event(cluster) for cluster in clusters)
+        """Compatibility projection of the explicit physical-event partition."""
+        return tuple(
+            identity.event for identity in self.identify(events).physical_events
+        )
+
+    def identify(
+        self, events: tuple[DisasterEvent, ...]
+    ) -> PhysicalEventIdentityResult:
+        """Partition observations without order-dependent transitive merging.
+
+        A connected equivalence component is merged only when every pair agrees.
+        Non-clique components remain singleton physical events with explicit ambiguous
+        assignments, preventing an A~B~C chain from coercing A and C together.
+        """
+        ordered = tuple(sorted(events, key=_event_order_key))
+        compatible: dict[str, set[str]] = {
+            event_observation_key(event): set() for event in ordered
+        }
+        by_key = {event_observation_key(event): event for event in ordered}
+        for index, first in enumerate(ordered):
+            first_key = event_observation_key(first)
+            for second in ordered[index + 1 :]:
+                if not self.same_physical_event(first, second):
+                    continue
+                second_key = event_observation_key(second)
+                compatible[first_key].add(second_key)
+                compatible[second_key].add(first_key)
+
+        components: list[tuple[str, ...]] = []
+        remaining = set(by_key)
+        while remaining:
+            start = min(remaining)
+            queue = deque((start,))
+            component: set[str] = set()
+            while queue:
+                current = queue.popleft()
+                if current in component:
+                    continue
+                component.add(current)
+                queue.extend(sorted(compatible[current] - component))
+            remaining -= component
+            components.append(tuple(sorted(component)))
+
+        identities: list[PhysicalEventIdentity] = []
+        ambiguous_assignments: list[EventObservationAssignment] = []
+        for component_keys in sorted(components):
+            pair_count = len(component_keys) * (len(component_keys) - 1) // 2
+            actual_pairs = sum(len(compatible[key]) for key in component_keys) // 2
+            is_complete = actual_pairs == pair_count
+            groups = (
+                (component_keys,)
+                if is_complete
+                else tuple((key,) for key in component_keys)
+            )
+            for group in groups:
+                observations = tuple(by_key[key] for key in group)
+                physical_event_id = _physical_event_id(observations)
+                assignments: list[EventObservationAssignment] = []
+                for key in group:
+                    status = (
+                        EventAssignmentStatus.ASSIGNED
+                        if is_complete
+                        else EventAssignmentStatus.AMBIGUOUS
+                    )
+                    assignment = EventObservationAssignment(
+                        observation_key=key,
+                        physical_event_id=physical_event_id,
+                        status=status,
+                        rationale=(
+                            "All observations in the cluster satisfy the hazard policy "
+                            "pairwise."
+                            if len(group) > 1
+                            else (
+                                "No equivalent observation was found."
+                                if is_complete
+                                else "The observation matches multiple incompatible "
+                                "cluster alternatives and was kept separate."
+                            )
+                        ),
+                        compatible_observation_keys=tuple(sorted(compatible[key])),
+                    )
+                    assignments.append(assignment)
+                    if status == EventAssignmentStatus.AMBIGUOUS:
+                        ambiguous_assignments.append(assignment)
+                identities.append(
+                    PhysicalEventIdentity(
+                        physical_event_id=physical_event_id,
+                        event=_merge_event(list(observations)),
+                        observations=observations,
+                        assignments=tuple(assignments),
+                    )
+                )
+        return PhysicalEventIdentityResult(
+            physical_events=tuple(
+                sorted(identities, key=lambda item: item.physical_event_id)
+            ),
+            ambiguous_assignments=tuple(
+                sorted(
+                    ambiguous_assignments,
+                    key=lambda item: item.observation_key,
+                )
+            ),
+        )
 
     def _filtered(
         self,
@@ -230,22 +402,40 @@ class BaseEventPolicy:
         *,
         now: datetime,
     ) -> EventResolution:
+        identity_result = self.identify(candidates)
+        identity_by_observation = {
+            event_observation_key(identity.event): identity
+            for identity in identity_result.physical_events
+        }
         ranked = sorted(
-            self._filtered(candidates, query, now),
-            key=lambda item: self.rank(item, query, now),
+            self._filtered(
+                tuple(identity.event for identity in identity_result.physical_events),
+                query,
+                now,
+            ),
+            key=lambda item: (self.rank(item, query, now), event_observation_key(item)),
             reverse=True,
         )
         if not ranked:
             return EventResolution(
-                None, (), False, "No candidate matched the bounded query window."
+                None,
+                (),
+                False,
+                "No candidate matched the bounded query window.",
+                physical_events=identity_result.physical_events,
+                ambiguous_assignments=identity_result.ambiguous_assignments,
             )
         selected = ranked[0]
+        selected_identity = identity_by_observation[event_observation_key(selected)]
         alternatives = tuple(ranked[1:4])
-        ambiguous = False
+        ambiguous = any(
+            assignment.status == EventAssignmentStatus.AMBIGUOUS
+            for assignment in selected_identity.assignments
+        )
         if len(ranked) > 1:
             second = ranked[1]
             score_gap = self.rank(selected, query, now) - self.rank(second, query, now)
-            ambiguous = (
+            ambiguous = ambiguous or (
                 not self.same_sequence(selected, second)
                 and score_gap < self.ambiguity_threshold
             )
@@ -254,6 +444,9 @@ class BaseEventPolicy:
             alternatives,
             ambiguous,
             self.describe_selection(query, ambiguous),
+            physical_events=identity_result.physical_events,
+            selected_physical_event=selected_identity,
+            ambiguous_assignments=identity_result.ambiguous_assignments,
         )
 
 
@@ -286,7 +479,10 @@ class EarthquakeEventPolicy(BaseEventPolicy):
         )
 
     def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
-        if first.hazard != second.hazard or first.country != second.country:
+        if (
+            first.hazard != second.hazard
+            or first.country.alpha3_code != second.country.alpha3_code
+        ):
             return False
         if super().same_physical_event(first, second):
             return True
@@ -372,10 +568,14 @@ class EarthquakeEventPolicy(BaseEventPolicy):
         if resolution.selected is None or not resolution.alternatives:
             return resolution
         second = resolution.alternatives[0]
-        ambiguous = not self.same_sequence(resolution.selected, second) and (
-            self.rank(resolution.selected, query, now) - self.rank(second, query, now)
-            < self.ambiguity_threshold
-            or second.is_aftershock
+        ambiguous = resolution.ambiguous or (
+            not self.same_sequence(resolution.selected, second)
+            and (
+                self.rank(resolution.selected, query, now)
+                - self.rank(second, query, now)
+                < self.ambiguity_threshold
+                or second.is_aftershock
+            )
         )
         return replace(
             resolution,
@@ -411,10 +611,10 @@ class DefaultEventPolicy(BaseEventPolicy):
         if resolution.selected is None or not resolution.alternatives:
             return resolution
         second = resolution.alternatives[0]
-        similar = abs(
-            (resolution.selected.event_time - second.event_time).total_seconds()
-        ) < self.ambiguity_threshold and not self.same_sequence(
-            resolution.selected, second
+        similar = resolution.ambiguous or (
+            abs((resolution.selected.event_time - second.event_time).total_seconds())
+            < self.ambiguity_threshold
+            and not self.same_sequence(resolution.selected, second)
         )
         return replace(
             resolution,
@@ -450,7 +650,7 @@ def resolve_recent_event(
 ) -> EventResolution:
     """Compatibility entry point backed by the typed hazard policy registry."""
     policy = default_event_policy_registry().for_hazard(query.hazard)
-    return policy.resolve(policy.cluster(candidates), query, now=now)
+    return policy.resolve(candidates, query, now=now)
 
 
 def cluster_physical_events(

@@ -1,17 +1,24 @@
 """Normalize provider records into a bounded, source-attributed evidence packet."""
 
 import re
-from datetime import UTC, datetime, timedelta
+from dataclasses import replace
+from datetime import UTC, datetime
 from html import unescape
 
 from disaster_monitor.application.disaster import DisasterQuery, EvidencePacket
+from disaster_monitor.application.services.evidence_state import (
+    build_evidence_world_state,
+    source_is_stale,
+)
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     DisasterEvent,
+    EvidenceDisposition,
+    EvidenceFreshness,
     FactStatus,
+    PhysicalEventIdentity,
     ReportedFact,
     SituationReport,
-    SourceAuthority,
     SourceReference,
 )
 
@@ -158,43 +165,42 @@ def _source_key(source: SourceReference) -> str:
     return source.canonical_url.rstrip("/").lower()
 
 
-def _source_priority(source: SourceReference) -> int:
-    return {
-        SourceAuthority.NATIONAL_AUTHORITY: 4,
-        SourceAuthority.SCIENTIFIC_AUTHORITY: 3,
-        SourceAuthority.HUMANITARIAN_AGGREGATOR: 2,
-        SourceAuthority.SECONDARY: 1,
-    }[source.authority]
-
-
-def _fact_status_priority(status: FactStatus) -> int:
-    return {
-        FactStatus.CONFIRMED: 5,
-        FactStatus.PRELIMINARY: 4,
-        FactStatus.ESTIMATED: 3,
-        FactStatus.DISPUTED: 2,
-        FactStatus.UNKNOWN: 1,
-    }[status]
-
-
-def _fact_key(fact: ReportedFact) -> str:
-    return fact.claim_id or fact.category
-
-
 def _deduplicate_reports(
     reports: tuple[SituationReport, ...],
 ) -> tuple[SituationReport, ...]:
     unique: dict[str, SituationReport] = {}
-    for report in reports:
+    ordered = sorted(
+        reports,
+        key=lambda report: (
+            report.source.effective_at,
+            report.source.source_id,
+            report.source.canonical_url,
+        ),
+    )
+    for report in ordered:
         narrative_key = re.sub(r"\W+", " ", report.narrative.lower()).strip()[:240]
         key = narrative_key if len(narrative_key) >= 40 else _source_key(report.source)
-        if key not in unique:
+        current = unique.get(key)
+        if current is None or (
+            report.source.effective_at,
+            report.source.source_id,
+            report.source.canonical_url,
+        ) > (
+            current.source.effective_at,
+            current.source.source_id,
+            current.source.canonical_url,
+        ):
             unique[key] = report
-            continue
-        current = unique[key]
-        if report.source.effective_at > current.source.effective_at:
-            unique[key] = report
-    return tuple(unique.values())
+    return tuple(
+        sorted(
+            unique.values(),
+            key=lambda report: (
+                report.source.effective_at,
+                report.source.source_id,
+                report.source.canonical_url,
+            ),
+        )
+    )
 
 
 def build_evidence_packet(
@@ -204,9 +210,9 @@ def build_evidence_packet(
     *,
     warnings: tuple[str, ...],
     retrieved_at: datetime,
+    physical_event: PhysicalEventIdentity | None = None,
 ) -> EvidencePacket:
     """Reconcile duplicate, newer, missing, and conflicting provider facts."""
-    reports = _deduplicate_reports(reports)
     correlated_reports: list[SituationReport] = []
     correlation_warnings: list[str] = []
     for report in reports:
@@ -239,56 +245,76 @@ def build_evidence_packet(
                 )
         else:
             correlated_reports.append(report)
-    reports = tuple(correlated_reports)
-    candidates: dict[str, list[ReportedFact]] = {}
-    for report in reports:
+    normalized_reports: list[SituationReport] = []
+    for report in correlated_reports:
+        normalized_facts: list[ReportedFact] = []
         for fact in report.facts:
             safe_value = sanitize_provider_text(fact.value, limit=240)
-            if not safe_value:
+            if not safe_value and fact.status != FactStatus.UNKNOWN:
                 continue
             if fact.event_id and not event.has_provider_id(fact.event_id):
                 continue
-            normalized = ReportedFact(
-                category=fact.category,
-                label=sanitize_provider_text(fact.label, limit=120),
-                value=safe_value,
-                status=fact.status,
-                source=fact.source,
-                event_id=fact.event_id or report.event_id or event.event_id,
-                observed_at=fact.observed_at,
-                claim_id=fact.claim_id,
+            normalized_facts.append(
+                ReportedFact(
+                    category=fact.category,
+                    label=sanitize_provider_text(fact.label, limit=120),
+                    value=safe_value,
+                    status=fact.status,
+                    source=fact.source,
+                    event_id=fact.event_id or report.event_id or event.event_id,
+                    observed_at=fact.observed_at,
+                    claim_id=fact.claim_id,
+                )
             )
-            candidates.setdefault(_fact_key(normalized), []).append(normalized)
-
-    selected: list[ReportedFact] = []
-    conflicts: list[str] = []
-    for claim_key, facts in candidates.items():
-        distinct_values = {fact.value.lower() for fact in facts}
-        ordered = sorted(
-            facts,
-            key=lambda fact: (
-                _source_priority(fact.source),
-                fact.source.effective_at,
-                _fact_status_priority(fact.status),
-            ),
-            reverse=True,
+        normalized_reports.append(
+            replace(
+                report,
+                narrative=sanitize_provider_text(report.narrative),
+                facts=tuple(normalized_facts),
+            )
         )
-        selected.append(ordered[0])
-        if len(distinct_values) > 1:
+    reports = tuple(normalized_reports)
+    world_state = build_evidence_world_state(
+        event,
+        reports,
+        evaluated_at=retrieved_at,
+        physical_event=physical_event,
+    )
+    selected = [
+        claim.current.fact for claim in world_state.claims if claim.current is not None
+    ]
+    conflicts: list[str] = []
+    for claim in world_state.claims:
+        conflicting = tuple(
+            item
+            for item in claim.history
+            if item.disposition == EvidenceDisposition.CONFLICTING
+        )
+        if claim.current is not None and conflicting:
+            observations = (claim.current, *(item.observation for item in conflicting))
             summary = "; ".join(
-                f"{fact.source.publisher}: {fact.value}" for fact in ordered[:4]
+                f"{item.fact.source.publisher}: {item.fact.value}"
+                for item in observations[:4]
             )
-            conflicts.append(f"{ordered[0].label or claim_key}: {summary}.")
+            conflicts.append(
+                f"{claim.current.fact.label or claim.claim_key}: {summary}."
+            )
+
+    projection_reports = _deduplicate_reports(reports)
 
     sources: list[SourceReference] = [event.source]
-    for report in reports:
+    for report in projection_reports:
         if _source_key(report.source) not in {_source_key(item) for item in sources}:
             sources.append(report.source)
     event_source_key = _source_key(event.source)
     stale = any(
         _source_key(report.source) != event_source_key
-        and retrieved_at - report.source.effective_at > timedelta(hours=24)
-        for report in reports
+        and source_is_stale(report.source.effective_at, retrieved_at)
+        for report in projection_reports
+    ) or any(
+        item.freshness == EvidenceFreshness.STALE
+        for claim in world_state.claims
+        for item in claim.history
     )
     stale_warning = (
         ("Some source updates are stale (more than 24 hours old).",) if stale else ()
@@ -296,8 +322,8 @@ def build_evidence_packet(
     narratives = tuple(
         f"{narrative} Source: {report.source.publisher} — {report.source.title} "
         f"({report.source.canonical_url})"
-        for report in reports
-        if (narrative := sanitize_provider_text(report.narrative))
+        for report in projection_reports
+        if (narrative := report.narrative)
     )
     impact_categories = {
         "fatalities",
@@ -333,7 +359,7 @@ def build_evidence_packet(
             report.narrative,
             re.IGNORECASE,
         )
-        for report in reports
+        for report in projection_reports
     )
     non_stale_warnings = tuple(
         warning
@@ -376,6 +402,7 @@ def build_evidence_packet(
         stale=stale,
         completeness=completeness,
         partial=partial,
+        world_state=world_state,
     )
 
 
@@ -390,6 +417,7 @@ class EvidenceReconciler:
         *,
         warnings: tuple[str, ...],
         retrieved_at: datetime,
+        physical_event: PhysicalEventIdentity | None = None,
     ) -> EvidencePacket:
         return build_evidence_packet(
             query,
@@ -397,4 +425,5 @@ class EvidenceReconciler:
             reports,
             warnings=warnings,
             retrieved_at=retrieved_at,
+            physical_event=physical_event,
         )

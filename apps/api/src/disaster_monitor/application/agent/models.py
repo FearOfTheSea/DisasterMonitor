@@ -13,7 +13,10 @@ from disaster_monitor.application.disaster import (
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
+    EvidenceWorldState,
     Hazard,
+    HypothesisArtifact,
+    PhysicalEventIdentity,
     SituationReport,
 )
 
@@ -164,9 +167,13 @@ class SourceSelectionSummary:
 class EvidenceWorkspace:
     source_selection: SourceSelectionSummary | None = None
     event_batch: ProviderBatch[DisasterEvent] | None = None
+    physical_events: tuple[PhysicalEventIdentity, ...] = ()
+    selected_physical_event: PhysicalEventIdentity | None = None
     selected_event: DisasterEvent | None = None
     alternatives: tuple[DisasterEvent, ...] = ()
     situation_batch: ProviderBatch[SituationReport] | None = None
+    evidence_state: EvidenceWorldState | None = None
+    hypotheses: tuple[HypothesisArtifact, ...] = ()
     evidence_packet: EvidencePacket | None = None
     report: DisasterReport | None = None
     source_ids: list[str] = field(default_factory=list)

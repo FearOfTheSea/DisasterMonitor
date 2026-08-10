@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "calibration_bins": 10,
+  "naive_baseline_probability": 0.5,
+  "cases": [
+    {
+      "id": "historical-positive-fatalities",
+      "kind": "historical",
+      "variants": 20,
+      "outcome": 1,
+      "reports": [
+        {"id": "fatalities-positive", "source_id": "national", "authority": "national_authority", "hours_ago": 1, "facts": [{"claim": "fatalities", "value": "3", "status": "confirmed"}]}
+      ]
+    },
+    {
+      "id": "counterfactual-positive-injuries",
+      "kind": "counterfactual",
+      "variants": 20,
+      "outcome": 1,
+      "reports": [
+        {"id": "injuries-positive", "source_id": "national", "authority": "national_authority", "hours_ago": 1, "facts": [{"claim": "injuries", "value": "12 injured", "status": "preliminary"}]}
+      ]
+    },
+    {
+      "id": "historical-explicit-zero-fatalities",
+      "kind": "historical",
+      "variants": 20,
+      "outcome": 0,
+      "reports": [
+        {"id": "fatalities-zero", "source_id": "national", "authority": "national_authority", "hours_ago": 1, "facts": [{"claim": "fatalities", "value": "0", "status": "confirmed"}]}
+      ]
+    },
+    {
+      "id": "counterfactual-explicit-zero-injuries",
+      "kind": "counterfactual",
+      "variants": 20,
+      "outcome": 0,
+      "reports": [
+        {"id": "injuries-zero", "source_id": "national", "authority": "national_authority", "hours_ago": 1, "facts": [{"claim": "injuries", "value": "0", "status": "confirmed"}]}
+      ]
+    },
+    {
+      "id": "unresolved-authority-conflict",
+      "kind": "adversarial",
+      "variants": 20,
+      "outcomes": [0, 1],
+      "reports": [
+        {"id": "conflict-positive", "source_id": "authority-a", "authority": "national_authority", "hours_ago": 2, "facts": [{"claim": "fatalities", "value": "2", "status": "confirmed"}]},
+        {"id": "conflict-zero", "source_id": "authority-b", "authority": "national_authority", "hours_ago": 1, "facts": [{"claim": "fatalities", "value": "0", "status": "confirmed"}]}
+      ]
+    },
+    {
+      "id": "missing-evidence-neutral",
+      "kind": "counterfactual",
+      "variants": 20,
+      "outcomes": [0, 1],
+      "reports": []
+    },
+    {
+      "id": "superseded-positive-current-zero",
+      "kind": "adversarial",
+      "variants": 20,
+      "outcome": 0,
+      "reports": [
+        {"id": "old-positive", "source_id": "national", "authority": "national_authority", "hours_ago": 5, "facts": [{"claim": "fatalities", "value": "2", "status": "confirmed"}]},
+        {"id": "corrected-zero", "source_id": "national", "authority": "national_authority", "hours_ago": 1, "facts": [{"claim": "fatalities", "value": "0", "status": "confirmed"}]}
+      ]
+    },
+    {
+      "id": "stale-positive-neutral",
+      "kind": "adversarial",
+      "variants": 20,
+      "outcomes": [0, 1],
+      "reports": [
+        {"id": "stale-positive", "source_id": "national", "authority": "national_authority", "hours_ago": 30, "facts": [{"claim": "fatalities", "value": "4", "status": "confirmed"}]}
+      ]
+    }
+  ]
+}

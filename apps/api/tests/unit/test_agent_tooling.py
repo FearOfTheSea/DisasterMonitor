@@ -309,6 +309,11 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     assert state.plan == default_investigation_plan(state.task)
     assert state.workspace.selected_event == event
     assert state.workspace.report is not None
+    assert len(state.workspace.hypotheses) == 1
+    assert state.workspace.hypotheses[0].truth_status == "inferred"
+    assert (
+        state.workspace.hypotheses[0].proposition not in state.workspace.report.message
+    )
     assert state.model_call_count == 0
 
     class ReplanAgent:

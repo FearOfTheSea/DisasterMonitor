@@ -7,6 +7,7 @@ from enum import StrEnum
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
+    EvidenceWorldState,
     Hazard,
     ReportedFact,
     SourceReference,
@@ -116,6 +117,7 @@ class EvidencePacket:
     stale: bool
     completeness: str = "partial"
     partial: bool = True
+    world_state: EvidenceWorldState | None = None
 
 
 @dataclass(frozen=True, slots=True)

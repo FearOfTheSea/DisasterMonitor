@@ -49,20 +49,24 @@ def _event(event_id: str, **changes: object) -> DisasterEvent:
 
 def test_earthquake_policy_clusters_cross_provider_observations() -> None:
     policy = EarthquakeEventPolicy()
-    clustered = policy.cluster(
-        (
-            _event("jma:target"),
-            _event(
-                "usgs:target",
-                event_time=NOW - timedelta(hours=2, seconds=-20),
-                latitude=37.02,
-                longitude=137.01,
-            ),
-        )
+    observations = (
+        _event("jma:target"),
+        _event(
+            "usgs:target",
+            event_time=NOW - timedelta(hours=2, seconds=-20),
+            latitude=37.02,
+            longitude=137.01,
+        ),
     )
+    identity = policy.identify(observations)
+    clustered = policy.cluster(observations)
 
     assert len(clustered) == 1
     assert set(clustered[0].provider_ids) == {"jma:target", "usgs:target"}
+    assert identity.physical_events[0].observations == observations
+    assert all(
+        assignment.rationale for assignment in identity.physical_events[0].assignments
+    )
 
 
 def test_earthquake_policy_never_clusters_across_country_or_hazard() -> None:
@@ -99,3 +103,14 @@ def test_default_policy_marks_similarly_recent_independent_events_ambiguous() ->
 
     assert resolution.selected == first
     assert resolution.ambiguous is True
+
+
+def test_default_policy_never_merges_shared_ids_across_scope() -> None:
+    policy = DefaultEventPolicy()
+    flood = _event("shared:event", hazard=Hazard.FLOOD)
+    foreign = _event("shared:event", hazard=Hazard.FLOOD, country=VENEZUELA)
+    earthquake = _event("shared:event", hazard=Hazard.EARTHQUAKE)
+
+    identity = policy.identify((flood, foreign, earthquake))
+
+    assert len(identity.physical_events) == 3

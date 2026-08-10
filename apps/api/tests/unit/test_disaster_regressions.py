@@ -219,6 +219,14 @@ def test_jma_and_usgs_observations_are_one_event_with_both_ids() -> None:
     assert normalized[0].jma_event_id == "20260805100000"
 
 
+def test_qualified_provider_ids_do_not_collide_across_namespaces() -> None:
+    selected = _event("jma:shared")
+
+    assert selected.has_provider_id("jma:shared")
+    assert selected.has_provider_id("shared")
+    assert not selected.has_provider_id("usgs:shared")
+
+
 def test_rejected_report_cannot_contribute_facts_and_narrative_is_preserved() -> None:
     event = _event("usgs:target")
     good_source = _source("ReliefWeb", "Ishikawa update")

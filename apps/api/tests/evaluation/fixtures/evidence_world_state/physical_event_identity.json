@@ -1,0 +1,152 @@
+{
+  "schema_version": "1.0",
+  "permutations_per_episode": 6,
+  "episodes": [
+    {
+      "id": "historical-2024-noto-mainshock",
+      "kind": "historical_replay",
+      "provenance": [
+        "https://www.jma.go.jp/jma/menu/20240101_noto_jishin.html",
+        "https://earthquake.usgs.gov/earthquakes/eventpage/us6000m0xl"
+      ],
+      "observations": [
+        {"id": "noto-jma", "source_id": "jma-rolling-earthquakes", "event_id": "jma:20240101161000", "event_time": "2024-01-01T07:10:00Z", "canonical_url": "https://www.jma.go.jp/jma/menu/20240101_noto_jishin.html", "lat": 37.5, "lon": 137.3, "magnitude": 7.6},
+        {"id": "noto-usgs", "source_id": "usgs-earthquakes", "event_id": "usgs:us6000m0xl", "event_time": "2024-01-01T07:10:09Z", "canonical_url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000m0xl", "lat": 37.487, "lon": 137.271, "magnitude": 7.5}
+      ],
+      "groups": [["noto-jma", "noto-usgs"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "cross-provider-match",
+      "observations": [
+        {"id": "jma", "source_id": "jma-events", "event_id": "jma:match", "seconds": 0, "lat": 37.0, "lon": 137.0, "magnitude": 6.1},
+        {"id": "usgs", "source_id": "usgs-events", "event_id": "usgs:match", "seconds": 20, "lat": 37.02, "lon": 137.01, "magnitude": 6.0}
+      ],
+      "groups": [["jma", "usgs"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "unqualified-namespace-collision",
+      "observations": [
+        {"id": "authority-a", "source_id": "authority-a", "event_id": "reused-42", "seconds": 0, "lat": 34.0, "lon": 135.0, "magnitude": 5.4},
+        {"id": "authority-b", "source_id": "authority-b", "event_id": "reused-42", "seconds": 15, "lat": 37.0, "lon": 140.0, "magnitude": 5.4}
+      ],
+      "groups": [["authority-a"], ["authority-b"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": true
+    },
+    {
+      "id": "missing-coordinates-shared-qualified-id",
+      "observations": [
+        {"id": "rolling", "source_id": "jma-rolling", "event_id": "jma:shared", "seconds": 0, "lat": null, "lon": null, "magnitude": 6.0},
+        {"id": "durable", "source_id": "jma-durable", "event_id": "durable:1", "provider_ids": ["jma:shared"], "seconds": 0, "lat": null, "lon": null, "magnitude": 6.0}
+      ],
+      "groups": [["rolling", "durable"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "missing-magnitude-geotemporal-match",
+      "observations": [
+        {"id": "with-mag", "source_id": "source-a", "event_id": "a:1", "seconds": 0, "lat": 36.0, "lon": 138.0, "magnitude": 5.8},
+        {"id": "without-mag", "source_id": "source-b", "event_id": "b:1", "seconds": 25, "lat": 36.01, "lon": 138.01, "magnitude": null}
+      ],
+      "groups": [["with-mag", "without-mag"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "nearby-simultaneous-independent",
+      "observations": [
+        {"id": "small", "source_id": "source-a", "event_id": "a:small", "seconds": 0, "lat": 36.0, "lon": 138.0, "magnitude": 5.0},
+        {"id": "large", "source_id": "source-b", "event_id": "b:large", "seconds": 10, "lat": 36.02, "lon": 138.02, "magnitude": 6.0}
+      ],
+      "groups": [["small"], ["large"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "delayed-provider-observation",
+      "observations": [
+        {"id": "early", "source_id": "source-a", "event_id": "a:delayed", "seconds": 0, "lat": 35.0, "lon": 136.0, "magnitude": 6.2, "retrieved_minutes": 2},
+        {"id": "delayed", "source_id": "source-b", "event_id": "b:delayed", "seconds": 30, "lat": 35.02, "lon": 136.01, "magnitude": 6.3, "retrieved_minutes": 180}
+      ],
+      "groups": [["early", "delayed"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "mainshock-aftershock-separation",
+      "observations": [
+        {"id": "mainshock", "source_id": "source-a", "event_id": "a:main", "seconds": 0, "lat": 37.0, "lon": 137.0, "magnitude": 6.7},
+        {"id": "aftershock", "source_id": "source-b", "event_id": "b:after", "seconds": 60, "lat": 37.05, "lon": 137.04, "magnitude": 5.2, "is_aftershock": true, "parent_event_id": "a:main"}
+      ],
+      "groups": [["mainshock"], ["aftershock"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "inclusive-threshold-boundary",
+      "observations": [
+        {"id": "boundary-a", "source_id": "source-a", "event_id": "a:boundary", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": 6.0},
+        {"id": "boundary-b", "source_id": "source-b", "event_id": "b:boundary", "seconds": 90, "lat": 35.0, "lon": 135.3, "magnitude": 6.5}
+      ],
+      "groups": [["boundary-a", "boundary-b"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "outside-time-threshold",
+      "observations": [
+        {"id": "outside-a", "source_id": "source-a", "event_id": "a:outside", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": 6.0},
+        {"id": "outside-b", "source_id": "source-b", "event_id": "b:outside", "seconds": 91, "lat": 35.01, "lon": 135.01, "magnitude": 6.0}
+      ],
+      "groups": [["outside-a"], ["outside-b"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": true
+    },
+    {
+      "id": "non-transitive-chain",
+      "observations": [
+        {"id": "chain-a", "source_id": "source-a", "event_id": "a:chain", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": 6.0},
+        {"id": "chain-b", "source_id": "source-b", "event_id": "b:chain", "seconds": 0, "lat": 35.0, "lon": 135.2, "magnitude": 6.0},
+        {"id": "chain-c", "source_id": "source-c", "event_id": "c:chain", "seconds": 0, "lat": 35.0, "lon": 135.4, "magnitude": 6.0}
+      ],
+      "groups": [["chain-a"], ["chain-b"], ["chain-c"]],
+      "ambiguous_assignments": ["chain-a", "chain-b", "chain-c"],
+      "resolution_ambiguous": true
+    },
+    {
+      "id": "cross-hazard-collision",
+      "observations": [
+        {"id": "earthquake", "source_id": "shared-source", "event_id": "shared:event", "hazard": "earthquake", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": 6.0},
+        {"id": "flood", "source_id": "shared-source", "event_id": "shared:event", "hazard": "flood", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": null}
+      ],
+      "groups": [["earthquake"], ["flood"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "cross-country-collision",
+      "observations": [
+        {"id": "japan", "source_id": "shared-source", "event_id": "shared:event", "country": "JPN", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": 6.0},
+        {"id": "venezuela", "source_id": "shared-source", "event_id": "shared:event", "country": "VEN", "seconds": 0, "lat": 10.0, "lon": -66.0, "magnitude": 6.0}
+      ],
+      "groups": [["japan"], ["venezuela"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": false
+    },
+    {
+      "id": "adversarially-similar-independent",
+      "observations": [
+        {"id": "adversarial-a", "source_id": "source-a", "event_id": "a:adversarial", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": 6.0},
+        {"id": "adversarial-b", "source_id": "source-b", "event_id": "b:adversarial", "seconds": 89, "lat": 35.0, "lon": 135.34, "magnitude": 6.0}
+      ],
+      "groups": [["adversarial-a"], ["adversarial-b"]],
+      "ambiguous_assignments": [],
+      "resolution_ambiguous": true
+    }
+  ]
+}

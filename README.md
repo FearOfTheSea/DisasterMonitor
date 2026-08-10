@@ -42,7 +42,7 @@ advanced analytics are intentionally deferred.
 ```text
 apps/api/       FastAPI application and Python tests
 apps/web/       Next.js application, OpenLayers map, and frontend tests
-docs/           Architecture and migration notes
+docs/           Architecture and other documentation
 scripts/        Deterministic system-test server and optional smoke helpers
 compose.yaml    Optional local two-service orchestration
 ```

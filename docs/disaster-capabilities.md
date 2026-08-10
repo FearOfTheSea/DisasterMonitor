@@ -47,6 +47,13 @@ equivalence, sequence handling, and ambiguity. Add a report profile only when th
 hazard needs sections beyond the generic human impact, physical/infrastructure impact,
 emergency response, gaps, sources, and freshness sections.
 
+All hazard policies produce the same generic `PhysicalEventIdentity` contract. They
+must preserve normalized observations and deterministic assignment rationale, enforce
+hazard/country boundaries, and leave non-transitive or otherwise confusable assignment
+sets explicit. Temporal evidence and hypotheses are hazard-neutral artifacts; a
+hazard-specific rule may be added only as application policy over canonical evidence,
+never inside provider transport.
+
 ## Geography metadata
 
 The packaged country metadata records ISO alpha-3 codes, canonical English names,

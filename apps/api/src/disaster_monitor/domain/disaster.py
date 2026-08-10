@@ -109,6 +109,43 @@ class SourceAuthority(StrEnum):
     SECONDARY = "secondary"
 
 
+class EventAssignmentStatus(StrEnum):
+    """Whether an observation has a unique physical-event assignment."""
+
+    ASSIGNED = "assigned"
+    AMBIGUOUS = "ambiguous"
+
+
+class EvidenceAvailability(StrEnum):
+    """Whether a claim has a usable current observation."""
+
+    PRESENT = "present"
+    ABSENT = "absent"
+
+
+class EvidenceDisposition(StrEnum):
+    """Temporal role of an observation in a canonical claim history."""
+
+    CURRENT = "current"
+    SUPERSEDED = "superseded"
+    CONFLICTING = "conflicting"
+    DUPLICATE = "duplicate"
+    UNUSABLE = "unusable"
+
+
+class EvidenceFreshness(StrEnum):
+    """Freshness of one observation at world-state evaluation time."""
+
+    FRESH = "fresh"
+    STALE = "stale"
+
+
+class HypothesisTruthStatus(StrEnum):
+    """Epistemic type for products that are never observations."""
+
+    INFERRED = "inferred"
+
+
 @dataclass(frozen=True, slots=True)
 class SourceReference:
     """A canonical source and the distinct timestamps attached to it."""
@@ -158,12 +195,18 @@ class DisasterEvent:
 
     def has_provider_id(self, value: str) -> bool:
         """Return whether a provider-specific identifier belongs to this event."""
-        normalized = value.lower()
+        normalized = value.strip().lower()
         identifiers = {
-            item.lower().removeprefix("jma:").removeprefix("usgs:")
+            item.strip().lower()
             for item in (self.event_id, *self.provider_ids)
+            if item.strip()
         }
-        return normalized.removeprefix("jma:").removeprefix("usgs:") in identifiers
+        if ":" in normalized:
+            return normalized in identifiers
+        return normalized in {
+            identifier.partition(":")[2] if ":" in identifier else identifier
+            for identifier in identifiers
+        }
 
     @property
     def jma_event_id(self) -> str | None:
@@ -172,6 +215,35 @@ class DisasterEvent:
             if value.lower().startswith("jma:"):
                 return value.removeprefix("jma:")
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class EventObservationAssignment:
+    """Auditable assignment of one provider observation to a physical event."""
+
+    observation_key: str
+    physical_event_id: str
+    status: EventAssignmentStatus
+    rationale: str
+    compatible_observation_keys: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PhysicalEventIdentity:
+    """One conservatively resolved physical event and all source observations."""
+
+    physical_event_id: str
+    event: DisasterEvent
+    observations: tuple[DisasterEvent, ...]
+    assignments: tuple[EventObservationAssignment, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PhysicalEventIdentityResult:
+    """Deterministic partition plus any deliberately unresolved assignments."""
+
+    physical_events: tuple[PhysicalEventIdentity, ...]
+    ambiguous_assignments: tuple[EventObservationAssignment, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,3 +276,98 @@ class SituationReport:
     hazard: Hazard | None = None
     magnitude: float | None = None
     provider_event_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceChronology:
+    """All relevant times plus the centralized effective comparison time."""
+
+    observed_at: datetime | None
+    published_at: datetime | None
+    updated_at: datetime | None
+    retrieved_at: datetime
+    effective_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceObservation:
+    """One immutable fact observation with complete report/source lineage."""
+
+    observation_id: str
+    claim_key: str
+    fact: ReportedFact
+    report: SituationReport
+    chronology: EvidenceChronology
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceObservationState:
+    """Classification of one retained observation in a claim history."""
+
+    observation: EvidenceObservation
+    disposition: EvidenceDisposition
+    freshness: EvidenceFreshness
+    rule_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimEvidenceState:
+    """Current selection and complete retained history for one claim."""
+
+    claim_key: str
+    availability: EvidenceAvailability
+    current: EvidenceObservation | None
+    history: tuple[EvidenceObservationState, ...]
+    omission_reports: tuple[SourceReference, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceWorldState:
+    """Request-scoped canonical evidence state for one physical event."""
+
+    state_version: str
+    physical_event: PhysicalEventIdentity
+    claims: tuple[ClaimEvidenceState, ...]
+    reports: tuple[SituationReport, ...]
+    evaluated_at: datetime
+
+    def claim(self, claim_key: str) -> ClaimEvidenceState:
+        """Return a typed absent state when no usable claim history exists."""
+        for claim in self.claims:
+            if claim.claim_key == claim_key:
+                return claim
+        return ClaimEvidenceState(
+            claim_key=claim_key,
+            availability=EvidenceAvailability.ABSENT,
+            current=None,
+            history=(),
+            omission_reports=(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class HypothesisFeature:
+    """Public rule contribution; this is audit metadata, not chain-of-thought."""
+
+    rule_id: str
+    description: str
+    contribution: float
+
+
+@dataclass(frozen=True, slots=True)
+class HypothesisArtifact:
+    """A deterministic inferred product kept structurally apart from observations."""
+
+    hypothesis_id: str
+    proposition: str
+    probability: float
+    supporting_evidence_ids: tuple[str, ...]
+    contradicting_evidence_ids: tuple[str, ...]
+    evaluated_at: datetime
+    state_version: str
+    rationale_features: tuple[HypothesisFeature, ...]
+    truth_status: HypothesisTruthStatus = HypothesisTruthStatus.INFERRED
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.probability <= 1.0:
+            raise ValueError("Hypothesis probability must be between zero and one.")

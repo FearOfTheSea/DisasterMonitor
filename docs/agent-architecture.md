@@ -36,8 +36,11 @@ Execution permits at most eight plan steps, twelve tool calls, four bounded mode
 operations, and one replan decision. There is no recursion, worker, background job,
 dynamic import, filesystem discovery, arbitrary URL selection, or generated-code
 execution. Tools enforce prerequisites and store normalized artifacts in a
-request-scoped evidence workspace. `CurrentDisasterReportService` is a compatibility
-facade over the same tools.
+request-scoped evidence workspace. Event discovery stores the auditable physical-event
+partition and selected identity as well as its compatibility `DisasterEvent`.
+Reconciliation stores the canonical temporal world state, its `EvidencePacket`
+projection, and a separate tuple of inferred hypothesis artifacts.
+`CurrentDisasterReportService` is a compatibility facade over the same tools.
 
 Current answers are composed by application code from `EvidencePacket`. Focused
 casualty answers include event identity, source, freshness, conflict, and explicit
@@ -45,6 +48,13 @@ missing-evidence language; absence is never rendered as zero. The optional API
 investigation summary exposes status, normalized task fields, actions, source IDs,
 evidence count, gaps, and termination reason. It excludes prompts, raw model/provider
 output, chain-of-thought, configuration, stack traces, and secrets.
+
+Historical observations in the workspace are immutable. Claim histories distinguish
+current, superseded, materially conflicting, duplicate, unusable/missing, and stale
+evidence. Later report omission is retained separately and does not silently retract a
+previous value. Hypotheses are always `HypothesisArtifact` values with
+`truth_status=inferred`; they are not `ReportedFact` values and are not part of current
+verified-fact rendering.
 
 The executable provider registry remains selection authority. A versioned static
 source catalog adds semantic roles, jurisdiction, authority, hazard/country scope,
@@ -67,3 +77,6 @@ requests are recorded as honest capability gaps while supported text may continu
 Phase 4 remains absent: disaster image retrieval, satellite/aerial imagery, raster or
 vector COP artifacts, agent-controlled map layers, CARTO, TerraLabo, online source
 crawling, and arbitrary generated retrieval code are not implemented.
+
+EW state also remains request-scoped: there is no database, continuous ingestion,
+background revision monitor, cross-request state recovery, or LLM probability model.
