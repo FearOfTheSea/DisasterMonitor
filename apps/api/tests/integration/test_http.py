@@ -569,6 +569,10 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     assert body["sections"][-1]["title"] == "Decision support"
     assert "Advisory analytical options only" in body["sections"][-1]["content"]
     assert "Continue approved-source monitoring" in body["message"]
+    assert "Scenario mode:" in body["sections"][-1]["content"]
+    assert "Sensitivity:" in body["sections"][-1]["content"]
+    assert "Evidence gaps:" in body["sections"][-1]["content"]
+    assert "Recommendation layer (" in body["sections"][-1]["content"]
     assert body["investigation"]["information_needs"] == ["decision_support"]
     assert model.requests == []
 

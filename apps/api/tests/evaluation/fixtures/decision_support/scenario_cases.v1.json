@@ -1,0 +1,164 @@
+{
+  "fixture_version": "dm-ds-b-v1",
+  "calibration_bins": 10,
+  "cases": [
+    {
+      "id": "positive-fatalities",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 5.2,
+      "variants": 20,
+      "outcome": 1,
+      "expected_mode": "material_human_impact",
+      "expected_recommendation": "human_review_required",
+      "reports": [
+        {
+          "source_id": "national-positive-fatalities",
+          "hours_ago": 1,
+          "facts": [
+            {"category": "fatalities", "value": "3", "status": "confirmed"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "positive-injuries",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "variants": 20,
+      "outcome": 1,
+      "expected_mode": "material_human_impact",
+      "expected_recommendation": "available",
+      "reports": [
+        {
+          "source_id": "national-positive-injuries",
+          "hours_ago": 1,
+          "facts": [
+            {"category": "injuries", "value": "12 injured", "status": "preliminary"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "explicit-zero-fatalities",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "variants": 20,
+      "outcome": 0,
+      "expected_mode": "limited_observed_human_impact",
+      "expected_recommendation": "available",
+      "reports": [
+        {
+          "source_id": "national-zero-fatalities",
+          "hours_ago": 1,
+          "facts": [
+            {"category": "fatalities", "value": "0", "status": "confirmed"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "explicit-zero-injuries",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "variants": 20,
+      "outcome": 0,
+      "expected_mode": "limited_observed_human_impact",
+      "expected_recommendation": "available",
+      "reports": [
+        {
+          "source_id": "national-zero-injuries",
+          "hours_ago": 1,
+          "facts": [
+            {"category": "injuries", "value": "0", "status": "confirmed"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "conflict-neutral",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "variants": 20,
+      "outcomes": [0, 1],
+      "expected_mode": "unresolved",
+      "expected_recommendation": "human_review_required",
+      "reports": [
+        {
+          "source_id": "national-conflict-positive",
+          "hours_ago": 2,
+          "facts": [
+            {"category": "fatalities", "value": "2", "status": "confirmed"}
+          ]
+        },
+        {
+          "source_id": "national-conflict-zero",
+          "hours_ago": 1,
+          "facts": [
+            {"category": "fatalities", "value": "0", "status": "confirmed"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "missing-neutral",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "variants": 20,
+      "outcomes": [0, 1],
+      "expected_mode": "unresolved",
+      "expected_recommendation": "disabled_unsupported_premise",
+      "reports": []
+    },
+    {
+      "id": "superseded-positive-current-zero",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "variants": 20,
+      "outcome": 0,
+      "expected_mode": "limited_observed_human_impact",
+      "expected_recommendation": "available",
+      "reports": [
+        {
+          "source_id": "national-correction",
+          "hours_ago": 5,
+          "facts": [
+            {"category": "fatalities", "value": "2", "status": "confirmed"}
+          ]
+        },
+        {
+          "source_id": "national-correction",
+          "hours_ago": 1,
+          "facts": [
+            {"category": "fatalities", "value": "0", "status": "confirmed"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "stale-positive-neutral",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "variants": 20,
+      "outcomes": [0, 1],
+      "expected_mode": "unresolved",
+      "expected_recommendation": "human_review_required",
+      "reports": [
+        {
+          "source_id": "national-stale",
+          "hours_ago": 30,
+          "facts": [
+            {"category": "fatalities", "value": "4", "status": "confirmed"}
+          ]
+        }
+      ]
+    }
+  ]
+}

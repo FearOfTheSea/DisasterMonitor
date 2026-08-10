@@ -1,9 +1,10 @@
 import json
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from evidence_world_state_metrics import expected_calibration_error
 
 from disaster_monitor.application.services.decision_support import (
     DecisionOptionGenerator,
@@ -21,9 +22,15 @@ from disaster_monitor.application.services.hypothesis_reasoning import (
 from disaster_monitor.application.services.incident_priority import (
     IncidentPriorityRanker,
 )
+from disaster_monitor.application.services.scenario_reasoning import (
+    validate_scenario_analysis,
+)
 from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 from disaster_monitor.domain.decision import (
+    PROHIBITED_CONSEQUENTIAL_ACTIONS,
     DecisionFact,
+    DecisionRecommendationStatus,
+    DecisionScenarioMode,
     DecisionStatementType,
 )
 from disaster_monitor.domain.disaster import (
@@ -92,12 +99,13 @@ def _state(item: dict[str, object]):
     for raw_report in raw_reports:
         assert isinstance(raw_report, dict)
         source_id = str(raw_report["source_id"])
+        source_time = NOW - timedelta(hours=float(raw_report.get("hours_ago", 0)))
         source = SourceReference(
             source_id=source_id,
             publisher=f"Authority {source_id}",
             title=f"Situation {source_id}",
             canonical_url=f"https://reports.example/{case_id}/{source_id}",
-            published_at=NOW,
+            published_at=source_time,
             updated_at=None,
             retrieved_at=NOW,
             authority=SourceAuthority.NATIONAL_AUTHORITY,
@@ -109,7 +117,7 @@ def _state(item: dict[str, object]):
                 category=str(fact["category"]),
                 label=str(fact["category"]).replace("_", " ").title(),
                 value=str(fact["value"]),
-                status=FactStatus.CONFIRMED,
+                status=FactStatus(str(fact.get("status", "confirmed"))),
                 source=source,
                 event_id=case_id,
                 claim_id=str(fact["category"]),
@@ -279,3 +287,118 @@ def test_ds_a_is_deterministic_across_repeated_packet_order() -> None:
     for replay in range(8):
         ordered = cases if replay % 2 == 0 else tuple(reversed(cases))
         assert {str(item["id"]): _products(item)[-1] for item in ordered} == baseline
+
+
+def test_ds_b_release_gate() -> None:
+    fixture = json.loads(
+        (FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+    )
+    assert fixture["fixture_version"] == "dm-ds-b-v1"
+    cases = fixture["cases"]
+    assert isinstance(cases, list) and cases
+    consistency_passed = 0
+    policy_passed = 0
+    policy_total = 0
+    predictions: list[float] = []
+    outcomes: list[int] = []
+
+    for item in cases:
+        state, hypotheses, _priority, triage, artifact = _products(item)
+        analysis = artifact.scenario_analysis
+        consistency_passed += analysis.mode == DecisionScenarioMode(
+            str(item["expected_mode"])
+        )
+        assert analysis.recommendation.status == DecisionRecommendationStatus(
+            str(item["expected_recommendation"])
+        )
+        assert analysis.assumption_sensitivity
+        assert analysis.evidence_gaps == artifact.evidence_gaps
+        material = next(
+            scenario
+            for scenario in analysis.scenarios
+            if scenario.mode == DecisionScenarioMode.MATERIAL_HUMAN_IMPACT
+        )
+        variants = int(item["variants"])
+        prediction_cycle = [material.probability] * variants
+        predictions.extend(prediction_cycle)
+        outcome_cycle = item.get("outcomes")
+        if outcome_cycle is None:
+            outcomes.extend([int(item["outcome"])] * variants)
+        else:
+            assert isinstance(outcome_cycle, list)
+            outcomes.extend(
+                int(outcome_cycle[index % len(outcome_cycle)])
+                for index in range(variants)
+            )
+        constrained = (
+            *artifact.options,
+            *analysis.scenarios,
+            analysis.recommendation,
+        )
+        for product in constrained:
+            policy_total += 1
+            constraints = getattr(
+                product,
+                "prohibited_actions",
+                getattr(product, "policy_constraints", ()),
+            )
+            policy_passed += constraints == PROHIBITED_CONSEQUENTIAL_ACTIONS
+        validate_scenario_analysis(
+            analysis,
+            state=state,
+            facts=artifact.facts,
+            assumptions=artifact.assumptions,
+            options=artifact.options,
+            hypotheses=hypotheses,
+            triage=triage,
+            expected_gaps=artifact.evidence_gaps,
+        )
+
+    consistency_rate = consistency_passed / len(cases)
+    calibration_ece = expected_calibration_error(
+        predictions, outcomes, bins=int(fixture["calibration_bins"])
+    )
+    policy_rate = policy_passed / policy_total
+    assert consistency_rate >= 0.90, ("ds_b.scenario_consistency", consistency_rate)
+    assert calibration_ece <= 0.05, ("ds_b.ece", calibration_ece)
+    assert policy_rate >= 0.95, ("ds_b.policy_adherence", policy_rate)
+
+
+def test_ds_b_disables_unsupported_recommendation_and_rejects_policy_escape() -> None:
+    fixture = json.loads(
+        (FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+    )
+    cases = fixture["cases"]
+    assert isinstance(cases, list)
+    missing = next(item for item in cases if item["id"] == "missing-neutral")
+    state, hypotheses, _priority, triage, artifact = _products(missing)
+    analysis = artifact.scenario_analysis
+    recommendation = analysis.recommendation
+    assert (
+        recommendation.status
+        == DecisionRecommendationStatus.DISABLED_UNSUPPORTED_PREMISE
+    )
+    assert recommendation.option_id is None
+    assert recommendation.confidence is None
+    assert recommendation.unsupported_premise_ids
+
+    escaped = replace(analysis.scenarios[0], policy_constraints=("public_warning",))
+    with pytest.raises(ValueError, match="policy lineage"):
+        validate_scenario_analysis(
+            replace(analysis, scenarios=(escaped, analysis.scenarios[1])),
+            state=state,
+            facts=artifact.facts,
+            assumptions=artifact.assumptions,
+            options=artifact.options,
+            hypotheses=hypotheses,
+            triage=triage,
+            expected_gaps=artifact.evidence_gaps,
+        )
+
+    supported_case = next(
+        item for item in cases if item["id"] == "explicit-zero-fatalities"
+    )
+    supported = _products(supported_case)[-1].scenario_analysis.recommendation
+    assert supported.status == DecisionRecommendationStatus.AVAILABLE
+    with pytest.raises(ValueError, match="unsupported premise"):
+        replace(supported, unsupported_premise_ids=("premise:not-supported",))

@@ -2,7 +2,12 @@
 
 from hashlib import sha256
 
+from disaster_monitor.application.services.scenario_reasoning import (
+    DecisionScenarioSimulator,
+    validate_scenario_analysis,
+)
 from disaster_monitor.domain.decision import (
+    PROHIBITED_CONSEQUENTIAL_ACTIONS,
     DecisionAssumption,
     DecisionConsequence,
     DecisionContradiction,
@@ -22,11 +27,6 @@ from disaster_monitor.domain.disaster import (
     InternalTriageDecision,
 )
 
-_PROHIBITED_ACTIONS = (
-    "public_warning",
-    "evacuation_directive",
-    "resource_allocation_order",
-)
 _IMPACT_CLAIMS = (
     "fatalities",
     "injuries",
@@ -252,6 +252,15 @@ class DecisionOptionGenerator:
                 )
             )
 
+        scenario_analysis = DecisionScenarioSimulator().simulate(
+            state,
+            hypotheses,
+            tuple(facts),
+            tuple(assumptions),
+            tuple(options),
+            evidence_gaps,
+            triage,
+        )
         material = "|".join(
             (
                 state.state_version,
@@ -272,6 +281,7 @@ class DecisionOptionGenerator:
             options=tuple(options),
             contradictions=contradictions,
             evidence_gaps=evidence_gaps,
+            scenario_analysis=scenario_analysis,
             generated_at=state.evaluated_at,
         )
         validate_decision_support_artifact(
@@ -341,7 +351,7 @@ def validate_decision_support_artifact(
         not set(option.supporting_fact_ids) <= fact_ids
         or not set(option.supporting_estimate_ids) <= estimate_ids
         or not set(option.assumption_ids) <= assumption_ids
-        or option.prohibited_actions != _PROHIBITED_ACTIONS
+        or option.prohibited_actions != PROHIBITED_CONSEQUENTIAL_ACTIONS
         for option in artifact.options
     ):
         raise ValueError(
@@ -357,6 +367,16 @@ def validate_decision_support_artifact(
     }
     if {item.claim_key for item in artifact.contradictions} != expected_conflicts:
         raise ValueError("Decision support omitted a material evidence contradiction.")
+    validate_scenario_analysis(
+        artifact.scenario_analysis,
+        state=state,
+        facts=artifact.facts,
+        assumptions=artifact.assumptions,
+        options=artifact.options,
+        hypotheses=hypotheses,
+        triage=triage,
+        expected_gaps=artifact.evidence_gaps,
+    )
 
 
 def render_decision_support(artifact: DecisionSupportArtifact) -> str:
@@ -379,6 +399,19 @@ def render_decision_support(artifact: DecisionSupportArtifact) -> str:
             "- Material contradictions retained: "
             + "; ".join(item.detail for item in artifact.contradictions)
         )
+    analysis = artifact.scenario_analysis
+    lines.append(
+        "- Scenario mode: "
+        f"{analysis.mode.value}. Sensitivity: "
+        + "; ".join(analysis.assumption_sensitivity)
+    )
+    if analysis.evidence_gaps:
+        lines.append("- Evidence gaps: " + "; ".join(analysis.evidence_gaps))
+    recommendation = analysis.recommendation
+    lines.append(
+        f"- Recommendation layer ({recommendation.status.value}): "
+        f"{recommendation.rationale}"
+    )
     return "\n".join(lines)
 
 
@@ -457,7 +490,7 @@ def _option(
         consequence=consequence,
         reversible=True,
         requires_human_approval=requires_human_approval,
-        prohibited_actions=_PROHIBITED_ACTIONS,
+        prohibited_actions=PROHIBITED_CONSEQUENTIAL_ACTIONS,
     )
 
 

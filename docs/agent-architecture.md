@@ -64,7 +64,10 @@ hypothesis-backed estimates, assumptions, contradictions, gaps, and analytical
 options. Every option carries complete lineage, trade-offs, uncertainty, and closed
 authority constraints. Unsupported facts or an omitted material conflict reject the
 artifact; public warnings, evacuation directives, and resource-allocation orders are
-always prohibited.
+always prohibited. Paired human-impact counterfactuals reuse the calibrated EW
+hypothesis rather than inventing a second probability. Scenario sensitivity and gaps
+are visible in the composed section. The separate recommendation state fails closed on
+an unresolved premise and cannot select a high-consequence or human-review option.
 `CurrentDisasterReportService` is a compatibility facade over the same tools.
 
 Current answers are composed by application code from `EvidencePacket`. Focused
@@ -119,4 +122,6 @@ reliability, critical escalation, closed action authority, and human-review roll
 The frozen Decision Support evaluation begins in
 `tests/evaluation/test_decision_support.py`. DS-A measures factual support, complete
 material trace, option relevance, explicit epistemic separation, contradiction
-retention, and repeated deterministic replay.
+retention, and repeated deterministic replay. DS-B measures frozen scenario
+consistency, calibration, policy adherence, sensitivity/gap exposure, and fail-closed
+recommendation behavior.

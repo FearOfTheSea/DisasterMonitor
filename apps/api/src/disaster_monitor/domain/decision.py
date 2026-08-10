@@ -18,6 +18,25 @@ class DecisionConsequence(StrEnum):
     HIGH = "high"
 
 
+class DecisionScenarioMode(StrEnum):
+    MATERIAL_HUMAN_IMPACT = "material_human_impact"
+    LIMITED_OBSERVED_HUMAN_IMPACT = "limited_observed_human_impact"
+    UNRESOLVED = "unresolved"
+
+
+class DecisionRecommendationStatus(StrEnum):
+    AVAILABLE = "available"
+    DISABLED_UNSUPPORTED_PREMISE = "disabled_unsupported_premise"
+    HUMAN_REVIEW_REQUIRED = "human_review_required"
+
+
+PROHIBITED_CONSEQUENTIAL_ACTIONS = (
+    "public_warning",
+    "evacuation_directive",
+    "resource_allocation_order",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class DecisionFact:
     fact_id: str
@@ -128,6 +147,98 @@ class DecisionContradiction:
 
 
 @dataclass(frozen=True, slots=True)
+class DecisionScenario:
+    scenario_id: str
+    mode: DecisionScenarioMode
+    title: str
+    description: str
+    probability: float
+    supporting_fact_ids: tuple[str, ...]
+    supporting_estimate_ids: tuple[str, ...]
+    assumption_ids: tuple[str, ...]
+    trade_offs: tuple[str, ...]
+    sensitivity: tuple[str, ...]
+    evidence_gaps: tuple[str, ...]
+    policy_constraints: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not all((self.scenario_id, self.title.strip(), self.description.strip())):
+            raise ValueError("Decision scenarios require stable identity and content.")
+        if not 0 <= self.probability <= 1:
+            raise ValueError("Decision scenario probability must be bounded.")
+        if not self.supporting_estimate_ids:
+            raise ValueError("Decision scenarios require typed estimate lineage.")
+        if not self.trade_offs or not self.sensitivity:
+            raise ValueError("Decision scenarios require trade-offs and sensitivity.")
+        if not self.policy_constraints:
+            raise ValueError("Decision scenarios require explicit policy constraints.")
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionRecommendation:
+    status: DecisionRecommendationStatus
+    option_id: str | None
+    confidence: float | None
+    premise_fact_ids: tuple[str, ...]
+    premise_estimate_ids: tuple[str, ...]
+    unsupported_premise_ids: tuple[str, ...]
+    rationale: str
+    sensitivity: tuple[str, ...]
+    evidence_gaps: tuple[str, ...]
+    policy_constraints: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.rationale.strip() or not self.sensitivity:
+            raise ValueError("Recommendation state requires rationale and sensitivity.")
+        if not self.policy_constraints:
+            raise ValueError("Recommendation state requires policy constraints.")
+        if self.status == DecisionRecommendationStatus.AVAILABLE:
+            if self.option_id is None or self.confidence is None:
+                raise ValueError(
+                    "Available recommendation requires option and confidence."
+                )
+            if not 0 <= self.confidence <= 1:
+                raise ValueError("Recommendation confidence must be bounded.")
+            if not (self.premise_fact_ids or self.premise_estimate_ids):
+                raise ValueError(
+                    "Available recommendation requires supported premises."
+                )
+            if self.unsupported_premise_ids:
+                raise ValueError(
+                    "High-confidence recommendation cannot depend on an "
+                    "unsupported premise."
+                )
+        elif self.option_id is not None or self.confidence is not None:
+            raise ValueError("Disabled recommendation cannot select an option.")
+        if (
+            self.status == DecisionRecommendationStatus.DISABLED_UNSUPPORTED_PREMISE
+            and not self.unsupported_premise_ids
+        ):
+            raise ValueError(
+                "Unsupported-premise disablement requires visible premises."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionScenarioAnalysis:
+    analysis_id: str
+    evidence_state_version: str
+    scenarios: tuple[DecisionScenario, ...]
+    mode: DecisionScenarioMode
+    assumption_sensitivity: tuple[str, ...]
+    evidence_gaps: tuple[str, ...]
+    recommendation: DecisionRecommendation
+
+    def __post_init__(self) -> None:
+        if not self.analysis_id or not self.evidence_state_version:
+            raise ValueError("Scenario analysis requires canonical state lineage.")
+        if len(self.scenarios) != 2:
+            raise ValueError("Scenario analysis requires paired counterfactuals.")
+        if not self.assumption_sensitivity:
+            raise ValueError("Scenario analysis requires visible sensitivity.")
+
+
+@dataclass(frozen=True, slots=True)
 class DecisionSupportArtifact:
     artifact_id: str
     physical_event_id: str
@@ -140,6 +251,7 @@ class DecisionSupportArtifact:
     options: tuple[DecisionOption, ...]
     contradictions: tuple[DecisionContradiction, ...]
     evidence_gaps: tuple[str, ...]
+    scenario_analysis: DecisionScenarioAnalysis
     generated_at: datetime
     advisory_only: bool = True
 

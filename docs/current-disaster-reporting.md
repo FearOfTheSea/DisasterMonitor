@@ -55,7 +55,12 @@ The flow is:
     Every option identifies its support, trade-offs, uncertainty, human-approval state,
     and prohibited public-warning, evacuation, and resource-order actions. Fabricated
     current facts or omitted material contradictions reject the artifact and leave the
-    deterministic evidence report in place.
+    deterministic evidence report in place. Paired counterfactual scenarios reuse the
+    calibrated human-impact hypothesis, expose assumption sensitivity and evidence
+    gaps, and retain the same closed policy constraints. A bounded internal monitoring
+    recommendation is available only when its leading premise has current fact lineage
+    and triage does not require human intervention; unresolved premises disable that
+    layer.
 11. When the request contains admitted image bytes, associate each asset to the selected
     physical event using explicit hazard, country, capture-time, capture-role, event-ID,
     and WGS84 footprint metadata. Only uniquely associated assets enter bounded local
