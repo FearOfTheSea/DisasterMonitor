@@ -146,6 +146,15 @@ class HypothesisTruthStatus(StrEnum):
     INFERRED = "inferred"
 
 
+class IncidentPriority(StrEnum):
+    """Internal attention class derived from verified evidence state."""
+
+    LOW = "low"
+    MODERATE = "moderate"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
 @dataclass(frozen=True, slots=True)
 class SourceReference:
     """A canonical source and the distinct timestamps attached to it."""
@@ -371,3 +380,46 @@ class HypothesisArtifact:
     def __post_init__(self) -> None:
         if not 0.0 <= self.probability <= 1.0:
             raise ValueError("Hypothesis probability must be between zero and one.")
+
+
+@dataclass(frozen=True, slots=True)
+class IncidentPrioritySignal:
+    """Public policy contribution with direct evidence lineage where applicable."""
+
+    rule_id: str
+    detail: str
+    score_delta: int
+    evidence_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.rule_id.strip() or not self.detail.strip():
+            raise ValueError("Priority signals require a rule ID and public detail.")
+        if self.score_delta < 0:
+            raise ValueError("Uncertainty and evidence cannot reduce priority score.")
+
+
+@dataclass(frozen=True, slots=True)
+class IncidentPriorityAssessment:
+    """Deterministic internal ranking result tied to one canonical EW version."""
+
+    assessment_id: str
+    physical_event_id: str
+    evidence_state_version: str
+    priority: IncidentPriority
+    score: int
+    requires_human_review: bool
+    uncertainty_escalated: bool
+    signals: tuple[IncidentPrioritySignal, ...]
+    assessed_at: datetime
+
+    def __post_init__(self) -> None:
+        if not self.assessment_id or not self.physical_event_id:
+            raise ValueError("Priority assessments require stable event lineage.")
+        if not self.evidence_state_version:
+            raise ValueError("Priority assessments require an EW state version.")
+        if not 0 <= self.score <= 100:
+            raise ValueError("Priority score must be between zero and one hundred.")
+
+    @property
+    def is_critical(self) -> bool:
+        return self.priority == IncidentPriority.CRITICAL

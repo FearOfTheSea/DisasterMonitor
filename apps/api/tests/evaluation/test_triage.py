@@ -1,4 +1,6 @@
 import json
+from datetime import UTC, datetime
+from math import log2
 from pathlib import Path
 
 from disaster_monitor.application.agent.models import InformationNeed
@@ -6,8 +8,31 @@ from disaster_monitor.application.agent.task_normalization import (
     deterministic_task_draft,
     disaster_safety_gate,
 )
+from disaster_monitor.application.services.event_resolution import (
+    default_event_policy_registry,
+)
+from disaster_monitor.application.services.evidence_state import (
+    build_evidence_world_state,
+)
+from disaster_monitor.application.services.incident_priority import (
+    IncidentPriorityRanker,
+)
+from disaster_monitor.domain.disaster import (
+    DisasterEvent,
+    FactStatus,
+    Hazard,
+    ReportedFact,
+    SituationReport,
+    SourceAuthority,
+    SourceReference,
+)
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "triage"
+NOW = datetime(2026, 8, 11, 12, tzinfo=UTC)
+COUNTRIES = StaticCountryCatalog()
 
 
 def _load(name: str) -> dict[str, object]:
@@ -85,3 +110,202 @@ def test_tr_a_is_deterministic_across_order_and_repeated_runs() -> None:
             str(item["id"]): deterministic_task_draft(str(item["text"]))
             for item in ordered
         } == baseline
+
+
+def _priority_state(item: dict[str, object]):
+    case_id = str(item["id"])
+    hazard = Hazard(str(item["hazard"]))
+    country = COUNTRIES.get_by_alpha3(str(item["country_code"]))
+    assert country is not None
+    event_time = datetime.fromisoformat(
+        str(item.get("event_time", "2026-08-10T12:00:00Z"))
+    )
+    event_source = SourceReference(
+        source_id=f"event-{case_id}",
+        publisher="Frozen event source",
+        title=f"Event {case_id}",
+        canonical_url=f"https://events.example/{case_id}",
+        published_at=event_time,
+        updated_at=None,
+        retrieved_at=NOW,
+        authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
+    )
+    event = DisasterEvent(
+        event_id=case_id,
+        hazard=hazard,
+        location=country.canonical_name,
+        country=country,
+        event_time=event_time,
+        source=event_source,
+        magnitude=(None if item.get("magnitude") is None else float(item["magnitude"])),
+        intensity=(None if item.get("intensity") is None else str(item["intensity"])),
+        significance=(
+            None if item.get("significance") is None else float(item["significance"])
+        ),
+    )
+    identity = (
+        default_event_policy_registry()
+        .for_hazard(hazard)
+        .identify((event,))
+        .physical_events[0]
+    )
+    raw_facts = item.get("facts", [])
+    assert isinstance(raw_facts, list)
+    reports = ()
+    if raw_facts:
+        report_source = SourceReference(
+            source_id=f"report-{case_id}",
+            publisher="Frozen situation authority",
+            title=f"Situation {case_id}",
+            canonical_url=f"https://reports.example/{case_id}",
+            published_at=NOW,
+            updated_at=None,
+            retrieved_at=NOW,
+            authority=SourceAuthority.NATIONAL_AUTHORITY,
+        )
+        facts = tuple(
+            ReportedFact(
+                category=str(fact["category"]),
+                label=str(fact["category"]).replace("_", " ").title(),
+                value=str(fact["value"]),
+                status=FactStatus.CONFIRMED,
+                source=report_source,
+                event_id=case_id,
+                claim_id=str(fact["category"]),
+            )
+            for fact in raw_facts
+        )
+        reports = (
+            SituationReport(
+                source=report_source,
+                narrative="Frozen priority episode.",
+                facts=facts,
+                event_id=case_id,
+                hazard=hazard,
+                country_codes=(country.alpha3_code,),
+            ),
+        )
+    return build_evidence_world_state(
+        event,
+        reports,
+        evaluated_at=NOW,
+        physical_event=identity,
+    )
+
+
+def _ndcg(order: list[str], relevance: dict[str, int]) -> float:
+    def dcg(ids: list[str]) -> float:
+        return sum(
+            (2 ** relevance[case_id] - 1) / log2(index + 2)
+            for index, case_id in enumerate(ids)
+        )
+
+    ideal = sorted(relevance, key=lambda case_id: relevance[case_id], reverse=True)
+    return dcg(order) / dcg(ideal)
+
+
+def test_tr_b_release_gate() -> None:
+    fixture = _load("incident_priority_cases.v1.json")
+    assert fixture["fixture_version"] == "dm-tr-b-v1"
+    episodes = fixture["episodes"]
+    assert isinstance(episodes, list) and episodes
+    states = tuple(_priority_state(item) for item in episodes)
+    ranker = IncidentPriorityRanker()
+    ranked = ranker.rank(states)
+    id_by_state = {
+        state.state_version: str(item["id"])
+        for item, state in zip(episodes, states, strict=True)
+    }
+    ordered_ids = [id_by_state[item.evidence_state_version] for item in ranked]
+    relevance = {str(item["id"]): int(item["gold_relevance"]) for item in episodes}
+    expected_critical = {str(item["id"]) for item in episodes if bool(item["critical"])}
+    predicted_critical = {
+        id_by_state[item.evidence_state_version] for item in ranked if item.is_critical
+    }
+    critical_true_positive = len(expected_critical & predicted_critical)
+    critical_false_dismissal = len(expected_critical - predicted_critical)
+    critical_recall = critical_true_positive / len(expected_critical)
+    false_dismissal_rate = critical_false_dismissal / len(expected_critical)
+
+    assert critical_recall >= 0.995, ("tr_b.critical_recall", critical_recall)
+    assert false_dismissal_rate <= 0.005, (
+        "tr_b.false_dismissal",
+        false_dismissal_rate,
+    )
+    assert _ndcg(ordered_ids, relevance) >= 0.95, (
+        "tr_b.ndcg",
+        ordered_ids,
+    )
+    for state, assessment in zip(states, map(ranker.assess, states), strict=True):
+        evidence_ids = {
+            history.observation.observation_id
+            for claim in state.claims
+            for history in claim.history
+        }
+        assert assessment.evidence_state_version == state.state_version
+        assert assessment.physical_event_id == state.physical_event.physical_event_id
+        assert {
+            evidence_id
+            for signal in assessment.signals
+            for evidence_id in signal.evidence_ids
+        } <= evidence_ids
+
+
+def test_tr_b_scope_parity_and_uncertainty_escalation() -> None:
+    fixture = _load("incident_priority_cases.v1.json")
+    parity = fixture["scope_parity"]
+    assert isinstance(parity, dict)
+    variants = parity["variants"]
+    assert isinstance(variants, list)
+    parity_states = tuple(
+        _priority_state({**item, "facts": parity["facts"]}) for item in variants
+    )
+    ranker = IncidentPriorityRanker()
+    parity_results = tuple(ranker.assess(state) for state in parity_states)
+    assert len({item.score for item in parity_results}) == 1
+    assert len({item.priority for item in parity_results}) == 1
+
+    base = {
+        "id": "uncertainty-comparison",
+        "hazard": "earthquake",
+        "country_code": "VEN",
+        "magnitude": 5.2,
+    }
+    uncertain = ranker.assess(_priority_state({**base, "facts": []}))
+    resolved_zero = ranker.assess(
+        _priority_state(
+            {
+                **base,
+                "id": "resolved-zero",
+                "facts": [{"category": "fatalities", "value": "0"}],
+            }
+        )
+    )
+    assert uncertain.score >= resolved_zero.score
+    assert uncertain.uncertainty_escalated
+    assert uncertain.requires_human_review
+
+
+def test_tr_b_ranking_is_order_independent_across_repeated_runs() -> None:
+    episodes = _load("incident_priority_cases.v1.json")["episodes"]
+    assert isinstance(episodes, list)
+    states = tuple(_priority_state(item) for item in episodes)
+    ranker = IncidentPriorityRanker()
+    baseline = ranker.rank(states)
+    for replay in range(8):
+        inputs = states if replay % 2 == 0 else tuple(reversed(states))
+        assert ranker.rank(inputs) == baseline
+
+
+def test_tr_b_production_policy_contains_no_frozen_episode_ids() -> None:
+    source = (
+        Path(__file__).parents[2]
+        / "src"
+        / "disaster_monitor"
+        / "application"
+        / "services"
+        / "incident_priority.py"
+    ).read_text(encoding="utf-8")
+    episodes = _load("incident_priority_cases.v1.json")["episodes"]
+    assert isinstance(episodes, list)
+    assert all(str(item["id"]) not in source for item in episodes)

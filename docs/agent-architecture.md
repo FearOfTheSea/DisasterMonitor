@@ -49,6 +49,10 @@ request-scoped evidence workspace. Event discovery stores the auditable physical
 partition and selected identity as well as its compatibility `DisasterEvent`.
 Reconciliation stores the canonical temporal world state, its `EvidencePacket`
 projection, and a separate tuple of inferred hypothesis artifacts.
+It also derives an internal `IncidentPriorityAssessment` from that same EW version.
+The ranker uses verified event severity and current claim observations, retains the
+supporting evidence IDs and public rule IDs, and lets ambiguity, conflicts, stale
+evidence, or unresolved human-impact gaps raise review priority but never lower it.
 `CurrentDisasterReportService` is a compatibility facade over the same tools.
 
 Current answers are composed by application code from `EvidencePacket`. Focused
@@ -95,4 +99,6 @@ background revision monitor, cross-request state recovery, or LLM probability mo
 
 The frozen Triage evaluation begins in `tests/evaluation/test_triage.py`. TR-A covers
 information-need classification and evidence-path retention with deterministic
-multilingual, paraphrase, and adversarial cases.
+multilingual, paraphrase, and adversarial cases. TR-B covers critical-event recall,
+false dismissal, ranked relevance, scope parity, uncertainty escalation, lineage, and
+repeated-run ordering.

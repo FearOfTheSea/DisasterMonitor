@@ -16,6 +16,7 @@ from disaster_monitor.domain.disaster import (
     EvidenceWorldState,
     Hazard,
     HypothesisArtifact,
+    IncidentPriorityAssessment,
     PhysicalEventIdentity,
     SituationReport,
 )
@@ -181,6 +182,7 @@ class EvidenceWorkspace:
     situation_batch: ProviderBatch[SituationReport] | None = None
     evidence_state: EvidenceWorldState | None = None
     hypotheses: tuple[HypothesisArtifact, ...] = ()
+    incident_priority: IncidentPriorityAssessment | None = None
     evidence_packet: EvidencePacket | None = None
     report: DisasterReport | None = None
     multimodal_assets: tuple[MultimodalAsset, ...] = ()

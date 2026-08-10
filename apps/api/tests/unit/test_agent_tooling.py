@@ -311,6 +311,10 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     assert state.workspace.report is not None
     assert len(state.workspace.hypotheses) == 1
     assert state.workspace.hypotheses[0].truth_status == "inferred"
+    assert state.workspace.incident_priority is not None
+    assert state.workspace.incident_priority.evidence_state_version == (
+        state.workspace.evidence_state.state_version
+    )
     assert (
         state.workspace.hypotheses[0].proposition not in state.workspace.report.message
     )

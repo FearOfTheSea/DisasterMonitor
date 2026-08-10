@@ -1,0 +1,163 @@
+{
+  "fixture_version": "dm-tr-b-v1",
+  "episodes": [
+    {
+      "id": "eq-jpn-catastrophic",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "event_time": "2026-08-11T00:00:00Z",
+      "magnitude": 7.6,
+      "significance": 1200,
+      "facts": [
+        { "category": "fatalities", "value": "200" },
+        { "category": "injuries", "value": "1000" },
+        { "category": "warnings", "value": "Active warning issued" },
+        { "category": "infrastructure", "value": "Widespread power outage" }
+      ],
+      "gold_relevance": 3,
+      "critical": true
+    },
+    {
+      "id": "flood-vnm-lethal",
+      "hazard": "flood",
+      "country_code": "VNM",
+      "event_time": "2026-08-10T23:00:00Z",
+      "facts": [
+        { "category": "fatalities", "value": "1" },
+        { "category": "physical_damage", "value": "Major structural damage" }
+      ],
+      "gold_relevance": 3,
+      "critical": true
+    },
+    {
+      "id": "cyclone-ven-missing",
+      "hazard": "tropical_cyclone",
+      "country_code": "VEN",
+      "event_time": "2026-08-10T22:00:00Z",
+      "facts": [
+        { "category": "missing", "value": "12" },
+        { "category": "warnings", "value": "Active evacuation warning" },
+        { "category": "infrastructure", "value": "Road closures" }
+      ],
+      "gold_relevance": 3,
+      "critical": true
+    },
+    {
+      "id": "eq-vnm-major-unknown",
+      "hazard": "earthquake",
+      "country_code": "VNM",
+      "event_time": "2026-08-10T21:00:00Z",
+      "magnitude": 7.0,
+      "facts": [],
+      "gold_relevance": 3,
+      "critical": true
+    },
+    {
+      "id": "eq-jpn-strong",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "event_time": "2026-08-10T20:00:00Z",
+      "magnitude": 6.2,
+      "facts": [],
+      "gold_relevance": 2,
+      "critical": false
+    },
+    {
+      "id": "flood-vnm-evacuation",
+      "hazard": "flood",
+      "country_code": "VNM",
+      "event_time": "2026-08-10T19:00:00Z",
+      "facts": [
+        { "category": "evacuations", "value": "2000" },
+        { "category": "warnings", "value": "Active flood warning" }
+      ],
+      "gold_relevance": 2,
+      "critical": false
+    },
+    {
+      "id": "landslide-ven-severe-damage",
+      "hazard": "landslide",
+      "country_code": "VEN",
+      "event_time": "2026-08-10T18:00:00Z",
+      "facts": [
+        {
+          "category": "physical_damage",
+          "value": "Severe collapsed structures"
+        },
+        { "category": "infrastructure", "value": "Bridge closure" }
+      ],
+      "gold_relevance": 2,
+      "critical": false
+    },
+    {
+      "id": "wildfire-jpn-warning",
+      "hazard": "wildfire",
+      "country_code": "JPN",
+      "event_time": "2026-08-10T17:00:00Z",
+      "facts": [
+        { "category": "warnings", "value": "Active evacuation advisory" }
+      ],
+      "gold_relevance": 2,
+      "critical": false
+    },
+    {
+      "id": "eq-ven-moderate",
+      "hazard": "earthquake",
+      "country_code": "VEN",
+      "event_time": "2026-08-10T16:00:00Z",
+      "magnitude": 5.2,
+      "facts": [],
+      "gold_relevance": 1,
+      "critical": false
+    },
+    {
+      "id": "flood-jpn-small-evacuation",
+      "hazard": "flood",
+      "country_code": "JPN",
+      "event_time": "2026-08-10T15:00:00Z",
+      "facts": [{ "category": "evacuations", "value": "20" }],
+      "gold_relevance": 1,
+      "critical": false
+    },
+    {
+      "id": "landslide-vnm-local-damage",
+      "hazard": "landslide",
+      "country_code": "VNM",
+      "event_time": "2026-08-10T14:00:00Z",
+      "facts": [{ "category": "physical_damage", "value": "Localized damage" }],
+      "gold_relevance": 1,
+      "critical": false
+    },
+    {
+      "id": "eq-jpn-low",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "event_time": "2026-08-10T13:00:00Z",
+      "magnitude": 4.2,
+      "facts": [],
+      "gold_relevance": 0,
+      "critical": false
+    },
+    {
+      "id": "flood-ven-no-impact",
+      "hazard": "flood",
+      "country_code": "VEN",
+      "event_time": "2026-08-10T12:00:00Z",
+      "facts": [],
+      "gold_relevance": 0,
+      "critical": false
+    }
+  ],
+  "scope_parity": {
+    "facts": [{ "category": "infrastructure", "value": "Power outage" }],
+    "variants": [
+      { "id": "parity-eq-jpn", "hazard": "earthquake", "country_code": "JPN" },
+      { "id": "parity-flood-vnm", "hazard": "flood", "country_code": "VNM" },
+      {
+        "id": "parity-wildfire-ven",
+        "hazard": "wildfire",
+        "country_code": "VEN"
+      }
+    ]
+  }
+}

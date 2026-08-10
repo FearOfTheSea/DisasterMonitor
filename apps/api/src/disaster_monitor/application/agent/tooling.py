@@ -33,6 +33,9 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 from disaster_monitor.application.services.hypothesis_reasoning import (
     HypothesisGenerator,
 )
+from disaster_monitor.application.services.incident_priority import (
+    IncidentPriorityRanker,
+)
 from disaster_monitor.application.services.provider_registry import (
     ProviderRegistry,
     ProviderRole,
@@ -99,6 +102,9 @@ class DisasterToolDependencies:
     clock: Callable[[], datetime]
     hypothesis_generator: HypothesisGenerator = field(
         default_factory=HypothesisGenerator
+    )
+    priority_ranker: IncidentPriorityRanker = field(
+        default_factory=IncidentPriorityRanker
     )
 
 
@@ -359,6 +365,9 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
         if packet.world_state is not None:
             state.workspace.hypotheses = (
                 self.dependencies.hypothesis_generator.generate(packet.world_state)
+            )
+            state.workspace.incident_priority = (
+                self.dependencies.priority_ranker.assess(packet.world_state)
             )
         state.workspace.evidence_packet = packet
         return (

@@ -42,11 +42,15 @@ The flow is:
    metadata, warnings, and retrieval time.
 8. Derive a bounded internal hypothesis artifact from canonical state. It remains
    machine-typed as inferred and is not included in verified current-fact rendering.
-9. When the request contains admitted image bytes, associate each asset to the selected
-   physical event using explicit hazard, country, capture-time, capture-role, event-ID,
-   and WGS84 footprint metadata. Only uniquely associated assets enter bounded local
-   visual analysis. Store results as analytical observations linked to the EW version,
-   then build a typed analytical COP when pixel-supported damage and geometry exist.
+9. Derive an internal incident-priority assessment from the same canonical state.
+   Verified severity and impact signals retain evidence lineage. Missing, stale,
+   conflicting, or ambiguous evidence can raise review priority but cannot silently
+   reduce it. The assessment does not create facts or operational authority.
+10. When the request contains admitted image bytes, associate each asset to the selected
+    physical event using explicit hazard, country, capture-time, capture-role, event-ID,
+    and WGS84 footprint metadata. Only uniquely associated assets enter bounded local
+    visual analysis. Store results as analytical observations linked to the EW version,
+    then build a typed analytical COP when pixel-supported damage and geometry exist.
 
 The current report path does not use model memory for current facts. This keeps
 the report useful when Ollama is unavailable and prevents generated prose from
