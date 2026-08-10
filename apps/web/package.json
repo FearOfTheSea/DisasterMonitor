@@ -14,7 +14,7 @@
     "test:system": "node scripts/run_system_test.mjs"
   },
   "dependencies": {
-    "next": "16.0.10",
+    "next": "16.3.0",
     "ol": "^10.7.0",
     "react": "19.2.0",
     "react-dom": "19.2.0"
@@ -30,10 +30,14 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
-    "eslint-config-next": "16.0.10",
+    "eslint-config-next": "16.3.0",
     "jsdom": "^27.0.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "unrs-resolver@1.12.2": true
   }
 }

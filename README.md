@@ -35,8 +35,7 @@ for the implemented flow and limitations.
 Live weather, geocoding, satellite catalogs and imagery, flood providers, broad
 news aggregation, remote model providers, paid map services, authentication,
 queues, background workers, cloud deployment, multi-user persistence, and
-advanced analytics are intentionally deferred. See
-[docs/migration-report.md](docs/migration-report.md) for the migration decisions.
+advanced analytics are intentionally deferred.
 
 ## Repository layout
 
@@ -70,14 +69,14 @@ The backend defaults to `http://localhost:11434` and `qwen3:1.7b`. Copy `apps/ap
 
 ## Run the applications independently
 
-Start the backend in one terminal:
+Start the backend:
 
 ```powershell
 uv sync --project apps/api
 uv run --project apps/api uvicorn disaster_monitor.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-Start the frontend in another:
+Start the frontend:
 
 ```powershell
 cd apps/web
@@ -85,8 +84,6 @@ npm ci
 Copy-Item .env.example .env.local
 npm run dev
 ```
-
-Open <http://localhost:3000>, click **Open assistant**, and submit a question. The map uses OpenStreetMap tiles, so map tiles require network access; ordinary assistant requests use the local API and Ollama, while supported current-earthquake reports use the configured source adapters.
 
 Useful checks:
 
