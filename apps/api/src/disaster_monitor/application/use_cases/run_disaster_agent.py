@@ -178,4 +178,11 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
                 if active
             )
         ),
+        specialist_handoff_count=len(state.workspace.specialist_handoffs),
+        specialist_roles=tuple(
+            dict.fromkeys(
+                handoff.receiver_role.value
+                for handoff in state.workspace.specialist_handoffs
+            )
+        ),
     )

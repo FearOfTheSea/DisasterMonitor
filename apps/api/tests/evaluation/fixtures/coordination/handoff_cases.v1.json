@@ -1,0 +1,320 @@
+{
+  "fixture_version": "dm-co-a-v1",
+  "cases": [
+    {
+      "id": "valid-event-identity",
+      "expect_accept": true,
+      "expected_owner": "event_identity_specialist",
+      "payload": {
+        "task_id": "task:event:001",
+        "task_type": "verify_event_identity",
+        "sender_role": "supervisor",
+        "receiver_role": "event_identity_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "physical-event:001",
+            "artifact_type": "physical_event",
+            "state_version": "ew:001",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": [
+          "read_event_identity",
+          "read_provenance",
+          "propose_analysis"
+        ]
+      }
+    },
+    {
+      "id": "valid-evidence-review",
+      "expect_accept": true,
+      "expected_owner": "evidence_reconciliation_specialist",
+      "payload": {
+        "task_id": "task:evidence:001",
+        "task_type": "review_evidence_state",
+        "sender_role": "supervisor",
+        "receiver_role": "evidence_reconciliation_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "ew:001",
+            "artifact_type": "evidence_state",
+            "state_version": "ew:001",
+            "evidence_ids": [
+              "event-observation:001",
+              "observation:fatalities:001"
+            ],
+            "source_ids": ["usgs-earthquakes", "fdma-situation-reports"]
+          }
+        ],
+        "requested_permissions": [
+          "read_evidence_state",
+          "read_provenance",
+          "propose_analysis"
+        ]
+      }
+    },
+    {
+      "id": "valid-decision-review",
+      "expect_accept": true,
+      "expected_owner": "decision_analysis_specialist",
+      "payload": {
+        "task_id": "task:decision:001",
+        "task_type": "assess_decision_options",
+        "sender_role": "supervisor",
+        "receiver_role": "decision_analysis_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "decision-support:001",
+            "artifact_type": "decision_support",
+            "state_version": "ew:001",
+            "evidence_ids": [
+              "event-observation:001",
+              "observation:fatalities:001"
+            ],
+            "source_ids": ["usgs-earthquakes", "fdma-situation-reports"]
+          }
+        ],
+        "requested_permissions": [
+          "read_evidence_state",
+          "read_decision_support",
+          "read_provenance",
+          "propose_analysis"
+        ]
+      }
+    },
+    {
+      "id": "valid-multimodal-review",
+      "expect_accept": true,
+      "expected_owner": "multimodal_analysis_specialist",
+      "payload": {
+        "task_id": "task:multimodal:001",
+        "task_type": "review_multimodal_state",
+        "sender_role": "supervisor",
+        "receiver_role": "multimodal_analysis_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "multimodal-state:001",
+            "artifact_type": "multimodal_state",
+            "state_version": "ew:001",
+            "evidence_ids": ["visual-observation:001"],
+            "source_ids": ["operator-asset:001"]
+          }
+        ],
+        "requested_permissions": [
+          "read_evidence_state",
+          "read_multimodal_state",
+          "read_provenance",
+          "propose_analysis"
+        ]
+      }
+    },
+    {
+      "id": "reject-wrong-task-owner",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:evidence:wrong-owner",
+        "task_type": "review_evidence_state",
+        "sender_role": "supervisor",
+        "receiver_role": "decision_analysis_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "ew:wrong-owner",
+            "artifact_type": "evidence_state",
+            "state_version": "ew:wrong-owner",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": [
+          "read_evidence_state",
+          "read_provenance",
+          "propose_analysis"
+        ]
+      }
+    },
+    {
+      "id": "reject-provider-io-privilege",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:decision:provider-io",
+        "task_type": "assess_decision_options",
+        "sender_role": "supervisor",
+        "receiver_role": "decision_analysis_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "decision-support:provider-io",
+            "artifact_type": "decision_support",
+            "state_version": "ew:001",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": [
+          "read_decision_support",
+          "execute_provider_io"
+        ]
+      }
+    },
+    {
+      "id": "reject-safety-policy-privilege",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:evidence:policy",
+        "task_type": "review_evidence_state",
+        "sender_role": "supervisor",
+        "receiver_role": "evidence_reconciliation_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "ew:policy",
+            "artifact_type": "evidence_state",
+            "state_version": "ew:policy",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": ["read_evidence_state", "alter_safety_policy"]
+      }
+    },
+    {
+      "id": "reject-missing-evidence-provenance",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:evidence:no-evidence",
+        "task_type": "review_evidence_state",
+        "sender_role": "supervisor",
+        "receiver_role": "evidence_reconciliation_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "ew:no-evidence",
+            "artifact_type": "evidence_state",
+            "state_version": "ew:no-evidence",
+            "evidence_ids": [],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": ["read_evidence_state", "read_provenance"]
+      }
+    },
+    {
+      "id": "reject-missing-source-provenance",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:decision:no-source",
+        "task_type": "assess_decision_options",
+        "sender_role": "supervisor",
+        "receiver_role": "decision_analysis_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "decision-support:no-source",
+            "artifact_type": "decision_support",
+            "state_version": "ew:no-source",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": []
+          }
+        ],
+        "requested_permissions": ["read_decision_support", "read_provenance"]
+      }
+    },
+    {
+      "id": "reject-ambiguous-artifact-type",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:decision:ambiguous",
+        "task_type": "assess_decision_options",
+        "sender_role": "supervisor",
+        "receiver_role": "decision_analysis_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "ew:ambiguous",
+            "artifact_type": "evidence_state",
+            "state_version": "ew:ambiguous",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": ["read_decision_support", "read_provenance"]
+      }
+    },
+    {
+      "id": "reject-duplicate-provenance",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:event:duplicate",
+        "task_type": "verify_event_identity",
+        "sender_role": "supervisor",
+        "receiver_role": "event_identity_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "physical-event:duplicate",
+            "artifact_type": "physical_event",
+            "state_version": "ew:duplicate",
+            "evidence_ids": ["event-observation:001", "event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": ["read_event_identity", "read_provenance"]
+      }
+    },
+    {
+      "id": "reject-self-handoff",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:evidence:self",
+        "task_type": "review_evidence_state",
+        "sender_role": "evidence_reconciliation_specialist",
+        "receiver_role": "evidence_reconciliation_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "ew:self",
+            "artifact_type": "evidence_state",
+            "state_version": "ew:self",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": ["read_evidence_state", "read_provenance"]
+      }
+    },
+    {
+      "id": "reject-extra-field",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:evidence:extra",
+        "task_type": "review_evidence_state",
+        "sender_role": "supervisor",
+        "receiver_role": "evidence_reconciliation_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "ew:extra",
+            "artifact_type": "evidence_state",
+            "state_version": "ew:extra",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ],
+        "requested_permissions": ["read_evidence_state", "read_provenance"],
+        "inherit_sender_permissions": true
+      }
+    },
+    {
+      "id": "reject-missing-permissions",
+      "expect_accept": false,
+      "payload": {
+        "task_id": "task:evidence:no-permissions",
+        "task_type": "review_evidence_state",
+        "sender_role": "supervisor",
+        "receiver_role": "evidence_reconciliation_specialist",
+        "artifact_references": [
+          {
+            "artifact_id": "ew:no-permissions",
+            "artifact_type": "evidence_state",
+            "state_version": "ew:no-permissions",
+            "evidence_ids": ["event-observation:001"],
+            "source_ids": ["usgs-earthquakes"]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -126,6 +126,8 @@ async def assistant(
             decision_active_internal_states=list(
                 result.investigation.decision_active_internal_states
             ),
+            specialist_handoff_count=(result.investigation.specialist_handoff_count),
+            specialist_roles=list(result.investigation.specialist_roles),
         )
     )
     if result.response_type == "assistant":

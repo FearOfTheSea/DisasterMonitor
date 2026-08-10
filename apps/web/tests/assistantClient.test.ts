@@ -103,6 +103,11 @@ describe('AssistantClient', () => {
             decision_termination_reason: 'advisory_recommendation_unavailable',
             decision_state_revision: 0,
             decision_active_internal_states: [],
+            specialist_handoff_count: 2,
+            specialist_roles: [
+              'evidence_reconciliation_specialist',
+              'decision_analysis_specialist',
+            ],
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },

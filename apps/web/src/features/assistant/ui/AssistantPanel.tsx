@@ -234,6 +234,15 @@ function DisasterReportView({
                 : ''}
             </p>
           )}
+          {(report.investigation.specialist_handoff_count ?? 0) > 0 && (
+            <p>
+              Specialist handoffs:{' '}
+              <strong>{report.investigation.specialist_handoff_count}</strong>
+              {report.investigation.specialist_roles?.length
+                ? ` / ${report.investigation.specialist_roles.join(', ')}`
+                : ''}
+            </p>
+          )}
           {report.investigation.actions.length > 0 && (
             <>
               <h3>Completed actions</h3>

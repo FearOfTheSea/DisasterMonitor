@@ -62,6 +62,8 @@ export type InvestigationSummary = {
   decision_termination_reason?: string | null;
   decision_state_revision?: number | null;
   decision_active_internal_states?: string[];
+  specialist_handoff_count?: number;
+  specialist_roles?: string[];
 };
 
 export type AssistantSource = {

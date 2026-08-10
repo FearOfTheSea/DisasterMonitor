@@ -107,6 +107,11 @@ describe('AssistantPanel', () => {
                 decision_termination_reason: 'advisory_recommendation_unavailable',
                 decision_state_revision: 0,
                 decision_active_internal_states: [],
+                specialist_handoff_count: 2,
+                specialist_roles: [
+                  'evidence_reconciliation_specialist',
+                  'decision_analysis_specialist',
+                ],
               },
             },
           },
@@ -133,6 +138,9 @@ describe('AssistantPanel', () => {
     );
     expect(screen.getByText(/Bounded decision:/)).toHaveTextContent(
       'none / advisory_only / state r0 / Human intervention required',
+    );
+    expect(screen.getByText(/Specialist handoffs:/)).toHaveTextContent(
+      '2 / evidence_reconciliation_specialist, decision_analysis_specialist',
     );
     expect(
       screen.getByText('Trusted disaster-image retrieval is not implemented.'),

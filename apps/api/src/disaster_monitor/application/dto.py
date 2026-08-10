@@ -37,6 +37,8 @@ class InvestigationSummary:
     decision_termination_reason: str | None = None
     decision_state_revision: int | None = None
     decision_active_internal_states: tuple[str, ...] = ()
+    specialist_handoff_count: int = 0
+    specialist_roles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

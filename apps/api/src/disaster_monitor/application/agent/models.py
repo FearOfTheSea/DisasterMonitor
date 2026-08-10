@@ -10,6 +10,7 @@ from disaster_monitor.application.disaster import (
     EvidencePacket,
     ProviderBatch,
 )
+from disaster_monitor.domain.coordination import SpecialistHandoff
 from disaster_monitor.domain.decision import (
     DecisionExecutionOutcome,
     DecisionSupportArtifact,
@@ -192,6 +193,7 @@ class EvidenceWorkspace:
     triage_decision: InternalTriageDecision | None = None
     decision_support: DecisionSupportArtifact | None = None
     decision_outcome: DecisionExecutionOutcome | None = None
+    specialist_handoffs: tuple[SpecialistHandoff, ...] = ()
     evidence_packet: EvidencePacket | None = None
     report: DisasterReport | None = None
     multimodal_assets: tuple[MultimodalAsset, ...] = ()

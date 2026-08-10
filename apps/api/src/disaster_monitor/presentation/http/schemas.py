@@ -78,6 +78,8 @@ class InvestigationResponse(BaseModel):
     decision_termination_reason: str | None = None
     decision_state_revision: int | None = None
     decision_active_internal_states: list[str] = Field(default_factory=list)
+    specialist_handoff_count: int = 0
+    specialist_roles: list[str] = Field(default_factory=list)
 
 
 class SourceResponse(BaseModel):

@@ -75,6 +75,15 @@ authority drift, and the rollback switch preserve the initial state and return
 advisory-only.
 `CurrentDisasterReportService` is a compatibility facade over the same tools.
 
+Canonical EW and decision-support artifacts can be handed to deterministic specialist
+roles through `SpecialistHandoffBroker`. Handoffs are request-scoped typed artifacts,
+not workers or recursive model calls. The broker derives one owner per task type,
+requires state/evidence/source provenance, and grants only permissions already declared
+for the receiving role. The sender cannot transfer its own permissions. Invalid
+ownership, ambiguous artifact types, missing provenance, unknown fields, and privilege
+requests fail closed to the existing single-supervisor path. Investigation metadata
+exposes the handoff count and receiving roles.
+
 Current answers are composed by application code from `EvidencePacket`. Focused
 casualty answers include event identity, source, freshness, conflict, and explicit
 missing-evidence language; absence is never rendered as zero. The optional API
@@ -132,3 +141,8 @@ consistency, calibration, policy adherence, sensitivity/gap exposure, and fail-c
 recommendation behavior. DS-C measures eight-run final-state reliability, correct
 state transitions, zero prohibited effects, rollback, and immediate advisory-only
 downgrade behavior.
+
+The frozen Coordination evaluation begins in
+`tests/evaluation/test_coordination.py`. CO-A measures strict handoff-schema decisions,
+complete provenance, task ownership, zero privilege escalation, deterministic replay,
+and sender-permission non-inheritance.

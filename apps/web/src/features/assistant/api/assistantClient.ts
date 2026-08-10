@@ -199,7 +199,10 @@ export class AssistantClient {
       (item.decision_state_revision == null ||
         typeof item.decision_state_revision === 'number') &&
       (item.decision_active_internal_states == null ||
-        this.isStringArray(item.decision_active_internal_states))
+        this.isStringArray(item.decision_active_internal_states)) &&
+      (item.specialist_handoff_count == null ||
+        typeof item.specialist_handoff_count === 'number') &&
+      (item.specialist_roles == null || this.isStringArray(item.specialist_roles))
     );
   }
 }

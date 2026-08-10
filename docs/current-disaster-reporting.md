@@ -65,7 +65,13 @@ The flow is:
     final state and termination reason are inspectable. A prohibited public warning,
     evacuation directive, resource order, unselected option, or authority mismatch
     leaves state unchanged and immediately downgrades the result to advisory-only.
-11. When the request contains admitted image bytes, associate each asset to the selected
+11. Issue request-scoped typed handoffs from the supervisor to the evidence specialist
+    and, when decision support exists, the decision specialist. The broker derives task
+    ownership and granted permissions from a closed role policy; each artifact carries
+    state, evidence, and source provenance. Malformed, ambiguous, or privilege-expanding
+    handoffs are rejected and the existing single-supervisor path remains active. No
+    background worker or inherited sender permission is introduced.
+12. When the request contains admitted image bytes, associate each asset to the selected
     physical event using explicit hazard, country, capture-time, capture-role, event-ID,
     and WGS84 footprint metadata. Only uniquely associated assets enter bounded local
     visual analysis. Store results as analytical observations linked to the EW version,

@@ -23,6 +23,9 @@ from disaster_monitor.application.ports.disaster_information import (
     SituationReportProvider,
 )
 from disaster_monitor.application.ports.source_catalog import SourceCatalog
+from disaster_monitor.application.services.coordination_handoffs import (
+    CoordinationHandoffPlanner,
+)
 from disaster_monitor.application.services.decision_autonomy import (
     DecisionAutonomyController,
     render_decision_execution,
@@ -121,6 +124,9 @@ class DisasterToolDependencies:
     )
     decision_autonomy: DecisionAutonomyController = field(
         default_factory=DecisionAutonomyController
+    )
+    handoff_planner: CoordinationHandoffPlanner = field(
+        default_factory=CoordinationHandoffPlanner
     )
 
 
@@ -388,9 +394,19 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
             state.workspace.triage_decision = self.dependencies.triage_policy.decide(
                 state.workspace.incident_priority
             )
+            try:
+                evidence_handoff = self.dependencies.handoff_planner.for_evidence_state(
+                    packet.world_state
+                )
+                state.workspace.specialist_handoffs = (evidence_handoff,)
+            except ValueError:
+                state.capability_gaps.append(
+                    "Typed specialist handoff failed its ownership or provenance "
+                    "gate; the single-supervisor path remains active."
+                )
             if InformationNeed.DECISION_SUPPORT in state.task.information_needs:
                 try:
-                    state.workspace.decision_support = (
+                    decision_support = (
                         self.dependencies.decision_option_generator.generate(
                             packet.world_state,
                             state.workspace.hypotheses,
@@ -398,16 +414,32 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
                             state.workspace.triage_decision,
                         )
                     )
+                    state.workspace.decision_support = decision_support
                     state.workspace.decision_outcome = (
-                        self.dependencies.decision_autonomy.execute(
-                            state.workspace.decision_support
-                        )
+                        self.dependencies.decision_autonomy.execute(decision_support)
                     )
                 except ValueError:
                     state.capability_gaps.append(
                         "Decision support failed its evidence-lineage safety gate; "
                         "the deterministic report remains available."
                     )
+                else:
+                    try:
+                        decision_handoff = (
+                            self.dependencies.handoff_planner.for_decision_support(
+                                decision_support
+                            )
+                        )
+                        state.workspace.specialist_handoffs = (
+                            *state.workspace.specialist_handoffs,
+                            decision_handoff,
+                        )
+                    except ValueError:
+                        state.capability_gaps.append(
+                            "Typed specialist handoff failed its ownership or "
+                            "provenance gate; the single-supervisor path remains "
+                            "active."
+                        )
         state.workspace.evidence_packet = packet
         return (
             f"Reconciled {len(packet.facts)} facts from {len(packet.sources)} sources."

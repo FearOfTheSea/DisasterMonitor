@@ -586,6 +586,11 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     }
     assert body["investigation"]["decision_state_revision"] in {0, 1}
     assert isinstance(body["investigation"]["decision_active_internal_states"], list)
+    assert body["investigation"]["specialist_handoff_count"] == 2
+    assert body["investigation"]["specialist_roles"] == [
+        "evidence_reconciliation_specialist",
+        "decision_analysis_specialist",
+    ]
     assert model.requests == []
 
 
