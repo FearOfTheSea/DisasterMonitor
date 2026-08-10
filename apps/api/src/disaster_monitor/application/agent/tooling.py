@@ -40,6 +40,7 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRegistry,
     ProviderRole,
 )
+from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 
 MAX_TOOL_CALLS = 12
 
@@ -106,6 +107,7 @@ class DisasterToolDependencies:
     priority_ranker: IncidentPriorityRanker = field(
         default_factory=IncidentPriorityRanker
     )
+    triage_policy: TriageAutonomyPolicy = field(default_factory=TriageAutonomyPolicy)
 
 
 def build_disaster_tool_registry(
@@ -368,6 +370,9 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
             )
             state.workspace.incident_priority = (
                 self.dependencies.priority_ranker.assess(packet.world_state)
+            )
+            state.workspace.triage_decision = self.dependencies.triage_policy.decide(
+                state.workspace.incident_priority
             )
         state.workspace.evidence_packet = packet
         return (

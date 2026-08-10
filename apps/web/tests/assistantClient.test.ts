@@ -92,6 +92,11 @@ describe('AssistantClient', () => {
             evidence_count: 1,
             capability_gaps: [],
             termination_reason: 'partial_evidence',
+            triage_priority: 'high',
+            triage_score: 55,
+            triage_action: 'request_priority_review',
+            triage_autonomy_mode: 'human_on_the_loop',
+            triage_requires_human_intervention: true,
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -129,6 +134,41 @@ describe('AssistantClient', () => {
             evidence_count: 0,
             capability_gaps: [],
             termination_reason: 'done',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Latest earthquake?', null, {
+        centerLatitude: 21,
+        centerLongitude: 105,
+        zoom: 8,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+  });
+
+  it('rejects invalid triage authority metadata', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Invalid triage shape',
+          conversation_id: 'session-1',
+          model: 'source-backed-agent',
+          response_type: 'current_disaster',
+          investigation: {
+            status: 'completed',
+            task_summary: 'task',
+            information_needs: [],
+            output_modalities: [],
+            actions: [],
+            source_ids: [],
+            evidence_count: 0,
+            capability_gaps: [],
+            termination_reason: 'done',
+            triage_requires_human_intervention: 'no',
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },

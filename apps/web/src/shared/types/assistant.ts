@@ -51,6 +51,11 @@ export type InvestigationSummary = {
   evidence_count: number;
   capability_gaps: string[];
   termination_reason: string;
+  triage_priority?: string | null;
+  triage_score?: number | null;
+  triage_action?: string | null;
+  triage_autonomy_mode?: string | null;
+  triage_requires_human_intervention?: boolean | null;
 };
 
 export type AssistantSource = {

@@ -538,6 +538,10 @@ async def test_fatality_request_is_focused_and_missing_is_not_zero() -> None:
         "Report freshness",
     ]
     assert body["investigation"]["information_needs"] == ["fatalities"]
+    assert body["investigation"]["triage_priority"] == "critical"
+    assert body["investigation"]["triage_action"] == "escalate_critical"
+    assert body["investigation"]["triage_autonomy_mode"] == "human_in_the_loop"
+    assert body["investigation"]["triage_requires_human_intervention"] is True
     assert model.requests == []
 
 

@@ -1,7 +1,11 @@
 import json
+import random
+from dataclasses import replace
 from datetime import UTC, datetime
 from math import log2
 from pathlib import Path
+
+import pytest
 
 from disaster_monitor.application.agent.models import InformationNeed
 from disaster_monitor.application.agent.task_normalization import (
@@ -17,14 +21,18 @@ from disaster_monitor.application.services.evidence_state import (
 from disaster_monitor.application.services.incident_priority import (
     IncidentPriorityRanker,
 )
+from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
     FactStatus,
     Hazard,
+    IncidentPriority,
+    InternalTriageAction,
     ReportedFact,
     SituationReport,
     SourceAuthority,
     SourceReference,
+    TriageAutonomyMode,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -309,3 +317,106 @@ def test_tr_b_production_policy_contains_no_frozen_episode_ids() -> None:
     episodes = _load("incident_priority_cases.v1.json")["episodes"]
     assert isinstance(episodes, list)
     assert all(str(item["id"]) not in source for item in episodes)
+
+
+def test_tr_c_release_gate() -> None:
+    fixture = _load("autonomous_triage_cases.v1.json")
+    assert fixture["fixture_version"] == "dm-tr-c-v1"
+    assert fixture["repeated_runs"] == 8
+    cases = fixture["cases"]
+    assert isinstance(cases, list) and cases
+    ranker = IncidentPriorityRanker()
+    policy = TriageAutonomyPolicy()
+    assessment_by_id = {
+        str(item["id"]): ranker.assess(_priority_state(item)) for item in cases
+    }
+    outcomes: dict[str, list[bool]] = {str(item["id"]): [] for item in cases}
+
+    for seed in range(8):
+        ordered = list(cases)
+        random.Random(seed).shuffle(ordered)
+        for item in ordered:
+            case_id = str(item["id"])
+            assessment = assessment_by_id[case_id]
+            decision = policy.decide(assessment)
+            expected_eligible = bool(item["eligible"])
+            assert policy.is_eligible(assessment) == expected_eligible, case_id
+            end_state_correct = (
+                decision.action == InternalTriageAction(str(item["action"]))
+                and decision.autonomy_mode == TriageAutonomyMode(str(item["mode"]))
+                and decision.assessment_id == assessment.assessment_id
+                and decision.evidence_state_version == assessment.evidence_state_version
+                and decision.physical_event_id == assessment.physical_event_id
+                and decision.reversible
+                and (
+                    decision.requires_human_intervention
+                    != (
+                        decision.autonomy_mode == TriageAutonomyMode.AUTONOMOUS_INTERNAL
+                    )
+                )
+            )
+            outcomes[case_id].append(end_state_correct)
+
+    eligible_ids = {str(item["id"]) for item in cases if bool(item["eligible"])}
+    autonomous_completed = sum(
+        policy.decide(assessment_by_id[case_id]).autonomy_mode
+        == TriageAutonomyMode.AUTONOMOUS_INTERNAL
+        and not policy.decide(assessment_by_id[case_id]).requires_human_intervention
+        for case_id in eligible_ids
+    )
+    autonomy_yield = autonomous_completed / len(eligible_ids)
+    pass_8 = sum(all(case_outcomes) for case_outcomes in outcomes.values()) / len(
+        outcomes
+    )
+
+    assert autonomy_yield >= 0.95, ("tr_c.autonomy_yield", autonomy_yield)
+    assert pass_8 >= 0.90, ("tr_c.pass_8", pass_8)
+    for case_id, assessment in assessment_by_id.items():
+        decision = policy.decide(assessment)
+        assert "suppress" not in decision.action.value, case_id
+        if assessment.priority == IncidentPriority.CRITICAL:
+            assert decision.action == InternalTriageAction.ESCALATE_CRITICAL
+            assert decision.autonomy_mode == TriageAutonomyMode.HUMAN_IN_THE_LOOP
+            assert decision.requires_human_intervention
+
+
+def test_tr_c_rollback_disables_autonomy_without_suppressing_incidents() -> None:
+    cases = _load("autonomous_triage_cases.v1.json")["cases"]
+    assert isinstance(cases, list)
+    ranker = IncidentPriorityRanker()
+    policy = TriageAutonomyPolicy(autonomy_enabled=False)
+
+    for item in cases:
+        decision = policy.decide(ranker.assess(_priority_state(item)))
+        assert decision.autonomy_mode != TriageAutonomyMode.AUTONOMOUS_INTERNAL
+        assert decision.requires_human_intervention
+        assert "suppress" not in decision.action.value
+
+
+def test_tr_c_domain_rejects_critical_autonomy_escalation_bypass() -> None:
+    case = {
+        "id": "domain-guard-low",
+        "hazard": "flood",
+        "country_code": "JPN",
+        "facts": [],
+    }
+    decision = TriageAutonomyPolicy().decide(
+        IncidentPriorityRanker().assess(_priority_state(case))
+    )
+
+    with pytest.raises(ValueError, match="low/moderate"):
+        replace(decision, priority=IncidentPriority.CRITICAL)
+
+
+def test_tr_c_production_policy_contains_no_frozen_case_ids() -> None:
+    source = (
+        Path(__file__).parents[2]
+        / "src"
+        / "disaster_monitor"
+        / "application"
+        / "services"
+        / "triage_autonomy.py"
+    ).read_text(encoding="utf-8")
+    cases = _load("autonomous_triage_cases.v1.json")["cases"]
+    assert isinstance(cases, list)
+    assert all(str(item["id"]) not in source for item in cases)

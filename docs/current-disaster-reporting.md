@@ -45,7 +45,10 @@ The flow is:
 9. Derive an internal incident-priority assessment from the same canonical state.
    Verified severity and impact signals retain evidence lineage. Missing, stale,
    conflicting, or ambiguous evidence can raise review priority but cannot silently
-   reduce it. The assessment does not create facts or operational authority.
+   reduce it. Apply the closed triage authority policy: only eligible low/moderate
+   assessments may receive reversible internal monitor/queue actions; high,
+   uncertainty-marked, and critical assessments require human review or escalation.
+   The assessment and decision do not create facts or external operational authority.
 10. When the request contains admitted image bytes, associate each asset to the selected
     physical event using explicit hazard, country, capture-time, capture-role, event-ID,
     and WGS84 footprint metadata. Only uniquely associated assets enter bounded local
@@ -64,6 +67,8 @@ invalid, the five-step default tool plan runs without Ollama. The legacy report 
 is a compatibility facade over those same tools. Responses may add safe actions,
 source IDs, evidence count, gaps, and termination status; they never expose hidden
 reasoning, prompts, raw model/provider output, secrets, or stack traces.
+The same metadata includes priority, score, internal triage action, autonomy mode, and
+whether human intervention is required. These are policy outcomes, not model reasoning.
 
 ## Implemented providers
 

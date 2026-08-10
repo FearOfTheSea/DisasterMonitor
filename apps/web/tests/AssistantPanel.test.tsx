@@ -96,6 +96,11 @@ describe('AssistantPanel', () => {
                   'Trusted disaster-image retrieval is not implemented.',
                 ],
                 termination_reason: 'partial_evidence',
+                triage_priority: 'critical',
+                triage_score: 100,
+                triage_action: 'escalate_critical',
+                triage_autonomy_mode: 'human_in_the_loop',
+                triage_requires_human_intervention: true,
               },
             },
           },
@@ -117,6 +122,9 @@ describe('AssistantPanel', () => {
     expect(screen.getByText(/Retrieved:/)).toBeInTheDocument();
     expect(screen.getByText('Investigation details')).toBeInTheDocument();
     expect(screen.getByText('Selected the Ishikawa event.')).toBeInTheDocument();
+    expect(screen.getByText(/Internal triage:/)).toHaveTextContent(
+      'critical / escalate_critical / human_in_the_loop / Human intervention required',
+    );
     expect(
       screen.getByText('Trusted disaster-image retrieval is not implemented.'),
     ).toBeInTheDocument();

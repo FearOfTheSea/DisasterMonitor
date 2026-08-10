@@ -53,6 +53,11 @@ It also derives an internal `IncidentPriorityAssessment` from that same EW versi
 The ranker uses verified event severity and current claim observations, retains the
 supporting evidence IDs and public rule IDs, and lets ambiguity, conflicts, stale
 evidence, or unresolved human-impact gaps raise review priority but never lower it.
+`TriageAutonomyPolicy` may autonomously choose only reversible internal monitoring or
+queue placement for eligible low/moderate assessments. High or uncertainty-marked
+assessments require human-on-the-loop review; critical assessments always use
+human-in-the-loop escalation. Incident suppression is not an available action. The
+policy's rollback mode routes every otherwise eligible decision to human review.
 `CurrentDisasterReportService` is a compatibility facade over the same tools.
 
 Current answers are composed by application code from `EvidencePacket`. Focused
@@ -101,4 +106,5 @@ The frozen Triage evaluation begins in `tests/evaluation/test_triage.py`. TR-A c
 information-need classification and evidence-path retention with deterministic
 multilingual, paraphrase, and adversarial cases. TR-B covers critical-event recall,
 false dismissal, ranked relevance, scope parity, uncertainty escalation, lineage, and
-repeated-run ordering.
+repeated-run ordering. TR-C covers eligible autonomy yield, eight-run end-state
+reliability, critical escalation, closed action authority, and human-review rollback.

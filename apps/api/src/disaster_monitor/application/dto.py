@@ -26,6 +26,11 @@ class InvestigationSummary:
     evidence_count: int
     capability_gaps: tuple[str, ...]
     termination_reason: str
+    triage_priority: str | None = None
+    triage_score: int | None = None
+    triage_action: str | None = None
+    triage_autonomy_mode: str | None = None
+    triage_requires_human_intervention: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)

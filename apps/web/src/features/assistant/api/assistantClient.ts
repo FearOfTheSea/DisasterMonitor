@@ -181,7 +181,14 @@ export class AssistantClient {
       this.isStringArray(item.source_ids) &&
       typeof item.evidence_count === 'number' &&
       this.isStringArray(item.capability_gaps) &&
-      typeof item.termination_reason === 'string'
+      typeof item.termination_reason === 'string' &&
+      (item.triage_priority == null || typeof item.triage_priority === 'string') &&
+      (item.triage_score == null || typeof item.triage_score === 'number') &&
+      (item.triage_action == null || typeof item.triage_action === 'string') &&
+      (item.triage_autonomy_mode == null ||
+        typeof item.triage_autonomy_mode === 'string') &&
+      (item.triage_requires_human_intervention == null ||
+        typeof item.triage_requires_human_intervention === 'boolean')
     );
   }
 }

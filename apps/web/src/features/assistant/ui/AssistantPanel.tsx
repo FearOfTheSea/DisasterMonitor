@@ -207,6 +207,18 @@ function DisasterReportView({
           <p>
             Status: <strong>{report.investigation.status}</strong>
           </p>
+          {report.investigation.triage_priority && (
+            <p>
+              Internal triage: <strong>{report.investigation.triage_priority}</strong>
+              {report.investigation.triage_action &&
+                ` / ${report.investigation.triage_action}`}
+              {report.investigation.triage_autonomy_mode &&
+                ` / ${report.investigation.triage_autonomy_mode}`}
+              {report.investigation.triage_requires_human_intervention
+                ? ' / Human intervention required'
+                : ''}
+            </p>
+          )}
           {report.investigation.actions.length > 0 && (
             <>
               <h3>Completed actions</h3>

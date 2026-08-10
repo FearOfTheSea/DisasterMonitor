@@ -1,0 +1,258 @@
+{
+  "fixture_version": "dm-tr-c-v1",
+  "repeated_runs": 8,
+  "cases": [
+    {
+      "id": "eligible-low-flood-jpn",
+      "hazard": "flood",
+      "country_code": "JPN",
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-flood-vnm",
+      "hazard": "flood",
+      "country_code": "VNM",
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-flood-ven",
+      "hazard": "flood",
+      "country_code": "VEN",
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-wildfire-jpn",
+      "hazard": "wildfire",
+      "country_code": "JPN",
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-wildfire-vnm",
+      "hazard": "wildfire",
+      "country_code": "VNM",
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-landslide-ven",
+      "hazard": "landslide",
+      "country_code": "VEN",
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-cyclone-jpn",
+      "hazard": "tropical_cyclone",
+      "country_code": "JPN",
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-tsunami-vnm",
+      "hazard": "tsunami",
+      "country_code": "VNM",
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-eq-jpn",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-low-eq-ven",
+      "hazard": "earthquake",
+      "country_code": "VEN",
+      "magnitude": 4.5,
+      "facts": [],
+      "eligible": true,
+      "action": "monitor_internal",
+      "mode": "autonomous_internal"
+    },
+
+    {
+      "id": "eligible-moderate-damage-jpn",
+      "hazard": "flood",
+      "country_code": "JPN",
+      "facts": [{ "category": "physical_damage", "value": "Localized damage" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-damage-vnm",
+      "hazard": "wildfire",
+      "country_code": "VNM",
+      "facts": [{ "category": "physical_damage", "value": "Localized damage" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-damage-ven",
+      "hazard": "landslide",
+      "country_code": "VEN",
+      "facts": [{ "category": "physical_damage", "value": "Localized damage" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-evac-jpn",
+      "hazard": "flood",
+      "country_code": "JPN",
+      "facts": [{ "category": "evacuations", "value": "20" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-evac-vnm",
+      "hazard": "tropical_cyclone",
+      "country_code": "VNM",
+      "facts": [{ "category": "evacuations", "value": "75" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-evac-ven",
+      "hazard": "flood",
+      "country_code": "VEN",
+      "facts": [{ "category": "evacuations", "value": "100" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-injury-jpn",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "facts": [{ "category": "injuries", "value": "1" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-injury-vnm",
+      "hazard": "flood",
+      "country_code": "VNM",
+      "facts": [{ "category": "injuries", "value": "5" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-injury-ven",
+      "hazard": "wildfire",
+      "country_code": "VEN",
+      "facts": [{ "category": "injuries", "value": "10" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+    {
+      "id": "eligible-moderate-eq-resolved",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 5.2,
+      "facts": [{ "category": "fatalities", "value": "0" }],
+      "eligible": true,
+      "action": "queue_internal",
+      "mode": "autonomous_internal"
+    },
+
+    {
+      "id": "review-critical-magnitude",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 7.1,
+      "facts": [],
+      "eligible": false,
+      "action": "escalate_critical",
+      "mode": "human_in_the_loop"
+    },
+    {
+      "id": "review-critical-fatality",
+      "hazard": "flood",
+      "country_code": "VNM",
+      "facts": [{ "category": "fatalities", "value": "1" }],
+      "eligible": false,
+      "action": "escalate_critical",
+      "mode": "human_in_the_loop"
+    },
+    {
+      "id": "review-critical-missing",
+      "hazard": "landslide",
+      "country_code": "VEN",
+      "facts": [{ "category": "missing", "value": "12" }],
+      "eligible": false,
+      "action": "escalate_critical",
+      "mode": "human_in_the_loop"
+    },
+    {
+      "id": "review-high-magnitude",
+      "hazard": "earthquake",
+      "country_code": "VNM",
+      "magnitude": 6.2,
+      "facts": [],
+      "eligible": false,
+      "action": "request_priority_review",
+      "mode": "human_on_the_loop"
+    },
+    {
+      "id": "review-high-warning",
+      "hazard": "flood",
+      "country_code": "JPN",
+      "facts": [{ "category": "warnings", "value": "Active flood warning" }],
+      "eligible": false,
+      "action": "request_priority_review",
+      "mode": "human_on_the_loop"
+    },
+    {
+      "id": "review-uncertain-infrastructure",
+      "hazard": "wildfire",
+      "country_code": "VNM",
+      "facts": [{ "category": "infrastructure", "value": "Power outage" }],
+      "eligible": false,
+      "action": "request_priority_review",
+      "mode": "human_on_the_loop"
+    },
+    {
+      "id": "review-high-damage",
+      "hazard": "tropical_cyclone",
+      "country_code": "VEN",
+      "facts": [
+        { "category": "physical_damage", "value": "Widespread major damage" }
+      ],
+      "eligible": false,
+      "action": "request_priority_review",
+      "mode": "human_on_the_loop"
+    }
+  ]
+}

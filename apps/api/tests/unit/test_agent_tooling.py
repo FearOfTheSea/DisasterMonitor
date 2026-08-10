@@ -315,6 +315,10 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     assert state.workspace.incident_priority.evidence_state_version == (
         state.workspace.evidence_state.state_version
     )
+    assert state.workspace.triage_decision is not None
+    assert state.workspace.triage_decision.assessment_id == (
+        state.workspace.incident_priority.assessment_id
+    )
     assert (
         state.workspace.hypotheses[0].proposition not in state.workspace.report.message
     )

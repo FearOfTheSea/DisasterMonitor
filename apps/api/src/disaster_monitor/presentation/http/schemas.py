@@ -67,6 +67,11 @@ class InvestigationResponse(BaseModel):
     evidence_count: int = 0
     capability_gaps: list[str] = Field(default_factory=list)
     termination_reason: str
+    triage_priority: str | None = None
+    triage_score: int | None = None
+    triage_action: str | None = None
+    triage_autonomy_mode: str | None = None
+    triage_requires_human_intervention: bool | None = None
 
 
 class SourceResponse(BaseModel):

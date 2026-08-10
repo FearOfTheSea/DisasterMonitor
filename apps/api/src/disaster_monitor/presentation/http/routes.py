@@ -107,6 +107,13 @@ async def assistant(
             evidence_count=result.investigation.evidence_count,
             capability_gaps=list(result.investigation.capability_gaps),
             termination_reason=result.investigation.termination_reason,
+            triage_priority=result.investigation.triage_priority,
+            triage_score=result.investigation.triage_score,
+            triage_action=result.investigation.triage_action,
+            triage_autonomy_mode=result.investigation.triage_autonomy_mode,
+            triage_requires_human_intervention=(
+                result.investigation.triage_requires_human_intervention
+            ),
         )
     )
     if result.response_type == "assistant":

@@ -121,6 +121,8 @@ def _response_type_without_report(status: AgentStatus) -> str:
 def _summary(state: AgentExecutionState) -> InvestigationSummary:
     task = state.task
     packet = state.workspace.evidence_packet
+    priority = state.workspace.incident_priority
+    decision = state.workspace.triage_decision
     return InvestigationSummary(
         status=state.final_status.value,
         task_summary=(task.detail or task.question)[:500],
@@ -135,4 +137,11 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
             dict.fromkeys((*state.capability_gaps, *state.plan.capability_gaps))
         ),
         termination_reason=state.termination_reason,
+        triage_priority=priority.priority.value if priority else None,
+        triage_score=priority.score if priority else None,
+        triage_action=decision.action.value if decision else None,
+        triage_autonomy_mode=decision.autonomy_mode.value if decision else None,
+        triage_requires_human_intervention=(
+            decision.requires_human_intervention if decision else None
+        ),
     )
