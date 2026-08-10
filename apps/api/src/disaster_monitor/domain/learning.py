@@ -37,6 +37,23 @@ class DriftAdaptationStatus(StrEnum):
     NON_ADAPTIVE_SAFE_MODE = "non_adaptive_safe_mode"
 
 
+class OptimizationScope(StrEnum):
+    ANALYTICAL_TUNING = "analytical_tuning"
+    TRUST_REGISTRY = "trust_registry"
+    PERMISSIONS = "permissions"
+    SAFETY_THRESHOLDS = "safety_thresholds"
+    HIGH_CONSEQUENCE_AUTHORITY = "high_consequence_authority"
+
+
+class OptimizationStatus(StrEnum):
+    APPROVED = "approved"
+    REJECTED_PROTECTED_SCOPE = "rejected_protected_scope"
+    REJECTED_OUTSIDE_ALLOWLIST = "rejected_outside_allowlist"
+    REJECTED_NOT_REVERSIBLE = "rejected_not_reversible"
+    REJECTED_INSUFFICIENT_IMPROVEMENT = "rejected_insufficient_improvement"
+    REJECTED_REGRESSION = "rejected_regression"
+
+
 @dataclass(frozen=True, slots=True)
 class AnalyticalTuningParameters:
     parameter_set_id: str
@@ -44,6 +61,7 @@ class AnalyticalTuningParameters:
     material_conflict_weight: float
     multimodal_review_weight: float
     routine_monitoring_weight: float
+    attenuated_signal_boost: float = 1.0
     source_authority_mutable: bool = False
     permission_mutable: bool = False
     safety_threshold_mutable: bool = False
@@ -62,6 +80,10 @@ class AnalyticalTuningParameters:
         ):
             raise ValueError(
                 "Analytical tuning weights must remain reversible and bounded."
+            )
+        if not 1.0 <= self.attenuated_signal_boost <= 3.0:
+            raise ValueError(
+                "Analytical signal boost must remain reversible and bounded."
             )
         if (
             self.source_authority_mutable
@@ -264,3 +286,103 @@ class DriftAdaptationRelease:
             or self.safe_mode_reason is None
         ):
             raise ValueError("Safe mode must retain prior approved parameters.")
+
+
+@dataclass(frozen=True, slots=True)
+class OptimizationProposal:
+    proposal_id: str
+    scope: OptimizationScope
+    target_ids: tuple[str, ...]
+    baseline_parameters: AnalyticalTuningParameters
+    candidate_parameters: AnalyticalTuningParameters
+    provenance_ids: tuple[str, ...]
+    reversible: bool
+
+    def __post_init__(self) -> None:
+        if not self.proposal_id or not self.target_ids or not self.provenance_ids:
+            raise ValueError("Optimization proposal requires identity and provenance.")
+        if len(self.target_ids) != len(set(self.target_ids)):
+            raise ValueError("Optimization proposal targets must be unique.")
+
+
+@dataclass(frozen=True, slots=True)
+class OptimizationFamilyEvaluation:
+    family: str
+    sample_count: int
+    baseline_accuracy: float
+    candidate_accuracy: float
+
+    def __post_init__(self) -> None:
+        if not self.family or self.sample_count < 1:
+            raise ValueError("Optimization family requires identity and samples.")
+        if any(
+            not 0 <= value <= 1
+            for value in (self.baseline_accuracy, self.candidate_accuracy)
+        ):
+            raise ValueError("Optimization family metrics must be bounded.")
+
+
+@dataclass(frozen=True, slots=True)
+class AutonomousOptimizationRelease:
+    release_id: str
+    dataset_version: str
+    status: OptimizationStatus
+    proposal: OptimizationProposal
+    approved_parameters: AnalyticalTuningParameters
+    family_evaluations: tuple[OptimizationFamilyEvaluation, ...]
+    baseline_guardrail_evaluation: LearningEvaluation
+    candidate_guardrail_evaluation: LearningEvaluation
+    baseline_pass_eight: float
+    candidate_pass_eight: float
+    rejection_reason: str | None
+    rollback_restored: bool
+    provenance_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.release_id or not self.dataset_version or not self.provenance_ids:
+            raise ValueError("Optimization release requires identity and provenance.")
+        if any(
+            not 0 <= value <= 1
+            for value in (self.baseline_pass_eight, self.candidate_pass_eight)
+        ):
+            raise ValueError("Optimization repeated-run metrics must be bounded.")
+        improved_families = sum(
+            item.candidate_accuracy > item.baseline_accuracy
+            for item in self.family_evaluations
+        )
+        safety_regression = (
+            self.candidate_guardrail_evaluation.critical_safety_rate
+            < self.baseline_guardrail_evaluation.critical_safety_rate
+        )
+        grounding_regression = (
+            self.candidate_guardrail_evaluation.grounding_rate
+            < self.baseline_guardrail_evaluation.grounding_rate
+        )
+        task_regression = (
+            self.candidate_guardrail_evaluation.task_accuracy
+            < self.baseline_guardrail_evaluation.task_accuracy
+        )
+        if self.status == OptimizationStatus.APPROVED:
+            if (
+                self.proposal.scope != OptimizationScope.ANALYTICAL_TUNING
+                or not self.proposal.reversible
+                or self.approved_parameters != self.proposal.candidate_parameters
+                or improved_families < 3
+                or self.candidate_pass_eight < self.baseline_pass_eight
+                or safety_regression
+                or grounding_regression
+                or task_regression
+                or self.rejection_reason is not None
+                or self.rollback_restored
+            ):
+                raise ValueError(
+                    "Approved autonomous optimization failed its release gate."
+                )
+        elif (
+            self.approved_parameters != self.proposal.baseline_parameters
+            or not self.rollback_restored
+            or self.rejection_reason is None
+        ):
+            raise ValueError(
+                "Rejected optimization must restore the prior approved state."
+            )

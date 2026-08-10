@@ -118,8 +118,16 @@ authority or policy. Adapted display weights require at least 90% seeded-shift r
 shifted-set improvement, no critical-safety regression, and no more than one point of
 historical task degradation. A severe missed shift with unsupported-output risk or a
 damaged critical baseline retains the prior `analytical-tuning:v1` parameters in
-non-adaptive safe mode. The current approved set is
-`analytical-tuning:v2-drift-adapted`.
+non-adaptive safe mode.
+
+Governed autonomous optimization can change only the bounded, reversible
+`attenuated_signal_boost` analytical parameter. Release requires improvements on at
+least three independent benchmark families while repeated-run, task, grounding, and
+critical-safety guardrails remain unchanged or improve. The release artifact records
+the proposal, targets, metrics, provenance, decision, and rollback. Attempts to change
+the trust registry, permissions, safety thresholds, high-consequence authority, or any
+non-allowlisted analytical field are rejected and restore the prior state. The current
+approved set is `analytical-tuning:v3-governed`.
 
 Current answers are composed by application code from `EvidencePacket`. Focused
 casualty answers include event identity, source, freshness, conflict, and explicit
@@ -195,4 +203,6 @@ provenance separation, paired task improvement, non-compensatory safety/groundin
 gates, rejected-candidate rollback, and the closed non-authority parameter schema.
 CL-B measures seeded drift recall across five shift families, shifted/historical
 performance, authority separation, and non-adaptive safe mode under severe missed drift
-or critical baseline damage.
+or critical baseline damage. CL-C measures independent-family improvement, pass^8,
+backward task/grounding/safety guardrails, the explicit reversible allowlist, and atomic
+rollback for protected or unsafe self-change proposals.

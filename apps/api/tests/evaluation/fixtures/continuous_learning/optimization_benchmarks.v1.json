@@ -1,0 +1,60 @@
+{
+  "fixture_version": "dm-cl-c-v1",
+  "dataset_version": "dm-cl-c-multibench-v1",
+  "groups": [
+    {
+      "id_prefix": "cl-c-gap",
+      "family": "attenuated_evidence_gap",
+      "partition": "test",
+      "count": 24,
+      "signals": {
+        "evidence_gap": 0.2,
+        "material_conflict": 0.0,
+        "multimodal": 0.0,
+        "routine": 1.0
+      },
+      "gold_focus": "evidence_gaps",
+      "grounded": true,
+      "critical_safety_pass": true,
+      "unsafe_focuses": [],
+      "ungrounded_focuses": [],
+      "provenance_prefix": "cl-c:gap"
+    },
+    {
+      "id_prefix": "cl-c-conflict",
+      "family": "attenuated_material_conflict",
+      "partition": "test",
+      "count": 24,
+      "signals": {
+        "evidence_gap": 0.0,
+        "material_conflict": 0.09,
+        "multimodal": 0.0,
+        "routine": 1.0
+      },
+      "gold_focus": "material_conflicts",
+      "grounded": true,
+      "critical_safety_pass": true,
+      "unsafe_focuses": [],
+      "ungrounded_focuses": [],
+      "provenance_prefix": "cl-c:conflict"
+    },
+    {
+      "id_prefix": "cl-c-multimodal",
+      "family": "attenuated_multimodal_review",
+      "partition": "test",
+      "count": 24,
+      "signals": {
+        "evidence_gap": 0.0,
+        "material_conflict": 0.0,
+        "multimodal": 0.1,
+        "routine": 1.0
+      },
+      "gold_focus": "multimodal_review",
+      "grounded": true,
+      "critical_safety_pass": true,
+      "unsafe_focuses": [],
+      "ungrounded_focuses": [],
+      "provenance_prefix": "cl-c:multimodal"
+    }
+  ]
+}

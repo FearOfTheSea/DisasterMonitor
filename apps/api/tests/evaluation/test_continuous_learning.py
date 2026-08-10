@@ -9,16 +9,25 @@ from disaster_monitor.application.services.drift_adaptation import (
     DriftAdaptationController,
     load_drift_observations,
 )
+from disaster_monitor.application.services.governed_optimization import (
+    GovernedAutonomousOptimizer,
+)
 from disaster_monitor.application.services.offline_learning import (
     BASELINE_ANALYTICAL_TUNING_V0,
+    DRIFT_ADAPTED_ANALYTICAL_TUNING_V2,
+    GOVERNED_ANALYTICAL_TUNING_V3,
     OfflineTrajectoryLearner,
     load_locked_trajectories,
 )
 from disaster_monitor.domain.learning import (
+    AnalyticalFocus,
     AnalyticalTuningParameters,
     DriftAdaptationStatus,
     LearningPartition,
     LearningReleaseStatus,
+    OptimizationProposal,
+    OptimizationScope,
+    OptimizationStatus,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "continuous_learning"
@@ -200,6 +209,123 @@ def test_cl_b_severe_missed_shift_and_baseline_damage_enter_safe_mode() -> None:
     assert damaged.approved_parameters == damaged.prior_parameters
 
 
+def test_cl_c_governed_multi_benchmark_release_gate() -> None:
+    dataset_version, benchmark, regression = _optimization_inputs()
+    proposal = _optimization_proposal()
+    release = GovernedAutonomousOptimizer().evaluate(
+        dataset_version,
+        proposal,
+        benchmark_trajectories=benchmark,
+        regression_trajectories=regression,
+    )
+
+    assert release.status == OptimizationStatus.APPROVED
+    assert release.approved_parameters == GOVERNED_ANALYTICAL_TUNING_V3
+    assert len(release.family_evaluations) == 3
+    assert all(
+        item.candidate_accuracy > item.baseline_accuracy
+        for item in release.family_evaluations
+    )
+    assert release.candidate_pass_eight >= release.baseline_pass_eight
+    assert (
+        release.candidate_guardrail_evaluation.critical_safety_rate
+        >= release.baseline_guardrail_evaluation.critical_safety_rate
+    )
+    assert (
+        release.candidate_guardrail_evaluation.grounding_rate
+        >= release.baseline_guardrail_evaluation.grounding_rate
+    )
+    assert proposal.target_ids == ("analytical_tuning.attenuated_signal_boost",)
+    assert proposal.reversible
+    assert not release.rollback_restored
+
+
+@pytest.mark.parametrize(
+    "scope,target",
+    (
+        (OptimizationScope.TRUST_REGISTRY, "trusted_source_catalog"),
+        (OptimizationScope.PERMISSIONS, "specialist_permissions"),
+        (OptimizationScope.SAFETY_THRESHOLDS, "critical_safety_thresholds"),
+        (
+            OptimizationScope.HIGH_CONSEQUENCE_AUTHORITY,
+            "public_warning_authority",
+        ),
+    ),
+)
+def test_cl_c_protected_self_changes_are_rejected_and_rolled_back(
+    scope: OptimizationScope, target: str
+) -> None:
+    dataset_version, benchmark, regression = _optimization_inputs()
+    proposal = replace(
+        _optimization_proposal(),
+        proposal_id=f"cl-c-protected:{scope.value}",
+        scope=scope,
+        target_ids=(target,),
+    )
+    release = GovernedAutonomousOptimizer().evaluate(
+        dataset_version,
+        proposal,
+        benchmark_trajectories=benchmark,
+        regression_trajectories=regression,
+    )
+
+    assert release.status == OptimizationStatus.REJECTED_PROTECTED_SCOPE
+    assert release.approved_parameters == DRIFT_ADAPTED_ANALYTICAL_TUNING_V2
+    assert release.rollback_restored
+    assert release.rejection_reason == f"protected_scope:{scope.value}"
+
+
+def test_cl_c_non_reversible_out_of_scope_and_safety_damage_restore_prior() -> None:
+    dataset_version, benchmark, regression = _optimization_inputs()
+    optimizer = GovernedAutonomousOptimizer()
+
+    non_reversible = optimizer.evaluate(
+        dataset_version,
+        replace(_optimization_proposal(), reversible=False),
+        benchmark_trajectories=benchmark,
+        regression_trajectories=regression,
+    )
+    assert non_reversible.status == OptimizationStatus.REJECTED_NOT_REVERSIBLE
+    assert non_reversible.rollback_restored
+
+    weight_change = replace(
+        GOVERNED_ANALYTICAL_TUNING_V3,
+        parameter_set_id="analytical-tuning:disallowed-weight-change",
+        evidence_gap_weight=3,
+    )
+    outside_allowlist = optimizer.evaluate(
+        dataset_version,
+        replace(_optimization_proposal(), candidate_parameters=weight_change),
+        benchmark_trajectories=benchmark,
+        regression_trajectories=regression,
+    )
+    assert outside_allowlist.status == OptimizationStatus.REJECTED_OUTSIDE_ALLOWLIST
+    assert outside_allowlist.rollback_restored
+
+    first, *remaining = regression
+    safety_damaged = (
+        replace(
+            first,
+            evidence_gap_signal=0.2,
+            material_conflict_signal=0,
+            multimodal_signal=0,
+            routine_signal=1,
+            gold_focus=AnalyticalFocus.EVIDENCE_GAPS,
+            unsafe_focuses=(AnalyticalFocus.EVIDENCE_GAPS,),
+        ),
+        *remaining,
+    )
+    rejected = optimizer.evaluate(
+        dataset_version,
+        _optimization_proposal(),
+        benchmark_trajectories=benchmark,
+        regression_trajectories=safety_damaged,
+    )
+    assert rejected.status == OptimizationStatus.REJECTED_REGRESSION
+    assert rejected.approved_parameters == DRIFT_ADAPTED_ANALYTICAL_TUNING_V2
+    assert rejected.rollback_restored
+
+
 def _drift_inputs():
     observation_payload = json.loads(
         (FIXTURES / "drift_observations.v1.json").read_text(encoding="utf-8")
@@ -216,3 +342,25 @@ def _drift_inputs():
     assert shifted_payload["fixture_version"] == "dm-cl-b-shift-v1"
     _, shifted = load_locked_trajectories(shifted_payload)
     return dataset_version, observations, historical, shifted
+
+
+def _optimization_inputs():
+    payload = json.loads(
+        (FIXTURES / "optimization_benchmarks.v1.json").read_text(encoding="utf-8")
+    )
+    assert payload["fixture_version"] == "dm-cl-c-v1"
+    dataset_version, benchmark = load_locked_trajectories(payload)
+    _, _, historical, shifted = _drift_inputs()
+    return dataset_version, benchmark, (*historical, *shifted)
+
+
+def _optimization_proposal() -> OptimizationProposal:
+    return OptimizationProposal(
+        proposal_id="cl-c:attenuated-signal-boost:v3",
+        scope=OptimizationScope.ANALYTICAL_TUNING,
+        target_ids=("analytical_tuning.attenuated_signal_boost",),
+        baseline_parameters=DRIFT_ADAPTED_ANALYTICAL_TUNING_V2,
+        candidate_parameters=GOVERNED_ANALYTICAL_TUNING_V3,
+        provenance_ids=("cl-c:optimizer-proposal:v3",),
+        reversible=True,
+    )

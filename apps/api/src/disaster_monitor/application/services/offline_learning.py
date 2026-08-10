@@ -35,6 +35,14 @@ DRIFT_ADAPTED_ANALYTICAL_TUNING_V2 = AnalyticalTuningParameters(
     multimodal_review_weight=4.0,
     routine_monitoring_weight=0.5,
 )
+GOVERNED_ANALYTICAL_TUNING_V3 = AnalyticalTuningParameters(
+    parameter_set_id="analytical-tuning:v3-governed",
+    evidence_gap_weight=2.0,
+    material_conflict_weight=5.0,
+    multimodal_review_weight=4.0,
+    routine_monitoring_weight=0.5,
+    attenuated_signal_boost=2.0,
+)
 _CANDIDATES = (
     APPROVED_ANALYTICAL_TUNING_V1,
     AnalyticalTuningParameters(
@@ -59,7 +67,7 @@ class AnalyticalFollowupRanker:
 
     def __init__(
         self,
-        parameters: AnalyticalTuningParameters = DRIFT_ADAPTED_ANALYTICAL_TUNING_V2,
+        parameters: AnalyticalTuningParameters = GOVERNED_ANALYTICAL_TUNING_V3,
     ) -> None:
         self.parameters = parameters
 
@@ -73,19 +81,27 @@ class AnalyticalFollowupRanker:
     ) -> AnalyticalFocus:
         scores = {
             AnalyticalFocus.EVIDENCE_GAPS: (
-                evidence_gap_signal * self.parameters.evidence_gap_weight
+                self._analytical_signal(evidence_gap_signal)
+                * self.parameters.evidence_gap_weight
             ),
             AnalyticalFocus.MATERIAL_CONFLICTS: (
-                material_conflict_signal * self.parameters.material_conflict_weight
+                self._analytical_signal(material_conflict_signal)
+                * self.parameters.material_conflict_weight
             ),
             AnalyticalFocus.MULTIMODAL_REVIEW: (
-                multimodal_signal * self.parameters.multimodal_review_weight
+                self._analytical_signal(multimodal_signal)
+                * self.parameters.multimodal_review_weight
             ),
             AnalyticalFocus.ROUTINE_MONITORING: (
                 routine_signal * self.parameters.routine_monitoring_weight
             ),
         }
         return max(scores, key=scores.__getitem__)
+
+    def _analytical_signal(self, value: float) -> float:
+        if 0 < value < 0.30:
+            return value * self.parameters.attenuated_signal_boost
+        return value
 
 
 class OfflineTrajectoryLearner:
