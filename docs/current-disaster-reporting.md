@@ -60,7 +60,11 @@ The flow is:
     gaps, and retain the same closed policy constraints. A bounded internal monitoring
     recommendation is available only when its leading premise has current fact lineage
     and triage does not require human intervention; unresolved premises disable that
-    layer.
+    layer. The bounded autonomy controller may apply only that selected option when it
+    is a reversible low/moderate-consequence internal state change. The request-scoped
+    final state and termination reason are inspectable. A prohibited public warning,
+    evacuation directive, resource order, unselected option, or authority mismatch
+    leaves state unchanged and immediately downgrades the result to advisory-only.
 11. When the request contains admitted image bytes, associate each asset to the selected
     physical event using explicit hazard, country, capture-time, capture-role, event-ID,
     and WGS84 footprint metadata. Only uniquely associated assets enter bounded local

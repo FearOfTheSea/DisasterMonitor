@@ -114,6 +114,18 @@ async def assistant(
             triage_requires_human_intervention=(
                 result.investigation.triage_requires_human_intervention
             ),
+            decision_action=result.investigation.decision_action,
+            decision_autonomy_mode=result.investigation.decision_autonomy_mode,
+            decision_requires_human_intervention=(
+                result.investigation.decision_requires_human_intervention
+            ),
+            decision_termination_reason=(
+                result.investigation.decision_termination_reason
+            ),
+            decision_state_revision=result.investigation.decision_state_revision,
+            decision_active_internal_states=list(
+                result.investigation.decision_active_internal_states
+            ),
         )
     )
     if result.response_type == "assistant":

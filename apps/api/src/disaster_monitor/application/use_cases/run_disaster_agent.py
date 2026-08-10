@@ -123,6 +123,10 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
     packet = state.workspace.evidence_packet
     priority = state.workspace.incident_priority
     decision = state.workspace.triage_decision
+    decision_outcome = state.workspace.decision_outcome
+    decision_state = (
+        decision_outcome.final_state if decision_outcome is not None else None
+    )
     return InvestigationSummary(
         status=state.final_status.value,
         task_summary=(task.detail or task.question)[:500],
@@ -143,5 +147,35 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
         triage_autonomy_mode=decision.autonomy_mode.value if decision else None,
         triage_requires_human_intervention=(
             decision.requires_human_intervention if decision else None
+        ),
+        decision_action=(decision_outcome.action.value if decision_outcome else None),
+        decision_autonomy_mode=(
+            decision_outcome.autonomy_mode.value if decision_outcome else None
+        ),
+        decision_requires_human_intervention=(
+            decision_outcome.requires_human_intervention if decision_outcome else None
+        ),
+        decision_termination_reason=(
+            decision_outcome.termination_reason if decision_outcome else None
+        ),
+        decision_state_revision=(decision_state.revision if decision_state else None),
+        decision_active_internal_states=(
+            ()
+            if decision_state is None
+            else tuple(
+                name
+                for name, active in (
+                    ("monitoring_active", decision_state.monitoring_active),
+                    (
+                        "evidence_gap_priority_active",
+                        decision_state.evidence_gap_priority_active,
+                    ),
+                    (
+                        "verified_update_comparison_active",
+                        decision_state.verified_update_comparison_active,
+                    ),
+                )
+                if active
+            )
         ),
     )

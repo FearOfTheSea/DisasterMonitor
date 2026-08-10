@@ -219,6 +219,21 @@ function DisasterReportView({
                 : ''}
             </p>
           )}
+          {report.investigation.decision_autonomy_mode && (
+            <p>
+              Bounded decision:{' '}
+              <strong>{report.investigation.decision_action ?? 'none'}</strong>
+              {` / ${report.investigation.decision_autonomy_mode}`}
+              {report.investigation.decision_state_revision != null &&
+                ` / state r${report.investigation.decision_state_revision}`}
+              {report.investigation.decision_active_internal_states?.length
+                ? ` / ${report.investigation.decision_active_internal_states.join(', ')}`
+                : ''}
+              {report.investigation.decision_requires_human_intervention
+                ? ' / Human intervention required'
+                : ''}
+            </p>
+          )}
           {report.investigation.actions.length > 0 && (
             <>
               <h3>Completed actions</h3>

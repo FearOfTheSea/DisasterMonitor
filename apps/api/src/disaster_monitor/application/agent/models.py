@@ -10,7 +10,10 @@ from disaster_monitor.application.disaster import (
     EvidencePacket,
     ProviderBatch,
 )
-from disaster_monitor.domain.decision import DecisionSupportArtifact
+from disaster_monitor.domain.decision import (
+    DecisionExecutionOutcome,
+    DecisionSupportArtifact,
+)
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
@@ -188,6 +191,7 @@ class EvidenceWorkspace:
     incident_priority: IncidentPriorityAssessment | None = None
     triage_decision: InternalTriageDecision | None = None
     decision_support: DecisionSupportArtifact | None = None
+    decision_outcome: DecisionExecutionOutcome | None = None
     evidence_packet: EvidencePacket | None = None
     report: DisasterReport | None = None
     multimodal_assets: tuple[MultimodalAsset, ...] = ()

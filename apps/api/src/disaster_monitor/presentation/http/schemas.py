@@ -72,6 +72,12 @@ class InvestigationResponse(BaseModel):
     triage_action: str | None = None
     triage_autonomy_mode: str | None = None
     triage_requires_human_intervention: bool | None = None
+    decision_action: str | None = None
+    decision_autonomy_mode: str | None = None
+    decision_requires_human_intervention: bool | None = None
+    decision_termination_reason: str | None = None
+    decision_state_revision: int | None = None
+    decision_active_internal_states: list[str] = Field(default_factory=list)
 
 
 class SourceResponse(BaseModel):

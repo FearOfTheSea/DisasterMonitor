@@ -6,6 +6,10 @@ from pathlib import Path
 import pytest
 from evidence_world_state_metrics import expected_calibration_error
 
+from disaster_monitor.application.services.decision_autonomy import (
+    DecisionAutonomyController,
+    validate_decision_execution,
+)
 from disaster_monitor.application.services.decision_support import (
     DecisionOptionGenerator,
     validate_decision_support_artifact,
@@ -28,7 +32,11 @@ from disaster_monitor.application.services.scenario_reasoning import (
 from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 from disaster_monitor.domain.decision import (
     PROHIBITED_CONSEQUENTIAL_ACTIONS,
+    DecisionAutonomyMode,
+    DecisionConsequence,
+    DecisionExecutionState,
     DecisionFact,
+    DecisionInternalAction,
     DecisionRecommendationStatus,
     DecisionScenarioMode,
     DecisionStatementType,
@@ -402,3 +410,112 @@ def test_ds_b_disables_unsupported_recommendation_and_rejects_policy_escape() ->
     assert supported.status == DecisionRecommendationStatus.AVAILABLE
     with pytest.raises(ValueError, match="unsupported premise"):
         replace(supported, unsupported_premise_ids=("premise:not-supported",))
+
+
+def test_ds_c_release_gate() -> None:
+    scenario_fixture = json.loads(
+        (FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+    )
+    scenarios = {str(item["id"]): item for item in scenario_fixture["cases"]}
+    fixture = json.loads(
+        (FIXTURES / "autonomy_cases.v1.json").read_text(encoding="utf-8")
+    )
+    assert fixture["fixture_version"] == "dm-ds-c-v1"
+    cases = fixture["cases"]
+    assert isinstance(cases, list) and cases
+    runs_per_case = int(fixture["runs_per_case"])
+    pass_eight = 0
+    correct_final_states = 0
+    final_state_total = 0
+    critical_policy_violations = 0
+    controller = DecisionAutonomyController()
+
+    for item in cases:
+        scenario = scenarios[str(item["scenario_id"])]
+        run_results: list[bool] = []
+        expected_final = item["expected_final"]
+        assert isinstance(expected_final, dict)
+        for run in range(runs_per_case):
+            variant = dict(scenario)
+            reports = scenario.get("reports")
+            if isinstance(reports, list) and run % 2:
+                variant["reports"] = list(reversed(reports))
+            artifact = _products(variant)[-1]
+            requested = item.get("requested_action")
+            outcome = controller.execute(
+                artifact,
+                requested_action=None if requested is None else str(requested),
+            )
+            final_snapshot = {
+                "revision": outcome.final_state.revision,
+                "monitoring": outcome.final_state.monitoring_active,
+                "gap_priority": (outcome.final_state.evidence_gap_priority_active),
+                "update_comparison": (
+                    outcome.final_state.verified_update_comparison_active
+                ),
+            }
+            final_correct = final_snapshot == expected_final
+            result_correct = (
+                outcome.autonomy_mode
+                == DecisionAutonomyMode(str(item["expected_mode"]))
+                and outcome.action
+                == DecisionInternalAction(str(item["expected_action"]))
+                and outcome.termination_reason == item["expected_termination"]
+                and outcome.requires_human_intervention
+                is bool(item["expected_requires_human"])
+                and final_correct
+            )
+            correct_final_states += final_correct
+            final_state_total += 1
+            critical_policy_violations += any(
+                (
+                    outcome.final_state.public_warning_issued,
+                    outcome.final_state.evacuation_directive_issued,
+                    outcome.final_state.resource_allocation_ordered,
+                )
+            )
+            validate_decision_execution(outcome, artifact)
+            run_results.append(result_correct)
+        pass_eight += all(run_results)
+
+    pass_eight_rate = pass_eight / len(cases)
+    final_state_rate = correct_final_states / final_state_total
+    assert pass_eight_rate >= 0.95, ("ds_c.pass8", pass_eight_rate)
+    assert final_state_rate >= 0.99, ("ds_c.final_state", final_state_rate)
+    assert critical_policy_violations == 0, (
+        "ds_c.critical_policy_violations",
+        critical_policy_violations,
+    )
+
+
+def test_ds_c_rollback_and_authority_guards_preserve_state() -> None:
+    scenario_fixture = json.loads(
+        (FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+    )
+    cases = scenario_fixture["cases"]
+    assert isinstance(cases, list)
+    eligible = next(item for item in cases if item["id"] == "positive-injuries")
+    artifact = _products(eligible)[-1]
+
+    rollback = DecisionAutonomyController(autonomy_enabled=False).execute(artifact)
+    assert rollback.autonomy_mode == DecisionAutonomyMode.ADVISORY_ONLY
+    assert rollback.final_state == rollback.initial_state
+
+    selected_id = artifact.scenario_analysis.recommendation.option_id
+    tampered_options = tuple(
+        replace(option, consequence=DecisionConsequence.HIGH)
+        if option.option_id == selected_id
+        else option
+        for option in artifact.options
+    )
+    guarded = DecisionAutonomyController().execute(
+        replace(artifact, options=tampered_options)
+    )
+    assert guarded.autonomy_mode == DecisionAutonomyMode.ADVISORY_ONLY
+    assert guarded.termination_reason == "advisory_authority_guard_downgrade"
+    assert guarded.final_state == guarded.initial_state
+
+    with pytest.raises(ValueError, match="prohibited consequential effects"):
+        DecisionExecutionState(
+            artifact_id=artifact.artifact_id, public_warning_issued=True
+        )

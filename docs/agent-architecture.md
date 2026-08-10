@@ -67,7 +67,12 @@ artifact; public warnings, evacuation directives, and resource-allocation orders
 always prohibited. Paired human-impact counterfactuals reuse the calibrated EW
 hypothesis rather than inventing a second probability. Scenario sensitivity and gaps
 are visible in the composed section. The separate recommendation state fails closed on
-an unresolved premise and cannot select a high-consequence or human-review option.
+an unresolved premise and cannot select a high-consequence or human-review option. A
+request-scoped autonomy controller can apply the selected eligible option to typed
+internal state. Its action, mode, final revision, active internal flags, and termination
+reason are exposed without hidden reasoning. Prohibited or unselected action requests,
+authority drift, and the rollback switch preserve the initial state and return
+advisory-only.
 `CurrentDisasterReportService` is a compatibility facade over the same tools.
 
 Current answers are composed by application code from `EvidencePacket`. Focused
@@ -124,4 +129,6 @@ The frozen Decision Support evaluation begins in
 material trace, option relevance, explicit epistemic separation, contradiction
 retention, and repeated deterministic replay. DS-B measures frozen scenario
 consistency, calibration, policy adherence, sensitivity/gap exposure, and fail-closed
-recommendation behavior.
+recommendation behavior. DS-C measures eight-run final-state reliability, correct
+state transitions, zero prohibited effects, rollback, and immediate advisory-only
+downgrade behavior.

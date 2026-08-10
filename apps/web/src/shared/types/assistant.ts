@@ -56,6 +56,12 @@ export type InvestigationSummary = {
   triage_action?: string | null;
   triage_autonomy_mode?: string | null;
   triage_requires_human_intervention?: boolean | null;
+  decision_action?: string | null;
+  decision_autonomy_mode?: string | null;
+  decision_requires_human_intervention?: boolean | null;
+  decision_termination_reason?: string | null;
+  decision_state_revision?: number | null;
+  decision_active_internal_states?: string[];
 };
 
 export type AssistantSource = {

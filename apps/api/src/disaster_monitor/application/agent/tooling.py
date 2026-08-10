@@ -23,6 +23,10 @@ from disaster_monitor.application.ports.disaster_information import (
     SituationReportProvider,
 )
 from disaster_monitor.application.ports.source_catalog import SourceCatalog
+from disaster_monitor.application.services.decision_autonomy import (
+    DecisionAutonomyController,
+    render_decision_execution,
+)
 from disaster_monitor.application.services.decision_support import (
     DecisionOptionGenerator,
     render_decision_support,
@@ -114,6 +118,9 @@ class DisasterToolDependencies:
     triage_policy: TriageAutonomyPolicy = field(default_factory=TriageAutonomyPolicy)
     decision_option_generator: DecisionOptionGenerator = field(
         default_factory=DecisionOptionGenerator
+    )
+    decision_autonomy: DecisionAutonomyController = field(
+        default_factory=DecisionAutonomyController
     )
 
 
@@ -391,6 +398,11 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
                             state.workspace.triage_decision,
                         )
                     )
+                    state.workspace.decision_outcome = (
+                        self.dependencies.decision_autonomy.execute(
+                            state.workspace.decision_support
+                        )
+                    )
                 except ValueError:
                     state.capability_gaps.append(
                         "Decision support failed its evidence-lineage safety gate; "
@@ -527,7 +539,16 @@ def compose_report(
     if state.workspace.decision_support is not None:
         decision_section = ReportSection(
             "Decision support",
-            render_decision_support(state.workspace.decision_support),
+            "\n".join(
+                (
+                    render_decision_support(state.workspace.decision_support),
+                    *(
+                        (render_decision_execution(state.workspace.decision_outcome),)
+                        if state.workspace.decision_outcome is not None
+                        else ()
+                    ),
+                )
+            ),
         )
         sections = (*sections, decision_section)
         message = f"{message}\n\n## Decision support\n{decision_section.content}"

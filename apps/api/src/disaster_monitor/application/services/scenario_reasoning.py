@@ -270,8 +270,13 @@ def _recommendation(
             evidence_gaps=evidence_gaps,
             policy_constraints=PROHIBITED_CONSEQUENTIAL_ACTIONS,
         )
-    monitor_option = next(
-        item for item in options if item.option_kind == "continue_approved_monitoring"
+    selected_kind = (
+        "compare_verified_updates"
+        if mode == DecisionScenarioMode.MATERIAL_HUMAN_IMPACT
+        else "continue_approved_monitoring"
+    )
+    selected_option = next(
+        item for item in options if item.option_kind == selected_kind
     )
     confidence = (
         estimate.probability
@@ -280,14 +285,14 @@ def _recommendation(
     )
     return DecisionRecommendation(
         status=DecisionRecommendationStatus.AVAILABLE,
-        option_id=monitor_option.option_id,
+        option_id=selected_option.option_id,
         confidence=confidence,
         premise_fact_ids=branch_fact_ids,
         premise_estimate_ids=(estimate.hypothesis_id,),
         unsupported_premise_ids=(),
         rationale=(
-            "Continue the reversible approved-source monitoring option; this does "
-            "not authorize any public or operational action."
+            f"Select the reversible internal {selected_kind} option; this does not "
+            "authorize any public or operational action."
         ),
         sensitivity=sensitivity,
         evidence_gaps=evidence_gaps,

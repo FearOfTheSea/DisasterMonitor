@@ -30,6 +30,18 @@ class DecisionRecommendationStatus(StrEnum):
     HUMAN_REVIEW_REQUIRED = "human_review_required"
 
 
+class DecisionAutonomyMode(StrEnum):
+    AUTONOMOUS_INTERNAL = "autonomous_internal"
+    ADVISORY_ONLY = "advisory_only"
+
+
+class DecisionInternalAction(StrEnum):
+    NONE = "none"
+    CONTINUE_APPROVED_MONITORING = "continue_approved_monitoring"
+    PRIORITIZE_EVIDENCE_GAPS = "prioritize_evidence_gaps"
+    COMPARE_VERIFIED_UPDATES = "compare_verified_updates"
+
+
 PROHIBITED_CONSEQUENTIAL_ACTIONS = (
     "public_warning",
     "evacuation_directive",
@@ -236,6 +248,75 @@ class DecisionScenarioAnalysis:
             raise ValueError("Scenario analysis requires paired counterfactuals.")
         if not self.assumption_sensitivity:
             raise ValueError("Scenario analysis requires visible sensitivity.")
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionExecutionState:
+    artifact_id: str
+    revision: int = 0
+    monitoring_active: bool = False
+    evidence_gap_priority_active: bool = False
+    verified_update_comparison_active: bool = False
+    public_warning_issued: bool = False
+    evacuation_directive_issued: bool = False
+    resource_allocation_ordered: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.artifact_id or self.revision < 0:
+            raise ValueError("Decision execution state requires identity and revision.")
+        if (
+            self.public_warning_issued
+            or self.evacuation_directive_issued
+            or self.resource_allocation_ordered
+        ):
+            raise ValueError(
+                "Decision autonomy cannot represent prohibited consequential effects."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionExecutionOutcome:
+    execution_id: str
+    artifact_id: str
+    autonomy_mode: DecisionAutonomyMode
+    action: DecisionInternalAction
+    selected_option_id: str | None
+    initial_state: DecisionExecutionState
+    final_state: DecisionExecutionState
+    reversible: bool
+    requires_human_intervention: bool
+    policy_rule_ids: tuple[str, ...]
+    termination_reason: str
+
+    def __post_init__(self) -> None:
+        if not self.execution_id or not self.artifact_id:
+            raise ValueError("Decision execution requires stable artifact lineage.")
+        if (
+            self.initial_state.artifact_id != self.artifact_id
+            or self.final_state.artifact_id != self.artifact_id
+        ):
+            raise ValueError("Decision execution state escaped artifact lineage.")
+        if not self.policy_rule_ids or not self.termination_reason:
+            raise ValueError(
+                "Decision execution requires policy and termination state."
+            )
+        if self.autonomy_mode == DecisionAutonomyMode.AUTONOMOUS_INTERNAL:
+            if (
+                self.action == DecisionInternalAction.NONE
+                or self.selected_option_id is None
+                or not self.reversible
+                or self.requires_human_intervention
+                or self.final_state.revision != self.initial_state.revision + 1
+            ):
+                raise ValueError(
+                    "Autonomous decision must be reversible internal state change."
+                )
+        elif (
+            self.action != DecisionInternalAction.NONE
+            or self.selected_option_id is not None
+            or self.final_state != self.initial_state
+        ):
+            raise ValueError("Advisory-only decision cannot change system state.")
 
 
 @dataclass(frozen=True, slots=True)

@@ -97,6 +97,12 @@ describe('AssistantClient', () => {
             triage_action: 'request_priority_review',
             triage_autonomy_mode: 'human_on_the_loop',
             triage_requires_human_intervention: true,
+            decision_action: 'none',
+            decision_autonomy_mode: 'advisory_only',
+            decision_requires_human_intervention: true,
+            decision_termination_reason: 'advisory_recommendation_unavailable',
+            decision_state_revision: 0,
+            decision_active_internal_states: [],
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -169,6 +175,41 @@ describe('AssistantClient', () => {
             capability_gaps: [],
             termination_reason: 'done',
             triage_requires_human_intervention: 'no',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Latest earthquake?', null, {
+        centerLatitude: 21,
+        centerLongitude: 105,
+        zoom: 8,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+  });
+
+  it('rejects invalid bounded-decision state metadata', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Invalid decision state',
+          conversation_id: 'session-1',
+          model: 'source-backed-agent',
+          response_type: 'current_disaster',
+          investigation: {
+            status: 'completed',
+            task_summary: 'task',
+            information_needs: [],
+            output_modalities: [],
+            actions: [],
+            source_ids: [],
+            evidence_count: 0,
+            capability_gaps: [],
+            termination_reason: 'done',
+            decision_active_internal_states: ['monitoring_active', { unsafe: true }],
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },

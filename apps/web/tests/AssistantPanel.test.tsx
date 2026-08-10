@@ -101,6 +101,12 @@ describe('AssistantPanel', () => {
                 triage_action: 'escalate_critical',
                 triage_autonomy_mode: 'human_in_the_loop',
                 triage_requires_human_intervention: true,
+                decision_action: 'none',
+                decision_autonomy_mode: 'advisory_only',
+                decision_requires_human_intervention: true,
+                decision_termination_reason: 'advisory_recommendation_unavailable',
+                decision_state_revision: 0,
+                decision_active_internal_states: [],
               },
             },
           },
@@ -124,6 +130,9 @@ describe('AssistantPanel', () => {
     expect(screen.getByText('Selected the Ishikawa event.')).toBeInTheDocument();
     expect(screen.getByText(/Internal triage:/)).toHaveTextContent(
       'critical / escalate_critical / human_in_the_loop / Human intervention required',
+    );
+    expect(screen.getByText(/Bounded decision:/)).toHaveTextContent(
+      'none / advisory_only / state r0 / Human intervention required',
     );
     expect(
       screen.getByText('Trusted disaster-image retrieval is not implemented.'),

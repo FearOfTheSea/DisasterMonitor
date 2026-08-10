@@ -573,7 +573,19 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     assert "Sensitivity:" in body["sections"][-1]["content"]
     assert "Evidence gaps:" in body["sections"][-1]["content"]
     assert "Recommendation layer (" in body["sections"][-1]["content"]
+    assert "Bounded decision state:" in body["sections"][-1]["content"]
     assert body["investigation"]["information_needs"] == ["decision_support"]
+    assert body["investigation"]["decision_action"] in {
+        "none",
+        "continue_approved_monitoring",
+        "compare_verified_updates",
+    }
+    assert body["investigation"]["decision_autonomy_mode"] in {
+        "autonomous_internal",
+        "advisory_only",
+    }
+    assert body["investigation"]["decision_state_revision"] in {0, 1}
+    assert isinstance(body["investigation"]["decision_active_internal_states"], list)
     assert model.requests == []
 
 

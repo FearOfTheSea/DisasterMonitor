@@ -188,7 +188,18 @@ export class AssistantClient {
       (item.triage_autonomy_mode == null ||
         typeof item.triage_autonomy_mode === 'string') &&
       (item.triage_requires_human_intervention == null ||
-        typeof item.triage_requires_human_intervention === 'boolean')
+        typeof item.triage_requires_human_intervention === 'boolean') &&
+      (item.decision_action == null || typeof item.decision_action === 'string') &&
+      (item.decision_autonomy_mode == null ||
+        typeof item.decision_autonomy_mode === 'string') &&
+      (item.decision_requires_human_intervention == null ||
+        typeof item.decision_requires_human_intervention === 'boolean') &&
+      (item.decision_termination_reason == null ||
+        typeof item.decision_termination_reason === 'string') &&
+      (item.decision_state_revision == null ||
+        typeof item.decision_state_revision === 'number') &&
+      (item.decision_active_internal_states == null ||
+        this.isStringArray(item.decision_active_internal_states))
     );
   }
 }
