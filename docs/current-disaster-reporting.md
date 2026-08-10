@@ -75,7 +75,13 @@ The flow is:
     a bounded coordinator merges only identical conclusions for the same finding key.
     Unknown evidence, a changed safety fingerprint, a specialist disagreement, or more
     than two iterations discards collaborative output and retains the single-supervisor
-    result.
+    result. A budgeted coordination supervisor compares the merged finding keys with a
+    deterministic sufficiency checklist derived from the EW, decision, conflict, and
+    multimodal artifacts present. It terminates only on a complete bounded end state;
+    outages, missing findings, policy/provenance violations, deadlocks, and handoff/
+    finding/iteration overruns preserve the already-completed default plan. The API
+    exposes status, artifact identity, provenance, checklist, bounded rationale, and
+    termination reason without specialist scratch work or chain-of-thought.
 12. When the request contains admitted image bytes, associate each asset to the selected
     physical event using explicit hazard, country, capture-time, capture-role, event-ID,
     and WGS84 footprint metadata. Only uniquely associated assets enter bounded local

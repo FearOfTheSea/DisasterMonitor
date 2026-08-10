@@ -93,6 +93,15 @@ an iteration overrun discards all specialist findings and retains the pre-existi
 single-supervisor result. Status, finding/deadlock counts, iterations, roles, and a safe
 fallback reason are inspectable; hidden deliberation is not stored.
 
+`CoordinationSupervisor` owns autonomous analytical termination. It caps one episode at
+four handoffs, 24 findings, and two iterations, then compares stable finding keys with a
+checklist derived from the artifacts actually present. Only a policy-identical,
+provenance-valid, deadlock-free complete checklist terminates as autonomous analytical
+coordination. Every other state retains the already-completed bounded default plan. The
+supervision ID, status, required/missing keys, evidence IDs, final templated rationale,
+and termination reason are user-inspectable; prompts, scratch work, and chain-of-thought
+are neither stored nor returned.
+
 Current answers are composed by application code from `EvidencePacket`. Focused
 casualty answers include event identity, source, freshness, conflict, and explicit
 missing-evidence language; absence is never rendered as zero. The optional API
@@ -157,4 +166,6 @@ complete provenance, task ownership, zero privilege escalation, deterministic re
 and sender-permission non-inheritance. CO-B measures end-state improvement over the
 frozen pre-collaboration baseline, unresolved deadlocks, pass^8, multisource/conflicting/
 multimodal packets, and single-supervisor fallback under loop, policy, provenance, and
-deadlock attacks.
+deadlock attacks. CO-C measures pass^8 on eligible internal episodes, correct
+sufficiency/termination under outages and adversarial specialists, zero critical policy
+violations, budget fallback, and inspectable final artifacts without hidden reasoning.

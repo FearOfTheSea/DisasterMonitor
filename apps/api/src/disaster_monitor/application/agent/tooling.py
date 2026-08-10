@@ -24,11 +24,14 @@ from disaster_monitor.application.ports.disaster_information import (
 )
 from disaster_monitor.application.ports.source_catalog import SourceCatalog
 from disaster_monitor.application.services.collaborative_investigation import (
-    CollaborativeInvestigator,
     render_collaborative_investigation,
 )
 from disaster_monitor.application.services.coordination_handoffs import (
     CoordinationHandoffPlanner,
+)
+from disaster_monitor.application.services.coordination_supervision import (
+    CoordinationSupervisor,
+    render_coordination_supervision,
 )
 from disaster_monitor.application.services.decision_autonomy import (
     DecisionAutonomyController,
@@ -132,8 +135,8 @@ class DisasterToolDependencies:
     handoff_planner: CoordinationHandoffPlanner = field(
         default_factory=CoordinationHandoffPlanner
     )
-    collaborative_investigator: CollaborativeInvestigator = field(
-        default_factory=CollaborativeInvestigator
+    coordination_supervisor: CoordinationSupervisor = field(
+        default_factory=CoordinationSupervisor
     )
 
 
@@ -466,14 +469,14 @@ class ComposeDisasterAnswerTool(_BaseTool):
 
     async def execute(self, state: AgentExecutionState) -> str:
         if state.workspace.evidence_state is not None:
-            state.workspace.collaborative_investigation = (
-                self.dependencies.collaborative_investigator.investigate(
-                    state.workspace.evidence_state,
-                    state.workspace.specialist_handoffs,
-                    decision_support=state.workspace.decision_support,
-                    multimodal_state=state.workspace.multimodal_state,
-                )
+            supervision = self.dependencies.coordination_supervisor.run(
+                state.workspace.evidence_state,
+                state.workspace.specialist_handoffs,
+                decision_support=state.workspace.decision_support,
+                multimodal_state=state.workspace.multimodal_state,
             )
+            state.workspace.coordination_supervision = supervision
+            state.workspace.collaborative_investigation = supervision.collaboration
         state.workspace.report = compose_report(
             state, self.dependencies.renderer, self.now()
         )
@@ -604,7 +607,20 @@ def compose_report(
     if collaboration is not None and collaboration.findings:
         coordination_section = ReportSection(
             "Specialist coordination",
-            render_collaborative_investigation(collaboration),
+            "\n".join(
+                (
+                    render_collaborative_investigation(collaboration),
+                    *(
+                        (
+                            render_coordination_supervision(
+                                state.workspace.coordination_supervision
+                            ),
+                        )
+                        if state.workspace.coordination_supervision is not None
+                        else ()
+                    ),
+                )
+            ),
         )
         sections = (*sections, coordination_section)
         message = (

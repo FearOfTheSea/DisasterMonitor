@@ -139,6 +139,28 @@ async def assistant(
             collaboration_fallback_reason=(
                 result.investigation.collaboration_fallback_reason
             ),
+            coordination_supervision_id=(
+                result.investigation.coordination_supervision_id
+            ),
+            coordination_supervisor_status=(
+                result.investigation.coordination_supervisor_status
+            ),
+            coordination_sufficient=result.investigation.coordination_sufficient,
+            coordination_required_finding_keys=list(
+                result.investigation.coordination_required_finding_keys
+            ),
+            coordination_missing_finding_keys=list(
+                result.investigation.coordination_missing_finding_keys
+            ),
+            coordination_termination_reason=(
+                result.investigation.coordination_termination_reason
+            ),
+            coordination_final_rationale=(
+                result.investigation.coordination_final_rationale
+            ),
+            coordination_evidence_ids=list(
+                result.investigation.coordination_evidence_ids
+            ),
         )
     )
     if result.response_type == "assistant":

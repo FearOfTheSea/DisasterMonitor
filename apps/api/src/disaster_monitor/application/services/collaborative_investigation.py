@@ -191,6 +191,22 @@ def single_supervisor_baseline(state: EvidenceWorldState) -> dict[str, str]:
     return {"event_identity": state.physical_event.physical_event_id}
 
 
+def single_supervisor_fallback(
+    state: EvidenceWorldState,
+    handoffs: tuple[SpecialistHandoff, ...],
+    *,
+    reason: str,
+    iterations: int = 1,
+) -> CollaborativeInvestigation:
+    """Create the explicit safe fallback retained by the supervisor."""
+    return _fallback(
+        state,
+        handoffs,
+        reason=reason,
+        iterations=max(1, min(iterations, 2)),
+    )
+
+
 def render_collaborative_investigation(result: CollaborativeInvestigation) -> str:
     if result.status == CollaborativeInvestigationStatus.SINGLE_SUPERVISOR_FALLBACK:
         return (

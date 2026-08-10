@@ -212,7 +212,23 @@ export class AssistantClient {
       (item.collaboration_iterations == null ||
         typeof item.collaboration_iterations === 'number') &&
       (item.collaboration_fallback_reason == null ||
-        typeof item.collaboration_fallback_reason === 'string')
+        typeof item.collaboration_fallback_reason === 'string') &&
+      (item.coordination_supervision_id == null ||
+        typeof item.coordination_supervision_id === 'string') &&
+      (item.coordination_supervisor_status == null ||
+        typeof item.coordination_supervisor_status === 'string') &&
+      (item.coordination_sufficient == null ||
+        typeof item.coordination_sufficient === 'boolean') &&
+      (item.coordination_required_finding_keys == null ||
+        this.isStringArray(item.coordination_required_finding_keys)) &&
+      (item.coordination_missing_finding_keys == null ||
+        this.isStringArray(item.coordination_missing_finding_keys)) &&
+      (item.coordination_termination_reason == null ||
+        typeof item.coordination_termination_reason === 'string') &&
+      (item.coordination_final_rationale == null ||
+        typeof item.coordination_final_rationale === 'string') &&
+      (item.coordination_evidence_ids == null ||
+        this.isStringArray(item.coordination_evidence_ids))
     );
   }
 }

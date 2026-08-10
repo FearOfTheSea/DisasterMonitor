@@ -117,6 +117,17 @@ describe('AssistantPanel', () => {
                 collaboration_deadlock_count: 0,
                 collaboration_iterations: 1,
                 collaboration_fallback_reason: null,
+                coordination_supervision_id: 'coordination-supervision:fixture',
+                coordination_supervisor_status: 'autonomous_complete',
+                coordination_sufficient: true,
+                coordination_required_finding_keys: [
+                  'event_identity',
+                  'decision_policy',
+                ],
+                coordination_missing_finding_keys: [],
+                coordination_termination_reason: 'sufficient_analytical_end_state',
+                coordination_final_rationale: 'The bounded checklist is complete.',
+                coordination_evidence_ids: ['physical-event:fixture'],
               },
             },
           },
@@ -150,6 +161,10 @@ describe('AssistantPanel', () => {
     expect(screen.getByText(/Collaboration:/)).toHaveTextContent(
       'completed / 5 findings / 1 iteration(s)',
     );
+    expect(screen.getByText(/Coordination supervisor:/)).toHaveTextContent(
+      'autonomous_complete / sufficient / sufficient_analytical_end_state',
+    );
+    expect(screen.getByText('The bounded checklist is complete.')).toBeInTheDocument();
     expect(
       screen.getByText('Trusted disaster-image retrieval is not implemented.'),
     ).toBeInTheDocument();

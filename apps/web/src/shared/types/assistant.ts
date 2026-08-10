@@ -69,6 +69,14 @@ export type InvestigationSummary = {
   collaboration_deadlock_count?: number;
   collaboration_iterations?: number | null;
   collaboration_fallback_reason?: string | null;
+  coordination_supervision_id?: string | null;
+  coordination_supervisor_status?: string | null;
+  coordination_sufficient?: boolean | null;
+  coordination_required_finding_keys?: string[];
+  coordination_missing_finding_keys?: string[];
+  coordination_termination_reason?: string | null;
+  coordination_final_rationale?: string | null;
+  coordination_evidence_ids?: string[];
 };
 
 export type AssistantSource = {

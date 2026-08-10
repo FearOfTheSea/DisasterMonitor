@@ -582,6 +582,7 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     assert (
         "without changing evidence or safety policy" in coordination_section["content"]
     )
+    assert "Supervisor status: autonomous_complete" in coordination_section["content"]
     assert body["investigation"]["information_needs"] == ["decision_support"]
     assert body["investigation"]["decision_action"] in {
         "none",
@@ -604,6 +605,20 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     assert body["investigation"]["collaboration_deadlock_count"] == 0
     assert body["investigation"]["collaboration_iterations"] == 1
     assert body["investigation"]["collaboration_fallback_reason"] is None
+    assert body["investigation"]["coordination_supervision_id"].startswith(
+        "coordination-supervision:"
+    )
+    assert (
+        body["investigation"]["coordination_supervisor_status"] == "autonomous_complete"
+    )
+    assert body["investigation"]["coordination_sufficient"] is True
+    assert body["investigation"]["coordination_missing_finding_keys"] == []
+    assert (
+        body["investigation"]["coordination_termination_reason"]
+        == "sufficient_analytical_end_state"
+    )
+    assert body["investigation"]["coordination_final_rationale"]
+    assert body["investigation"]["coordination_evidence_ids"]
     assert model.requests == []
 
 

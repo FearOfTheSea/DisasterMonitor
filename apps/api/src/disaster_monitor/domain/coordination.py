@@ -43,6 +43,11 @@ class CollaborativeInvestigationStatus(StrEnum):
     SINGLE_SUPERVISOR_FALLBACK = "single_supervisor_fallback"
 
 
+class CoordinationSupervisorStatus(StrEnum):
+    AUTONOMOUS_COMPLETE = "autonomous_complete"
+    DEFAULT_PLAN_FALLBACK = "default_plan_fallback"
+
+
 @dataclass(frozen=True, slots=True)
 class HandoffArtifactReference:
     artifact_id: str
@@ -156,3 +161,71 @@ class CollaborativeInvestigation:
                 )
         elif self.fallback_reason is None:
             raise ValueError("Single-supervisor fallback requires a visible reason.")
+
+
+@dataclass(frozen=True, slots=True)
+class CoordinationSupervision:
+    supervision_id: str
+    status: CoordinationSupervisorStatus
+    evidence_state_version: str
+    collaboration: CollaborativeInvestigation
+    sufficient: bool
+    required_finding_keys: tuple[str, ...]
+    missing_finding_keys: tuple[str, ...]
+    evidence_ids: tuple[str, ...]
+    source_ids: tuple[str, ...]
+    final_rationale: str
+    termination_reason: str
+    handoff_count: int
+    finding_count: int
+    iterations: int
+    max_handoffs: int
+    max_findings: int
+    max_iterations: int
+    safety_policy_fingerprint: str
+
+    def __post_init__(self) -> None:
+        if not self.supervision_id or not self.evidence_state_version:
+            raise ValueError("Coordination supervision requires stable state lineage.")
+        if self.collaboration.evidence_state_version != self.evidence_state_version:
+            raise ValueError("Coordination supervision escaped collaboration state.")
+        if not self.required_finding_keys:
+            raise ValueError(
+                "Coordination supervision requires a sufficiency checklist."
+            )
+        if not self.evidence_ids or not self.source_ids:
+            raise ValueError(
+                "Coordination supervision requires inspectable provenance."
+            )
+        if not self.final_rationale.strip() or len(self.final_rationale) > 1_000:
+            raise ValueError(
+                "Coordination supervision requires bounded final rationale."
+            )
+        if not self.termination_reason:
+            raise ValueError("Coordination supervision requires explicit termination.")
+        if (
+            self.handoff_count < 0
+            or self.finding_count < 0
+            or self.iterations < 1
+            or self.max_handoffs <= 0
+            or self.max_findings <= 0
+            or self.max_iterations <= 0
+        ):
+            raise ValueError("Coordination supervision budgets must be positive.")
+        if self.status == CoordinationSupervisorStatus.AUTONOMOUS_COMPLETE:
+            if (
+                not self.sufficient
+                or self.missing_finding_keys
+                or self.collaboration.status
+                != CollaborativeInvestigationStatus.COMPLETED
+                or self.handoff_count > self.max_handoffs
+                or self.finding_count > self.max_findings
+                or self.iterations > self.max_iterations
+            ):
+                raise ValueError(
+                    "Autonomous coordination requires sufficient bounded completion."
+                )
+        elif self.sufficient:
+            raise ValueError(
+                "Default-plan fallback cannot claim sufficient completion."
+            )

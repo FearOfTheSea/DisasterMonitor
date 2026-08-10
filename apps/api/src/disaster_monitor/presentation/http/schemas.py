@@ -85,6 +85,14 @@ class InvestigationResponse(BaseModel):
     collaboration_deadlock_count: int = 0
     collaboration_iterations: int | None = None
     collaboration_fallback_reason: str | None = None
+    coordination_supervision_id: str | None = None
+    coordination_supervisor_status: str | None = None
+    coordination_sufficient: bool | None = None
+    coordination_required_finding_keys: list[str] = Field(default_factory=list)
+    coordination_missing_finding_keys: list[str] = Field(default_factory=list)
+    coordination_termination_reason: str | None = None
+    coordination_final_rationale: str | None = None
+    coordination_evidence_ids: list[str] = Field(default_factory=list)
 
 
 class SourceResponse(BaseModel):

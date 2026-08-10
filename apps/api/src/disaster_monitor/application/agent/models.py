@@ -12,6 +12,7 @@ from disaster_monitor.application.disaster import (
 )
 from disaster_monitor.domain.coordination import (
     CollaborativeInvestigation,
+    CoordinationSupervision,
     SpecialistHandoff,
 )
 from disaster_monitor.domain.decision import (
@@ -198,6 +199,7 @@ class EvidenceWorkspace:
     decision_outcome: DecisionExecutionOutcome | None = None
     specialist_handoffs: tuple[SpecialistHandoff, ...] = ()
     collaborative_investigation: CollaborativeInvestigation | None = None
+    coordination_supervision: CoordinationSupervision | None = None
     evidence_packet: EvidencePacket | None = None
     report: DisasterReport | None = None
     multimodal_assets: tuple[MultimodalAsset, ...] = ()

@@ -257,6 +257,23 @@ function DisasterReportView({
                 : ''}
             </p>
           )}
+          {report.investigation.coordination_supervisor_status && (
+            <p>
+              Coordination supervisor:{' '}
+              <strong>{report.investigation.coordination_supervisor_status}</strong>
+              {report.investigation.coordination_sufficient
+                ? ' / sufficient'
+                : ' / default plan retained'}
+              {report.investigation.coordination_termination_reason &&
+                ` / ${report.investigation.coordination_termination_reason}`}
+              {report.investigation.coordination_missing_finding_keys?.length
+                ? ` / missing ${report.investigation.coordination_missing_finding_keys.join(', ')}`
+                : ''}
+            </p>
+          )}
+          {report.investigation.coordination_final_rationale && (
+            <p>{report.investigation.coordination_final_rationale}</p>
+          )}
           {report.investigation.actions.length > 0 && (
             <>
               <h3>Completed actions</h3>

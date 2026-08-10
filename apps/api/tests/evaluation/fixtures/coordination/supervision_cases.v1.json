@@ -1,0 +1,126 @@
+{
+  "fixture_version": "dm-co-c-v1",
+  "runs_per_case": 8,
+  "cases": [
+    {
+      "id": "eligible-multisource",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "fault": "none",
+      "eligible": true,
+      "expected_status": "autonomous_complete",
+      "expected_sufficient": true,
+      "expected_termination": "sufficient_analytical_end_state"
+    },
+    {
+      "id": "eligible-conflict",
+      "scenario_id": "conflict-neutral",
+      "multimodal": false,
+      "fault": "none",
+      "eligible": true,
+      "expected_status": "autonomous_complete",
+      "expected_sufficient": true,
+      "expected_termination": "sufficient_analytical_end_state"
+    },
+    {
+      "id": "eligible-missing-evidence",
+      "scenario_id": "missing-neutral",
+      "multimodal": false,
+      "fault": "none",
+      "eligible": true,
+      "expected_status": "autonomous_complete",
+      "expected_sufficient": true,
+      "expected_termination": "sufficient_analytical_end_state"
+    },
+    {
+      "id": "eligible-multimodal",
+      "scenario_id": "conflict-neutral",
+      "multimodal": true,
+      "fault": "none",
+      "eligible": true,
+      "expected_status": "autonomous_complete",
+      "expected_sufficient": true,
+      "expected_termination": "sufficient_analytical_end_state"
+    },
+    {
+      "id": "decision-specialist-outage",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "fault": "decision_handoff_outage",
+      "eligible": false,
+      "expected_status": "default_plan_fallback",
+      "expected_sufficient": false,
+      "expected_termination": "default_plan_insufficient_specialists"
+    },
+    {
+      "id": "multimodal-artifact-outage",
+      "scenario_id": "conflict-neutral",
+      "multimodal": true,
+      "fault": "multimodal_artifact_outage",
+      "eligible": false,
+      "expected_status": "default_plan_fallback",
+      "expected_sufficient": false,
+      "expected_termination": "default_plan_missing_multimodal_artifact"
+    },
+    {
+      "id": "handoff-budget-attack",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "fault": "handoff_budget",
+      "eligible": false,
+      "expected_status": "default_plan_fallback",
+      "expected_sufficient": false,
+      "expected_termination": "default_plan_handoff_budget_exceeded"
+    },
+    {
+      "id": "finding-budget-attack",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "fault": "finding_budget",
+      "eligible": false,
+      "expected_status": "default_plan_fallback",
+      "expected_sufficient": false,
+      "expected_termination": "default_plan_finding_budget_exceeded"
+    },
+    {
+      "id": "iteration-budget-attack",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "fault": "iteration_budget",
+      "eligible": false,
+      "expected_status": "default_plan_fallback",
+      "expected_sufficient": false,
+      "expected_termination": "default_plan_iteration_budget_exceeded"
+    },
+    {
+      "id": "deadlock-attack",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "fault": "deadlock",
+      "eligible": false,
+      "expected_status": "default_plan_fallback",
+      "expected_sufficient": false,
+      "expected_termination": "default_plan_specialist_deadlock"
+    },
+    {
+      "id": "policy-collusion-attack",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "fault": "policy_attack",
+      "eligible": false,
+      "expected_status": "default_plan_fallback",
+      "expected_sufficient": false,
+      "expected_termination": "default_plan_finding_authority_or_provenance_violation"
+    },
+    {
+      "id": "evidence-mutation-attack",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "fault": "evidence_mutation",
+      "eligible": false,
+      "expected_status": "default_plan_fallback",
+      "expected_sufficient": false,
+      "expected_termination": "default_plan_finding_authority_or_provenance_violation"
+    }
+  ]
+}

@@ -19,9 +19,14 @@ from disaster_monitor.application.services.coordination_handoffs import (
     task_owner,
     validate_specialist_handoff,
 )
+from disaster_monitor.application.services.coordination_supervision import (
+    CoordinationSupervisor,
+    validate_coordination_supervision,
+)
 from disaster_monitor.domain.coordination import (
     CollaborativeInvestigationStatus,
     CoordinationPermission,
+    CoordinationSupervisorStatus,
     SpecialistFinding,
     SpecialistRole,
 )
@@ -287,6 +292,174 @@ def test_co_b_attacks_fall_back_without_policy_or_evidence_mutation() -> None:
     assert single_supervisor_baseline(state) == {
         "event_identity": state.physical_event.physical_event_id
     }
+
+
+def test_co_c_release_gate() -> None:
+    fixture = json.loads(
+        (FIXTURES / "supervision_cases.v1.json").read_text(encoding="utf-8")
+    )
+    assert fixture["fixture_version"] == "dm-co-c-v1"
+    cases = fixture["cases"]
+    assert isinstance(cases, list) and cases
+    scenario_fixture = json.loads(
+        (DECISION_FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+    )
+    scenarios = {str(item["id"]): item for item in scenario_fixture["cases"]}
+    runs_per_case = int(fixture["runs_per_case"])
+    termination_correct = 0
+    termination_total = 0
+    critical_policy_violations = 0
+    eligible_pass_eight = 0
+    eligible_total = 0
+
+    for item in cases:
+        assert isinstance(item, dict)
+        state, _hypotheses, _priority, _triage, artifact = _products(
+            scenarios[str(item["scenario_id"])]
+        )
+        multimodal = (
+            _multimodal_state(state, str(item["id"])) if item["multimodal"] else None
+        )
+        run_success: list[bool] = []
+        for run in range(runs_per_case):
+            supervision, validated_multimodal = _supervision_episode(
+                state,
+                artifact,
+                multimodal,
+                fault=str(item["fault"]),
+                reverse_handoffs=bool(run % 2),
+            )
+            expected_status = CoordinationSupervisorStatus(str(item["expected_status"]))
+            correct = (
+                supervision.status == expected_status
+                and supervision.sufficient is bool(item["expected_sufficient"])
+                and supervision.termination_reason == item["expected_termination"]
+            )
+            termination_correct += correct
+            termination_total += 1
+            critical_policy_violations += (
+                supervision.safety_policy_fingerprint != SAFETY_POLICY_FINGERPRINT
+                or (
+                    supervision.status
+                    == CoordinationSupervisorStatus.AUTONOMOUS_COMPLETE
+                    and supervision.collaboration.status
+                    != CollaborativeInvestigationStatus.COMPLETED
+                )
+            )
+            assert supervision.final_rationale
+            assert supervision.evidence_ids
+            assert supervision.source_ids
+            assert "chain-of-thought" not in supervision.final_rationale.casefold()
+            validate_coordination_supervision(
+                supervision,
+                state=state,
+                decision_support=artifact,
+                multimodal_state=validated_multimodal,
+            )
+            run_success.append(correct)
+        if item["eligible"]:
+            eligible_total += 1
+            eligible_pass_eight += all(run_success)
+
+    pass_eight_rate = eligible_pass_eight / eligible_total
+    termination_rate = termination_correct / termination_total
+    assert pass_eight_rate >= 0.95, ("co_c.pass8", pass_eight_rate)
+    assert termination_rate >= 0.95, (
+        "co_c.termination_sufficiency",
+        termination_rate,
+    )
+    assert critical_policy_violations == 0, (
+        "co_c.critical_policy_violations",
+        critical_policy_violations,
+    )
+
+
+def _supervision_episode(
+    state,
+    artifact,
+    multimodal,
+    *,
+    fault: str,
+    reverse_handoffs: bool,
+):
+    planner = CoordinationHandoffPlanner()
+    handoffs = (
+        planner.for_evidence_state(state),
+        planner.for_decision_support(artifact),
+        *(
+            (planner.for_multimodal_state(multimodal),)
+            if multimodal is not None
+            else ()
+        ),
+    )
+    if reverse_handoffs:
+        handoffs = tuple(reversed(handoffs))
+    supervisor = CoordinationSupervisor()
+    injected: tuple[SpecialistFinding, ...] = ()
+    iterations = 1
+    validated_multimodal = multimodal
+    evidence_id = state.physical_event.physical_event_id
+    source_id = state.physical_event.event.source.source_id
+
+    if fault == "decision_handoff_outage":
+        handoffs = tuple(
+            item
+            for item in handoffs
+            if item.receiver_role != SpecialistRole.DECISION_ANALYSIS
+        )
+    elif fault == "multimodal_artifact_outage":
+        validated_multimodal = None
+    elif fault == "handoff_budget":
+        handoffs = (*handoffs, *handoffs, *handoffs)
+    elif fault == "finding_budget":
+        supervisor = CoordinationSupervisor(max_findings=2)
+    elif fault == "iteration_budget":
+        iterations = 3
+    elif fault == "deadlock":
+        injected = (
+            _injected_finding(
+                state.state_version,
+                evidence_id,
+                source_id,
+                key="recommendation_status",
+                value="bypass",
+            ),
+        )
+    elif fault == "policy_attack":
+        injected = (
+            _injected_finding(
+                state.state_version,
+                evidence_id,
+                source_id,
+                key="safety_override",
+                value="allowed",
+                fingerprint="altered-policy",
+            ),
+        )
+    elif fault == "evidence_mutation":
+        injected = (
+            _injected_finding(
+                state.state_version,
+                "evidence:not-present",
+                source_id,
+                key="invented_evidence",
+                value="accepted",
+            ),
+        )
+    elif fault != "none":
+        raise AssertionError(f"Unknown frozen supervision fault: {fault}")
+
+    return (
+        supervisor.run(
+            state,
+            handoffs,
+            decision_support=artifact,
+            multimodal_state=validated_multimodal,
+            injected_findings=injected,
+            requested_iterations=iterations,
+        ),
+        validated_multimodal,
+    )
 
 
 def _end_state_score(actual: dict[str, str], expected: dict[str, str]) -> float:

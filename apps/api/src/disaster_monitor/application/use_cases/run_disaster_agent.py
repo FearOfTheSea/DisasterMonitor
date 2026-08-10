@@ -128,6 +128,7 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
         decision_outcome.final_state if decision_outcome is not None else None
     )
     collaboration = state.workspace.collaborative_investigation
+    supervision = state.workspace.coordination_supervision
     return InvestigationSummary(
         status=state.final_status.value,
         task_summary=(task.detail or task.question)[:500],
@@ -197,4 +198,24 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
         collaboration_fallback_reason=(
             collaboration.fallback_reason if collaboration else None
         ),
+        coordination_supervision_id=(
+            supervision.supervision_id if supervision else None
+        ),
+        coordination_supervisor_status=(
+            supervision.status.value if supervision else None
+        ),
+        coordination_sufficient=(supervision.sufficient if supervision else None),
+        coordination_required_finding_keys=(
+            supervision.required_finding_keys if supervision else ()
+        ),
+        coordination_missing_finding_keys=(
+            supervision.missing_finding_keys if supervision else ()
+        ),
+        coordination_termination_reason=(
+            supervision.termination_reason if supervision else None
+        ),
+        coordination_final_rationale=(
+            supervision.final_rationale if supervision else None
+        ),
+        coordination_evidence_ids=(supervision.evidence_ids if supervision else ()),
     )
