@@ -23,6 +23,10 @@ from disaster_monitor.application.ports.disaster_information import (
     SituationReportProvider,
 )
 from disaster_monitor.application.ports.source_catalog import SourceCatalog
+from disaster_monitor.application.services.decision_support import (
+    DecisionOptionGenerator,
+    render_decision_support,
+)
 from disaster_monitor.application.services.disaster_report_renderer import (
     DisasterReportRenderer,
 )
@@ -108,6 +112,9 @@ class DisasterToolDependencies:
         default_factory=IncidentPriorityRanker
     )
     triage_policy: TriageAutonomyPolicy = field(default_factory=TriageAutonomyPolicy)
+    decision_option_generator: DecisionOptionGenerator = field(
+        default_factory=DecisionOptionGenerator
+    )
 
 
 def build_disaster_tool_registry(
@@ -374,6 +381,21 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
             state.workspace.triage_decision = self.dependencies.triage_policy.decide(
                 state.workspace.incident_priority
             )
+            if InformationNeed.DECISION_SUPPORT in state.task.information_needs:
+                try:
+                    state.workspace.decision_support = (
+                        self.dependencies.decision_option_generator.generate(
+                            packet.world_state,
+                            state.workspace.hypotheses,
+                            state.workspace.incident_priority,
+                            state.workspace.triage_decision,
+                        )
+                    )
+                except ValueError:
+                    state.capability_gaps.append(
+                        "Decision support failed its evidence-lineage safety gate; "
+                        "the deterministic report remains available."
+                    )
         state.workspace.evidence_packet = packet
         return (
             f"Reconciled {len(packet.facts)} facts from {len(packet.sources)} sources."
@@ -502,6 +524,13 @@ def compose_report(
             ),
         )
         message = "\n\n".join(f"## {item.title}\n{item.content}" for item in sections)
+    if state.workspace.decision_support is not None:
+        decision_section = ReportSection(
+            "Decision support",
+            render_decision_support(state.workspace.decision_support),
+        )
+        sections = (*sections, decision_section)
+        message = f"{message}\n\n## Decision support\n{decision_section.content}"
     gaps = tuple(dict.fromkeys((*state.plan.capability_gaps, *state.capability_gaps)))
     if gaps:
         gap_section = ReportSection("Capability gaps", " ".join(gaps))

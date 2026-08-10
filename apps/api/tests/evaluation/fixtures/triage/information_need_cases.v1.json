@@ -349,6 +349,30 @@
       "text": "Show the current emergency response map for Japan.",
       "needs": ["emergency_response", "map_visualization"],
       "requires_evidence": false
+    },
+    {
+      "id": "decision-en-current",
+      "text": "What decision support options should analysts consider for the current earthquake in Japan?",
+      "needs": ["decision_support"],
+      "requires_evidence": true
+    },
+    {
+      "id": "decision-es-current",
+      "text": "¿Qué opciones debe considerar el equipo ante el terremoto actual en Japón?",
+      "needs": ["decision_support"],
+      "requires_evidence": true
+    },
+    {
+      "id": "decision-vi-current",
+      "text": "Phương án cho động đất hiện tại ở Việt Nam là gì?",
+      "needs": ["decision_support"],
+      "requires_evidence": true
+    },
+    {
+      "id": "decision-ja-current",
+      "text": "日本の現在の地震について意思決定の選択肢を示して。",
+      "needs": ["decision_support"],
+      "requires_evidence": true
     }
   ]
 }

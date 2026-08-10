@@ -26,6 +26,9 @@ _NEGATED_WARNING = re.compile(
 _SEVERE_DAMAGE = re.compile(
     r"\b(?:major|severe|widespread|destroyed|collapsed|uninhabitable)\b", re.I
 )
+_NEGATED_OPERATIONAL_IMPACT = re.compile(
+    r"\b(?:no|none|not reported|without|unaffected|operational)\b", re.I
+)
 
 _PRIORITY_ORDER = {
     IncidentPriority.LOW: 0,
@@ -338,6 +341,8 @@ class IncidentPriorityRanker:
                 "infrastructure_disruption",
                 "utilities",
             }:
+                if _NEGATED_OPERATIONAL_IMPACT.search(value):
+                    continue
                 add_signal(
                     "tr.priority.infrastructure_disruption",
                     "Verified current evidence reports infrastructure disruption.",
@@ -346,6 +351,8 @@ class IncidentPriorityRanker:
                     priority_floor=IncidentPriority.MODERATE,
                 )
             elif category in {"damage", "physical_damage"}:
+                if _NEGATED_OPERATIONAL_IMPACT.search(value):
+                    continue
                 severe = bool(_SEVERE_DAMAGE.search(value))
                 add_signal(
                     "tr.priority.physical_damage",

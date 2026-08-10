@@ -79,15 +79,19 @@ _EVIDENCE_MARKERS = re.compile(
     r"destroyed|collapsed|infrastructure|outage\w*|utilities|road\w*|bridge\w*|"
     r"warning\w*|alert\w*|advisory|watch|response|responders?|relief|rescue|aid|"
     r"pictures?|images?|photos?|imagery|timeline|chronology|map layers?)\b|"
+    r"\b(?:decision support|options?|recommendations?|next steps?|what should)\b|"
     r"\b(?:muert(?:e|es|os)|fallecid[oa]s?|herid[oa]s?|desaparecid[oa]s?|"
     r"evacuad[oa]s?|desplazad[oa]s?|daños?|destruid[oa]s?|infraestructura|"
     r"cortes?|carreteras?|puentes?|alertas?|advertencias?|respuesta|rescate|"
     r"ayuda|fotos?|imágenes?|mapas?|cronología)\b|"
+    r"\b(?:opciones?|recomendaciones?|próximos pasos|qué debería)\b|"
     r"(?:tử vong|người chết|bị thương|mất tích|sơ tán|di dời|thiệt hại|"
     r"phá hủy|cơ sở hạ tầng|mất điện|đường|cầu|cảnh báo|ứng phó|cứu hộ|"
     r"cứu trợ|hình ảnh|bản đồ|dòng thời gian|"
+    r"phương án|khuyến nghị|bước tiếp theo|"
     r"死者|死亡|負傷|けが|行方不明|避難|被害|倒壊|インフラ|停電|道路|橋|"
-    r"警報|注意報|対応|救助|支援|画像|写真|地図|時系列))",
+    r"警報|注意報|対応|救助|支援|画像|写真|地図|時系列|"
+    r"意思決定|選択肢|推奨|次のステップ))",
     re.I,
 )
 _GENERAL_KNOWLEDGE_MARKERS = re.compile(
@@ -374,8 +378,19 @@ def _information_needs(text: str) -> tuple[InformationNeed, ...]:
             r"\b(?:cronología|secuencia temporal)\b|"
             r"(?:dòng thời gian|時系列))",
         ),
+        (
+            InformationNeed.DECISION_SUPPORT,
+            r"(?:\b(?:decision support|options?|recommendations?|next steps?|"
+            r"what should)\b|\b(?:opciones?|recomendaciones?|próximos pasos|"
+            r"qué debería)\b|(?:phương án|khuyến nghị|bước tiếp theo|"
+            r"意思決定|選択肢|推奨|次のステップ))",
+        ),
     )
     found = tuple(need for need, pattern in patterns if re.search(pattern, text, re.I))
+    if InformationNeed.DECISION_SUPPORT in found:
+        found = tuple(
+            need for need in found if need is not InformationNeed.GENERAL_INFORMATION
+        )
     return found or (InformationNeed.EVENT_OVERVIEW,)
 
 

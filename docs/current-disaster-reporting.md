@@ -49,7 +49,14 @@ The flow is:
    assessments may receive reversible internal monitor/queue actions; high,
    uncertainty-marked, and critical assessments require human review or escalation.
    The assessment and decision do not create facts or external operational authority.
-10. When the request contains admitted image bytes, associate each asset to the selected
+10. For an explicit decision-support information need, derive a deterministic advisory
+    artifact from that same EW, priority, and triage lineage. Verified facts, estimates,
+    assumptions, contradictions, evidence gaps, and analytical options remain separate.
+    Every option identifies its support, trade-offs, uncertainty, human-approval state,
+    and prohibited public-warning, evacuation, and resource-order actions. Fabricated
+    current facts or omitted material contradictions reject the artifact and leave the
+    deterministic evidence report in place.
+11. When the request contains admitted image bytes, associate each asset to the selected
     physical event using explicit hazard, country, capture-time, capture-role, event-ID,
     and WGS84 footprint metadata. Only uniquely associated assets enter bounded local
     visual analysis. Store results as analytical observations linked to the EW version,

@@ -546,6 +546,34 @@ async def test_fatality_request_is_focused_and_missing_is_not_zero() -> None:
 
 
 @pytest.mark.asyncio
+async def test_decision_support_request_returns_advisory_evidence_bounded_options() -> (
+    None
+):
+    model = FakeLanguageModel(error=AssertionError("general model must not be called"))
+    app = create_app(model=model, current_disaster_report=build_current_service())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={
+                "question": (
+                    "What decision support options should analysts consider for the "
+                    "current earthquake in Japan?"
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sections"][-1]["title"] == "Decision support"
+    assert "Advisory analytical options only" in body["sections"][-1]["content"]
+    assert "Continue approved-source monitoring" in body["message"]
+    assert body["investigation"]["information_needs"] == ["decision_support"]
+    assert model.requests == []
+
+
+@pytest.mark.asyncio
 async def test_image_request_runs_supported_text_path_and_reports_capability_gap() -> (
     None
 ):

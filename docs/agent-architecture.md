@@ -58,6 +58,13 @@ queue placement for eligible low/moderate assessments. High or uncertainty-marke
 assessments require human-on-the-loop review; critical assessments always use
 human-in-the-loop escalation. Incident suppression is not an available action. The
 policy's rollback mode routes every otherwise eligible decision to human review.
+An explicit decision-support request additionally creates a typed
+`DecisionSupportArtifact`. The deterministic generator separates verified facts,
+hypothesis-backed estimates, assumptions, contradictions, gaps, and analytical
+options. Every option carries complete lineage, trade-offs, uncertainty, and closed
+authority constraints. Unsupported facts or an omitted material conflict reject the
+artifact; public warnings, evacuation directives, and resource-allocation orders are
+always prohibited.
 `CurrentDisasterReportService` is a compatibility facade over the same tools.
 
 Current answers are composed by application code from `EvidencePacket`. Focused
@@ -108,3 +115,8 @@ multilingual, paraphrase, and adversarial cases. TR-B covers critical-event reca
 false dismissal, ranked relevance, scope parity, uncertainty escalation, lineage, and
 repeated-run ordering. TR-C covers eligible autonomy yield, eight-run end-state
 reliability, critical escalation, closed action authority, and human-review rollback.
+
+The frozen Decision Support evaluation begins in
+`tests/evaluation/test_decision_support.py`. DS-A measures factual support, complete
+material trace, option relevance, explicit epistemic separation, contradiction
+retention, and repeated deterministic replay.

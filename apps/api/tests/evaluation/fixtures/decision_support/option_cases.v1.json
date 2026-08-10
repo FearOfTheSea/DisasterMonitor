@@ -1,0 +1,145 @@
+{
+  "fixture_version": "dm-ds-a-v1",
+  "cases": [
+    {
+      "id": "quiet-flood-gap",
+      "hazard": "flood",
+      "country_code": "VNM",
+      "facts": [],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps"
+      ]
+    },
+    {
+      "id": "moderate-earthquake-resolved-zero",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 5.2,
+      "facts": [
+        { "category": "fatalities", "value": "0" },
+        { "category": "injuries", "value": "0" },
+        { "category": "missing", "value": "0" },
+        { "category": "evacuations", "value": "0" },
+        { "category": "physical_damage", "value": "No damage reported" },
+        { "category": "infrastructure", "value": "No disruption reported" }
+      ],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "compare_verified_updates"
+      ]
+    },
+    {
+      "id": "critical-fatalities",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 6.1,
+      "facts": [
+        { "category": "fatalities", "value": "3" },
+        { "category": "injuries", "value": "18" }
+      ],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps",
+        "route_accountable_review",
+        "compare_verified_updates"
+      ]
+    },
+    {
+      "id": "critical-major-magnitude",
+      "hazard": "earthquake",
+      "country_code": "VNM",
+      "magnitude": 7.2,
+      "facts": [],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps",
+        "route_accountable_review"
+      ]
+    },
+    {
+      "id": "high-active-warning",
+      "hazard": "flood",
+      "country_code": "VEN",
+      "facts": [{ "category": "warnings", "value": "Active flood warning" }],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps",
+        "route_accountable_review"
+      ]
+    },
+    {
+      "id": "moderate-injuries",
+      "hazard": "wildfire",
+      "country_code": "VEN",
+      "facts": [{ "category": "injuries", "value": "5" }],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps",
+        "compare_verified_updates"
+      ]
+    },
+    {
+      "id": "severe-damage-review",
+      "hazard": "landslide",
+      "country_code": "VNM",
+      "facts": [
+        { "category": "physical_damage", "value": "Widespread major damage" },
+        { "category": "infrastructure", "value": "Bridge closure" }
+      ],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps",
+        "route_accountable_review",
+        "compare_verified_updates"
+      ]
+    },
+    {
+      "id": "evacuation-impact",
+      "hazard": "tropical_cyclone",
+      "country_code": "JPN",
+      "facts": [{ "category": "evacuations", "value": "2500" }],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps",
+        "route_accountable_review",
+        "compare_verified_updates"
+      ]
+    },
+    {
+      "id": "conflicting-fatalities",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 5.8,
+      "reports": [
+        {
+          "source_id": "national-a",
+          "facts": [{ "category": "fatalities", "value": "2" }]
+        },
+        {
+          "source_id": "national-b",
+          "facts": [{ "category": "fatalities", "value": "5" }]
+        }
+      ],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps",
+        "review_material_conflicts",
+        "route_accountable_review",
+        "compare_verified_updates"
+      ]
+    },
+    {
+      "id": "missing-people-review",
+      "hazard": "flood",
+      "country_code": "VNM",
+      "facts": [{ "category": "missing", "value": "4" }],
+      "expected_options": [
+        "continue_approved_monitoring",
+        "prioritize_evidence_gaps",
+        "route_accountable_review",
+        "compare_verified_updates"
+      ]
+    }
+  ]
+}

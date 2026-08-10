@@ -10,6 +10,7 @@ from disaster_monitor.application.disaster import (
     EvidencePacket,
     ProviderBatch,
 )
+from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
@@ -50,6 +51,7 @@ class InformationNeed(StrEnum):
     IMAGES = "images"
     MAP_VISUALIZATION = "map_visualization"
     TIMELINE = "timeline"
+    DECISION_SUPPORT = "decision_support"
 
 
 class OutputModality(StrEnum):
@@ -185,6 +187,7 @@ class EvidenceWorkspace:
     hypotheses: tuple[HypothesisArtifact, ...] = ()
     incident_priority: IncidentPriorityAssessment | None = None
     triage_decision: InternalTriageDecision | None = None
+    decision_support: DecisionSupportArtifact | None = None
     evidence_packet: EvidencePacket | None = None
     report: DisasterReport | None = None
     multimodal_assets: tuple[MultimodalAsset, ...] = ()

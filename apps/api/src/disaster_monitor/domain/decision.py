@@ -1,0 +1,162 @@
+"""Typed decision-support artifacts with explicit epistemic boundaries."""
+
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
+
+
+class DecisionStatementType(StrEnum):
+    VERIFIED_FACT = "verified_fact"
+    ESTIMATE = "estimate"
+    ASSUMPTION = "assumption"
+    OPTION = "option"
+
+
+class DecisionConsequence(StrEnum):
+    LOW = "low"
+    MODERATE = "moderate"
+    HIGH = "high"
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionFact:
+    fact_id: str
+    statement: str
+    evidence_ids: tuple[str, ...]
+    source_ids: tuple[str, ...]
+    status: str
+    statement_type: DecisionStatementType = DecisionStatementType.VERIFIED_FACT
+
+    def __post_init__(self) -> None:
+        if not self.fact_id or not self.statement.strip():
+            raise ValueError("Decision facts require stable identity and content.")
+        if not self.evidence_ids or not self.source_ids:
+            raise ValueError("Decision facts require evidence and source lineage.")
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionEstimate:
+    estimate_id: str
+    proposition: str
+    probability: float
+    supporting_evidence_ids: tuple[str, ...]
+    contradicting_evidence_ids: tuple[str, ...]
+    statement_type: DecisionStatementType = DecisionStatementType.ESTIMATE
+
+    def __post_init__(self) -> None:
+        if not self.estimate_id or not self.proposition.strip():
+            raise ValueError("Decision estimates require stable identity and content.")
+        if not 0 <= self.probability <= 1:
+            raise ValueError("Decision estimate probability must be bounded.")
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionAssumption:
+    assumption_id: str
+    statement: str
+    sensitivity: str
+    evidence_gap: str
+    statement_type: DecisionStatementType = DecisionStatementType.ASSUMPTION
+
+    def __post_init__(self) -> None:
+        if not all(
+            value.strip()
+            for value in (
+                self.assumption_id,
+                self.statement,
+                self.sensitivity,
+                self.evidence_gap,
+            )
+        ):
+            raise ValueError(
+                "Decision assumptions require explicit sensitivity and gap."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionOption:
+    option_id: str
+    option_kind: str
+    title: str
+    description: str
+    supporting_fact_ids: tuple[str, ...]
+    supporting_estimate_ids: tuple[str, ...]
+    assumption_ids: tuple[str, ...]
+    trade_offs: tuple[str, ...]
+    uncertainties: tuple[str, ...]
+    consequence: DecisionConsequence
+    reversible: bool
+    requires_human_approval: bool
+    prohibited_actions: tuple[str, ...]
+    statement_type: DecisionStatementType = DecisionStatementType.OPTION
+
+    def __post_init__(self) -> None:
+        if not all(
+            value.strip()
+            for value in (
+                self.option_id,
+                self.option_kind,
+                self.title,
+                self.description,
+            )
+        ):
+            raise ValueError("Decision options require stable identity and content.")
+        if not (
+            self.supporting_fact_ids
+            or self.supporting_estimate_ids
+            or self.assumption_ids
+        ):
+            raise ValueError("Every decision option requires traceable support.")
+        if not self.trade_offs or not self.uncertainties:
+            raise ValueError("Decision options require trade-offs and uncertainty.")
+        if not self.prohibited_actions:
+            raise ValueError("Decision options require explicit authority constraints.")
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionContradiction:
+    contradiction_id: str
+    claim_key: str
+    evidence_ids: tuple[str, ...]
+    detail: str
+
+    def __post_init__(self) -> None:
+        if not self.contradiction_id or not self.claim_key or not self.evidence_ids:
+            raise ValueError("Decision contradictions require complete lineage.")
+        if not self.detail.strip():
+            raise ValueError("Decision contradictions require visible detail.")
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionSupportArtifact:
+    artifact_id: str
+    physical_event_id: str
+    evidence_state_version: str
+    priority_assessment_id: str
+    triage_decision_id: str
+    facts: tuple[DecisionFact, ...]
+    estimates: tuple[DecisionEstimate, ...]
+    assumptions: tuple[DecisionAssumption, ...]
+    options: tuple[DecisionOption, ...]
+    contradictions: tuple[DecisionContradiction, ...]
+    evidence_gaps: tuple[str, ...]
+    generated_at: datetime
+    advisory_only: bool = True
+
+    def __post_init__(self) -> None:
+        if not all(
+            (
+                self.artifact_id,
+                self.physical_event_id,
+                self.evidence_state_version,
+                self.priority_assessment_id,
+                self.triage_decision_id,
+            )
+        ):
+            raise ValueError("Decision support requires complete state lineage.")
+        if not self.facts or not self.assumptions or not self.options:
+            raise ValueError(
+                "Decision support requires facts, assumptions, and options."
+            )
+        if not self.advisory_only:
+            raise ValueError("Decision support is advisory-only at this milestone.")
