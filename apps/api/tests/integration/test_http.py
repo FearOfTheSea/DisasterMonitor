@@ -566,14 +566,22 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
 
     assert response.status_code == 200
     body = response.json()
-    assert body["sections"][-1]["title"] == "Decision support"
-    assert "Advisory analytical options only" in body["sections"][-1]["content"]
+    decision_section = next(
+        item for item in body["sections"] if item["title"] == "Decision support"
+    )
+    coordination_section = next(
+        item for item in body["sections"] if item["title"] == "Specialist coordination"
+    )
+    assert "Advisory analytical options only" in decision_section["content"]
     assert "Continue approved-source monitoring" in body["message"]
-    assert "Scenario mode:" in body["sections"][-1]["content"]
-    assert "Sensitivity:" in body["sections"][-1]["content"]
-    assert "Evidence gaps:" in body["sections"][-1]["content"]
-    assert "Recommendation layer (" in body["sections"][-1]["content"]
-    assert "Bounded decision state:" in body["sections"][-1]["content"]
+    assert "Scenario mode:" in decision_section["content"]
+    assert "Sensitivity:" in decision_section["content"]
+    assert "Evidence gaps:" in decision_section["content"]
+    assert "Recommendation layer (" in decision_section["content"]
+    assert "Bounded decision state:" in decision_section["content"]
+    assert (
+        "without changing evidence or safety policy" in coordination_section["content"]
+    )
     assert body["investigation"]["information_needs"] == ["decision_support"]
     assert body["investigation"]["decision_action"] in {
         "none",
@@ -591,6 +599,11 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
         "evidence_reconciliation_specialist",
         "decision_analysis_specialist",
     ]
+    assert body["investigation"]["collaboration_status"] == "completed"
+    assert body["investigation"]["collaboration_finding_count"] >= 5
+    assert body["investigation"]["collaboration_deadlock_count"] == 0
+    assert body["investigation"]["collaboration_iterations"] == 1
+    assert body["investigation"]["collaboration_fallback_reason"] is None
     assert model.requests == []
 
 

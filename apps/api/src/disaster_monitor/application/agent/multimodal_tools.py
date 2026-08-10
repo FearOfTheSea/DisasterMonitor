@@ -1,7 +1,7 @@
 """Bounded agent tools over already-admitted multimodal artifacts."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from disaster_monitor.application.agent.models import (
@@ -11,6 +11,9 @@ from disaster_monitor.application.agent.models import (
 from disaster_monitor.application.agent.tooling import AgentTool, ToolDescription
 from disaster_monitor.application.services.common_operational_picture import (
     CommonOperationalPictureBuilder,
+)
+from disaster_monitor.application.services.coordination_handoffs import (
+    CoordinationHandoffPlanner,
 )
 from disaster_monitor.application.services.multimodal_association import (
     MultimodalEventAssociator,
@@ -28,6 +31,9 @@ class MultimodalToolDependencies:
     visual_analysis: VisualAnalysisService
     cop_builder: CommonOperationalPictureBuilder
     clock: Callable[[], datetime]
+    handoff_planner: CoordinationHandoffPlanner = field(
+        default_factory=CoordinationHandoffPlanner
+    )
 
 
 def build_multimodal_agent_tools(
@@ -99,6 +105,21 @@ class AnalyzeMultimodalAssetsTool:
             tuple(observations),
             evaluated_at=now,
         )
+        try:
+            multimodal_handoff = (
+                self._dependencies.handoff_planner.for_multimodal_state(
+                    state.workspace.multimodal_state
+                )
+            )
+            state.workspace.specialist_handoffs = (
+                *state.workspace.specialist_handoffs,
+                multimodal_handoff,
+            )
+        except ValueError:
+            state.capability_gaps.append(
+                "Typed multimodal handoff failed its ownership or provenance gate; "
+                "the single-supervisor path remains active."
+            )
         associated_count = sum(
             item.status == EventAssociationStatus.ASSOCIATED for item in associations
         )

@@ -64,6 +64,11 @@ export type InvestigationSummary = {
   decision_active_internal_states?: string[];
   specialist_handoff_count?: number;
   specialist_roles?: string[];
+  collaboration_status?: string | null;
+  collaboration_finding_count?: number;
+  collaboration_deadlock_count?: number;
+  collaboration_iterations?: number | null;
+  collaboration_fallback_reason?: string | null;
 };
 
 export type AssistantSource = {

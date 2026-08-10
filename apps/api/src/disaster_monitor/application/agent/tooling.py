@@ -23,6 +23,10 @@ from disaster_monitor.application.ports.disaster_information import (
     SituationReportProvider,
 )
 from disaster_monitor.application.ports.source_catalog import SourceCatalog
+from disaster_monitor.application.services.collaborative_investigation import (
+    CollaborativeInvestigator,
+    render_collaborative_investigation,
+)
 from disaster_monitor.application.services.coordination_handoffs import (
     CoordinationHandoffPlanner,
 )
@@ -127,6 +131,9 @@ class DisasterToolDependencies:
     )
     handoff_planner: CoordinationHandoffPlanner = field(
         default_factory=CoordinationHandoffPlanner
+    )
+    collaborative_investigator: CollaborativeInvestigator = field(
+        default_factory=CollaborativeInvestigator
     )
 
 
@@ -458,6 +465,15 @@ class ComposeDisasterAnswerTool(_BaseTool):
     )
 
     async def execute(self, state: AgentExecutionState) -> str:
+        if state.workspace.evidence_state is not None:
+            state.workspace.collaborative_investigation = (
+                self.dependencies.collaborative_investigator.investigate(
+                    state.workspace.evidence_state,
+                    state.workspace.specialist_handoffs,
+                    decision_support=state.workspace.decision_support,
+                    multimodal_state=state.workspace.multimodal_state,
+                )
+            )
         state.workspace.report = compose_report(
             state, self.dependencies.renderer, self.now()
         )
@@ -584,6 +600,16 @@ def compose_report(
         )
         sections = (*sections, decision_section)
         message = f"{message}\n\n## Decision support\n{decision_section.content}"
+    collaboration = state.workspace.collaborative_investigation
+    if collaboration is not None and collaboration.findings:
+        coordination_section = ReportSection(
+            "Specialist coordination",
+            render_collaborative_investigation(collaboration),
+        )
+        sections = (*sections, coordination_section)
+        message = (
+            f"{message}\n\n## Specialist coordination\n{coordination_section.content}"
+        )
     gaps = tuple(dict.fromkeys((*state.plan.capability_gaps, *state.capability_gaps)))
     if gaps:
         gap_section = ReportSection("Capability gaps", " ".join(gaps))

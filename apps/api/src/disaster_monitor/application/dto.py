@@ -39,6 +39,11 @@ class InvestigationSummary:
     decision_active_internal_states: tuple[str, ...] = ()
     specialist_handoff_count: int = 0
     specialist_roles: tuple[str, ...] = ()
+    collaboration_status: str | None = None
+    collaboration_finding_count: int = 0
+    collaboration_deadlock_count: int = 0
+    collaboration_iterations: int | None = None
+    collaboration_fallback_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

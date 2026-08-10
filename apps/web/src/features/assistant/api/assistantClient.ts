@@ -202,7 +202,17 @@ export class AssistantClient {
         this.isStringArray(item.decision_active_internal_states)) &&
       (item.specialist_handoff_count == null ||
         typeof item.specialist_handoff_count === 'number') &&
-      (item.specialist_roles == null || this.isStringArray(item.specialist_roles))
+      (item.specialist_roles == null || this.isStringArray(item.specialist_roles)) &&
+      (item.collaboration_status == null ||
+        typeof item.collaboration_status === 'string') &&
+      (item.collaboration_finding_count == null ||
+        typeof item.collaboration_finding_count === 'number') &&
+      (item.collaboration_deadlock_count == null ||
+        typeof item.collaboration_deadlock_count === 'number') &&
+      (item.collaboration_iterations == null ||
+        typeof item.collaboration_iterations === 'number') &&
+      (item.collaboration_fallback_reason == null ||
+        typeof item.collaboration_fallback_reason === 'string')
     );
   }
 }

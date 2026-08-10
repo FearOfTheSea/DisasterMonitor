@@ -84,6 +84,15 @@ ownership, ambiguous artifact types, missing provenance, unknown fields, and pri
 requests fail closed to the existing single-supervisor path. Investigation metadata
 exposes the handoff count and receiving roles.
 
+`CollaborativeInvestigator` runs those deterministic specialists only after their typed
+handoffs exist. Evidence, decision, and optional multimodal specialists return stable
+finding keys with canonical evidence/source lineage and the closed safety-policy
+fingerprint. The coordinator performs a bounded merge; it cannot mutate EW or policy.
+Unknown provenance, a changed fingerprint, conflicting values, missing artifacts, or
+an iteration overrun discards all specialist findings and retains the pre-existing
+single-supervisor result. Status, finding/deadlock counts, iterations, roles, and a safe
+fallback reason are inspectable; hidden deliberation is not stored.
+
 Current answers are composed by application code from `EvidencePacket`. Focused
 casualty answers include event identity, source, freshness, conflict, and explicit
 missing-evidence language; absence is never rendered as zero. The optional API
@@ -145,4 +154,7 @@ downgrade behavior.
 The frozen Coordination evaluation begins in
 `tests/evaluation/test_coordination.py`. CO-A measures strict handoff-schema decisions,
 complete provenance, task ownership, zero privilege escalation, deterministic replay,
-and sender-permission non-inheritance.
+and sender-permission non-inheritance. CO-B measures end-state improvement over the
+frozen pre-collaboration baseline, unresolved deadlocks, pass^8, multisource/conflicting/
+multimodal packets, and single-supervisor fallback under loop, policy, provenance, and
+deadlock attacks.

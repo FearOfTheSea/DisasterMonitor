@@ -15,6 +15,7 @@ from disaster_monitor.domain.coordination import (
 )
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import EvidenceWorldState
+from disaster_monitor.domain.multimodal import MultimodalEvidenceState
 
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$")
 _TASK_OWNER = {
@@ -264,6 +265,39 @@ class CoordinationHandoffPlanner:
                 CoordinationPermission.PROPOSE_ANALYSIS,
             ),
             issued_at=artifact.generated_at,
+        )
+
+    def for_multimodal_state(self, state: MultimodalEvidenceState) -> SpecialistHandoff:
+        evidence_ids = tuple(
+            dict.fromkeys(
+                (
+                    *(item.observation_id for item in state.observations),
+                    *(item.asset_id for item in state.assets),
+                )
+            )
+        )
+        reference = HandoffArtifactReference(
+            artifact_id=state.state_version,
+            artifact_type=HandoffArtifactType.MULTIMODAL_STATE,
+            state_version=state.evidence_world_state_version,
+            evidence_ids=evidence_ids,
+            source_ids=tuple(
+                dict.fromkeys(item.source.source_id for item in state.assets)
+            ),
+        )
+        return self._broker.issue(
+            task_id=f"task:multimodal:{state.state_version.split(':')[-1]}",
+            task_type=SpecialistTaskType.REVIEW_MULTIMODAL_STATE,
+            sender_role=SpecialistRole.SUPERVISOR,
+            receiver_role=SpecialistRole.MULTIMODAL_ANALYSIS,
+            artifact_references=(reference,),
+            requested_permissions=(
+                CoordinationPermission.READ_EVIDENCE_STATE,
+                CoordinationPermission.READ_MULTIMODAL_STATE,
+                CoordinationPermission.READ_PROVENANCE,
+                CoordinationPermission.PROPOSE_ANALYSIS,
+            ),
+            issued_at=state.evaluated_at,
         )
 
 

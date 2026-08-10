@@ -127,6 +127,7 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
     decision_state = (
         decision_outcome.final_state if decision_outcome is not None else None
     )
+    collaboration = state.workspace.collaborative_investigation
     return InvestigationSummary(
         status=state.final_status.value,
         task_summary=(task.detail or task.question)[:500],
@@ -184,5 +185,16 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
                 handoff.receiver_role.value
                 for handoff in state.workspace.specialist_handoffs
             )
+        ),
+        collaboration_status=(collaboration.status.value if collaboration else None),
+        collaboration_finding_count=(
+            len(collaboration.findings) if collaboration else 0
+        ),
+        collaboration_deadlock_count=(
+            len(collaboration.unresolved_deadlocks) if collaboration else 0
+        ),
+        collaboration_iterations=(collaboration.iterations if collaboration else None),
+        collaboration_fallback_reason=(
+            collaboration.fallback_reason if collaboration else None
         ),
     )

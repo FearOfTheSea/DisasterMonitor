@@ -128,6 +128,17 @@ async def assistant(
             ),
             specialist_handoff_count=(result.investigation.specialist_handoff_count),
             specialist_roles=list(result.investigation.specialist_roles),
+            collaboration_status=result.investigation.collaboration_status,
+            collaboration_finding_count=(
+                result.investigation.collaboration_finding_count
+            ),
+            collaboration_deadlock_count=(
+                result.investigation.collaboration_deadlock_count
+            ),
+            collaboration_iterations=result.investigation.collaboration_iterations,
+            collaboration_fallback_reason=(
+                result.investigation.collaboration_fallback_reason
+            ),
         )
     )
     if result.response_type == "assistant":

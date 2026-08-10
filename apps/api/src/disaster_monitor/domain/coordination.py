@@ -38,6 +38,11 @@ class HandoffArtifactType(StrEnum):
     MULTIMODAL_STATE = "multimodal_state"
 
 
+class CollaborativeInvestigationStatus(StrEnum):
+    COMPLETED = "completed"
+    SINGLE_SUPERVISOR_FALLBACK = "single_supervisor_fallback"
+
+
 @dataclass(frozen=True, slots=True)
 class HandoffArtifactReference:
     artifact_id: str
@@ -87,3 +92,67 @@ class SpecialistHandoff:
             raise ValueError(
                 "Handoff permissions cannot be silently broadened or reduced."
             )
+
+
+@dataclass(frozen=True, slots=True)
+class SpecialistFinding:
+    finding_id: str
+    specialist_role: SpecialistRole
+    finding_key: str
+    value: str
+    summary: str
+    state_version: str
+    evidence_ids: tuple[str, ...]
+    source_ids: tuple[str, ...]
+    safety_policy_fingerprint: str
+
+    def __post_init__(self) -> None:
+        if not all(
+            (
+                self.finding_id,
+                self.finding_key,
+                self.value,
+                self.summary.strip(),
+                self.state_version,
+                self.evidence_ids,
+                self.source_ids,
+                self.safety_policy_fingerprint,
+            )
+        ):
+            raise ValueError("Specialist findings require content and provenance.")
+        if self.specialist_role == SpecialistRole.SUPERVISOR:
+            raise ValueError("Supervisor output is not a specialist finding.")
+
+
+@dataclass(frozen=True, slots=True)
+class CollaborativeInvestigation:
+    investigation_id: str
+    status: CollaborativeInvestigationStatus
+    evidence_state_version: str
+    handoff_ids: tuple[str, ...]
+    findings: tuple[SpecialistFinding, ...]
+    participating_roles: tuple[SpecialistRole, ...]
+    unresolved_deadlocks: tuple[str, ...]
+    iterations: int
+    safety_policy_fingerprint: str
+    fallback_reason: str | None
+
+    def __post_init__(self) -> None:
+        if not self.investigation_id or not self.evidence_state_version:
+            raise ValueError("Collaborative investigation requires state lineage.")
+        if not 1 <= self.iterations <= 2:
+            raise ValueError("Collaborative investigation exceeded iteration budget.")
+        if not self.safety_policy_fingerprint:
+            raise ValueError("Collaborative investigation requires safety fingerprint.")
+        if self.status == CollaborativeInvestigationStatus.COMPLETED:
+            if (
+                len(self.participating_roles) < 2
+                or self.unresolved_deadlocks
+                or self.fallback_reason is not None
+                or not self.findings
+            ):
+                raise ValueError(
+                    "Completed collaboration requires findings from two specialists."
+                )
+        elif self.fallback_reason is None:
+            raise ValueError("Single-supervisor fallback requires a visible reason.")

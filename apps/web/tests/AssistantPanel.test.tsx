@@ -112,6 +112,11 @@ describe('AssistantPanel', () => {
                   'evidence_reconciliation_specialist',
                   'decision_analysis_specialist',
                 ],
+                collaboration_status: 'completed',
+                collaboration_finding_count: 5,
+                collaboration_deadlock_count: 0,
+                collaboration_iterations: 1,
+                collaboration_fallback_reason: null,
               },
             },
           },
@@ -141,6 +146,9 @@ describe('AssistantPanel', () => {
     );
     expect(screen.getByText(/Specialist handoffs:/)).toHaveTextContent(
       '2 / evidence_reconciliation_specialist, decision_analysis_specialist',
+    );
+    expect(screen.getByText(/Collaboration:/)).toHaveTextContent(
+      'completed / 5 findings / 1 iteration(s)',
     );
     expect(
       screen.getByText('Trusted disaster-image retrieval is not implemented.'),

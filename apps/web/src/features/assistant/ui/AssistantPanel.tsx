@@ -243,6 +243,20 @@ function DisasterReportView({
                 : ''}
             </p>
           )}
+          {report.investigation.collaboration_status && (
+            <p>
+              Collaboration:{' '}
+              <strong>{report.investigation.collaboration_status}</strong>
+              {` / ${report.investigation.collaboration_finding_count ?? 0} findings`}
+              {report.investigation.collaboration_iterations != null &&
+                ` / ${report.investigation.collaboration_iterations} iteration(s)`}
+              {(report.investigation.collaboration_deadlock_count ?? 0) > 0 &&
+                ` / ${report.investigation.collaboration_deadlock_count} deadlock(s)`}
+              {report.investigation.collaboration_fallback_reason
+                ? ` / ${report.investigation.collaboration_fallback_reason}`
+                : ''}
+            </p>
+          )}
           {report.investigation.actions.length > 0 && (
             <>
               <h3>Completed actions</h3>

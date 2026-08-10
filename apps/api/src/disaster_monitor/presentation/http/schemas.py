@@ -80,6 +80,11 @@ class InvestigationResponse(BaseModel):
     decision_active_internal_states: list[str] = Field(default_factory=list)
     specialist_handoff_count: int = 0
     specialist_roles: list[str] = Field(default_factory=list)
+    collaboration_status: str | None = None
+    collaboration_finding_count: int = 0
+    collaboration_deadlock_count: int = 0
+    collaboration_iterations: int | None = None
+    collaboration_fallback_reason: str | None = None
 
 
 class SourceResponse(BaseModel):

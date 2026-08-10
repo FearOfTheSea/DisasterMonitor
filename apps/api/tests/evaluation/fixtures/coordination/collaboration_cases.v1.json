@@ -1,0 +1,90 @@
+{
+  "fixture_version": "dm-co-b-v1",
+  "runs_per_case": 8,
+  "cases": [
+    {
+      "id": "multisource-positive-injuries",
+      "scenario_id": "positive-injuries",
+      "multimodal": false,
+      "expected": {
+        "evidence_gap_count": "5",
+        "scenario_mode": "material_human_impact",
+        "recommendation_status": "available"
+      }
+    },
+    {
+      "id": "multisource-fatality-conflict",
+      "scenario_id": "conflict-neutral",
+      "multimodal": false,
+      "expected": {
+        "evidence_gap_count": "5",
+        "scenario_mode": "unresolved",
+        "recommendation_status": "human_review_required",
+        "claim:fatalities:conflict": "retained"
+      }
+    },
+    {
+      "id": "missing-evidence-deadlock-avoidance",
+      "scenario_id": "missing-neutral",
+      "multimodal": false,
+      "expected": {
+        "evidence_gap_count": "6",
+        "scenario_mode": "unresolved",
+        "recommendation_status": "disabled_unsupported_premise"
+      }
+    },
+    {
+      "id": "stale-evidence-review",
+      "scenario_id": "stale-positive-neutral",
+      "multimodal": false,
+      "expected": {
+        "evidence_gap_count": "6",
+        "scenario_mode": "unresolved",
+        "recommendation_status": "human_review_required"
+      }
+    },
+    {
+      "id": "corrected-zero-monitoring",
+      "scenario_id": "superseded-positive-current-zero",
+      "multimodal": false,
+      "expected": {
+        "evidence_gap_count": "5",
+        "scenario_mode": "limited_observed_human_impact",
+        "recommendation_status": "available"
+      }
+    },
+    {
+      "id": "critical-impact-review",
+      "scenario_id": "positive-fatalities",
+      "multimodal": false,
+      "expected": {
+        "evidence_gap_count": "5",
+        "scenario_mode": "material_human_impact",
+        "recommendation_status": "human_review_required"
+      }
+    },
+    {
+      "id": "multimodal-conflict-packet",
+      "scenario_id": "conflict-neutral",
+      "multimodal": true,
+      "expected": {
+        "evidence_gap_count": "5",
+        "scenario_mode": "unresolved",
+        "recommendation_status": "human_review_required",
+        "claim:fatalities:conflict": "retained",
+        "visual_observation_count": "0"
+      }
+    },
+    {
+      "id": "multimodal-missing-evidence-packet",
+      "scenario_id": "missing-neutral",
+      "multimodal": true,
+      "expected": {
+        "evidence_gap_count": "6",
+        "scenario_mode": "unresolved",
+        "recommendation_status": "disabled_unsupported_premise",
+        "visual_observation_count": "0"
+      }
+    }
+  ]
+}
