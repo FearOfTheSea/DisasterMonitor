@@ -13,6 +13,10 @@ export default function Home() {
   const [mapView, setMapView] = useState<MapView>(DEFAULT_MAP_VIEW);
   const conversation = useAssistantConversation();
   const handleViewChange = useCallback((view: MapView) => setMapView(view), []);
+  const commonOperationalPicture = [...conversation.messages]
+    .reverse()
+    .find((message) => message.report?.commonOperationalPicture)
+    ?.report?.commonOperationalPicture;
 
   return (
     <main className="app-shell">
@@ -37,7 +41,10 @@ export default function Home() {
       </header>
       <section className="workspace">
         <div className="map-region">
-          <DisasterMap onViewChange={handleViewChange} />
+          <DisasterMap
+            onViewChange={handleViewChange}
+            commonOperationalPicture={commonOperationalPicture}
+          />
           <div className="map-overlay">OpenStreetMap base layer · Hanoi view</div>
         </div>
         {assistantOpen && (

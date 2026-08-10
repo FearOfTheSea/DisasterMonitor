@@ -1,4 +1,4 @@
-# Agent architecture (Phases 1–3)
+# Agent architecture
 
 Disaster Monitor follows **LLM-first orchestration, evidence-first truth**. The local
 agent model may interpret intent and propose a bounded plan. Deterministic validation,
@@ -31,6 +31,12 @@ The deterministic fallback plan is available without Ollama:
 3. `retrieve_situation_evidence`
 4. `reconcile_disaster_evidence`
 5. `compose_disaster_answer`
+
+When admitted multimodal assets are present, the validated plan inserts
+`analyze_multimodal_assets` after reconciliation and
+`build_common_operational_picture` before composition. These tools consume only
+workspace artifacts and never accept model-selected URLs, paths, providers, model IDs,
+geometry, or authority. Visual failure records a gap and preserves the text path.
 
 Execution permits at most eight plan steps, twelve tool calls, four bounded model
 operations, and one replan decision. There is no recursion, worker, background job,
@@ -72,11 +78,14 @@ metadata can be classified and queued for human review, but it cannot create a p
 Exactly one hazard and one catalog country may be investigated. Multiple values
 request clarification; unknown countries return a catalog limitation; combinations
 without event discovery return coverage unavailable. Image and agent-controlled map
-requests are recorded as honest capability gaps while supported text may continue.
+requests without an admitted, associated artifact remain honest capability gaps while
+supported text may continue. With a qualifying asset, the agent may produce only the
+bounded analytical COP described in
+[Multimodal situational awareness](multimodal-awareness.md).
 
-Phase 4 remains absent: disaster image retrieval, satellite/aerial imagery, raster or
-vector COP artifacts, agent-controlled map layers, CARTO, TerraLabo, online source
-crawling, and arbitrary generated retrieval code are not implemented.
+Disaster image retrieval, satellite/aerial monitoring, live raster services, arbitrary
+agent-generated layers, CARTO, TerraLabo, online source crawling, and generated
+retrieval code remain absent.
 
 EW state also remains request-scoped: there is no database, continuous ingestion,
 background revision monitor, cross-request state recovery, or LLM probability model.

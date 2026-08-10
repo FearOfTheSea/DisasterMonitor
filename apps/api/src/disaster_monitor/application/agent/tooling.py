@@ -104,6 +104,7 @@ class DisasterToolDependencies:
 
 def build_disaster_tool_registry(
     dependencies: DisasterToolDependencies,
+    additional_tools: Iterable[AgentTool] = (),
 ) -> ToolRegistry:
     return ToolRegistry(
         (
@@ -112,6 +113,7 @@ def build_disaster_tool_registry(
             RetrieveSituationEvidenceTool(dependencies),
             ReconcileDisasterEvidenceTool(dependencies),
             ComposeDisasterAnswerTool(dependencies),
+            *tuple(additional_tools),
         )
     )
 
@@ -382,6 +384,8 @@ async def execute_plan(state: AgentExecutionState, registry: ToolRegistry) -> No
         if state.workspace.selected_event is None and step.tool_name in {
             "retrieve_situation_evidence",
             "reconcile_disaster_evidence",
+            "analyze_multimodal_assets",
+            "build_common_operational_picture",
         }:
             action = "Skipped because no selected event was available."
         else:

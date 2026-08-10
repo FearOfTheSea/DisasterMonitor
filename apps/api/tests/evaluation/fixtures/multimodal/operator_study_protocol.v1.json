@@ -1,0 +1,70 @@
+{
+  "protocol_version": "dm-mm-c-operator-v1",
+  "status": "awaiting_legitimate_human_results",
+  "primary_outcome": "task_completed_without_critical_error",
+  "acceptance_rule": "cop_completion_rate_strictly_greater",
+  "minimum_participants": 6,
+  "expertise_categories": [
+    "emergency_management_practitioner",
+    "geospatial_analyst",
+    "disaster_response_researcher"
+  ],
+  "conditions": {
+    "text_only": "The frozen source-backed text report and its ordinary map event marker.",
+    "cop": "The same report plus the typed COP with visible analytical authority, status, uncertainty, and attribution."
+  },
+  "scenarios": [
+    {
+      "scenario_id": "frozen-earthquake-assessment",
+      "scenario_version": "1.0.0",
+      "task": "Identify all areas with pixel-supported major-or-destroyed damage and state which displayed geometry is analytical rather than official.",
+      "critical_error_codes": [
+        "missed_major_or_destroyed_area",
+        "analytical_geometry_called_official",
+        "unsupported_casualty_or_identity_claim"
+      ]
+    },
+    {
+      "scenario_id": "frozen-flood-access-assessment",
+      "scenario_version": "1.0.0",
+      "task": "Identify visibly affected access areas while preserving the supplied status, uncertainty, and artifact attribution.",
+      "critical_error_codes": [
+        "missed_visible_access_impact",
+        "status_or_uncertainty_omitted",
+        "unsupported_operational_instruction"
+      ]
+    }
+  ],
+  "counterbalance_sequences": {
+    "A": [
+      {
+        "scenario_id": "frozen-earthquake-assessment",
+        "scenario_version": "1.0.0",
+        "condition": "text_only"
+      },
+      {
+        "scenario_id": "frozen-flood-access-assessment",
+        "scenario_version": "1.0.0",
+        "condition": "cop"
+      }
+    ],
+    "B": [
+      {
+        "scenario_id": "frozen-earthquake-assessment",
+        "scenario_version": "1.0.0",
+        "condition": "cop"
+      },
+      {
+        "scenario_id": "frozen-flood-access-assessment",
+        "scenario_version": "1.0.0",
+        "condition": "text_only"
+      }
+    ]
+  },
+  "collection_rules": {
+    "do_not_collect": ["name", "email", "phone", "address", "employer", "IP address"],
+    "participant_code": "Use a study-local random code with no identity mapping in this repository.",
+    "result_location": "Store completed records under ignored data/operator-study, never in Git.",
+    "human_only": "Simulation, synthetic participants, LLM judges, and retrospective relabeling cannot satisfy the gate."
+  }
+}

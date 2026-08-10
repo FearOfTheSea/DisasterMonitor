@@ -23,6 +23,7 @@ from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
+from disaster_monitor.domain.multimodal import MultimodalAsset
 
 MAX_MODEL_CALLS = 4
 MAX_REPLANS = 1
@@ -42,7 +43,9 @@ class DisasterAgentRuntime:
         self._tools = tool_registry
         self._agent_model = agent_model
 
-    async def run(self, question: str) -> AgentExecutionState:
+    async def run(
+        self, question: str, *, multimodal_assets: tuple[MultimodalAsset, ...] = ()
+    ) -> AgentExecutionState:
         model_calls = 0
         draft = deterministic_task_draft(question)
         if self._agent_model is not None:
@@ -76,7 +79,9 @@ class DisasterAgentRuntime:
             )
             return state
 
-        plan = default_investigation_plan(task)
+        plan = default_investigation_plan(
+            task, multimodal_assets_available=bool(multimodal_assets)
+        )
         if self._agent_model is not None and model_calls < MAX_MODEL_CALLS:
             try:
                 proposed = await self._agent_model.propose_plan(
@@ -84,11 +89,18 @@ class DisasterAgentRuntime:
                     tuple(item.planning_text() for item in self._tools.descriptions),
                 )
                 model_calls += 1
-                plan = validate_plan(proposed, allowed_tools=self._tools.names)
+                plan = validate_plan(
+                    proposed,
+                    allowed_tools=self._tools.names,
+                    requires_multimodal=bool(multimodal_assets),
+                )
             except Exception:
                 model_calls += 1
-                plan = default_investigation_plan(task)
+                plan = default_investigation_plan(
+                    task, multimodal_assets_available=bool(multimodal_assets)
+                )
         state = AgentExecutionState(task, plan, model_call_count=model_calls)
+        state.workspace.multimodal_assets = multimodal_assets
         state.capability_gaps.extend(plan.capability_gaps)
         try:
             await execute_plan(state, self._tools)

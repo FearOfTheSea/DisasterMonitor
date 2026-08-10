@@ -142,6 +142,64 @@ button {
   z-index: 2;
 }
 
+.cop-legend {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  bottom: 24px;
+  box-shadow: 0 8px 24px rgba(20, 34, 55, 0.12);
+  display: grid;
+  font-size: 0.75rem;
+  gap: 4px;
+  left: 18px;
+  max-height: 42vh;
+  max-width: min(420px, calc(100% - 36px));
+  overflow-y: auto;
+  padding: 10px 12px;
+  position: absolute;
+  z-index: 3;
+}
+
+.cop-legend > span,
+.cop-legend small {
+  color: var(--muted);
+}
+
+.cop-legend ul {
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 5px 0 0;
+  padding: 0;
+}
+
+.cop-legend li {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 32px minmax(0, 1fr);
+}
+
+.cop-legend li > span:last-child,
+.cop-legend small {
+  display: block;
+}
+
+.legend-line {
+  border-top: 3px solid #155e75;
+  margin-top: 7px;
+}
+
+.legend-line-dotted {
+  border-color: #166534;
+  border-top-style: dotted;
+}
+
+.legend-line-dashed {
+  border-color: #b45309;
+  border-top-style: dashed;
+}
+
 .assistant-panel {
   background: var(--surface);
   border-left: 1px solid var(--line);
@@ -291,6 +349,69 @@ button {
   border-top: 1px solid var(--line);
   min-width: 0;
   padding-top: 0.6rem;
+}
+
+.visual-evidence,
+.cop-summary {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+  padding-top: 0.65rem;
+}
+
+.visual-evidence h3,
+.cop-summary h3,
+.visual-evidence p,
+.cop-summary p {
+  margin: 0;
+}
+
+.visual-asset,
+.visual-observation,
+.cop-layer-summary {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.65rem;
+}
+
+.visual-asset small,
+.visual-observation small,
+.cop-feature-summary small {
+  color: var(--muted);
+}
+
+.evidence-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.evidence-badges span,
+.authority-label {
+  background: #edf2f7;
+  border: 1px solid #d2dbe7;
+  border-radius: 999px;
+  color: #334155;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  width: fit-content;
+}
+
+.visual-observation details {
+  font-size: 0.75rem;
+}
+
+.cop-feature-summary {
+  border-left: 3px solid #b45309;
+  display: grid;
+  gap: 0.15rem;
+  padding-left: 0.55rem;
 }
 
 .report-sources a {

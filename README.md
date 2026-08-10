@@ -16,6 +16,8 @@ planning cannot create providers, countries, URLs, or facts. See
 - Browser-session conversation continuity using `sessionStorage`.
 - FastAPI health, readiness, and assistant endpoints.
 - Ollama adapter for a configurable local Qwen model.
+- Bounded operator-supplied image admission, metadata-only event association, local
+  Qwen3-VL analytical observations, and provenance-bearing vector COP overlays.
 - Deterministic current-earthquake request classification and event selection.
 - JMA earthquake/tsunami feeds, USGS earthquake GeoJSON, and supplementary
   ReliefWeb situation reports behind focused provider ports.
@@ -29,10 +31,13 @@ other unimplemented data are not connected. The current-earthquake workflow only
 uses retrieved provider evidence and does not substitute model memory for current
 facts. See [docs/current-disaster-reporting.md](docs/current-disaster-reporting.md)
 for the implemented flow and limitations.
+The multimodal boundary and its still-pending external benchmark/human gates are
+documented in
+[docs/multimodal-awareness.md](docs/multimodal-awareness.md).
 
 ## Deferred capabilities
 
-Live weather, geocoding, satellite catalogs and imagery, flood providers, broad
+Live weather, geocoding, satellite catalogs and imagery retrieval, flood providers, broad
 news aggregation, remote model providers, paid map services, authentication,
 queues, background workers, cloud deployment, multi-user persistence, and
 advanced analytics are intentionally deferred.

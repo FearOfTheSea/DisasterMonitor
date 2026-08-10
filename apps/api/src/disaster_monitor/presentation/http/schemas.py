@@ -5,6 +5,12 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from disaster_monitor.presentation.http.multimodal_schemas import (
+    CommonOperationalPictureResponse,
+    MultimodalAssetRequest,
+    MultimodalStateResponse,
+)
+
 
 class MapViewRequest(BaseModel):
     """Optional current browser map view."""
@@ -24,6 +30,9 @@ class AssistantRequest(BaseModel):
     question: Annotated[str, Field(min_length=1, max_length=2_000)]
     conversation_id: Annotated[str | None, Field(max_length=100)] = None
     map_view: MapViewRequest | None = None
+    multimodal_assets: Annotated[list[MultimodalAssetRequest], Field(max_length=3)] = (
+        Field(default_factory=list)
+    )
 
 
 class AssistantResponse(BaseModel):
@@ -40,6 +49,8 @@ class AssistantResponse(BaseModel):
     sections: list["ReportSectionResponse"] = Field(default_factory=list)
     partial: bool = False
     investigation: "InvestigationResponse | None" = None
+    multimodal: MultimodalStateResponse | None = None
+    common_operational_picture: CommonOperationalPictureResponse | None = None
 
 
 class InvestigationResponse(BaseModel):

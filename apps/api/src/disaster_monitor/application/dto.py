@@ -5,6 +5,10 @@ from datetime import datetime
 
 from disaster_monitor.application.disaster import ReportSection, SelectedEventSummary
 from disaster_monitor.domain.disaster import SourceReference
+from disaster_monitor.domain.multimodal import (
+    CommonOperationalPicture,
+    MultimodalEvidenceState,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,3 +75,5 @@ class AssistantAnswer:
     sections: tuple[ReportSection, ...] = ()
     partial: bool = False
     investigation: InvestigationSummary | None = None
+    multimodal_state: MultimodalEvidenceState | None = None
+    common_operational_picture: CommonOperationalPicture | None = None

@@ -42,6 +42,11 @@ The flow is:
    metadata, warnings, and retrieval time.
 8. Derive a bounded internal hypothesis artifact from canonical state. It remains
    machine-typed as inferred and is not included in verified current-fact rendering.
+9. When the request contains admitted image bytes, associate each asset to the selected
+   physical event using explicit hazard, country, capture-time, capture-role, event-ID,
+   and WGS84 footprint metadata. Only uniquely associated assets enter bounded local
+   visual analysis. Store results as analytical observations linked to the EW version,
+   then build a typed analytical COP when pixel-supported damage and geometry exist.
 
 The current report path does not use model memory for current facts. This keeps
 the report useful when Ollama is unavailable and prevents generated prose from
@@ -98,9 +103,9 @@ target before making a request when it is outside that set, and the composite re
 normalized records whose stable source ID or canonical source URL does not match the
 registration. Startup validation keeps the packaged catalog, registration, and adapter
 source policies aligned.
-No weather,
-flood, satellite, geocoding, news, authentication, or map-overlay provider is
-implemented by this feature.
+No weather, flood, satellite/imagery retrieval, geocoding, news, authentication, or
+official map-overlay provider is implemented by this feature. Operator-supplied images
+are request inputs, not trusted live providers.
 
 Physical-event clustering is application policy rather than transport composition.
 The earthquake policy can merge matching JMA and USGS observations while preserving
@@ -189,6 +194,11 @@ conflations, per-class temporal metrics, ECE, and Brier score against a fixed 0.
 baseline. Fault-injection regressions prove detection of cross-event merging,
 destructive history replacement, missing-as-zero conversion, miscalibration, and
 hypothesis promotion into observed products.
+
+Multimodal analytical state is a separate versioned extension whose observations
+cannot overwrite those claim histories. See
+[Multimodal situational awareness](multimodal-awareness.md) for the exact input,
+association, model, COP, evaluation, and pending-gate boundaries.
 
 The initial hypothesis rule is deliberately narrow and deterministic. It evaluates a
 material-human-impact proposition from fresh numeric fatality, injury, and missing-

@@ -35,6 +35,8 @@ export type AssistantResponse = {
   sections?: ReportSection[];
   partial?: boolean;
   investigation?: InvestigationSummary;
+  multimodal?: MultimodalEvidenceState | null;
+  common_operational_picture?: CommonOperationalPicture | null;
 };
 
 export type InvestigationSummary = {
@@ -87,6 +89,188 @@ export type AssistantReport = {
   sections: ReportSection[];
   partial: boolean;
   investigation?: InvestigationSummary;
+  multimodal?: MultimodalEvidenceState;
+  commonOperationalPicture?: CommonOperationalPicture;
+};
+
+export type Wgs84PointGeometry = {
+  type: 'Point';
+  coordinates: [number, number];
+  crs: 'EPSG:4326';
+};
+
+export type Wgs84LineStringGeometry = {
+  type: 'LineString';
+  coordinates: [number, number][];
+  crs: 'EPSG:4326';
+};
+
+export type Wgs84PolygonGeometry = {
+  type: 'Polygon';
+  coordinates: [number, number][][];
+  crs: 'EPSG:4326';
+};
+
+export type CopGeometry =
+  Wgs84PointGeometry | Wgs84LineStringGeometry | Wgs84PolygonGeometry;
+
+export type MultimodalSource = {
+  source_id: string;
+  attribution: string;
+  canonical_url?: string | null;
+  dataset_id?: string | null;
+  license_name?: string | null;
+};
+
+export type MultimodalAsset = {
+  asset_id: string;
+  source: MultimodalSource;
+  retrieved_at: string;
+  captured_at?: string | null;
+  modality: string;
+  media_type: string;
+  content_sha256: string;
+  byte_length: number;
+  width?: number | null;
+  height?: number | null;
+  footprint?: Wgs84PolygonGeometry | null;
+  declared_hazard?: string | null;
+  declared_country_code?: string | null;
+  capture_role: string;
+  processing_level?: string | null;
+  parent_asset_ids: string[];
+  event_id_hint?: string | null;
+  eligibility: string;
+  eligibility_reasons: string[];
+};
+
+export type AssetEventAssociation = {
+  association_id: string;
+  asset_id: string;
+  physical_event_id: string;
+  status: string;
+  geography_match?: boolean | null;
+  time_match?: boolean | null;
+  hazard_match?: boolean | null;
+  country_match?: boolean | null;
+  event_id_match?: boolean | null;
+  distance_km?: number | null;
+  time_delta_seconds?: number | null;
+  rule_ids: string[];
+  detail: string;
+};
+
+export type VisualAnalysisConfiguration = {
+  model_id: string;
+  model_digest?: string | null;
+  adapter_version: string;
+  analysis_version: string;
+  prompt_version: string;
+  preprocessing_version: string;
+  temperature: number;
+  seed: number;
+};
+
+export type VisualObservation = {
+  observation_id: string;
+  asset_id: string;
+  association_id: string;
+  physical_event_id: string;
+  modality: 'image';
+  truth_status: 'analytical';
+  kind: string;
+  status: string;
+  damage_level?: string | null;
+  question?: string | null;
+  answer?: string | null;
+  answerable?: boolean | null;
+  confidence?: number | null;
+  uncertainty: string;
+  visual_cues: string[];
+  configuration: VisualAnalysisConfiguration;
+  created_at: string;
+  safety_rule_ids: string[];
+};
+
+export type MultimodalEvidenceState = {
+  state_version: string;
+  evidence_world_state_version: string;
+  physical_event_id: string;
+  assets: MultimodalAsset[];
+  associations: AssetEventAssociation[];
+  observations: VisualObservation[];
+  evaluated_at: string;
+};
+
+type CopFeatureBase = {
+  feature_id: string;
+  physical_event_id: string;
+  source_asset_ids: string[];
+  created_at: string;
+  updated_at?: string | null;
+  semantic_kind: string;
+  geometry: CopGeometry;
+  attribution: string;
+  status: string;
+  uncertainty: string;
+};
+
+export type SourceMapFeature = CopFeatureBase & {
+  feature_type: 'source';
+  source_id: string;
+  authority: 'official_source' | 'source_supplied';
+  source_authority: 'official' | 'source_supplied';
+};
+
+export type AnalyticalMapFeature = CopFeatureBase & {
+  feature_type: 'analytical';
+  visual_observation_ids: string[];
+  confidence?: number | null;
+  authority: 'analytical_generated';
+};
+
+export type SourceMapLayer = {
+  layer_type: 'source';
+  layer_id: string;
+  physical_event_id: string;
+  title: string;
+  semantic_kind: string;
+  features: SourceMapFeature[];
+  source_ids: string[];
+  source_asset_ids: string[];
+  created_at: string;
+  updated_at: string;
+  status: string;
+  uncertainty: string;
+  attribution: string;
+};
+
+export type AnalyticalMapLayer = {
+  layer_type: 'analytical';
+  layer_id: string;
+  physical_event_id: string;
+  title: string;
+  semantic_kind: string;
+  features: AnalyticalMapFeature[];
+  source_asset_ids: string[];
+  visual_observation_ids: string[];
+  created_at: string;
+  updated_at: string;
+  status: string;
+  uncertainty: string;
+  attribution: string;
+};
+
+export type CopLayer = SourceMapLayer | AnalyticalMapLayer;
+
+export type CommonOperationalPicture = {
+  cop_id: string;
+  physical_event_id: string;
+  multimodal_state_version: string;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  layers: CopLayer[];
 };
 
 export type ConversationState = {

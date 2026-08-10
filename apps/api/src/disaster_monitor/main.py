@@ -2,20 +2,36 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from disaster_monitor.application.agent.multimodal_tools import (
+    MultimodalToolDependencies,
+    build_multimodal_agent_tools,
+)
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
+from disaster_monitor.application.services.common_operational_picture import (
+    CommonOperationalPictureBuilder,
+)
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
+from disaster_monitor.application.services.multimodal_asset_admission import (
+    MultimodalAssetAdmissionService,
+)
+from disaster_monitor.application.services.multimodal_association import (
+    MultimodalEventAssociator,
+)
+from disaster_monitor.application.services.visual_analysis import VisualAnalysisService
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.infrastructure.composition import (
@@ -25,6 +41,7 @@ from disaster_monitor.infrastructure.composition import (
     build_disaster_query_parser,
     build_language_model,
     build_source_catalog,
+    build_visual_analyzer,
 )
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.presentation.http.error_handlers import register_error_handlers
@@ -37,6 +54,7 @@ def create_app(
     current_disaster_report: CurrentDisasterReportService | None = None,
     disaster_query_parser: DisasterQueryParser | None = None,
     agent_model: AgentModel | None = None,
+    visual_analyzer: VisualAnalyzer | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -52,13 +70,36 @@ def create_app(
         if agent_model is not None
         else (build_agent_model(app_settings) if model is None else None)
     )
+    configured_visual_analyzer = visual_analyzer or build_visual_analyzer(app_settings)
+
+    def clock() -> datetime:
+        return datetime.now(UTC)
+
+    asset_admission = MultimodalAssetAdmissionService(clock=clock)
+    multimodal_tools = build_multimodal_agent_tools(
+        MultimodalToolDependencies(
+            associator=MultimodalEventAssociator(),
+            visual_analysis=VisualAnalysisService(
+                configured_visual_analyzer,
+                clock=clock,
+            ),
+            cop_builder=CommonOperationalPictureBuilder(),
+            clock=clock,
+        )
+    )
     agent_runtime = DisasterAgentRuntime(
         country_catalog=country_catalog,
         query_parser=query_parser,
-        tool_registry=disaster_report.build_agent_tools(source_catalog),
+        tool_registry=disaster_report.build_agent_tools(
+            source_catalog, multimodal_tools
+        ),
         agent_model=configured_agent_model,
     )
-    disaster_agent = RunDisasterAgent(agent_runtime, language_model)
+    disaster_agent = RunDisasterAgent(
+        agent_runtime,
+        language_model,
+        asset_admission,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -72,6 +113,9 @@ def create_app(
         close_agent = getattr(app.state.agent_model, "aclose", None)
         if close_agent is not None:
             await close_agent()
+        close_visual = getattr(app.state.visual_analyzer, "aclose", None)
+        if close_visual is not None:
+            await close_visual()
 
     app = FastAPI(
         title=app_settings.app_name,
@@ -88,6 +132,7 @@ def create_app(
     app.state.language_model = language_model
     app.state.current_disaster_report = disaster_report
     app.state.agent_model = configured_agent_model
+    app.state.visual_analyzer = configured_visual_analyzer
     app.state.answer_map_question = AnswerMapQuestion(
         language_model,
         disaster_report,

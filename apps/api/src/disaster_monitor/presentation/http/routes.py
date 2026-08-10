@@ -1,13 +1,23 @@
 """FastAPI routes for the MVP."""
 
+import base64
+import binascii
 from typing import Annotated, cast
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from disaster_monitor.application.dto import ModelReadiness
+from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.domain.models import MapView
+from disaster_monitor.presentation.http.multimodal_schemas import (
+    MultimodalAssetRequest,
+)
+from disaster_monitor.presentation.http.multimodal_serialization import (
+    cop_response,
+    multimodal_state_response,
+)
 from disaster_monitor.presentation.http.schemas import (
     AssistantRequest,
     AssistantResponse,
@@ -77,6 +87,9 @@ async def assistant(
                 center_longitude=request.map_view.center_longitude,
                 zoom=request.map_view.zoom,
             )
+        ),
+        multimodal_inputs=tuple(
+            _asset_input(item) for item in request.multimodal_assets
         ),
     )
     investigation = (
@@ -151,4 +164,40 @@ async def assistant(
         ],
         partial=result.partial,
         investigation=investigation,
+        multimodal=multimodal_state_response(result.multimodal_state),
+        common_operational_picture=cop_response(result.common_operational_picture),
+    )
+
+
+def _asset_input(item: MultimodalAssetRequest) -> AssetAdmissionInput:
+    try:
+        content = base64.b64decode(item.content_base64, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise HTTPException(
+            status_code=422,
+            detail="Multimodal asset content must be valid base64.",
+        ) from error
+    footprint = item.footprint
+    return AssetAdmissionInput(
+        content=content,
+        attribution=item.attribution,
+        captured_at=item.captured_at,
+        footprint_coordinates=(
+            None
+            if footprint is None
+            else tuple(
+                tuple((longitude, latitude) for longitude, latitude in ring)
+                for ring in footprint.coordinates
+            )
+        ),
+        footprint_crs=footprint.crs if footprint else "EPSG:4326",
+        declared_hazard=item.declared_hazard,
+        declared_country_code=item.declared_country_code,
+        capture_role=item.capture_role,
+        canonical_url=item.canonical_url,
+        dataset_id=item.dataset_id,
+        license_name=item.license_name,
+        processing_level=item.processing_level,
+        parent_asset_ids=tuple(item.parent_asset_ids),
+        event_id_hint=item.event_id_hint,
     )

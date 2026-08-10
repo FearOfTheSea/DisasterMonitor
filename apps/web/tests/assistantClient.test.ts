@@ -4,6 +4,7 @@ import {
   AssistantApiError,
   AssistantClient,
 } from '@/features/assistant/api/assistantClient';
+import { commonOperationalPicture, multimodalState } from './fixtures/multimodal';
 
 describe('AssistantClient', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -139,6 +140,60 @@ describe('AssistantClient', () => {
       client.ask('Latest earthquake?', null, {
         centerLatitude: 21,
         centerLongitude: 105,
+        zoom: 8,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+  });
+
+  it('accepts provenance-complete multimodal state and its typed COP', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Analytical imagery result.',
+          conversation_id: 'session-mm',
+          model: 'source-backed-agent',
+          response_type: 'current_disaster',
+          multimodal: multimodalState,
+          common_operational_picture: commonOperationalPicture,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Analyze the supplied image.', null, {
+        centerLatitude: 35,
+        centerLongitude: 137,
+        zoom: 8,
+      }),
+    ).resolves.toMatchObject({
+      multimodal: { state_version: 'multimodal-state:fixture' },
+      common_operational_picture: { status: 'current' },
+    });
+  });
+
+  it('rejects a COP whose provenance is absent from multimodal state', async () => {
+    const unsafe = structuredClone(commonOperationalPicture);
+    unsafe.layers[0].features[0].source_asset_ids = ['asset:not-admitted'];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Unsafe analytical result.',
+          conversation_id: 'session-mm',
+          model: 'source-backed-agent',
+          multimodal: multimodalState,
+          common_operational_picture: unsafe,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Analyze the supplied image.', null, {
+        centerLatitude: 35,
+        centerLongitude: 137,
         zoom: 8,
       }),
     ).rejects.toMatchObject({ status: 502 });

@@ -2,6 +2,7 @@
 
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -54,6 +55,9 @@ from disaster_monitor.infrastructure.llm.structured_agent_model import (
 from disaster_monitor.infrastructure.sources.static_source_catalog import (
     StaticSourceCatalog,
 )
+from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
+    OllamaVisionAdapter,
+)
 
 
 def build_language_model(settings: Settings) -> LanguageModel:
@@ -69,6 +73,16 @@ def build_language_model(settings: Settings) -> LanguageModel:
 def build_agent_model(settings: Settings) -> AgentModel:
     """Construct a separate structured-agent abstraction over local Qwen."""
     return StructuredAgentModel(build_language_model(settings))
+
+
+def build_visual_analyzer(settings: Settings) -> VisualAnalyzer:
+    """Construct the lazy local-only visual analysis adapter."""
+    return OllamaVisionAdapter(
+        model_name=settings.ollama_vision_model,
+        base_url=settings.ollama_base_url,
+        timeout_seconds=settings.ollama_vision_timeout_seconds,
+        max_tokens=settings.ollama_vision_max_tokens,
+    )
 
 
 def build_source_catalog(settings: Settings | None = None) -> StaticSourceCatalog:

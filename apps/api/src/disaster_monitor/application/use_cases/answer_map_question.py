@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 from disaster_monitor.application.dto import AssistantAnswer
+from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
@@ -41,11 +42,15 @@ class AnswerMapQuestion:
         question: str,
         conversation_id: str | None = None,
         map_view: MapView | None = None,
+        multimodal_inputs: tuple[AssetAdmissionInput, ...] = (),
     ) -> AssistantAnswer:
         """Return a stable answer while keeping model details behind the port."""
         if self._disaster_agent is not None:
             return await self._disaster_agent.execute(
-                question, conversation_id=conversation_id, map_view=map_view
+                question,
+                conversation_id=conversation_id,
+                map_view=map_view,
+                multimodal_inputs=multimodal_inputs,
             )
         normalized_question = normalize_question(question)
         normalized_conversation_id = normalize_conversation_id(conversation_id)

@@ -29,10 +29,13 @@ cyclone requests are recognized but currently return coverage unavailable becaus
 event-discovery provider for those hazards is registered. ReliefWeb alone cannot verify
 an event and is never treated as an official national total.
 
-Image retrieval, satellite/aerial imagery, raster/vector COP products,
-agent-controlled map layers, CARTO, TerraLabo, and online source crawling are explicitly
-unsupported Phase 4 capabilities. Structured source-candidate metadata can be screened
-into a separate review queue, but it cannot alter this matrix or contribute evidence.
+The API accepts bounded operator-supplied PNG/JPEG bytes with explicit provenance and
+event metadata. Associated images may produce local analytical observations and a
+typed vector COP; this request boundary is not a live provider and does not alter the
+catalog above. Image retrieval, satellite/aerial monitoring, live raster products,
+official-warning overlay providers, CARTO, TerraLabo, and online source crawling remain
+unsupported. Structured source-candidate metadata can be screened into a separate
+review queue, but it cannot alter this matrix or contribute evidence.
 
 ## Extension procedure
 

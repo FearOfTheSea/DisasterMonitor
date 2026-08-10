@@ -7,6 +7,7 @@ from disaster_monitor.domain.errors import (
     InvalidQuestionError,
     ModelResponseError,
     ModelRuntimeError,
+    MultimodalInputError,
 )
 
 
@@ -32,6 +33,12 @@ def register_error_handlers(app: FastAPI) -> None:
                 )
             },
         )
+
+    @app.exception_handler(MultimodalInputError)
+    async def handle_multimodal_input_error(
+        _request: Request, error: MultimodalInputError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(error)})
 
     @app.exception_handler(ModelResponseError)
     async def handle_model_response_error(

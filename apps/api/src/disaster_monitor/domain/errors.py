@@ -11,3 +11,7 @@ class ModelRuntimeError(RuntimeError):
 
 class ModelResponseError(RuntimeError):
     """Raised when the model runtime returns an unusable response."""
+
+
+class MultimodalInputError(ValueError):
+    """Raised when a supplied media payload is malformed or exceeds policy."""

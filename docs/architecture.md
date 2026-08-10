@@ -11,7 +11,7 @@ remains the trusted data plane.
 flowchart LR
     browser["Browser"] --> web["Next.js web app"]
     web --> api["FastAPI API"]
-    api --> ollama["Local Ollama / Qwen"]
+    api --> ollama["Local Ollama / Qwen + Qwen3-VL"]
     api --> jma["JMA JSON feeds"]
     api --> usgs["USGS GeoJSON"]
     api --> reliefweb["ReliefWeb JSON"]
@@ -23,6 +23,8 @@ normalizes a typed hazard and country before provider access. Japan earthquake
 adapters remain the current live scope while capability routing is being expanded;
 other live disaster datasets remain unimplemented. The browser retains the conversation for
 the current tab session; the API does not persist multi-user conversations.
+The assistant API also accepts bounded operator-supplied image bytes with explicit
+metadata. It does not fetch images or contact a satellite/imagery provider.
 
 ## Backend request flow
 
@@ -80,7 +82,8 @@ import FastAPI, Ollama, `httpx`, or Pydantic. Composition selects concrete adapt
 - `AssistantClient` owns HTTP transport and response-shape checks.
 - `useAssistantConversation` owns the user-message / assistant-response workflow, status, and errors.
 - `SessionConversationStore` owns browser `sessionStorage` serialization.
-- `OpenLayersMapAdapter` owns map construction, view conversion, and cleanup.
+- `OpenLayersMapAdapter` owns map construction, view conversion, typed COP rendering,
+  replacement, and cleanup.
 - `AssistantPanel` and `DisasterMap` render state and emit user actions.
 - `app/page.tsx` composes the map, assistant drawer, and current map-view context.
 
@@ -112,11 +115,24 @@ SituationReportProvider
 CountryCatalog
   find_mentions(text) -> tuple[Country, ...]
   contains(Country, latitude, longitude) -> bool
+
+VisualAnalyzer
+  analyze(VisualAnalysisRequest) -> VisualModelPrediction
+  check_readiness() -> VisualModelReadiness
 ```
 
-`OllamaQwenAdapter` implements the model port. JMA, USGS, and ReliefWeb adapters
+`OllamaQwenAdapter` implements the text model port and `OllamaVisionAdapter`
+implements the focused visual port. JMA, USGS, and ReliefWeb adapters
 implement the disaster ports. Tests inject deterministic implementations. No
-speculative ports exist for weather, satellite, geocoding, or remote providers.
+speculative ports exist for weather, satellite retrieval, geocoding, or remote
+providers.
+
+Multimodal assets, metadata-only event associations, analytical visual observations,
+and typed COP layers are described in
+[Multimodal situational awareness](multimodal-awareness.md). These artifacts extend
+the canonical physical-event/EW lineage. They cannot enter `ReportedFact`, and
+analytical geometry cannot take official authority. The transport and browser preserve
+the same discriminators rather than inferring them during rendering.
 
 `ProviderRegistry` holds registrations with role, typed hazard, country scope,
 configuration requirements, and optional selected-event eligibility. `None` country
@@ -185,9 +201,9 @@ The Evidence / World-State release evaluations live under
 uv run --directory apps/api pytest -q tests/evaluation/test_evidence_world_state.py
 ```
 
-The canonical state remains request-scoped. This implementation does not claim a
-persistent event store, continuous monitoring, multimodal evidence, learned causal
-forecasting, or autonomous user-visible hypotheses.
+Canonical EW and multimodal state remain request-scoped. This implementation does not
+claim a persistent event store, continuous monitoring or image retrieval, learned
+causal forecasting, or autonomous user-visible hypotheses.
 
 ## Composition and testing
 

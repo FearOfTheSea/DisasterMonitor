@@ -19,7 +19,7 @@ const welcomeMessage: ConversationMessage = {
   id: 'welcome',
   role: 'assistant',
   content:
-    'Ask about the map, disaster concepts, or supported source-backed investigations. Image, satellite, and agent-controlled map-layer retrieval are not connected.',
+    'Ask about the map, disaster concepts, or supported source-backed investigations. The API can analyze bounded operator-supplied images when explicit event, time, and location metadata is present; automatic imagery retrieval and live satellite monitoring are not connected.',
 };
 
 export function useAssistantConversation() {

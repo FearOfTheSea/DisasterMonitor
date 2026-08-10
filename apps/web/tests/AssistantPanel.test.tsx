@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AssistantPanel } from '@/features/assistant/ui/AssistantPanel';
+import { commonOperationalPicture, multimodalState } from './fixtures/multimodal';
 
 describe('AssistantPanel', () => {
   it('submits a question and renders the conversation', async () => {
@@ -118,6 +119,43 @@ describe('AssistantPanel', () => {
     expect(screen.getByText('Selected the Ishikawa event.')).toBeInTheDocument();
     expect(
       screen.getByText('Trusted disaster-image retrieval is not implemented.'),
+    ).toBeInTheDocument();
+  });
+
+  it('labels visual observations and COP geometry as analytical with provenance', () => {
+    render(
+      <AssistantPanel
+        messages={[
+          {
+            id: 'multimodal-report',
+            role: 'assistant',
+            content: 'Bounded visual analysis completed.',
+            report: {
+              responseType: 'current_disaster',
+              warnings: [],
+              sections: [],
+              sources: [],
+              partial: false,
+              multimodal: multimodalState,
+              commonOperationalPicture,
+            },
+          },
+        ]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Analytical visual evidence' }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Analytical · AI-generated/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Visible damage: major damage/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Licensed operator fixture/).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/Uncertainty: Analytical estimate only/),
     ).toBeInTheDocument();
   });
 });

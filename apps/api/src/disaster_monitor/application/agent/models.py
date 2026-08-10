@@ -19,6 +19,13 @@ from disaster_monitor.domain.disaster import (
     PhysicalEventIdentity,
     SituationReport,
 )
+from disaster_monitor.domain.multimodal import (
+    AssetEventAssociation,
+    CommonOperationalPicture,
+    MultimodalAsset,
+    MultimodalEvidenceState,
+    VisualObservation,
+)
 
 
 class TaskKind(StrEnum):
@@ -176,6 +183,11 @@ class EvidenceWorkspace:
     hypotheses: tuple[HypothesisArtifact, ...] = ()
     evidence_packet: EvidencePacket | None = None
     report: DisasterReport | None = None
+    multimodal_assets: tuple[MultimodalAsset, ...] = ()
+    multimodal_associations: tuple[AssetEventAssociation, ...] = ()
+    visual_observations: tuple[VisualObservation, ...] = ()
+    multimodal_state: MultimodalEvidenceState | None = None
+    common_operational_picture: CommonOperationalPicture | None = None
     source_ids: list[str] = field(default_factory=list)
 
 
@@ -188,6 +200,7 @@ class AgentExecutionState:
     pending_steps: list[str] = field(default_factory=list)
     tool_call_count: int = 0
     model_call_count: int = 0
+    visual_model_call_count: int = 0
     replan_count: int = 0
     warnings: list[str] = field(default_factory=list)
     capability_gaps: list[str] = field(default_factory=list)

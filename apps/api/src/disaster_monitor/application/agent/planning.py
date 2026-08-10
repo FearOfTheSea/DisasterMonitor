@@ -15,6 +15,10 @@ DEFAULT_TOOL_ORDER = (
     "reconcile_disaster_evidence",
     "compose_disaster_answer",
 )
+MULTIMODAL_TOOL_ORDER = (
+    "analyze_multimodal_assets",
+    "build_common_operational_picture",
+)
 
 _BUILTIN_TOOL_PREREQUISITES = {
     "list_sources_for_task": (),
@@ -22,18 +26,32 @@ _BUILTIN_TOOL_PREREQUISITES = {
     "retrieve_situation_evidence": ("find_disaster_event",),
     "reconcile_disaster_evidence": ("retrieve_situation_evidence",),
     "compose_disaster_answer": ("reconcile_disaster_evidence",),
+    "analyze_multimodal_assets": ("reconcile_disaster_evidence",),
+    "build_common_operational_picture": ("analyze_multimodal_assets",),
 }
 
 
-def default_investigation_plan(task: ValidatedDisasterTask) -> InvestigationPlan:
+def default_investigation_plan(
+    task: ValidatedDisasterTask, *, multimodal_assets_available: bool = False
+) -> InvestigationPlan:
     plan_id = str(uuid5(NAMESPACE_URL, f"disaster-monitor:{task.question}"))
-    purposes = (
+    tools = list(DEFAULT_TOOL_ORDER[:-1])
+    purposes = [
         "List suitable maintained sources and coverage gaps.",
         "Find and resolve the requested disaster event.",
         "Retrieve event-correlated situation evidence.",
         "Reconcile normalized evidence and preserve conflicts.",
-        "Compose the requested evidence-backed answer.",
-    )
+    ]
+    if multimodal_assets_available:
+        tools.extend(MULTIMODAL_TOOL_ORDER)
+        purposes.extend(
+            (
+                "Associate and analyze already-admitted multimodal assets.",
+                "Build a validated provenance-bearing operational picture.",
+            )
+        )
+    tools.append(DEFAULT_TOOL_ORDER[-1])
+    purposes.append("Compose the requested evidence-backed answer.")
     steps = tuple(
         PlanStep(
             step_id=f"step-{index}",
@@ -42,18 +60,27 @@ def default_investigation_plan(task: ValidatedDisasterTask) -> InvestigationPlan
             purpose=purposes[index - 1],
             dependencies=() if index == 1 else (f"step-{index - 1}",),
         )
-        for index, name in enumerate(DEFAULT_TOOL_ORDER, start=1)
+        for index, name in enumerate(tools, start=1)
     )
     gaps = []
-    if any(item.value == "images" for item in task.output_modalities):
-        gaps.append("Trusted disaster-image retrieval is not implemented.")
-    if any(item.value == "map" for item in task.output_modalities):
-        gaps.append("Agent-controlled map layers are not implemented.")
+    if not multimodal_assets_available and any(
+        item.value == "images" for item in task.output_modalities
+    ):
+        gaps.append("No admitted disaster image was supplied for visual analysis.")
+    if not multimodal_assets_available and any(
+        item.value == "map" for item in task.output_modalities
+    ):
+        gaps.append(
+            "No qualifying multimodal artifact exists for a generated map layer."
+        )
     return InvestigationPlan(plan_id, task.question, steps, capability_gaps=tuple(gaps))
 
 
 def validate_plan(
-    plan: InvestigationPlan, *, allowed_tools: frozenset[str]
+    plan: InvestigationPlan,
+    *,
+    allowed_tools: frozenset[str],
+    requires_multimodal: bool = False,
 ) -> InvestigationPlan:
     if not plan.steps or len(plan.steps) > min(plan.maximum_steps, 8):
         raise ValueError("The investigation plan has an invalid step count.")
@@ -86,4 +113,12 @@ def validate_plan(
             "The investigation plan has invalid sequencing; trusted disaster plans "
             "must compose a grounded answer."
         )
+    if requires_multimodal and not set(MULTIMODAL_TOOL_ORDER).issubset(seen_tools):
+        raise ValueError(
+            "The investigation plan omitted required bounded multimodal tools."
+        )
+    if "analyze_multimodal_assets" in seen_tools and (
+        "build_common_operational_picture" not in seen_tools
+    ):
+        raise ValueError("Multimodal analysis must finish through the COP safety gate.")
     return plan

@@ -1,3 +1,4 @@
+import base64
 from datetime import UTC, datetime
 
 import httpx
@@ -6,6 +7,10 @@ from conftest import FakeLanguageModel
 
 from disaster_monitor.application.disaster import ProviderBatch
 from disaster_monitor.application.dto import ModelRequest
+from disaster_monitor.application.multimodal import (
+    VisualModelPrediction,
+    VisualModelReadiness,
+)
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -16,6 +21,10 @@ from disaster_monitor.domain.disaster import (
     ReportedFact,
     SituationReport,
     SourceReference,
+)
+from disaster_monitor.domain.multimodal import (
+    DamageLevel,
+    VisualAnalysisConfiguration,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -602,3 +611,136 @@ async def test_invalid_agent_model_output_uses_default_plan_not_general_model() 
     assert general.requests == []
     forbidden = {"reasoning", "prompt", "raw_model_output", "chain_of_thought"}
     assert forbidden.isdisjoint(body["investigation"])
+
+
+@pytest.mark.asyncio
+async def test_operator_image_crosses_real_http_boundary_into_typed_cop() -> None:
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+        "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+
+    class FakeVisualAnalyzer:
+        calls = 0
+
+        async def analyze(self, request):
+            self.calls += 1
+            return VisualModelPrediction(
+                damage_level=DamageLevel.MAJOR_DAMAGE,
+                damage_confidence=0.86,
+                damage_cues=("collapsed roof",),
+                answer="major structural damage is visible",
+                answerable=True,
+                answer_confidence=0.81,
+                answer_cues=("roof discontinuity",),
+                configuration=VisualAnalysisConfiguration(
+                    model_id="fake-vlm",
+                    model_digest="fixture-digest",
+                    adapter_version="fake-adapter-v1",
+                    analysis_version="bounded-damage-vqa-v1",
+                    prompt_version="dm-visual-analysis-v1",
+                    preprocessing_version="original-png-jpeg-bytes-v1",
+                    temperature=0,
+                    seed=7,
+                ),
+            )
+
+        async def check_readiness(self):
+            return VisualModelReadiness(
+                True,
+                True,
+                "fake-vlm",
+                "fixture-digest",
+                "fake-adapter-v1",
+                "dm-visual-analysis-v1",
+                "original-png-jpeg-bytes-v1",
+            )
+
+    visual = FakeVisualAnalyzer()
+    model = FakeLanguageModel(error=AssertionError("general model must not be called"))
+    app = create_app(
+        model=model,
+        current_disaster_report=build_current_service(),
+        visual_analyzer=visual,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={
+                "question": (
+                    "Analyze this image and map visible damage for the August 5, "
+                    "2026 earthquake in Japan."
+                ),
+                "multimodal_assets": [
+                    {
+                        "content_base64": base64.b64encode(png).decode("ascii"),
+                        "attribution": "Licensed operator test fixture",
+                        "captured_at": "2026-08-05T11:00:00Z",
+                        "footprint": {
+                            "crs": "EPSG:4326",
+                            "coordinates": [
+                                [
+                                    [136.8, 36.8],
+                                    [137.2, 36.8],
+                                    [137.2, 37.2],
+                                    [136.8, 37.2],
+                                    [136.8, 36.8],
+                                ]
+                            ],
+                        },
+                        "declared_hazard": "earthquake",
+                        "declared_country_code": "JPN",
+                        "capture_role": "post_event",
+                        "dataset_id": "http-integration-fixture",
+                        "license_name": "fixture-only",
+                        "processing_level": "raw",
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert visual.calls == 1
+    assert body["multimodal"]["evidence_world_state_version"]
+    assert body["multimodal"]["observations"][0]["truth_status"] == "analytical"
+    assert body["multimodal"]["assets"][0]["source"]["attribution"] == (
+        "Licensed operator test fixture"
+    )
+    assert "content_base64" not in response.text
+    cop = body["common_operational_picture"]
+    assert cop["multimodal_state_version"] == body["multimodal"]["state_version"]
+    feature = cop["layers"][0]["features"][0]
+    assert feature["feature_type"] == "analytical"
+    assert feature["authority"] == "analytical_generated"
+    assert feature["source_asset_ids"] == [body["multimodal"]["assets"][0]["asset_id"]]
+    assert feature["visual_observation_ids"]
+    assert feature["uncertainty"]
+
+
+@pytest.mark.asyncio
+async def test_invalid_inline_image_encoding_is_rejected_before_investigation() -> None:
+    model = FakeLanguageModel(error=AssertionError("model must not be called"))
+    app = create_app(model=model, current_disaster_report=build_current_service())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={
+                "question": CURRENT_PROMPT,
+                "multimodal_assets": [
+                    {
+                        "content_base64": "%%%not-base64%%%",
+                        "attribution": "Invalid fixture",
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Multimodal asset content must be valid base64."
+    )

@@ -9,7 +9,11 @@ from disaster_monitor.application.agent.models import (
 )
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
+from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.services.multimodal_asset_admission import (
+    MultimodalAssetAdmissionService,
+)
 from disaster_monitor.application.services.prompt_preparation import (
     clean_model_text,
     normalize_conversation_id,
@@ -22,20 +26,34 @@ from disaster_monitor.domain.models import MapQuestion, MapView
 
 class RunDisasterAgent:
     def __init__(
-        self, runtime: DisasterAgentRuntime, general_model: LanguageModel
+        self,
+        runtime: DisasterAgentRuntime,
+        general_model: LanguageModel,
+        asset_admission: MultimodalAssetAdmissionService | None = None,
     ) -> None:
         self._runtime = runtime
         self._general_model = general_model
+        self._asset_admission = asset_admission
 
     async def execute(
         self,
         question: str,
         conversation_id: str | None = None,
         map_view: MapView | None = None,
+        multimodal_inputs: tuple[AssetAdmissionInput, ...] = (),
     ) -> AssistantAnswer:
         normalized = normalize_question(question)
         conversation = normalize_conversation_id(conversation_id)
-        state = await self._runtime.run(normalized)
+        assets = (
+            self._asset_admission.admit_many(multimodal_inputs)
+            if multimodal_inputs and self._asset_admission is not None
+            else ()
+        )
+        state = (
+            await self._runtime.run(normalized, multimodal_assets=assets)
+            if assets
+            else await self._runtime.run(normalized)
+        )
         if state.task.kind in {TaskKind.NON_DISASTER, TaskKind.GENERAL_KNOWLEDGE}:
             return await self._general_answer(normalized, conversation, map_view)
         report = state.workspace.report
@@ -66,6 +84,8 @@ class RunDisasterAgent:
             sections=report.sections,
             partial=report.partial,
             investigation=_summary(state),
+            multimodal_state=state.workspace.multimodal_state,
+            common_operational_picture=state.workspace.common_operational_picture,
         )
 
     async def _general_answer(

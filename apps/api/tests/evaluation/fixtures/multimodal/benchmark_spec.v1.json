@@ -1,0 +1,73 @@
+{
+  "specification_version": "dm-mm-release-v1",
+  "status": "awaiting_licensed_external_assets",
+  "held_out_release_policy": {
+    "split": "held_out",
+    "prompt_version": "dm-visual-analysis-v1",
+    "preprocessing_version": "original-png-jpeg-bytes-v1",
+    "class_mapping": ["no_visible_damage", "minor_damage", "major_damage", "destroyed"],
+    "frozen_baseline": {
+      "name": "constant-no-visible-damage-v1",
+      "prediction": "no_visible_damage",
+      "minimum_absolute_macro_f1_improvement": 0.05
+    },
+    "selection_rule": "Samples are frozen by exact external dataset sample ID in an out-of-Git locked manifest before model or prompt tuning. Development samples must use a different split and IDs."
+  },
+  "dataset_families": [
+    {
+      "family": "xBD",
+      "dataset_version": "xView2 full release",
+      "required_tasks": ["damage_classification"],
+      "source": "https://xview2.org/dataset",
+      "license_notes": "Registration and acceptance of the dataset terms are required. The complete dataset is intentionally not downloaded or committed by ordinary tests.",
+      "sample_selection_status": "blocked_pending_registered_download_and_blind_curation"
+    },
+    {
+      "family": "FloodNet",
+      "dataset_version": "EARTHVISION-2021 Track 1 and Track 2",
+      "required_tasks": ["damage_classification", "visual_question_answering"],
+      "source": "https://github.com/BinaLab/FloodNet-Challenge-EARTHVISION2021",
+      "license_notes": "Use the official challenge download and retain its supplied license/attribution metadata outside Git.",
+      "sample_selection_status": "blocked_pending_external_download_and_blind_curation"
+    },
+    {
+      "family": "DisasterInsight",
+      "dataset_version": "arXiv:2601.18493v1",
+      "required_tasks": ["damage_classification"],
+      "source": "https://arxiv.org/abs/2601.18493",
+      "license_notes": "The paper defines the benchmark; no authoritative public release location or data license was found during implementation. Do not substitute an unofficial mirror.",
+      "sample_selection_status": "blocked_pending_authoritative_dataset_release_and_license"
+    },
+    {
+      "family": "DM-held-out",
+      "dataset_version": "dm-visual-safety-v1",
+      "required_tasks": ["visual_question_answering", "abstention", "prohibited_claim_safety"],
+      "source": "operator-curated licensed disaster imagery",
+      "license_notes": "Images and labels remain outside Git; the locked manifest must retain exact IDs, checksums, source, capture metadata, and license identity.",
+      "sample_selection_status": "blocked_pending_human_curation_and_holdout_freeze"
+    }
+  ],
+  "required_locked_manifest_fields": [
+    "sample_id",
+    "dataset_family",
+    "dataset_version",
+    "split",
+    "task",
+    "relative_path",
+    "sha256",
+    "expected_damage_or_answer",
+    "source_id",
+    "captured_at",
+    "footprint",
+    "expected_association",
+    "expected_geography_match",
+    "expected_time_match",
+    "license_or_dataset_identity"
+  ],
+  "full_gate_coverage": {
+    "damage_classes": ["no_visible_damage", "minor_damage", "major_damage", "destroyed"],
+    "vqa_case_types": ["answerable", "unanswerable", "prohibited"],
+    "association_statuses": ["associated", "ambiguous", "unmatched", "orphaned"],
+    "note": "The locked manifest must contain every category before the real model is invoked. Association-only cases may reuse immutable image bytes with adversarial metadata, but require distinct exact case IDs."
+  }
+}

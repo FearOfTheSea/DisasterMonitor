@@ -4,6 +4,11 @@ import type {
   AssistantResponse,
   MapView,
 } from '@/shared/types/assistant';
+import {
+  copMatchesMultimodalState,
+  isCommonOperationalPicture,
+  isMultimodalEvidenceState,
+} from '@/shared/validation/multimodal';
 
 export class AssistantApiError extends Error {
   constructor(
@@ -99,6 +104,26 @@ export class AssistantClient {
       ) {
         return false;
       }
+      const multimodal = item.multimodal;
+      const cop = item.common_operational_picture;
+      if (
+        multimodal !== undefined &&
+        multimodal !== null &&
+        !isMultimodalEvidenceState(multimodal)
+      ) {
+        return false;
+      }
+      if (cop !== undefined && cop !== null && !isCommonOperationalPicture(cop)) {
+        return false;
+      }
+      if (
+        cop !== undefined &&
+        cop !== null &&
+        (!isMultimodalEvidenceState(multimodal) ||
+          !copMatchesMultimodalState(cop, multimodal))
+      ) {
+        return false;
+      }
       return true;
     }
     return false;
@@ -176,5 +201,7 @@ export function toAssistantReport(
     sections: response.sections ?? [],
     partial: response.partial ?? false,
     investigation: response.investigation,
+    multimodal: response.multimodal ?? undefined,
+    commonOperationalPicture: response.common_operational_picture ?? undefined,
   };
 }
