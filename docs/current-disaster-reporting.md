@@ -4,6 +4,10 @@ The agent-first assistant has a deterministic current-disaster path for recogniz
 hazard and country requests. A `DisasterQueryParser` resolves exact hazard aliases and
 a packaged country catalog before source-backed tool execution:
 
+See [Capability and promotion status](capability-status.md) for the authoritative
+distinction between this implemented path, passing automated gates, and normative
+promotion evidence.
+
 > There was a recent earthquake in Japan. Please update me with the latest information about the damages in Japan.
 
 The flow is:
@@ -50,17 +54,20 @@ The flow is:
    uncertainty-marked, and critical assessments require human review or escalation.
    The assessment and decision do not create facts or external operational authority.
 10. For an explicit decision-support information need, derive a deterministic advisory
-    artifact from that same EW, priority, and triage lineage. Verified facts, estimates,
-    assumptions, contradictions, evidence gaps, and analytical options remain separate.
+    artifact from that same EW, priority, and triage lineage. Confirmed facts,
+    preliminary observations, source estimates, disputed observations, Disaster
+    Monitor's inferred estimates, assumptions, contradictions, evidence gaps, and
+    analytical options remain machine-distinct.
     Every option identifies its support, trade-offs, uncertainty, human-approval state,
     and prohibited public-warning, evacuation, and resource-order actions. Fabricated
     current facts or omitted material contradictions reject the artifact and leave the
     deterministic evidence report in place. Paired counterfactual scenarios reuse the
     calibrated human-impact hypothesis, expose assumption sensitivity and evidence
     gaps, and retain the same closed policy constraints. A bounded internal monitoring
-    recommendation is available only when its leading premise has current fact lineage
-    and triage does not require human intervention; unresolved premises disable that
-    layer. The bounded autonomy controller may apply only that selected option when it
+    recommendation is available only when its leading premise has current confirmed
+    fact lineage and triage does not require human intervention; preliminary,
+    source-estimated, disputed, stale, or unresolved premises disable that layer. The
+    bounded autonomy controller may apply only that selected option when it
     is a reversible low/moderate-consequence internal state change. The request-scoped
     final state and termination reason are inspectable. A prohibited public warning,
     evacuation directive, resource order, unselected option, or authority mismatch
@@ -83,9 +90,13 @@ The flow is:
     exposes status, artifact identity, provenance, checklist, bounded rationale, and
     termination reason without specialist scratch work or chain-of-thought. The first
     highlighted analytical follow-up uses the governed
-    `analytical-tuning:v3-governed` parameter set. It builds on the CL-A offline and CL-B
-    drift releases, improves three locked analytical benchmark families, and preserves
-    repeated-run, historical, shifted, grounding, and critical-safety guardrails.
+    `analytical-tuning:v3-governed` parameter set under release
+    `analytical-tuning-release:v3-governed`. Continuous signals are normalized counts
+    from decision gaps, conflicting claim families, and multimodal review units—not
+    presence booleans. The checksum-bound automated release changes three
+    production-derived attenuated regimes and preserves repeated-run, repository
+    regression/shift, grounding, critical-safety, sufficiency, and termination
+    guardrails.
     The weights affect display priority only; they cannot change the checklist, facts,
     source authority, permissions, safety thresholds, termination, or actions.
 12. When the request contains admitted image bytes, associate each asset to the selected
@@ -108,6 +119,9 @@ source IDs, evidence count, gaps, and termination status; they never expose hidd
 reasoning, prompts, raw model/provider output, secrets, or stack traces.
 The same metadata includes priority, score, internal triage action, autonomy mode, and
 whether human intervention is required. These are policy outcomes, not model reasoning.
+The machine-readable decision-support response and browser presentation preserve source
+epistemic type separately from Disaster Monitor's inferred estimate. Coordination
+metadata includes both the analytical parameter-set ID and approved release ID.
 
 ## Implemented providers
 
@@ -220,6 +234,11 @@ coverage matrix, event-conditioned selection, source-policy mutations, provider 
 episodes, revision and missing-value outcomes, and adversarial source-candidate cases.
 It is collected by the normal backend test command and therefore runs in CI.
 
+These SI-A–SI-C tests are the normative promotion protocol for the bounded approved-
+source runtime and currently pass. They do not approve candidate sources; candidate
+trust promotion remains human-only. See
+[Capability and promotion status](capability-status.md).
+
 Candidate assessment consumes structured metadata only. `SourceScout` infers supported
 roles, screens unsafe or misleading identities, and writes records to a candidate-only
 store. Those records cannot enter the trusted catalog or disaster evidence types, and a
@@ -243,6 +262,10 @@ baseline. Fault-injection regressions prove detection of cross-event merging,
 destructive history replacement, missing-as-zero conversion, miscalibration, and
 hypothesis promotion into observed products.
 
+This is automated/synthetic gate evidence. Normative EW promotion remains pending
+locked external historical provenance and independently adjudicated hidden outcomes;
+see [Capability and promotion status](capability-status.md).
+
 Multimodal analytical state is a separate versioned extension whose observations
 cannot overwrite those claim histories. See
 [Multimodal situational awareness](multimodal-awareness.md) for the exact input,
@@ -251,8 +274,10 @@ association, model, COP, evaluation, and pending-gate boundaries.
 The initial hypothesis rule is deliberately narrow and deterministic. It evaluates a
 material-human-impact proposition from fresh numeric fatality, injury, and missing-
 person observations. It does not retrieve data, forecast future impacts, use Ollama,
-or appear in the API report. EW state is request-scoped; persistence, continuous
-monitoring, multimodal state, and learned causal reasoning remain future work.
+or enter verified-fact rendering. For an explicit decision-support request, it is
+projected as a typed inferred estimate with public rationale rules. EW state is
+request-scoped; persistence, continuous monitoring, and learned causal reasoning remain
+future work. Bounded request-scoped multimodal state is implemented separately.
 
 ## Optional live-provider smoke test
 

@@ -2,7 +2,8 @@
 
 Disaster Monitor is a local-first MVP for exploring a basic interactive map and
 asking a locally running Qwen model map or disaster-monitoring questions. It also
-has a bounded, source-backed current-earthquake reporting workflow for Japan.
+has a bounded, source-backed current-earthquake reporting workflow for the packaged
+country catalog, with national situation coverage for Japan.
 
 Assistant requests enter a bounded agent-first control plane. Current facts are
 composed only from normalized trusted-source evidence; local Qwen interpretation and
@@ -23,6 +24,8 @@ planning cannot create providers, countries, URLs, or facts. See
   ReliefWeb situation reports behind focused provider ports.
 - Source-attributed report sections, conflict/partial/stale warnings, and
   clickable source metadata in the assistant drawer.
+- Evidence-bounded triage, decision support, typed specialist coordination, and
+  governed analytical follow-up ordering with closed authority and rollback.
 - Deterministic request normalization, prompt preparation, and provider-error translation.
 - Unit, HTTP integration, component, adapter, and deterministic Playwright system tests.
 
@@ -34,13 +37,17 @@ for the implemented flow and limitations.
 The multimodal boundary and its still-pending external benchmark/human gates are
 documented in
 [docs/multimodal-awareness.md](docs/multimodal-awareness.md).
+Implementation and automated-test success are not treated as normative release
+evidence. The authoritative family-by-family status, missing external/human evidence,
+and fail-closed supply procedures are in
+[docs/capability-status.md](docs/capability-status.md).
 
 ## Deferred capabilities
 
 Live weather, geocoding, satellite catalogs and imagery retrieval, flood providers, broad
 news aggregation, remote model providers, paid map services, authentication,
 queues, background workers, cloud deployment, multi-user persistence, and
-advanced analytics are intentionally deferred.
+unbounded predictive or consequential analytics are intentionally deferred.
 
 ## Repository layout
 

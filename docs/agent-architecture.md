@@ -4,6 +4,9 @@ Disaster Monitor follows **LLM-first orchestration, evidence-first truth**. The 
 agent model may interpret intent and propose a bounded plan. Deterministic validation,
 allowlisted tools, provider capabilities, and normalized evidence alone establish
 current facts.
+The implementation/evaluation distinction and normative promotion status for every
+capability family are authoritative in
+[Capability and promotion status](capability-status.md).
 
 ```mermaid
 flowchart TD
@@ -59,9 +62,12 @@ assessments require human-on-the-loop review; critical assessments always use
 human-in-the-loop escalation. Incident suppression is not an available action. The
 policy's rollback mode routes every otherwise eligible decision to human review.
 An explicit decision-support request additionally creates a typed
-`DecisionSupportArtifact`. The deterministic generator separates verified facts,
-hypothesis-backed estimates, assumptions, contradictions, gaps, and analytical
-options. Every option carries complete lineage, trade-offs, uncertainty, and closed
+`DecisionSupportArtifact`. The deterministic generator maps confirmed source evidence
+to `verified_fact`, preserves preliminary, source-estimated, and disputed observations
+under distinct statement types, and keeps Disaster Monitor's hypothesis-backed
+`estimate` explicitly inferred. Assumptions, contradictions, gaps, and analytical
+options remain separate. Only confirmed facts are eligible recommendation premises.
+Every option carries complete lineage, trade-offs, uncertainty, and closed
 authority constraints. Unsupported facts or an omitted material conflict reject the
 artifact; public warnings, evacuation directives, and resource-allocation orders are
 always prohibited. Paired human-impact counterfactuals reuse the calibrated EW
@@ -102,8 +108,8 @@ supervision ID, status, required/missing keys, evidence IDs, final templated rat
 and termination reason are user-inspectable; prompts, scratch work, and chain-of-thought
 are neither stored nor returned.
 
-The supervisor's first analytical follow-up focus is the only learned production
-parameter at CL-A. `OfflineTrajectoryLearner` selects bounded focus weights on locked
+The supervisor's analytical follow-up ranker is the only learned production surface.
+`OfflineTrajectoryLearner` selects bounded focus weights on locked
 train/dev partitions and evaluates once on the locked test partition. Release requires
 a significant paired task improvement, no critical-safety regression, and at most a
 0.5 percentage-point grounding regression. Dataset/provenance identities and partition
@@ -121,13 +127,19 @@ damaged critical baseline retains the prior `analytical-tuning:v1` parameters in
 non-adaptive safe mode.
 
 Governed autonomous optimization can change only the bounded, reversible
-`attenuated_signal_boost` analytical parameter. Release requires improvements on at
-least three independent benchmark families while repeated-run, task, grounding, and
-critical-safety guardrails remain unchanged or improve. The release artifact records
-the proposal, targets, metrics, provenance, decision, and rollback. Attempts to change
+`attenuated_signal_boost` analytical parameter. Production signals are normalized
+counts derived from canonical decision gaps, conflicting claim families, and
+multimodal review units. Release requires a changed reachable production behavior,
+full benchmark-regime coverage by production-derived cases, improvements on at least
+three independent families, and non-regressing production/repeated-run/task/grounding/
+critical-safety guardrails. The checksum-bound approved release records the proposal,
+benchmark artifact, prior and released parameters, production effects, and rollback;
+its ID is exposed with supervisor output. Attempts to change
 the trust registry, permissions, safety thresholds, high-consequence authority, or any
 non-allowlisted analytical field are rejected and restore the prior state. The current
-approved set is `analytical-tuning:v3-governed`.
+automated fixture release is `analytical-tuning-release:v3-governed` with parameter set
+`analytical-tuning:v3-governed`. Normative operational CL promotion remains pending
+real historical trajectories and genuine reviewer corrections.
 
 Current answers are composed by application code from `EvidencePacket`. Focused
 casualty answers include event identity, source, freshness, conflict, and explicit
@@ -204,5 +216,11 @@ gates, rejected-candidate rollback, and the closed non-authority parameter schem
 CL-B measures seeded drift recall across five shift families, shifted/historical
 performance, authority separation, and non-adaptive safe mode under severe missed drift
 or critical baseline damage. CL-C measures independent-family improvement, pass^8,
-backward task/grounding/safety guardrails, the explicit reversible allowlist, and atomic
-rollback for protected or unsafe self-change proposals.
+production reachability and effect, backward task/grounding/safety guardrails, the
+explicit reversible allowlist, and atomic rollback for protected, unreachable,
+production-regressing, or unsafe self-change proposals.
+
+All named suites above currently pass their repository fixtures. That statement means
+automated/synthetic gate passing only unless
+[Capability and promotion status](capability-status.md) explicitly records normative
+promotion as passed.

@@ -69,6 +69,10 @@ remains available and the investigation records the gap.
 
 ## Evaluation layers and current status
 
+This section records both passing automated harnesses and pending normative evidence.
+The cross-family vocabulary is defined in
+[Capability and promotion status](capability-status.md).
+
 The fast deterministic MM safety gate is collected by normal backend tests:
 
 ```powershell
@@ -115,8 +119,8 @@ The repository does not contain the licensed benchmark files or a completed lock
 selection. xBD requires its dataset access process; FloodNet must come from its
 official challenge release; an authoritative public DisasterInsight data release and
 license have not been identified. The full MM-A/MM-B performance gate is therefore
-pending, even though the real local adapter is installed and has passed an integration
-smoke test.
+pending. The adapter implementation and automated transport/safety tests do not
+substitute for licensed benchmark inference results.
 
 MM-C additionally requires legitimate expert/operator results. The frozen protocol is
 `operator_study_protocol.v1.json`: six or more study-local participant codes, paired
@@ -139,4 +143,6 @@ exist. Automated harness tests cannot satisfy it.
 There is no automatic image retrieval, continuous satellite/aerial monitoring, live
 raster service, imagery provider, official-warning overlay provider, arbitrary map
 publication, OCR pipeline, persistent multimodal database, background worker, hosted
-vision model, decision support, triage, or operational instruction generation.
+vision model, or operational instruction generation. Triage and advisory decision
+support are implemented over canonical evidence, but visual observations remain
+analytical inputs and cannot become source facts or authorize consequential action.

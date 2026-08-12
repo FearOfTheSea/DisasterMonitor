@@ -4,6 +4,9 @@ The assistant is agent-first. See [Agent architecture](agent-architecture.md) fo
 structured interpretation, deterministic validation, bounded tools, the evidence
 workspace, safe action logs, and Phase 4 exclusions. The provider architecture below
 remains the trusted data plane.
+See [Capability and promotion status](capability-status.md) for the exact distinction
+between implemented paths, passing automated fixtures, normative promotion, and
+intentionally unsupported capabilities.
 
 ## System context
 
@@ -19,10 +22,11 @@ flowchart LR
 ```
 
 OpenStreetMap is used only for the basic base map. The current-disaster workflow
-normalizes a typed hazard and country before provider access. Japan earthquake
-adapters remain the current live scope while capability routing is being expanded;
-other live disaster datasets remain unimplemented. The browser retains the conversation for
-the current tab session; the API does not persist multi-user conversations.
+normalizes a typed hazard and country before provider access. Earthquake event discovery
+is live for the packaged country catalog; national situation coverage remains specific
+to Japan. Other live disaster datasets remain unimplemented. The browser retains the
+conversation for the current tab session; the API does not persist multi-user
+conversations.
 The assistant API also accepts bounded operator-supplied image bytes with explicit
 metadata. It does not fetch images or contact a satellite/imagery provider.
 
@@ -175,6 +179,12 @@ truth type, deterministic key, probability, evidence references, state version,
 evaluation time, and public rule features. It cannot enter `EvidencePacket.facts`, and
 the current API/report renderer does not display hypotheses as verified facts.
 
+Decision support projects confirmed source observations as `verified_fact`, while
+preliminary, source-estimated, and disputed observations keep distinct machine types.
+Disaster Monitor's own probability remains an `estimate` typed as inferred. Only
+confirmed facts can become premises of an available recommendation. The HTTP and
+browser boundaries validate the same status/type mapping and reject promotion.
+
 ## Dependency direction
 
 ```mermaid
@@ -200,6 +210,10 @@ The Evidence / World-State release evaluations live under
 ```powershell
 uv run --directory apps/api pytest -q tests/evaluation/test_evidence_world_state.py
 ```
+
+Passing this repository gate is automated/synthetic evidence. Normative EW promotion
+is pending the locked external historical provenance and adjudicated hidden outcomes
+specified in [Capability and promotion status](capability-status.md).
 
 Canonical EW and multimodal state remain request-scoped. This implementation does not
 claim a persistent event store, continuous monitoring or image retrieval, learned

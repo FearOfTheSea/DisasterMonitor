@@ -1,5 +1,9 @@
 # Migration report
 
+This is a historical migration snapshot, not current capability or release evidence.
+Its command outputs and dependency findings describe the original migration run. See
+[Capability and promotion status](capability-status.md) for the audited current state.
+
 ## Sources inspected
 
 - `.migration-sources/Disaster-monitor-be-main/Disaster-monitor-be-main/`
@@ -31,6 +35,9 @@ The API keeps only browser-session conversation continuity. Server-side persiste
 
 ## Checks actually executed
 
+The counts below are intentionally preserved as historical evidence and must not be
+read as current test totals.
+
 - Backend formatting: `uv run ruff format --check src tests` passed in `apps/api` (27 files already formatted).
 - Backend lint: `uv run ruff check src tests` passed in `apps/api`.
 - Backend type check: `uv run mypy` passed in `apps/api`.
@@ -46,6 +53,9 @@ The API keeps only browser-session conversation continuity. Server-side persiste
 - Secret/generated-file audit: staged-content review and repository scans found no committed credentials or generated runtime artifacts.
 
 ## Checks not run and limitations
+
+The limitations below are also historical. Current Docker, dependency-audit, and gate
+results belong in the current verification record, not this migration snapshot.
 
 - Compose validation was not run because Docker Desktop / the `docker` command is not installed in this environment. The Compose file and Dockerfiles are included but were not claimed as runtime-tested.
 - OpenStreetMap tile availability was not treated as a CI dependency; browser tests verify the application flow without asserting remote tile content.
