@@ -246,6 +246,103 @@ describe('AssistantClient', () => {
     ).rejects.toMatchObject({ status: 502 });
   });
 
+  it('accepts decision evidence without promoting uncertain source status', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Bounded decision support.',
+          conversation_id: 'session-ds',
+          model: 'source-backed-agent',
+          response_type: 'current_disaster',
+          decision_support: {
+            artifact_id: 'decision-support:fixture',
+            evidence_state_version: 'evidence-state:fixture',
+            facts: [
+              {
+                fact_id: 'decision-fact:preliminary',
+                statement: 'Injuries are preliminarily reported.',
+                evidence_ids: ['observation:preliminary'],
+                source_ids: ['source:fixture'],
+                status: 'preliminary',
+                statement_type: 'preliminary_observation',
+              },
+            ],
+            estimates: [
+              {
+                estimate_id: 'decision-estimate:fixture',
+                proposition: 'Material human impact is likely.',
+                probability: 0.75,
+                supporting_evidence_ids: ['observation:preliminary'],
+                contradicting_evidence_ids: [],
+                uncertain_evidence_ids: ['observation:preliminary'],
+                rationale_rule_ids: ['hypothesis:status_weight:preliminary:+0.250'],
+                statement_type: 'estimate',
+              },
+            ],
+            scenario_mode: 'material_human_impact',
+            recommendation_status: 'unavailable',
+            advisory_only: true,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('What decisions are supported?', null, {
+        centerLatitude: 21,
+        centerLongitude: 105,
+        zoom: 8,
+      }),
+    ).resolves.toMatchObject({
+      decision_support: {
+        facts: [{ statement_type: 'preliminary_observation' }],
+        estimates: [{ statement_type: 'estimate' }],
+      },
+    });
+  });
+
+  it('rejects a preliminary source observation relabeled as verified fact', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Unsafe epistemic promotion.',
+          conversation_id: 'session-ds',
+          model: 'source-backed-agent',
+          decision_support: {
+            artifact_id: 'decision-support:fixture',
+            evidence_state_version: 'evidence-state:fixture',
+            facts: [
+              {
+                fact_id: 'decision-fact:preliminary',
+                statement: 'Injuries are preliminarily reported.',
+                evidence_ids: ['observation:preliminary'],
+                source_ids: ['source:fixture'],
+                status: 'preliminary',
+                statement_type: 'verified_fact',
+              },
+            ],
+            estimates: [],
+            scenario_mode: 'insufficient_evidence',
+            recommendation_status: 'unavailable',
+            advisory_only: true,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('What decisions are supported?', null, {
+        centerLatitude: 21,
+        centerLongitude: 105,
+        zoom: 8,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+  });
+
   it('accepts provenance-complete multimodal state and its typed COP', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

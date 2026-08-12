@@ -35,6 +35,7 @@ export type AssistantResponse = {
   sections?: ReportSection[];
   partial?: boolean;
   investigation?: InvestigationSummary;
+  decision_support?: DecisionSupportArtifact | null;
   multimodal?: MultimodalEvidenceState | null;
   common_operational_picture?: CommonOperationalPicture | null;
 };
@@ -108,6 +109,42 @@ export type ReportSection = {
   content: string;
 };
 
+export type DecisionFactStatementType =
+  | 'verified_fact'
+  | 'preliminary_observation'
+  | 'source_estimate'
+  | 'disputed_observation';
+
+export type DecisionFact = {
+  fact_id: string;
+  statement: string;
+  evidence_ids: string[];
+  source_ids: string[];
+  status: string;
+  statement_type: DecisionFactStatementType;
+};
+
+export type DecisionEstimate = {
+  estimate_id: string;
+  proposition: string;
+  probability: number;
+  supporting_evidence_ids: string[];
+  contradicting_evidence_ids: string[];
+  uncertain_evidence_ids: string[];
+  rationale_rule_ids: string[];
+  statement_type: 'estimate';
+};
+
+export type DecisionSupportArtifact = {
+  artifact_id: string;
+  evidence_state_version: string;
+  facts: DecisionFact[];
+  estimates: DecisionEstimate[];
+  scenario_mode: string;
+  recommendation_status: string;
+  advisory_only: true;
+};
+
 export type AssistantReport = {
   responseType: string;
   selectedEvent?: SelectedEvent;
@@ -117,6 +154,7 @@ export type AssistantReport = {
   sections: ReportSection[];
   partial: boolean;
   investigation?: InvestigationSummary;
+  decisionSupport?: DecisionSupportArtifact;
   multimodal?: MultimodalEvidenceState;
   commonOperationalPicture?: CommonOperationalPicture;
 };

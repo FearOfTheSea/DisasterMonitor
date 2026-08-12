@@ -209,4 +209,88 @@ describe('AssistantPanel', () => {
       screen.getByText(/Uncertainty: Analytical estimate only/),
     ).toBeInTheDocument();
   });
+
+  it('keeps source epistemic status distinct from DM analytical estimates', () => {
+    render(
+      <AssistantPanel
+        messages={[
+          {
+            id: 'decision-report',
+            role: 'assistant',
+            content: 'Bounded decision support completed.',
+            report: {
+              responseType: 'current_disaster',
+              warnings: [],
+              sections: [],
+              sources: [],
+              partial: false,
+              decisionSupport: {
+                artifact_id: 'decision-support:fixture',
+                evidence_state_version: 'evidence-state:fixture',
+                facts: [
+                  {
+                    fact_id: 'decision-fact:preliminary',
+                    statement: 'Injuries are preliminarily reported.',
+                    evidence_ids: ['observation:preliminary'],
+                    source_ids: ['source:fixture'],
+                    status: 'preliminary',
+                    statement_type: 'preliminary_observation',
+                  },
+                  {
+                    fact_id: 'decision-fact:estimated',
+                    statement: 'A source estimates ten displaced people.',
+                    evidence_ids: ['observation:estimated'],
+                    source_ids: ['source:fixture'],
+                    status: 'estimated',
+                    statement_type: 'source_estimate',
+                  },
+                  {
+                    fact_id: 'decision-fact:disputed',
+                    statement: 'A disruption report is disputed.',
+                    evidence_ids: ['observation:disputed'],
+                    source_ids: ['source:fixture'],
+                    status: 'disputed',
+                    statement_type: 'disputed_observation',
+                  },
+                ],
+                estimates: [
+                  {
+                    estimate_id: 'decision-estimate:fixture',
+                    proposition: 'Material human impact is plausible.',
+                    probability: 0.75,
+                    supporting_evidence_ids: ['observation:preliminary'],
+                    contradicting_evidence_ids: [],
+                    uncertain_evidence_ids: [
+                      'observation:preliminary',
+                      'observation:estimated',
+                      'observation:disputed',
+                    ],
+                    rationale_rule_ids: ['hypothesis:status_weight:preliminary:+0.250'],
+                    statement_type: 'estimate',
+                  },
+                ],
+                scenario_mode: 'material_human_impact',
+                recommendation_status: 'unavailable',
+                advisory_only: true,
+              },
+            },
+          },
+        ]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Decision evidence and estimates' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Preliminary source observation')).toBeInTheDocument();
+    expect(screen.getByText('Source-estimated observation')).toBeInTheDocument();
+    expect(screen.getByText('Disputed source observation')).toBeInTheDocument();
+    expect(screen.getByText('DM analytical estimate')).toBeInTheDocument();
+    expect(screen.getByText('Inferred')).toBeInTheDocument();
+    expect(screen.queryByText('Verified source fact')).not.toBeInTheDocument();
+  });
 });

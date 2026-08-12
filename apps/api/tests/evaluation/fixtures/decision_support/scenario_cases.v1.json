@@ -35,7 +35,7 @@
           "source_id": "national-positive-injuries",
           "hours_ago": 1,
           "facts": [
-            {"category": "injuries", "value": "12 injured", "status": "preliminary"}
+            {"category": "injuries", "value": "12 injured", "status": "confirmed"}
           ]
         }
       ]

@@ -517,6 +517,7 @@ def test_ew_c_release_gate() -> None:
             }
             assert set(hypothesis.supporting_evidence_ids) <= evidence_ids
             assert set(hypothesis.contradicting_evidence_ids) <= evidence_ids
+            assert set(hypothesis.uncertain_evidence_ids) <= evidence_ids
             assert hypothesis.state_version == state.state_version
             assert hypothesis.evaluated_at == state.evaluated_at
             assert hypothesis.rationale_features

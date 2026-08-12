@@ -104,6 +104,13 @@ export class AssistantClient {
       ) {
         return false;
       }
+      if (
+        item.decision_support !== undefined &&
+        item.decision_support !== null &&
+        !this.isDecisionSupport(item.decision_support)
+      ) {
+        return false;
+      }
       const multimodal = item.multimodal;
       const cop = item.common_operational_picture;
       if (
@@ -162,6 +169,65 @@ export class AssistantClient {
         const section = item as Record<string, unknown>;
         return typeof section.title === 'string' && typeof section.content === 'string';
       })
+    );
+  }
+
+  private isDecisionSupport(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const item = value as Record<string, unknown>;
+    const sourceTypeByStatus: Record<string, string> = {
+      source_backed_event: 'verified_fact',
+      confirmed: 'verified_fact',
+      preliminary: 'preliminary_observation',
+      estimated: 'source_estimate',
+      disputed: 'disputed_observation',
+    };
+    const factsValid =
+      Array.isArray(item.facts) &&
+      item.facts.every((value) => {
+        if (!value || typeof value !== 'object') {
+          return false;
+        }
+        const fact = value as Record<string, unknown>;
+        return (
+          typeof fact.fact_id === 'string' &&
+          typeof fact.statement === 'string' &&
+          this.isStringArray(fact.evidence_ids) &&
+          this.isStringArray(fact.source_ids) &&
+          typeof fact.status === 'string' &&
+          fact.statement_type === sourceTypeByStatus[fact.status]
+        );
+      });
+    const estimatesValid =
+      Array.isArray(item.estimates) &&
+      item.estimates.every((value) => {
+        if (!value || typeof value !== 'object') {
+          return false;
+        }
+        const estimate = value as Record<string, unknown>;
+        return (
+          typeof estimate.estimate_id === 'string' &&
+          typeof estimate.proposition === 'string' &&
+          typeof estimate.probability === 'number' &&
+          estimate.probability >= 0 &&
+          estimate.probability <= 1 &&
+          this.isStringArray(estimate.supporting_evidence_ids) &&
+          this.isStringArray(estimate.contradicting_evidence_ids) &&
+          this.isStringArray(estimate.uncertain_evidence_ids) &&
+          this.isStringArray(estimate.rationale_rule_ids) &&
+          estimate.statement_type === 'estimate'
+        );
+      });
+    return (
+      typeof item.artifact_id === 'string' &&
+      typeof item.evidence_state_version === 'string' &&
+      factsValid &&
+      estimatesValid &&
+      typeof item.scenario_mode === 'string' &&
+      typeof item.recommendation_status === 'string' &&
+      item.advisory_only === true
     );
   }
 
@@ -252,6 +318,7 @@ export function toAssistantReport(
     sections: response.sections ?? [],
     partial: response.partial ?? false,
     investigation: response.investigation,
+    decisionSupport: response.decision_support ?? undefined,
     multimodal: response.multimodal ?? undefined,
     commonOperationalPicture: response.common_operational_picture ?? undefined,
   };

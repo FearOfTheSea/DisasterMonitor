@@ -7,6 +7,9 @@ from enum import StrEnum
 
 class DecisionStatementType(StrEnum):
     VERIFIED_FACT = "verified_fact"
+    PRELIMINARY_OBSERVATION = "preliminary_observation"
+    SOURCE_ESTIMATE = "source_estimate"
+    DISPUTED_OBSERVATION = "disputed_observation"
     ESTIMATE = "estimate"
     ASSUMPTION = "assumption"
     OPTION = "option"
@@ -48,6 +51,24 @@ PROHIBITED_CONSEQUENTIAL_ACTIONS = (
     "resource_allocation_order",
 )
 
+_SOURCE_STATUS_STATEMENT_TYPES = {
+    "source_backed_event": DecisionStatementType.VERIFIED_FACT,
+    "confirmed": DecisionStatementType.VERIFIED_FACT,
+    "preliminary": DecisionStatementType.PRELIMINARY_OBSERVATION,
+    "estimated": DecisionStatementType.SOURCE_ESTIMATE,
+    "disputed": DecisionStatementType.DISPUTED_OBSERVATION,
+}
+
+
+def decision_statement_type_for_source_status(
+    status: str,
+) -> DecisionStatementType:
+    """Map admitted source status to its non-promoting DS epistemic type."""
+    try:
+        return _SOURCE_STATUS_STATEMENT_TYPES[status]
+    except KeyError as error:
+        raise ValueError("Decision fact source status is not DS-eligible.") from error
+
 
 @dataclass(frozen=True, slots=True)
 class DecisionFact:
@@ -63,6 +84,12 @@ class DecisionFact:
             raise ValueError("Decision facts require stable identity and content.")
         if not self.evidence_ids or not self.source_ids:
             raise ValueError("Decision facts require evidence and source lineage.")
+        if self.statement_type != decision_statement_type_for_source_status(
+            self.status
+        ):
+            raise ValueError(
+                "Decision fact statement type does not preserve source status."
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +99,8 @@ class DecisionEstimate:
     probability: float
     supporting_evidence_ids: tuple[str, ...]
     contradicting_evidence_ids: tuple[str, ...]
+    uncertain_evidence_ids: tuple[str, ...]
+    rationale_rule_ids: tuple[str, ...]
     statement_type: DecisionStatementType = DecisionStatementType.ESTIMATE
 
     def __post_init__(self) -> None:
@@ -79,6 +108,8 @@ class DecisionEstimate:
             raise ValueError("Decision estimates require stable identity and content.")
         if not 0 <= self.probability <= 1:
             raise ValueError("Decision estimate probability must be bounded.")
+        if not self.rationale_rule_ids:
+            raise ValueError("Decision estimates require visible inference policy.")
 
 
 @dataclass(frozen=True, slots=True)

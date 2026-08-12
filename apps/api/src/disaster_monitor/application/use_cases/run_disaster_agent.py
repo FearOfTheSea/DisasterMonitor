@@ -84,6 +84,7 @@ class RunDisasterAgent:
             sections=report.sections,
             partial=report.partial,
             investigation=_summary(state),
+            decision_support=state.workspace.decision_support,
             multimodal_state=state.workspace.multimodal_state,
             common_operational_picture=state.workspace.common_operational_picture,
         )

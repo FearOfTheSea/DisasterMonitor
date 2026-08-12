@@ -1,0 +1,183 @@
+{
+  "fixture_version": "dm-ds-epistemic-v1",
+  "cases": [
+    {
+      "id": "confirmed-positive",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [{ "category": "injuries", "value": "12", "status": "confirmed" }],
+      "expected_probability": 0.96,
+      "expected_mode": "material_human_impact",
+      "expected_recommendation": "available",
+      "expected_fact_types": { "confirmed": "verified_fact" },
+      "expected_uncertain_statuses": []
+    },
+    {
+      "id": "confirmed-zero",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [{ "category": "injuries", "value": "0", "status": "confirmed" }],
+      "expected_probability": 0.04,
+      "expected_mode": "limited_observed_human_impact",
+      "expected_recommendation": "available",
+      "expected_fact_types": { "confirmed": "verified_fact" },
+      "expected_uncertain_statuses": []
+    },
+    {
+      "id": "preliminary-positive",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [{ "category": "injuries", "value": "12", "status": "preliminary" }],
+      "expected_probability": 0.75,
+      "expected_mode": "material_human_impact",
+      "expected_recommendation": "disabled_unsupported_premise",
+      "expected_fact_types": { "preliminary": "preliminary_observation" },
+      "expected_uncertain_statuses": ["preliminary"]
+    },
+    {
+      "id": "preliminary-zero",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [{ "category": "injuries", "value": "0", "status": "preliminary" }],
+      "expected_probability": 0.25,
+      "expected_mode": "limited_observed_human_impact",
+      "expected_recommendation": "disabled_unsupported_premise",
+      "expected_fact_types": { "preliminary": "preliminary_observation" },
+      "expected_uncertain_statuses": ["preliminary"]
+    },
+    {
+      "id": "source-estimated-positive",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [{ "category": "injuries", "value": "12", "status": "estimated" }],
+      "expected_probability": 0.65,
+      "expected_mode": "unresolved",
+      "expected_recommendation": "disabled_unsupported_premise",
+      "expected_fact_types": { "estimated": "source_estimate" },
+      "expected_uncertain_statuses": ["estimated"]
+    },
+    {
+      "id": "disputed-positive",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [{ "category": "injuries", "value": "12", "status": "disputed" }],
+      "expected_probability": 0.5,
+      "expected_mode": "unresolved",
+      "expected_recommendation": "disabled_unsupported_premise",
+      "expected_fact_types": { "disputed": "disputed_observation" },
+      "expected_uncertain_statuses": ["disputed"]
+    },
+    {
+      "id": "unknown-excluded",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [{ "category": "injuries", "value": "unknown", "status": "unknown" }],
+      "expected_probability": 0.5,
+      "expected_mode": "unresolved",
+      "expected_recommendation": "disabled_unsupported_premise",
+      "expected_fact_types": {},
+      "expected_uncertain_statuses": []
+    },
+    {
+      "id": "confirmed-preliminary-conflict",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "reports": [
+        {
+          "source_id": "confirmed-positive",
+          "hours_ago": 2,
+          "facts": [{ "category": "injuries", "value": "12", "status": "confirmed" }]
+        },
+        {
+          "source_id": "preliminary-zero",
+          "hours_ago": 1,
+          "facts": [{ "category": "injuries", "value": "0", "status": "preliminary" }]
+        }
+      ],
+      "expected_probability": 0.71,
+      "expected_mode": "unresolved",
+      "expected_recommendation": "human_review_required",
+      "expected_fact_types": {
+        "confirmed": "verified_fact",
+        "preliminary": "preliminary_observation"
+      },
+      "expected_uncertain_statuses": ["preliminary"]
+    },
+    {
+      "id": "confirmed-estimated-conflict",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "reports": [
+        {
+          "source_id": "confirmed-positive",
+          "hours_ago": 2,
+          "facts": [{ "category": "injuries", "value": "12", "status": "confirmed" }]
+        },
+        {
+          "source_id": "estimated-zero",
+          "hours_ago": 1,
+          "facts": [{ "category": "injuries", "value": "0", "status": "estimated" }]
+        }
+      ],
+      "expected_probability": 0.81,
+      "expected_mode": "material_human_impact",
+      "expected_recommendation": "human_review_required",
+      "expected_fact_types": {
+        "confirmed": "verified_fact",
+        "estimated": "source_estimate"
+      },
+      "expected_uncertain_statuses": ["estimated"]
+    },
+    {
+      "id": "stale-confirmed-positive",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "reports": [
+        {
+          "source_id": "stale-confirmed",
+          "hours_ago": 30,
+          "facts": [{ "category": "injuries", "value": "12", "status": "confirmed" }]
+        }
+      ],
+      "expected_probability": 0.5,
+      "expected_mode": "unresolved",
+      "expected_recommendation": "human_review_required",
+      "expected_fact_types": { "confirmed": "verified_fact" },
+      "expected_uncertain_statuses": []
+    },
+    {
+      "id": "estimated-only",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [{ "category": "fatalities", "value": "3", "status": "estimated" }],
+      "expected_probability": 0.65,
+      "expected_mode": "unresolved",
+      "expected_recommendation": "human_review_required",
+      "expected_fact_types": { "estimated": "source_estimate" },
+      "expected_uncertain_statuses": ["estimated"]
+    },
+    {
+      "id": "missing-evidence",
+      "hazard": "earthquake",
+      "country_code": "JPN",
+      "magnitude": 4.2,
+      "facts": [],
+      "expected_probability": 0.5,
+      "expected_mode": "unresolved",
+      "expected_recommendation": "disabled_unsupported_premise",
+      "expected_fact_types": {},
+      "expected_uncertain_statuses": []
+    }
+  ]
+}

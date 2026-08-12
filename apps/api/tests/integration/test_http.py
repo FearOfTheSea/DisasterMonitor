@@ -52,6 +52,7 @@ def build_current_service(
     fact_category: str = "buildings",
     fact_label: str = "Buildings damaged",
     fact_value: str = "4",
+    fact_status: FactStatus = FactStatus.CONFIRMED,
 ):
     event_source = SourceReference(
         source_id="fixture-events",
@@ -103,7 +104,7 @@ def build_current_service(
                                 category=fact_category,
                                 label=fact_label,
                                 value=fact_value,
-                                status=FactStatus.CONFIRMED,
+                                status=fact_status,
                                 source=situation_source,
                                 event_id=event.event_id,
                                 claim_id=fact_category,
@@ -619,6 +620,13 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     )
     assert body["investigation"]["coordination_final_rationale"]
     assert body["investigation"]["coordination_evidence_ids"]
+    assert body["decision_support"]["advisory_only"] is True
+    assert body["decision_support"]["facts"]
+    assert all(
+        fact["statement_type"] == "verified_fact"
+        for fact in body["decision_support"]["facts"]
+    )
+    assert body["decision_support"]["estimates"][0]["statement_type"] == "estimate"
     assert body["investigation"]["coordination_analytical_focus"] in {
         "evidence_gaps",
         "material_conflicts",
@@ -628,6 +636,63 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     assert (
         body["investigation"]["coordination_analytical_parameter_set_id"]
         == "analytical-tuning:v3-governed"
+    )
+    assert model.requests == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("fact_status", "expected_statement_type"),
+    (
+        (FactStatus.PRELIMINARY, "preliminary_observation"),
+        (FactStatus.ESTIMATED, "source_estimate"),
+        (FactStatus.DISPUTED, "disputed_observation"),
+    ),
+)
+async def test_decision_support_api_preserves_uncertain_source_status(
+    fact_status: FactStatus,
+    expected_statement_type: str,
+) -> None:
+    model = FakeLanguageModel(error=AssertionError("general model must not be called"))
+    app = create_app(
+        model=model,
+        current_disaster_report=build_current_service(
+            fact_category="injuries",
+            fact_label="Injuries",
+            fact_value="12",
+            fact_status=fact_status,
+        ),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={
+                "question": (
+                    "What decision support options should analysts consider for the "
+                    "current earthquake in Japan?"
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    source_fact = next(
+        fact
+        for fact in body["decision_support"]["facts"]
+        if fact["status"] == fact_status.value
+    )
+    estimate = body["decision_support"]["estimates"][0]
+    assert source_fact["statement_type"] == expected_statement_type
+    assert estimate["statement_type"] == "estimate"
+    assert estimate["uncertain_evidence_ids"] == source_fact["evidence_ids"]
+    decision_section = next(
+        item for item in body["sections"] if item["title"] == "Decision support"
+    )
+    assert (
+        f"[{expected_statement_type}; status={fact_status.value}]"
+        in decision_section["content"]
     )
     assert model.requests == []
 

@@ -18,7 +18,7 @@
       "variants": 20,
       "outcome": 1,
       "reports": [
-        {"id": "injuries-positive", "source_id": "national", "authority": "national_authority", "hours_ago": 1, "facts": [{"claim": "injuries", "value": "12 injured", "status": "preliminary"}]}
+        {"id": "injuries-positive", "source_id": "national", "authority": "national_authority", "hours_ago": 1, "facts": [{"claim": "injuries", "value": "12 injured", "status": "confirmed"}]}
       ]
     },
     {

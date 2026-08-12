@@ -12,6 +12,7 @@ from disaster_monitor.application.services.decision_autonomy import (
 )
 from disaster_monitor.application.services.decision_support import (
     DecisionOptionGenerator,
+    render_decision_support,
     validate_decision_support_artifact,
 )
 from disaster_monitor.application.services.event_resolution import (
@@ -248,6 +249,78 @@ def test_ds_a_release_gate() -> None:
     )
     assert trace_rate == 1.0, ("ds_a.material_trace", trace_rate)
     assert relevance_rate >= 0.90, ("ds_a.option_relevance", relevance_rate)
+
+
+def test_ds_epistemic_status_truth_table_and_hypothesis_policy() -> None:
+    fixture = json.loads(
+        (FIXTURES / "epistemic_status_cases.v1.json").read_text(encoding="utf-8")
+    )
+    assert fixture["fixture_version"] == "dm-ds-epistemic-v1"
+    cases = fixture["cases"]
+    assert isinstance(cases, list) and cases
+
+    for item in cases:
+        state, hypotheses, _priority, _triage, artifact = _products(item)
+        hypothesis = hypotheses[0]
+        expected_fact_types = item["expected_fact_types"]
+        assert isinstance(expected_fact_types, dict)
+        actual_fact_types = {
+            fact.status: fact.statement_type.value
+            for fact in artifact.facts
+            if fact.status != "source_backed_event"
+        }
+        assert actual_fact_types == expected_fact_types, item["id"]
+        assert hypothesis.probability == pytest.approx(
+            float(item["expected_probability"])
+        ), item["id"]
+        assert artifact.scenario_analysis.mode == DecisionScenarioMode(
+            str(item["expected_mode"])
+        )
+        assert (
+            artifact.scenario_analysis.recommendation.status
+            == DecisionRecommendationStatus(str(item["expected_recommendation"]))
+        )
+
+        status_by_evidence_id = {
+            history.observation.observation_id: history.observation.fact.status.value
+            for claim in state.claims
+            for history in claim.history
+        }
+        uncertain_statuses = {
+            status_by_evidence_id[evidence_id]
+            for evidence_id in hypothesis.uncertain_evidence_ids
+        }
+        assert uncertain_statuses == set(item["expected_uncertain_statuses"])
+        assert all(
+            any(status in feature.rule_id for feature in hypothesis.rationale_features)
+            for status in uncertain_statuses
+        )
+
+        rendered = render_decision_support(artifact)
+        for status, statement_type in expected_fact_types.items():
+            assert f"[{statement_type}; status={status}]" in rendered
+        assert "DM analytical estimate [estimate; inferred]" in rendered
+        assert all(
+            estimate.statement_type == DecisionStatementType.ESTIMATE
+            for estimate in artifact.estimates
+        )
+        if "estimated" in expected_fact_types:
+            assert actual_fact_types["estimated"] == "source_estimate"
+            assert artifact.estimates[0].statement_type.value == "estimate"
+
+
+def test_ds_domain_rejects_source_status_promotion_to_verified_fact() -> None:
+    fixture = json.loads(
+        (FIXTURES / "epistemic_status_cases.v1.json").read_text(encoding="utf-8")
+    )
+    cases = fixture["cases"]
+    assert isinstance(cases, list)
+    preliminary = next(item for item in cases if item["id"] == "preliminary-positive")
+    artifact = _products(preliminary)[-1]
+    fact = next(item for item in artifact.facts if item.status == "preliminary")
+
+    with pytest.raises(ValueError, match="preserve source status"):
+        replace(fact, statement_type=DecisionStatementType.VERIFIED_FACT)
 
 
 def test_ds_a_rejects_unsupported_fact_and_omitted_contradiction() -> None:

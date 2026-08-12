@@ -10,6 +10,7 @@ from disaster_monitor.application.dto import ModelReadiness
 from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
+from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.models import MapView
 from disaster_monitor.presentation.http.multimodal_schemas import (
     MultimodalAssetRequest,
@@ -21,6 +22,9 @@ from disaster_monitor.presentation.http.multimodal_serialization import (
 from disaster_monitor.presentation.http.schemas import (
     AssistantRequest,
     AssistantResponse,
+    DecisionEstimateResponse,
+    DecisionFactResponse,
+    DecisionSupportResponse,
     HealthResponse,
     InvestigationResponse,
     ReadinessResponse,
@@ -224,8 +228,47 @@ async def assistant(
         ],
         partial=result.partial,
         investigation=investigation,
+        decision_support=_decision_support_response(result.decision_support),
         multimodal=multimodal_state_response(result.multimodal_state),
         common_operational_picture=cop_response(result.common_operational_picture),
+    )
+
+
+def _decision_support_response(
+    artifact: DecisionSupportArtifact | None,
+) -> DecisionSupportResponse | None:
+    if artifact is None:
+        return None
+    return DecisionSupportResponse(
+        artifact_id=artifact.artifact_id,
+        evidence_state_version=artifact.evidence_state_version,
+        facts=[
+            DecisionFactResponse(
+                fact_id=fact.fact_id,
+                statement=fact.statement,
+                evidence_ids=list(fact.evidence_ids),
+                source_ids=list(fact.source_ids),
+                status=fact.status,
+                statement_type=fact.statement_type.value,
+            )
+            for fact in artifact.facts
+        ],
+        estimates=[
+            DecisionEstimateResponse(
+                estimate_id=estimate.estimate_id,
+                proposition=estimate.proposition,
+                probability=estimate.probability,
+                supporting_evidence_ids=list(estimate.supporting_evidence_ids),
+                contradicting_evidence_ids=list(estimate.contradicting_evidence_ids),
+                uncertain_evidence_ids=list(estimate.uncertain_evidence_ids),
+                rationale_rule_ids=list(estimate.rationale_rule_ids),
+                statement_type=estimate.statement_type.value,
+            )
+            for estimate in artifact.estimates
+        ],
+        scenario_mode=artifact.scenario_analysis.mode.value,
+        recommendation_status=artifact.scenario_analysis.recommendation.status.value,
+        advisory_only=artifact.advisory_only,
     )
 
 

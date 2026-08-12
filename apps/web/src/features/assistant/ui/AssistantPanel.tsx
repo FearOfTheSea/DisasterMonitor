@@ -7,6 +7,8 @@ import type {
   CommonOperationalPicture,
   ConversationMessage,
   ConversationStatus,
+  DecisionFactStatementType,
+  DecisionSupportArtifact,
   MultimodalEvidenceState,
 } from '@/shared/types/assistant';
 
@@ -30,6 +32,53 @@ function formatConfidence(value: number | null | undefined) {
   return value === null || value === undefined
     ? 'Confidence not provided'
     : `${Math.round(value * 100)}% model confidence`;
+}
+
+const DECISION_FACT_LABELS: Record<DecisionFactStatementType, string> = {
+  verified_fact: 'Verified source fact',
+  preliminary_observation: 'Preliminary source observation',
+  source_estimate: 'Source-estimated observation',
+  disputed_observation: 'Disputed source observation',
+};
+
+function DecisionEvidenceView({ artifact }: { artifact: DecisionSupportArtifact }) {
+  return (
+    <section className="visual-evidence" aria-label="Decision evidence and estimates">
+      <h3>Decision evidence and estimates</h3>
+      {artifact.facts.map((fact) => (
+        <article className="visual-observation" key={fact.fact_id}>
+          <div className="evidence-badges">
+            <span>{DECISION_FACT_LABELS[fact.statement_type]}</span>
+            <span>Status: {fact.status.replaceAll('_', ' ')}</span>
+          </div>
+          <p>{fact.statement}</p>
+          <small>Sources: {fact.source_ids.join(', ')}</small>
+        </article>
+      ))}
+      {artifact.estimates.map((estimate) => (
+        <article className="visual-observation" key={estimate.estimate_id}>
+          <div className="evidence-badges">
+            <span>DM analytical estimate</span>
+            <span>Inferred</span>
+          </div>
+          <p>{estimate.proposition}</p>
+          <strong>
+            {Math.round(estimate.probability * 100)}% estimated probability
+          </strong>
+          {estimate.uncertain_evidence_ids.length > 0 && (
+            <small>
+              Includes uncertain source evidence:{' '}
+              {estimate.uncertain_evidence_ids.join(', ')}
+            </small>
+          )}
+        </article>
+      ))}
+      <small>
+        Scenario: {artifact.scenario_mode.replaceAll('_', ' ')} · Recommendation:{' '}
+        {artifact.recommendation_status.replaceAll('_', ' ')} · Advisory only
+      </small>
+    </section>
+  );
 }
 
 function VisualEvidenceView({ state }: { state: MultimodalEvidenceState }) {
@@ -175,6 +224,9 @@ function DisasterReportView({
           </section>
         ))}
       </div>
+      {report.decisionSupport && (
+        <DecisionEvidenceView artifact={report.decisionSupport} />
+      )}
       {report.multimodal && <VisualEvidenceView state={report.multimodal} />}
       {report.commonOperationalPicture && (
         <CopSummary cop={report.commonOperationalPicture} />

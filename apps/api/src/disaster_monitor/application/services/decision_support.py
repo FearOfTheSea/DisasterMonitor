@@ -15,12 +15,15 @@ from disaster_monitor.domain.decision import (
     DecisionFact,
     DecisionOption,
     DecisionSupportArtifact,
+    decision_statement_type_for_source_status,
 )
 from disaster_monitor.domain.disaster import (
     EvidenceAvailability,
     EvidenceDisposition,
     EvidenceFreshness,
+    EvidenceObservation,
     EvidenceWorldState,
+    FactStatus,
     HypothesisArtifact,
     IncidentPriority,
     IncidentPriorityAssessment,
@@ -63,18 +66,18 @@ class DecisionOptionGenerator:
                 status="source_backed_event",
             )
         ]
-        for claim in state.claims:
-            current = claim.current
-            if current is None:
-                continue
-            fact = current.fact
+        for observation in _decision_observations(state):
+            fact = observation.fact
             facts.append(
                 DecisionFact(
-                    fact_id=_id("decision-fact", current.observation_id),
+                    fact_id=_id("decision-fact", observation.observation_id),
                     statement=f"{fact.label}: {fact.value} ({fact.status.value}).",
-                    evidence_ids=(current.observation_id,),
+                    evidence_ids=(observation.observation_id,),
                     source_ids=(fact.source.source_id,),
                     status=fact.status.value,
+                    statement_type=decision_statement_type_for_source_status(
+                        fact.status.value
+                    ),
                 )
             )
 
@@ -85,6 +88,10 @@ class DecisionOptionGenerator:
                 probability=hypothesis.probability,
                 supporting_evidence_ids=hypothesis.supporting_evidence_ids,
                 contradicting_evidence_ids=hypothesis.contradicting_evidence_ids,
+                uncertain_evidence_ids=(hypothesis.uncertain_evidence_ids),
+                rationale_rule_ids=tuple(
+                    feature.rule_id for feature in hypothesis.rationale_features
+                ),
             )
             for hypothesis in hypotheses
         )
@@ -331,6 +338,31 @@ def validate_decision_support_artifact(
         for fact in artifact.facts
     ):
         raise ValueError("Decision fact lacks canonical evidence/source support.")
+    expected_observations = {
+        observation.observation_id: observation
+        for observation in _decision_observations(state)
+    }
+    source_facts = tuple(
+        fact
+        for fact in artifact.facts
+        if state.physical_event.physical_event_id not in fact.evidence_ids
+    )
+    if len(artifact.facts) != len(source_facts) + 1 or {
+        evidence_id for fact in source_facts for evidence_id in fact.evidence_ids
+    } != set(expected_observations):
+        raise ValueError("Decision support omitted an eligible source observation.")
+    for fact in source_facts:
+        if len(fact.evidence_ids) != 1:
+            raise ValueError("Decision fact source status escaped observation lineage.")
+        observation = expected_observations[fact.evidence_ids[0]]
+        expected_status = observation.fact.status.value
+        if (
+            fact.status != expected_status
+            or fact.source_ids != (observation.fact.source.source_id,)
+            or fact.statement_type
+            != decision_statement_type_for_source_status(expected_status)
+        ):
+            raise ValueError("Decision fact source status was promoted or changed.")
     hypothesis_by_id = {item.hypothesis_id: item for item in hypotheses}
     if any(
         estimate.estimate_id not in hypothesis_by_id
@@ -338,9 +370,21 @@ def validate_decision_support_artifact(
             (
                 *estimate.supporting_evidence_ids,
                 *estimate.contradicting_evidence_ids,
+                *estimate.uncertain_evidence_ids,
             )
         )
         <= known_evidence_ids
+        or estimate.supporting_evidence_ids
+        != hypothesis_by_id[estimate.estimate_id].supporting_evidence_ids
+        or estimate.contradicting_evidence_ids
+        != hypothesis_by_id[estimate.estimate_id].contradicting_evidence_ids
+        or estimate.uncertain_evidence_ids
+        != hypothesis_by_id[estimate.estimate_id].uncertain_evidence_ids
+        or estimate.rationale_rule_ids
+        != tuple(
+            feature.rule_id
+            for feature in hypothesis_by_id[estimate.estimate_id].rationale_features
+        )
         for estimate in artifact.estimates
     ):
         raise ValueError("Decision estimate escaped typed hypothesis lineage.")
@@ -383,6 +427,16 @@ def render_decision_support(artifact: DecisionSupportArtifact) -> str:
     lines = [
         "Advisory analytical options only; these are not official orders or directives."
     ]
+    lines.extend(
+        f"- Source evidence [{fact.statement_type.value}; status={fact.status}]: "
+        f"{fact.statement}"
+        for fact in artifact.facts
+    )
+    lines.extend(
+        f"- DM analytical estimate [{estimate.statement_type.value}; inferred]: "
+        f"{estimate.proposition} Probability {estimate.probability:.2f}."
+        for estimate in artifact.estimates
+    )
     for option in artifact.options:
         approval = (
             " Human approval is required."
@@ -444,11 +498,19 @@ def _contradictions(
 
 
 def _evidence_gaps(state: EvidenceWorldState) -> tuple[str, ...]:
-    gaps = [
-        f"No current verified observation for {claim_key}."
-        for claim_key in _IMPACT_CLAIMS
-        if state.claim(claim_key).availability == EvidenceAvailability.ABSENT
-    ]
+    gaps: list[str] = []
+    for claim_key in _IMPACT_CLAIMS:
+        claim = state.claim(claim_key)
+        if claim.availability == EvidenceAvailability.ABSENT:
+            gaps.append(f"No current usable source observation for {claim_key}.")
+        elif (
+            claim.current is not None
+            and claim.current.fact.status != FactStatus.CONFIRMED
+        ):
+            gaps.append(
+                f"Current {claim_key} observation is "
+                f"{claim.current.fact.status.value}, not confirmed."
+            )
     stale = [
         claim.claim_key
         for claim in state.claims
@@ -461,6 +523,28 @@ def _evidence_gaps(state: EvidenceWorldState) -> tuple[str, ...]:
     ]
     gaps.extend(f"Current {claim_key} evidence is stale." for claim_key in stale)
     return tuple(gaps)
+
+
+def _decision_observations(
+    state: EvidenceWorldState,
+) -> tuple[EvidenceObservation, ...]:
+    observations = (
+        item.observation
+        for claim in state.claims
+        for item in claim.history
+        if item.disposition
+        in {EvidenceDisposition.CURRENT, EvidenceDisposition.CONFLICTING}
+    )
+    return tuple(
+        sorted(
+            observations,
+            key=lambda item: (
+                item.claim_key,
+                item != state.claim(item.claim_key).current,
+                item.observation_id,
+            ),
+        )
+    )
 
 
 def _option(

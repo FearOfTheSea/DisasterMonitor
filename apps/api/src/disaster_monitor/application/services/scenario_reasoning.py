@@ -13,6 +13,7 @@ from disaster_monitor.domain.decision import (
     DecisionScenario,
     DecisionScenarioAnalysis,
     DecisionScenarioMode,
+    DecisionStatementType,
 )
 from disaster_monitor.domain.disaster import (
     EvidenceWorldState,
@@ -45,6 +46,8 @@ class DecisionScenarioSimulator:
         limited_fact_ids = _fact_ids_for_evidence(
             facts, estimate.contradicting_evidence_ids
         )
+        verified_material_fact_ids = _verified_fact_ids(facts, material_fact_ids)
+        verified_limited_fact_ids = _verified_fact_ids(facts, limited_fact_ids)
         scenarios = (
             DecisionScenario(
                 scenario_id=_id(
@@ -99,8 +102,8 @@ class DecisionScenarioSimulator:
         recommendation = _recommendation(
             mode=mode,
             estimate=estimate,
-            material_fact_ids=material_fact_ids,
-            limited_fact_ids=limited_fact_ids,
+            material_fact_ids=verified_material_fact_ids,
+            limited_fact_ids=verified_limited_fact_ids,
             assumptions=assumptions,
             options=options,
             sensitivity=sensitivity,
@@ -147,6 +150,7 @@ def validate_scenario_analysis(
     if analysis.evidence_state_version != state.state_version:
         raise ValueError("Scenario analysis escaped canonical evidence state.")
     fact_ids = {item.fact_id for item in facts}
+    fact_by_id = {item.fact_id: item for item in facts}
     assumption_ids = {item.assumption_id for item in assumptions}
     estimate_ids = {item.hypothesis_id for item in hypotheses}
     if any(
@@ -199,6 +203,11 @@ def validate_scenario_analysis(
             or recommendation.unsupported_premise_ids
             or analysis.mode == DecisionScenarioMode.UNRESOLVED
             or triage.requires_human_intervention
+            or any(
+                fact_by_id[fact_id].statement_type
+                != DecisionStatementType.VERIFIED_FACT
+                for fact_id in recommendation.premise_fact_ids
+            )
         ):
             raise ValueError(
                 "Recommendation depends on unsupported premise or ineligible authority."
@@ -317,6 +326,18 @@ def _fact_ids_for_evidence(
     )
 
 
+def _verified_fact_ids(
+    facts: tuple[DecisionFact, ...], fact_ids: tuple[str, ...]
+) -> tuple[str, ...]:
+    selected = set(fact_ids)
+    return tuple(
+        item.fact_id
+        for item in facts
+        if item.fact_id in selected
+        and item.statement_type == DecisionStatementType.VERIFIED_FACT
+    )
+
+
 def _sensitivity(
     evidence_gaps: tuple[str, ...], estimate: HypothesisArtifact
 ) -> tuple[str, ...]:
@@ -333,6 +354,12 @@ def _sensitivity(
         lines.append(
             "Resolving the retained material conflict may move probability away "
             "from the neutral branch."
+        )
+    if estimate.uncertain_evidence_ids:
+        lines.append(
+            "Preliminary, source-estimated, or disputed observations remain "
+            "ineligible as recommendation premises until confirmed source "
+            "evidence is available."
         )
     return tuple(lines)
 

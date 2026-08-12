@@ -392,6 +392,7 @@ class HypothesisArtifact:
     evaluated_at: datetime
     state_version: str
     rationale_features: tuple[HypothesisFeature, ...]
+    uncertain_evidence_ids: tuple[str, ...] = ()
     truth_status: HypothesisTruthStatus = HypothesisTruthStatus.INFERRED
 
     def __post_init__(self) -> None:

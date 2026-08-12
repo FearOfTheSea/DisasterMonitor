@@ -49,6 +49,7 @@ class AssistantResponse(BaseModel):
     sections: list["ReportSectionResponse"] = Field(default_factory=list)
     partial: bool = False
     investigation: "InvestigationResponse | None" = None
+    decision_support: "DecisionSupportResponse | None" = None
     multimodal: MultimodalStateResponse | None = None
     common_operational_picture: CommonOperationalPictureResponse | None = None
 
@@ -95,6 +96,42 @@ class InvestigationResponse(BaseModel):
     coordination_evidence_ids: list[str] = Field(default_factory=list)
     coordination_analytical_focus: str | None = None
     coordination_analytical_parameter_set_id: str | None = None
+
+
+class DecisionFactResponse(BaseModel):
+    """One source observation with machine-readable epistemic status."""
+
+    fact_id: str
+    statement: str
+    evidence_ids: list[str]
+    source_ids: list[str]
+    status: str
+    statement_type: str
+
+
+class DecisionEstimateResponse(BaseModel):
+    """One DM-generated inferred estimate, distinct from source estimates."""
+
+    estimate_id: str
+    proposition: str
+    probability: float
+    supporting_evidence_ids: list[str]
+    contradicting_evidence_ids: list[str]
+    uncertain_evidence_ids: list[str]
+    rationale_rule_ids: list[str]
+    statement_type: str
+
+
+class DecisionSupportResponse(BaseModel):
+    """Bounded decision artifact safe for typed browser presentation."""
+
+    artifact_id: str
+    evidence_state_version: str
+    facts: list[DecisionFactResponse]
+    estimates: list[DecisionEstimateResponse]
+    scenario_mode: str
+    recommendation_status: str
+    advisory_only: bool
 
 
 class SourceResponse(BaseModel):
