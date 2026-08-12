@@ -55,6 +55,7 @@ class InvestigationSummary:
     coordination_evidence_ids: tuple[str, ...] = ()
     coordination_analytical_focus: str | None = None
     coordination_analytical_parameter_set_id: str | None = None
+    coordination_analytical_release_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

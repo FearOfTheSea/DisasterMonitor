@@ -96,6 +96,7 @@ class InvestigationResponse(BaseModel):
     coordination_evidence_ids: list[str] = Field(default_factory=list)
     coordination_analytical_focus: str | None = None
     coordination_analytical_parameter_set_id: str | None = None
+    coordination_analytical_release_id: str | None = None
 
 
 class DecisionFactResponse(BaseModel):

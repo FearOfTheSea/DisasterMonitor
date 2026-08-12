@@ -298,7 +298,9 @@ export class AssistantClient {
       (item.coordination_analytical_focus == null ||
         typeof item.coordination_analytical_focus === 'string') &&
       (item.coordination_analytical_parameter_set_id == null ||
-        typeof item.coordination_analytical_parameter_set_id === 'string')
+        typeof item.coordination_analytical_parameter_set_id === 'string') &&
+      (item.coordination_analytical_release_id == null ||
+        typeof item.coordination_analytical_release_id === 'string')
     );
   }
 }

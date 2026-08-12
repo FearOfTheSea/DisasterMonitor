@@ -327,6 +327,9 @@ function DisasterReportView({
               {report.investigation.coordination_analytical_parameter_set_id
                 ? ` / ${report.investigation.coordination_analytical_parameter_set_id}`
                 : ''}
+              {report.investigation.coordination_analytical_release_id
+                ? ` / release ${report.investigation.coordination_analytical_release_id}`
+                : ''}
             </p>
           )}
           {report.investigation.coordination_final_rationale && (

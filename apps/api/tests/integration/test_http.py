@@ -637,6 +637,10 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
         body["investigation"]["coordination_analytical_parameter_set_id"]
         == "analytical-tuning:v3-governed"
     )
+    assert (
+        body["investigation"]["coordination_analytical_release_id"]
+        == "analytical-tuning-release:v3-governed"
+    )
     assert model.requests == []
 
 

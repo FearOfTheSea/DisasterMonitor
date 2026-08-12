@@ -80,6 +80,7 @@ export type InvestigationSummary = {
   coordination_evidence_ids?: string[];
   coordination_analytical_focus?: string | null;
   coordination_analytical_parameter_set_id?: string | null;
+  coordination_analytical_release_id?: string | null;
 };
 
 export type AssistantSource = {

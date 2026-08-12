@@ -171,6 +171,9 @@ async def assistant(
             coordination_analytical_parameter_set_id=(
                 result.investigation.coordination_analytical_parameter_set_id
             ),
+            coordination_analytical_release_id=(
+                result.investigation.coordination_analytical_release_id
+            ),
         )
     )
     if result.response_type == "assistant":

@@ -7,6 +7,7 @@ from math import comb
 from disaster_monitor.domain.learning import (
     AnalyticalFocus,
     AnalyticalTuningParameters,
+    ApprovedAnalyticalTuningRelease,
     LearningEvaluation,
     LearningPartition,
     LearningReleaseStatus,
@@ -43,6 +44,28 @@ GOVERNED_ANALYTICAL_TUNING_V3 = AnalyticalTuningParameters(
     routine_monitoring_weight=0.5,
     attenuated_signal_boost=2.0,
 )
+APPROVED_GOVERNED_ANALYTICAL_TUNING_RELEASE_V3 = ApprovedAnalyticalTuningRelease(
+    release_id="analytical-tuning-release:v3-governed",
+    optimizer_release_id=("autonomous-optimization:5f064819fa88f7ed7a7be340"),
+    dataset_version="dm-cl-c-production-linked-v2",
+    evaluation_artifact_id=("continuous_learning/optimization_benchmarks.v2.json"),
+    evaluation_artifact_sha256=(
+        "852da39a67f13a41a7475d4dd92b47b1b72fc1eee1019f15e1ba370a4e17e048"
+    ),
+    proposal_id="cl-c:attenuated-signal-boost:v3",
+    target_ids=("analytical_tuning.attenuated_signal_boost",),
+    prior_parameters=DRIFT_ADAPTED_ANALYTICAL_TUNING_V2,
+    released_parameters=GOVERNED_ANALYTICAL_TUNING_V3,
+    benchmark_family_ids=(
+        "attenuated_evidence_gap",
+        "attenuated_material_conflict",
+        "attenuated_multimodal_review",
+    ),
+    production_effect_count=3,
+)
+CURRENT_APPROVED_ANALYTICAL_TUNING_RELEASE = (
+    APPROVED_GOVERNED_ANALYTICAL_TUNING_RELEASE_V3
+)
 _CANDIDATES = (
     APPROVED_ANALYTICAL_TUNING_V1,
     AnalyticalTuningParameters(
@@ -67,9 +90,25 @@ class AnalyticalFollowupRanker:
 
     def __init__(
         self,
-        parameters: AnalyticalTuningParameters = GOVERNED_ANALYTICAL_TUNING_V3,
+        parameters: AnalyticalTuningParameters | None = None,
+        *,
+        approved_release: ApprovedAnalyticalTuningRelease | None = None,
     ) -> None:
-        self.parameters = parameters
+        if parameters is not None and approved_release is not None:
+            raise ValueError(
+                "Analytical ranker accepts parameters or an approved release, not both."
+            )
+        if parameters is None and approved_release is None:
+            approved_release = CURRENT_APPROVED_ANALYTICAL_TUNING_RELEASE
+        self.approved_release = approved_release
+        resolved_parameters = (
+            approved_release.released_parameters
+            if approved_release is not None
+            else parameters
+        )
+        if resolved_parameters is None:
+            raise ValueError("Analytical ranker requires bounded tuning parameters.")
+        self.parameters: AnalyticalTuningParameters = resolved_parameters
 
     def select(
         self,

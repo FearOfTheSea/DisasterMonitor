@@ -185,6 +185,7 @@ class CoordinationSupervision:
     safety_policy_fingerprint: str
     analytical_focus: str
     analytical_parameter_set_id: str
+    analytical_release_id: str
 
     def __post_init__(self) -> None:
         if not self.supervision_id or not self.evidence_state_version:
@@ -205,7 +206,13 @@ class CoordinationSupervision:
             )
         if not self.termination_reason:
             raise ValueError("Coordination supervision requires explicit termination.")
-        if not self.analytical_focus or not self.analytical_parameter_set_id:
+        if not all(
+            (
+                self.analytical_focus,
+                self.analytical_parameter_set_id,
+                self.analytical_release_id,
+            )
+        ):
             raise ValueError("Coordination supervision requires tuning provenance.")
         if (
             self.handoff_count < 0

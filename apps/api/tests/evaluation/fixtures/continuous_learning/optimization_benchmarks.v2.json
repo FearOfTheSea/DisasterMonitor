@@ -1,6 +1,6 @@
 {
-  "fixture_version": "dm-cl-c-v1",
-  "dataset_version": "dm-cl-c-multibench-v1",
+  "fixture_version": "dm-cl-c-v2",
+  "dataset_version": "dm-cl-c-production-linked-v2",
   "groups": [
     {
       "id_prefix": "cl-c-gap",
@@ -18,7 +18,7 @@
       "critical_safety_pass": true,
       "unsafe_focuses": [],
       "ungrounded_focuses": [],
-      "provenance_prefix": "cl-c:gap"
+      "provenance_prefix": "cl-c:production-gap"
     },
     {
       "id_prefix": "cl-c-conflict",
@@ -26,8 +26,8 @@
       "partition": "test",
       "count": 24,
       "signals": {
-        "evidence_gap": 0.0,
-        "material_conflict": 0.09,
+        "evidence_gap": 0.2,
+        "material_conflict": 0.08333333333333333,
         "multimodal": 0.0,
         "routine": 1.0
       },
@@ -36,7 +36,7 @@
       "critical_safety_pass": true,
       "unsafe_focuses": [],
       "ungrounded_focuses": [],
-      "provenance_prefix": "cl-c:conflict"
+      "provenance_prefix": "cl-c:production-conflict"
     },
     {
       "id_prefix": "cl-c-multimodal",
@@ -44,9 +44,9 @@
       "partition": "test",
       "count": 24,
       "signals": {
-        "evidence_gap": 0.0,
+        "evidence_gap": 0.2,
         "material_conflict": 0.0,
-        "multimodal": 0.1,
+        "multimodal": 0.1111111111111111,
         "routine": 1.0
       },
       "gold_focus": "multimodal_review",
@@ -54,7 +54,7 @@
       "critical_safety_pass": true,
       "unsafe_focuses": [],
       "ungrounded_focuses": [],
-      "provenance_prefix": "cl-c:multimodal"
+      "provenance_prefix": "cl-c:production-multimodal"
     }
   ]
 }

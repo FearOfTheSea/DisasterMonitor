@@ -50,6 +50,7 @@ class OptimizationStatus(StrEnum):
     REJECTED_PROTECTED_SCOPE = "rejected_protected_scope"
     REJECTED_OUTSIDE_ALLOWLIST = "rejected_outside_allowlist"
     REJECTED_NOT_REVERSIBLE = "rejected_not_reversible"
+    REJECTED_UNREACHABLE = "rejected_unreachable"
     REJECTED_INSUFFICIENT_IMPROVEMENT = "rejected_insufficient_improvement"
     REJECTED_REGRESSION = "rejected_regression"
 
@@ -323,6 +324,53 @@ class OptimizationFamilyEvaluation:
 
 
 @dataclass(frozen=True, slots=True)
+class ApprovedAnalyticalTuningRelease:
+    """Frozen approval that connects evaluation evidence to runtime tuning."""
+
+    release_id: str
+    optimizer_release_id: str
+    dataset_version: str
+    evaluation_artifact_id: str
+    evaluation_artifact_sha256: str
+    proposal_id: str
+    target_ids: tuple[str, ...]
+    prior_parameters: AnalyticalTuningParameters
+    released_parameters: AnalyticalTuningParameters
+    benchmark_family_ids: tuple[str, ...]
+    production_effect_count: int
+    reversible: bool = True
+
+    def __post_init__(self) -> None:
+        if not all(
+            (
+                self.release_id,
+                self.optimizer_release_id,
+                self.dataset_version,
+                self.evaluation_artifact_id,
+                self.proposal_id,
+                self.target_ids,
+                self.benchmark_family_ids,
+            )
+        ):
+            raise ValueError("Approved tuning release requires complete provenance.")
+        if len(self.evaluation_artifact_sha256) != 64 or any(
+            value not in "0123456789abcdef" for value in self.evaluation_artifact_sha256
+        ):
+            raise ValueError(
+                "Approved tuning release requires a SHA-256 artifact hash."
+            )
+        if (
+            self.prior_parameters == self.released_parameters
+            or self.production_effect_count < 1
+            or len(set(self.benchmark_family_ids)) < 3
+            or not self.reversible
+        ):
+            raise ValueError(
+                "Approved tuning release requires reversible production-linked change."
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class AutonomousOptimizationRelease:
     release_id: str
     dataset_version: str
@@ -330,10 +378,15 @@ class AutonomousOptimizationRelease:
     proposal: OptimizationProposal
     approved_parameters: AnalyticalTuningParameters
     family_evaluations: tuple[OptimizationFamilyEvaluation, ...]
+    production_family_evaluations: tuple[OptimizationFamilyEvaluation, ...]
     baseline_guardrail_evaluation: LearningEvaluation
     candidate_guardrail_evaluation: LearningEvaluation
+    production_baseline_evaluation: LearningEvaluation
+    production_candidate_evaluation: LearningEvaluation
     baseline_pass_eight: float
     candidate_pass_eight: float
+    production_effect_count: int
+    production_regime_coverage: float
     rejection_reason: str | None
     rollback_restored: bool
     provenance_ids: tuple[str, ...]
@@ -343,7 +396,11 @@ class AutonomousOptimizationRelease:
             raise ValueError("Optimization release requires identity and provenance.")
         if any(
             not 0 <= value <= 1
-            for value in (self.baseline_pass_eight, self.candidate_pass_eight)
+            for value in (
+                self.baseline_pass_eight,
+                self.candidate_pass_eight,
+                self.production_regime_coverage,
+            )
         ):
             raise ValueError("Optimization repeated-run metrics must be bounded.")
         improved_families = sum(
@@ -362,6 +419,14 @@ class AutonomousOptimizationRelease:
             self.candidate_guardrail_evaluation.task_accuracy
             < self.baseline_guardrail_evaluation.task_accuracy
         )
+        production_regression = (
+            self.production_candidate_evaluation.task_accuracy
+            < self.production_baseline_evaluation.task_accuracy
+            or self.production_candidate_evaluation.grounding_rate
+            < self.production_baseline_evaluation.grounding_rate
+            or self.production_candidate_evaluation.critical_safety_rate
+            < self.production_baseline_evaluation.critical_safety_rate
+        )
         if self.status == OptimizationStatus.APPROVED:
             if (
                 self.proposal.scope != OptimizationScope.ANALYTICAL_TUNING
@@ -372,6 +437,9 @@ class AutonomousOptimizationRelease:
                 or safety_regression
                 or grounding_regression
                 or task_regression
+                or production_regression
+                or self.production_effect_count < 1
+                or self.production_regime_coverage != 1.0
                 or self.rejection_reason is not None
                 or self.rollback_restored
             ):

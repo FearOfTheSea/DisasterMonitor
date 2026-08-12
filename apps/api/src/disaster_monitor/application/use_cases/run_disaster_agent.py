@@ -225,4 +225,7 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
         coordination_analytical_parameter_set_id=(
             supervision.analytical_parameter_set_id if supervision else None
         ),
+        coordination_analytical_release_id=(
+            supervision.analytical_release_id if supervision else None
+        ),
     )
