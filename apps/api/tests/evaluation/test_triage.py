@@ -24,6 +24,9 @@ from disaster_monitor.application.services.incident_priority import (
 from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
+    EventAssignmentStatus,
+    EvidenceDisposition,
+    EvidenceFreshness,
     FactStatus,
     Hazard,
     IncidentPriority,
@@ -292,6 +295,188 @@ def test_tr_b_scope_parity_and_uncertainty_escalation() -> None:
     assert uncertain.score >= resolved_zero.score
     assert uncertain.uncertainty_escalated
     assert uncertain.requires_human_review
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "Hospital systems remain fully operational.",
+        "No operational disruption was reported.",
+        "Hospital services were not disrupted.",
+        "It is not true that the hospital is not operational.",
+        "Operational teams completed a routine assessment.",
+        "Airport services remain operational at normal capacity.",
+        "Infrastructure impact: none.",
+    ),
+)
+def test_tr_b_explicit_no_impact_and_irrelevant_operational_language(
+    statement: str,
+) -> None:
+    assessment = IncidentPriorityRanker().assess(
+        _priority_state(
+            {
+                "id": "operational-no-impact",
+                "hazard": "flood",
+                "country_code": "JPN",
+                "facts": [{"category": "infrastructure", "value": statement}],
+            }
+        )
+    )
+
+    assert assessment.priority == IncidentPriority.LOW
+    assert assessment.score == 0
+    assert not assessment.requires_human_review
+    assert not assessment.signals
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "Operational disruption has severely reduced hospital capacity.",
+        "The airport is operational but road access is severely disrupted.",
+        "Power infrastructure is not operational.",
+        "Critical infrastructure remains operational despite localized damage.",
+        "The hospital is partially operational after severe structural damage.",
+        "Hospital systems remain operational, but the emergency wing is closed.",
+        "Power is unavailable while backup operations remain functional.",
+    ),
+)
+def test_tr_b_material_impact_survives_operational_and_mixed_language(
+    statement: str,
+) -> None:
+    assessment = IncidentPriorityRanker().assess(
+        _priority_state(
+            {
+                "id": "operational-impact",
+                "hazard": "flood",
+                "country_code": "JPN",
+                "facts": [{"category": "infrastructure", "value": statement}],
+            }
+        )
+    )
+
+    assert assessment.priority in {
+        IncidentPriority.MODERATE,
+        IncidentPriority.HIGH,
+        IncidentPriority.CRITICAL,
+    }
+    assert assessment.score >= 20
+    assert any(
+        signal.rule_id == "tr.priority.infrastructure_disruption"
+        for signal in assessment.signals
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "Operational disruption could not be ruled out.",
+        "Hospital operational status remains unclear.",
+        "Systems were not unaffected.",
+        "The hospital may be operational; confirmation status is pending.",
+    ),
+)
+def test_tr_b_ambiguous_operational_language_fails_toward_review(
+    statement: str,
+) -> None:
+    assessment = IncidentPriorityRanker().assess(
+        _priority_state(
+            {
+                "id": "operational-ambiguous",
+                "hazard": "flood",
+                "country_code": "JPN",
+                "facts": [{"category": "infrastructure", "value": statement}],
+            }
+        )
+    )
+
+    assert assessment.priority == IncidentPriority.MODERATE
+    assert assessment.uncertainty_escalated
+    assert assessment.requires_human_review
+    assert any(
+        signal.rule_id == "tr.priority.ambiguous_operational_impact"
+        for signal in assessment.signals
+    )
+
+
+def test_tr_b_missing_stale_conflicting_and_ambiguous_evidence_are_monotonic() -> None:
+    base = {
+        "id": "uncertainty-monotonic-base",
+        "hazard": "earthquake",
+        "country_code": "JPN",
+        "magnitude": 5.2,
+        "facts": [{"category": "fatalities", "value": "0"}],
+    }
+    ranker = IncidentPriorityRanker()
+    base_state = _priority_state(base)
+    baseline = ranker.assess(base_state)
+    missing = ranker.assess(
+        _priority_state({**base, "id": "monotonic-missing", "facts": []})
+    )
+
+    stale_claims = tuple(
+        replace(
+            claim,
+            history=tuple(
+                replace(item, freshness=EvidenceFreshness.STALE)
+                if item.observation == claim.current
+                else item
+                for item in claim.history
+            ),
+        )
+        for claim in base_state.claims
+    )
+    stale = ranker.assess(
+        replace(
+            base_state,
+            state_version="world-state:monotonic-stale",
+            claims=stale_claims,
+        )
+    )
+
+    conflicting_claims = tuple(
+        replace(
+            claim,
+            history=tuple(
+                replace(item, disposition=EvidenceDisposition.CONFLICTING)
+                if item.observation == claim.current
+                else item
+                for item in claim.history
+            ),
+        )
+        for claim in base_state.claims
+    )
+    conflicting = ranker.assess(
+        replace(
+            base_state,
+            state_version="world-state:monotonic-conflicting",
+            claims=conflicting_claims,
+        )
+    )
+
+    ambiguous_identity = replace(
+        base_state.physical_event,
+        assignments=tuple(
+            replace(item, status=EventAssignmentStatus.AMBIGUOUS)
+            for item in base_state.physical_event.assignments
+        ),
+    )
+    ambiguous = ranker.assess(
+        replace(
+            base_state,
+            state_version="world-state:monotonic-ambiguous",
+            physical_event=ambiguous_identity,
+        )
+    )
+
+    for uncertain in (missing, stale, conflicting, ambiguous):
+        assert uncertain.score >= baseline.score
+        assert uncertain.priority in {
+            IncidentPriority.MODERATE,
+            IncidentPriority.HIGH,
+            IncidentPriority.CRITICAL,
+        }
+        assert uncertain.requires_human_review
 
 
 def test_tr_b_ranking_is_order_independent_across_repeated_runs() -> None:

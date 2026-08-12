@@ -1,6 +1,7 @@
 """Evidence-state-owned incident priority policy for internal attention routing."""
 
 import re
+from enum import StrEnum
 from hashlib import sha256
 from typing import Protocol
 
@@ -26,8 +27,43 @@ _NEGATED_WARNING = re.compile(
 _SEVERE_DAMAGE = re.compile(
     r"\b(?:major|severe|widespread|destroyed|collapsed|uninhabitable)\b", re.I
 )
-_NEGATED_OPERATIONAL_IMPACT = re.compile(
-    r"\b(?:no|none|not reported|without|unaffected|operational)\b", re.I
+_CLAUSE_BOUNDARY = re.compile(
+    r"\s*(?:[.;]|\bbut\b|\bhowever\b|\balthough\b|\bthough\b|\bwhile\b|"
+    r"\bdespite\b)\s*",
+    re.I,
+)
+_EXPLICIT_NO_OPERATIONAL_IMPACT = re.compile(
+    r"\bnone\b|\b(?:no|without)\s+"
+    r"(?:reported\s+|material\s+|significant\s+)?"
+    r"(?:operational\s+)?(?:disruption|impact|damage|outage|closure)s?\b|"
+    r"\b(?:remain(?:s|ed)?|is|are|was|were)\s+(?:fully\s+)?operational\b|"
+    r"\b(?:unaffected|undamaged|fully\s+available|normal\s+operations?)\b|"
+    r"\bnot\s+(?:inoperable|unavailable|disrupted|closed|offline)\b|"
+    r"\bnot\s+(?:true|the\s+case)\s+that\b[^.;]{0,80}"
+    r"\bnot\s+(?:fully\s+)?operational\b",
+    re.I,
+)
+_OPERATIONAL_IMPACT = re.compile(
+    r"\b(?:operational\s+)?disrupt(?:ed|ion|ions|ive)?\b|"
+    r"\b(?:outage|outages|closure|closures|closed|blocked|inaccessible|"
+    r"unavailable|offline|failure|failures|failed|damage|damaged|destroyed|"
+    r"collapsed)\b|"
+    r"\b(?:severely\s+)?reduced\s+(?:service|services|capacity|access)\b|"
+    r"\b(?:partial|partially|partly|limited)\s+"
+    r"(?:availability|available|capacity|operations?|operational)\b|"
+    r"\bnot\s+(?:fully\s+)?operational\b",
+    re.I,
+)
+_AMBIGUOUS_OPERATIONAL_IMPACT = re.compile(
+    r"\b(?:not\s+(?:unaffected|undamaged)|not\s+ruled\s+out|"
+    r"(?:cannot|could\s+not)\s+be\s+ruled\s+out|unclear|uncertain|unconfirmed|"
+    r"status\s+(?:is\s+)?pending)\b",
+    re.I,
+)
+_IRRELEVANT_OPERATIONAL_CONTEXT = re.compile(
+    r"\boperational\s+(?:team|teams|briefing|plan|planning|exercise|"
+    r"assessment|review|response)\b",
+    re.I,
 )
 
 _PRIORITY_ORDER = {
@@ -36,6 +72,12 @@ _PRIORITY_ORDER = {
     IncidentPriority.HIGH: 2,
     IncidentPriority.CRITICAL: 3,
 }
+
+
+class _ImpactInterpretation(StrEnum):
+    NO_IMPACT = "no_impact"
+    IMPACT = "impact"
+    AMBIGUOUS = "ambiguous"
 
 
 class _SignalAdder(Protocol):
@@ -147,7 +189,8 @@ class IncidentPriorityRanker:
                 )
 
         self._add_human_impact_signals(state, add)
-        self._add_operational_signals(state, add)
+        if self._add_operational_signals(state, add):
+            uncertainty_escalated = True
 
         conflicting_ids = tuple(
             sorted(
@@ -319,7 +362,8 @@ class IncidentPriorityRanker:
 
     def _add_operational_signals(
         self, state: EvidenceWorldState, add_signal: _SignalAdder
-    ) -> None:
+    ) -> bool:
+        ambiguity_found = False
         for claim in state.claims:
             current = claim.current
             if current is None:
@@ -341,7 +385,19 @@ class IncidentPriorityRanker:
                 "infrastructure_disruption",
                 "utilities",
             }:
-                if _NEGATED_OPERATIONAL_IMPACT.search(value):
+                interpretation = _interpret_operational_impact(value)
+                if interpretation == _ImpactInterpretation.NO_IMPACT:
+                    continue
+                if interpretation == _ImpactInterpretation.AMBIGUOUS:
+                    ambiguity_found = True
+                    add_signal(
+                        "tr.priority.ambiguous_operational_impact",
+                        "Current infrastructure evidence is ambiguous; review "
+                        "priority rises rather than treating it as no impact.",
+                        10,
+                        evidence_ids=evidence_ids,
+                        priority_floor=IncidentPriority.MODERATE,
+                    )
                     continue
                 add_signal(
                     "tr.priority.infrastructure_disruption",
@@ -351,7 +407,19 @@ class IncidentPriorityRanker:
                     priority_floor=IncidentPriority.MODERATE,
                 )
             elif category in {"damage", "physical_damage"}:
-                if _NEGATED_OPERATIONAL_IMPACT.search(value):
+                interpretation = _interpret_operational_impact(value)
+                if interpretation == _ImpactInterpretation.NO_IMPACT:
+                    continue
+                if interpretation == _ImpactInterpretation.AMBIGUOUS:
+                    ambiguity_found = True
+                    add_signal(
+                        "tr.priority.ambiguous_operational_impact",
+                        "Current damage evidence is ambiguous; review priority "
+                        "rises rather than treating it as no impact.",
+                        10,
+                        evidence_ids=evidence_ids,
+                        priority_floor=IncidentPriority.MODERATE,
+                    )
                     continue
                 severe = bool(_SEVERE_DAMAGE.search(value))
                 add_signal(
@@ -363,6 +431,31 @@ class IncidentPriorityRanker:
                         IncidentPriority.HIGH if severe else IncidentPriority.MODERATE
                     ),
                 )
+        return ambiguity_found
+
+
+def _interpret_operational_impact(value: str) -> _ImpactInterpretation:
+    """Classify bounded impact wording without treating bare operational as negation."""
+    clause_results: list[_ImpactInterpretation] = []
+    for clause in _CLAUSE_BOUNDARY.split(value):
+        normalized = clause.strip()
+        if not normalized:
+            continue
+        if _AMBIGUOUS_OPERATIONAL_IMPACT.search(normalized):
+            clause_results.append(_ImpactInterpretation.AMBIGUOUS)
+        elif _EXPLICIT_NO_OPERATIONAL_IMPACT.search(normalized):
+            clause_results.append(_ImpactInterpretation.NO_IMPACT)
+        elif _OPERATIONAL_IMPACT.search(normalized):
+            clause_results.append(_ImpactInterpretation.IMPACT)
+        elif _IRRELEVANT_OPERATIONAL_CONTEXT.search(normalized):
+            clause_results.append(_ImpactInterpretation.NO_IMPACT)
+        else:
+            clause_results.append(_ImpactInterpretation.AMBIGUOUS)
+    if _ImpactInterpretation.IMPACT in clause_results:
+        return _ImpactInterpretation.IMPACT
+    if _ImpactInterpretation.AMBIGUOUS in clause_results or not clause_results:
+        return _ImpactInterpretation.AMBIGUOUS
+    return _ImpactInterpretation.NO_IMPACT
 
 
 def _claim_number(claim: ClaimEvidenceState) -> float | None:
