@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import type { ConversationMessage } from '@/shared/types/assistant';
+import { commonOperationalPicture } from './fixtures/multimodal';
 
 function assistantMessage(
   report: NonNullable<ConversationMessage['report']>,
@@ -22,6 +23,22 @@ const baseReport: NonNullable<ConversationMessage['report']> = {
   partial: false,
 };
 
+const selectedEvent = {
+  event_id: 'jma:fixture-event',
+  hazard: 'earthquake',
+  location: 'Ishikawa, Japan',
+  event_time: '2026-08-05T11:00:00Z',
+  latitude: 37,
+  longitude: 137,
+  source: {
+    source_id: 'jma-rolling-earthquakes',
+    publisher: 'JMA',
+    title: 'Earthquake fixture',
+    canonical_url: 'https://example.test/event',
+    retrieved_at: '2026-08-05T12:00:00Z',
+  },
+};
+
 describe('assistantMapAreaOfInterest', () => {
   it('fits the validated investigation country when no COP geometry exists', () => {
     const result = assistantMapAreaOfInterest([
@@ -31,7 +48,7 @@ describe('assistantMapAreaOfInterest', () => {
           status: 'completed',
           task_summary: 'Current earthquake information in Japan',
           hazard: 'earthquake',
-          country: 'Japan',
+          country: 'JPN',
           information_needs: [],
           output_modalities: [],
           actions: [],
@@ -44,7 +61,7 @@ describe('assistantMapAreaOfInterest', () => {
     ]);
 
     expect(result).toEqual({
-      id: 'assistant-1:country:Japan',
+      id: 'assistant-1:country:JPN',
       bounds: [122, 20, 154, 46],
     });
   });
@@ -125,6 +142,82 @@ describe('assistantMapAreaOfInterest', () => {
     expect(result).toEqual({
       id: 'assistant-1:cop:cop-1',
       bounds: [105, 20, 107, 22],
+    });
+  });
+
+  it('focuses the source-backed selected event before the country fallback', () => {
+    const result = assistantMapAreaOfInterest([
+      assistantMessage({
+        ...baseReport,
+        selectedEvent,
+        investigation: {
+          status: 'completed',
+          task_summary: 'Current earthquake information in Japan',
+          hazard: 'earthquake',
+          country: 'JPN',
+          information_needs: [],
+          output_modalities: [],
+          actions: [],
+          source_ids: [],
+          evidence_count: 1,
+          capability_gaps: [],
+          termination_reason: 'completed',
+        },
+      }),
+    ]);
+
+    expect(result).toEqual({
+      id: 'assistant-1:event:jma:fixture-event',
+      bounds: [137, 37, 137, 37],
+    });
+  });
+
+  it('falls back safely when selected-event coordinates are incomplete or invalid', () => {
+    const result = assistantMapAreaOfInterest([
+      assistantMessage({
+        ...baseReport,
+        selectedEvent: { ...selectedEvent, latitude: 91, longitude: undefined },
+        investigation: {
+          status: 'completed',
+          task_summary: 'Current earthquake information in Japan',
+          hazard: 'earthquake',
+          country: ' japan ',
+          information_needs: [],
+          output_modalities: [],
+          actions: [],
+          source_ids: [],
+          evidence_count: 1,
+          capability_gaps: [],
+          termination_reason: 'completed',
+        },
+      }),
+    ]);
+
+    expect(result).toEqual({
+      id: 'assistant-1:country:JPN',
+      bounds: [122, 20, 154, 46],
+    });
+  });
+
+  it('uses the short wrapped extent for COP geometry crossing the antimeridian', () => {
+    const cop = structuredClone(commonOperationalPicture);
+    cop.cop_id = 'cop-dateline';
+    cop.layers[0].features[0].geometry = {
+      type: 'LineString',
+      coordinates: [
+        [179, 10],
+        [-179, 12],
+      ],
+      crs: 'EPSG:4326',
+    };
+
+    const result = assistantMapAreaOfInterest([
+      assistantMessage({ ...baseReport, commonOperationalPicture: cop }),
+    ]);
+
+    expect(result).toEqual({
+      id: 'assistant-1:cop:cop-dateline',
+      bounds: [179, 10, 181, 12],
     });
   });
 

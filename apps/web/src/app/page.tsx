@@ -66,7 +66,10 @@ export default function Home() {
             commonOperationalPicture={commonOperationalPicture}
             areaOfInterest={areaOfInterest}
           />
-          <div className="map-overlay">OpenStreetMap base layer · Hanoi view</div>
+          <div className="map-overlay">
+            OpenStreetMap base layer · {mapView.centerLatitude.toFixed(2)},{' '}
+            {mapView.centerLongitude.toFixed(2)} · zoom {mapView.zoom.toFixed(1)}
+          </div>
         </div>
         {assistantOpen && (
           <AssistantPanel

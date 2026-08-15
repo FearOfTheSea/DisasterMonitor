@@ -99,6 +99,8 @@ export type SelectedEvent = {
   hazard: string;
   location: string;
   event_time: string;
+  latitude?: number | null;
+  longitude?: number | null;
   magnitude?: number;
   intensity?: string;
   depth_km?: number;

@@ -13,6 +13,7 @@ test('submits the target current-disaster question and renders a source-backed r
   await page.getByRole('button', { name: 'Ask assistant' }).click();
 
   await expect(page.getByText('Ishikawa, Japan', { exact: true })).toBeVisible();
+  await expect(page.getByText(/37\.02,\s*137\.01/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Situation summary' })).toBeVisible();
   await expect(page.getByText('Buildings damaged: 4.').first()).toBeVisible();
   await expect(page.getByRole('link', { name: /ReliefWeb fixture/ })).toBeVisible();

@@ -67,6 +67,21 @@ describe('AssistantClient', () => {
           conversation_id: 'session-1',
           model: 'source-backed-report',
           response_type: 'current_disaster',
+          selected_event: {
+            event_id: 'jma:fixture-event',
+            hazard: 'earthquake',
+            location: 'Ishikawa, Japan',
+            event_time: '2026-08-05T11:00:00Z',
+            latitude: 37,
+            longitude: 137,
+            source: {
+              source_id: 'jma-rolling-earthquakes',
+              publisher: 'JMA',
+              title: 'Fixture event',
+              canonical_url: 'https://example.test/event',
+              retrieved_at: '2026-08-05T12:00:00Z',
+            },
+          },
           retrieval_time: '2026-08-05T12:00:00Z',
           sources: [
             {
@@ -141,6 +156,7 @@ describe('AssistantClient', () => {
     ).resolves.toMatchObject({
       response_type: 'current_disaster',
       partial: true,
+      selected_event: { latitude: 37, longitude: 137 },
       investigation: { status: 'partial' },
     });
   });

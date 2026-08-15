@@ -55,6 +55,7 @@ try {
     );
   await page.getByRole('button', { name: 'Ask assistant' }).click();
   await page.getByText('Ishikawa, Japan', { exact: true }).waitFor({ timeout: 30_000 });
+  await page.getByText(/37\.02,\s*137\.01/).waitFor();
   await page.getByRole('heading', { name: 'Situation summary' }).waitFor();
   await page.getByText('Buildings damaged: 4.').first().waitFor();
   await page.getByRole('link', { name: /ReliefWeb fixture/ }).waitFor();

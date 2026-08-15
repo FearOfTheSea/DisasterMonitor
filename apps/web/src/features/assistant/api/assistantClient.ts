@@ -182,6 +182,16 @@ export class AssistantClient {
       typeof item.hazard === 'string' &&
       typeof item.location === 'string' &&
       typeof item.event_time === 'string' &&
+      (item.latitude == null ||
+        (typeof item.latitude === 'number' &&
+          Number.isFinite(item.latitude) &&
+          item.latitude >= -90 &&
+          item.latitude <= 90)) &&
+      (item.longitude == null ||
+        (typeof item.longitude === 'number' &&
+          Number.isFinite(item.longitude) &&
+          item.longitude >= -180 &&
+          item.longitude <= 180)) &&
       (item.magnitude == null || typeof item.magnitude === 'number') &&
       (item.intensity == null || typeof item.intensity === 'string') &&
       (item.depth_km == null || typeof item.depth_km === 'number') &&

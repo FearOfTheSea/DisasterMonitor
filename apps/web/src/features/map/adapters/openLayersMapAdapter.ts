@@ -30,9 +30,13 @@ type MapAdapterOptions = {
   onViewChange: (view: MapView) => void;
 };
 
+const DEFAULT_FIT_PADDING = 56;
+const WEB_MERCATOR_MAX_LATITUDE = 85.0511287798066;
+
 export class OpenLayersMapAdapter {
   private readonly map: Map;
   private copLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
+  private pendingArea?: MapAreaBounds;
 
   constructor(private readonly options: MapAdapterOptions) {
     const baseLayer = new TileLayer({ source: new OSM() });
@@ -52,11 +56,13 @@ export class OpenLayersMapAdapter {
       layers: [baseLayer],
       view,
     });
+    this.map.on('change:size', () => this.applyPendingArea());
     view.on('change:center', () => this.reportView());
     view.on('change:resolution', () => this.reportView());
   }
 
   destroy(): void {
+    this.pendingArea = undefined;
     this.clearCommonOperationalPicture();
     this.map.setTarget(undefined);
   }
@@ -93,19 +99,35 @@ export class OpenLayersMapAdapter {
   }
 
   fitArea(bounds: MapAreaBounds): void {
-    const [minLongitude, minLatitude, maxLongitude, maxLatitude] = bounds;
-    const minimum = fromLonLat([minLongitude, minLatitude]);
-    const maximum = fromLonLat([maxLongitude, maxLatitude]);
-    const extent = [
-      Math.min(minimum[0], maximum[0]),
-      Math.min(minimum[1], maximum[1]),
-      Math.max(minimum[0], maximum[0]),
-      Math.max(minimum[1], maximum[1]),
-    ];
+    if (!validAreaBounds(bounds)) {
+      return;
+    }
+    this.pendingArea = [...bounds];
+    this.map.updateSize();
+    this.applyPendingArea();
+  }
+
+  private applyPendingArea(): void {
+    if (!this.pendingArea) {
+      return;
+    }
+    const size = this.map.getSize();
+    if (!size || size[0] <= 0 || size[1] <= 0) {
+      return;
+    }
+    const extent = projectedExtent(this.pendingArea);
+    if (!extent) {
+      this.pendingArea = undefined;
+      return;
+    }
+    this.pendingArea = undefined;
+    const view = this.map.getView();
+    view.cancelAnimations();
     this.map.getView().fit(extent, {
-      duration: 400,
-      padding: [56, 56, 56, 56],
+      duration: reducedMotionPreferred() ? 0 : 400,
+      padding: fitPadding(size),
       maxZoom: 10,
+      size,
     });
   }
 
@@ -126,6 +148,53 @@ export class OpenLayersMapAdapter {
     for (const layer of this.copLayers) this.map.removeLayer(layer);
     this.copLayers = [];
   }
+}
+
+function validAreaBounds(bounds: MapAreaBounds): boolean {
+  const [minLongitude, minLatitude, maxLongitude, maxLatitude] = bounds;
+  return (
+    bounds.every(Number.isFinite) &&
+    minLongitude >= -180 &&
+    minLongitude <= 180 &&
+    maxLongitude >= minLongitude &&
+    maxLongitude - minLongitude <= 360 &&
+    minLatitude >= -90 &&
+    maxLatitude <= 90 &&
+    maxLatitude >= minLatitude
+  );
+}
+
+function projectedExtent(bounds: MapAreaBounds): number[] | undefined {
+  const [minLongitude, minLatitude, maxLongitude, maxLatitude] = bounds;
+  const minimum = fromLonLat([
+    minLongitude,
+    Math.max(minLatitude, -WEB_MERCATOR_MAX_LATITUDE),
+  ]);
+  const maximum = fromLonLat([
+    maxLongitude,
+    Math.min(maxLatitude, WEB_MERCATOR_MAX_LATITUDE),
+  ]);
+  const extent = [
+    Math.min(minimum[0], maximum[0]),
+    Math.min(minimum[1], maximum[1]),
+    Math.max(minimum[0], maximum[0]),
+    Math.max(minimum[1], maximum[1]),
+  ];
+  return extent.every(Number.isFinite) ? extent : undefined;
+}
+
+function fitPadding(size: readonly number[]): [number, number, number, number] {
+  const horizontal = Math.min(DEFAULT_FIT_PADDING, Math.max(0, (size[0] - 1) / 2));
+  const vertical = Math.min(DEFAULT_FIT_PADDING, Math.max(0, (size[1] - 1) / 2));
+  return [vertical, horizontal, vertical, horizontal];
+}
+
+function reducedMotionPreferred(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 }
 
 function toOpenLayersGeometry(geometry: CopGeometry): Geometry {

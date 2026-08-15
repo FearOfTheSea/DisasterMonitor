@@ -22,6 +22,7 @@ export function DisasterMap({
 }: DisasterMapProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const adapter = useRef<OpenLayersMapAdapter | null>(null);
+  const fittedAreaKey = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (!mapElement.current) {
@@ -35,6 +36,7 @@ export function DisasterMap({
     return () => {
       adapter.current?.destroy();
       adapter.current = null;
+      fittedAreaKey.current = undefined;
     };
   }, [onViewChange]);
 
@@ -43,9 +45,15 @@ export function DisasterMap({
   }, [commonOperationalPicture]);
 
   useEffect(() => {
-    if (areaOfInterest) {
-      adapter.current?.fitArea(areaOfInterest.bounds);
+    if (!areaOfInterest || !adapter.current) {
+      return;
     }
+    const key = `${areaOfInterest.id}:${areaOfInterest.bounds.join(',')}`;
+    if (fittedAreaKey.current === key) {
+      return;
+    }
+    adapter.current.fitArea(areaOfInterest.bounds);
+    fittedAreaKey.current = key;
   }, [areaOfInterest]);
 
   return (

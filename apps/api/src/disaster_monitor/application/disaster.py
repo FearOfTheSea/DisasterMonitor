@@ -136,6 +136,8 @@ class SelectedEventSummary:
     hazard: Hazard
     location: str
     event_time: datetime
+    latitude: float | None
+    longitude: float | None
     magnitude: float | None
     intensity: str | None
     depth_km: float | None

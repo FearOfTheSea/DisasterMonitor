@@ -662,6 +662,8 @@ def compose_report(
             packet.event.hazard,
             packet.event.location,
             packet.event.event_time,
+            packet.event.latitude,
+            packet.event.longitude,
             packet.event.magnitude,
             packet.event.intensity,
             packet.event.depth_km,

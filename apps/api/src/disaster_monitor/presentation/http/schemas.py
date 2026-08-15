@@ -156,6 +156,8 @@ class SelectedEventResponse(BaseModel):
     hazard: str
     location: str
     event_time: datetime
+    latitude: Annotated[float, Field(ge=-90, le=90)] | None = None
+    longitude: Annotated[float, Field(ge=-180, le=180)] | None = None
     magnitude: float | None = None
     intensity: str | None = None
     depth_km: float | None = None

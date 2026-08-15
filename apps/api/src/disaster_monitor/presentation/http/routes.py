@@ -357,6 +357,8 @@ async def assistant(
                 hazard=selected_event.hazard,
                 location=selected_event.location,
                 event_time=selected_event.event_time,
+                latitude=selected_event.latitude,
+                longitude=selected_event.longitude,
                 magnitude=selected_event.magnitude,
                 intensity=selected_event.intensity,
                 depth_km=selected_event.depth_km,
