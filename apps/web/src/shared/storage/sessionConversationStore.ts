@@ -4,6 +4,7 @@ import {
   isCommonOperationalPicture,
   isMultimodalEvidenceState,
 } from '@/shared/validation/multimodal';
+import { isMapNavigationAction } from '@/shared/validation/mapNavigation';
 
 const STORAGE_KEY = 'disaster-monitor.conversation.v1';
 
@@ -67,6 +68,7 @@ export class SessionConversationStore {
         typeof item.id === 'string' &&
         (item.role === 'user' || item.role === 'assistant') &&
         typeof item.content === 'string' &&
+        (item.mapAction === undefined || isMapNavigationAction(item.mapAction)) &&
         this.isStoredReport(item.report)
       );
     });

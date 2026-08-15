@@ -59,6 +59,64 @@ describe('AssistantClient', () => {
     );
   });
 
+  it('accepts a validated viewport action from the assistant', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Showing Japan on the map.',
+          conversation_id: 'session-map',
+          model: 'fake-qwen',
+          map_action: {
+            type: 'fit_bounds',
+            bounds: [122, 20, 154, 46],
+            label: 'Japan',
+            max_zoom: 10,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Zoom into Japan.', null, {
+        centerLatitude: 21.03,
+        centerLongitude: 105.85,
+        zoom: 10,
+      }),
+    ).resolves.toMatchObject({
+      map_action: { type: 'fit_bounds', label: 'Japan' },
+    });
+  });
+
+  it('rejects arbitrary or malformed assistant UI actions', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Unsafe action',
+          conversation_id: 'session-map',
+          model: 'fake-qwen',
+          map_action: {
+            type: 'run_javascript',
+            code: 'arbitrary()',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Move the map.', null, {
+        centerLatitude: 21.03,
+        centerLongitude: 105.85,
+        zoom: 10,
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<AssistantApiError>>({ status: 502 }),
+    );
+  });
+
   it('accepts structured current-disaster metadata and source timestamps', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

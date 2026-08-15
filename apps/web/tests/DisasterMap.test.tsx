@@ -28,7 +28,7 @@ describe('DisasterMap assistant focus', () => {
     );
 
     expect(adapterMocks.fitArea).toHaveBeenCalledTimes(1);
-    expect(adapterMocks.fitArea).toHaveBeenLastCalledWith([137, 37, 137, 37]);
+    expect(adapterMocks.fitArea).toHaveBeenLastCalledWith([137, 37, 137, 37], 10);
 
     rerender(
       <DisasterMap
@@ -41,11 +41,15 @@ describe('DisasterMap assistant focus', () => {
     rerender(
       <DisasterMap
         onViewChange={onViewChange}
-        areaOfInterest={{ id: 'assistant-1:event:event-1', bounds: [136, 36, 138, 38] }}
+        areaOfInterest={{
+          id: 'assistant-1:event:event-1',
+          bounds: [136, 36, 138, 38],
+          maxZoom: 8,
+        }}
       />,
     );
     expect(adapterMocks.fitArea).toHaveBeenCalledTimes(2);
-    expect(adapterMocks.fitArea).toHaveBeenLastCalledWith([136, 36, 138, 38]);
+    expect(adapterMocks.fitArea).toHaveBeenLastCalledWith([136, 36, 138, 38], 8);
 
     unmount();
     expect(adapterMocks.destroy).toHaveBeenCalledTimes(1);

@@ -11,6 +11,7 @@ from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
 from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.services.map_navigation import MapNavigationService
 from disaster_monitor.application.services.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
 )
@@ -30,10 +31,12 @@ class RunDisasterAgent:
         runtime: DisasterAgentRuntime,
         general_model: LanguageModel,
         asset_admission: MultimodalAssetAdmissionService | None = None,
+        map_navigation: MapNavigationService | None = None,
     ) -> None:
         self._runtime = runtime
         self._general_model = general_model
         self._asset_admission = asset_admission
+        self._map_navigation = map_navigation
 
     async def execute(
         self,
@@ -67,6 +70,15 @@ class RunDisasterAgent:
                 message=message,
                 conversation_id=_conversation_id(conversation),
                 model="disaster-agent",
+                map_action=(
+                    self._map_navigation.for_disaster_context(
+                        cop=state.workspace.common_operational_picture,
+                        selected_event=None,
+                        country=state.task.country,
+                    )
+                    if self._map_navigation is not None
+                    else None
+                ),
                 response_type=_response_type_without_report(state.final_status),
                 warnings=tuple(state.warnings),
                 partial=True,
@@ -76,6 +88,15 @@ class RunDisasterAgent:
             message=report.message,
             conversation_id=_conversation_id(conversation),
             model="source-backed-agent",
+            map_action=(
+                self._map_navigation.for_disaster_context(
+                    cop=state.workspace.common_operational_picture,
+                    selected_event=report.selected_event,
+                    country=state.task.country,
+                )
+                if self._map_navigation is not None
+                else None
+            ),
             response_type=report.response_type,
             selected_event=report.selected_event,
             retrieval_time=report.retrieval_time,
@@ -92,7 +113,14 @@ class RunDisasterAgent:
     async def _general_answer(
         self, question: str, conversation: str, map_view: MapView | None
     ) -> AssistantAnswer:
-        request = prepare_model_request(MapQuestion(question, conversation, map_view))
+        request = prepare_model_request(
+            MapQuestion(question, conversation, map_view),
+            tools=(
+                self._map_navigation.model_tools()
+                if self._map_navigation is not None
+                else ()
+            ),
+        )
         try:
             response = await self._general_model.generate(request)
         except ModelRuntimeError:
@@ -101,10 +129,26 @@ class RunDisasterAgent:
             raise ModelRuntimeError(
                 "The local model runtime could not answer the question."
             ) from error
+        map_action = (
+            self._map_navigation.execute_model_calls(
+                response.tool_calls, admitted_text=question
+            )
+            if self._map_navigation is not None
+            else None
+        )
         message = clean_model_text(response.text)
+        if not message and map_action is not None:
+            message = f"Showing {map_action.label} on the map."
+        if not message and response.tool_calls:
+            message = "I could not safely apply that map change."
         if not message:
             raise ModelResponseError("The local model returned an empty response.")
-        return AssistantAnswer(message, _conversation_id(conversation), response.model)
+        return AssistantAnswer(
+            message,
+            _conversation_id(conversation),
+            response.model,
+            map_action=map_action,
+        )
 
 
 def _conversation_id(value: str) -> str:

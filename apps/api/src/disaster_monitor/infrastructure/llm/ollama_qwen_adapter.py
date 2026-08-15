@@ -8,6 +8,7 @@ from disaster_monitor.application.dto import (
     ModelReadiness,
     ModelRequest,
     ModelResponse,
+    ModelToolCall,
 )
 from disaster_monitor.domain.errors import ModelResponseError, ModelRuntimeError
 
@@ -31,22 +32,35 @@ class OllamaQwenAdapter:
 
     async def generate(self, request: ModelRequest) -> ModelResponse:
         """Generate one non-streaming answer from Ollama's chat endpoint."""
+        request_payload: dict[str, Any] = {
+            "model": self._model_name,
+            "messages": [
+                {"role": message.role, "content": message.content}
+                for message in request.messages
+            ],
+            "stream": False,
+            "think": False,
+            "options": {
+                "num_predict": self._max_tokens,
+                "temperature": 0.2,
+            },
+        }
+        if request.tools:
+            request_payload["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.parameters,
+                    },
+                }
+                for tool in request.tools
+            ]
         try:
             response = await self._client.post(
                 f"{self._base_url}/api/chat",
-                json={
-                    "model": self._model_name,
-                    "messages": [
-                        {"role": message.role, "content": message.content}
-                        for message in request.messages
-                    ],
-                    "stream": False,
-                    "think": False,
-                    "options": {
-                        "num_predict": self._max_tokens,
-                        "temperature": 0.2,
-                    },
-                },
+                json=request_payload,
             )
             response.raise_for_status()
         except httpx.HTTPError as error:
@@ -57,9 +71,18 @@ class OllamaQwenAdapter:
         payload = self._payload(response)
         message = payload.get("message")
         generated_text = message.get("content") if isinstance(message, dict) else None
-        if not isinstance(generated_text, str) or not generated_text.strip():
+        tool_calls = self._tool_calls(
+            message.get("tool_calls") if isinstance(message, dict) else None
+        )
+        if not isinstance(generated_text, str):
+            generated_text = ""
+        if not generated_text.strip() and not tool_calls:
             raise ModelResponseError("Ollama returned an empty response.")
-        return ModelResponse(text=generated_text.strip(), model=self._model_name)
+        return ModelResponse(
+            text=generated_text.strip(),
+            model=self._model_name,
+            tool_calls=tool_calls,
+        )
 
     async def check_readiness(self) -> ModelReadiness:
         """Check the Ollama service and whether the configured model is installed."""
@@ -99,3 +122,28 @@ class OllamaQwenAdapter:
         if not isinstance(payload, dict):
             raise ModelResponseError("Ollama returned an invalid response payload.")
         return payload
+
+    @staticmethod
+    def _tool_calls(value: object) -> tuple[ModelToolCall, ...]:
+        if value is None:
+            return ()
+        if not isinstance(value, list):
+            raise ModelResponseError("Ollama returned invalid tool calls.")
+        calls: list[ModelToolCall] = []
+        for item in value:
+            if not isinstance(item, dict):
+                raise ModelResponseError("Ollama returned an invalid tool call.")
+            function = item.get("function")
+            if not isinstance(function, dict):
+                raise ModelResponseError("Ollama returned an invalid tool function.")
+            name = function.get("name")
+            arguments = function.get("arguments")
+            if (
+                not isinstance(name, str)
+                or not name.strip()
+                or not isinstance(arguments, dict)
+                or any(not isinstance(key, str) for key in arguments)
+            ):
+                raise ModelResponseError("Ollama returned invalid tool arguments.")
+            calls.append(ModelToolCall(name=name, arguments=dict(arguments)))
+        return tuple(calls)

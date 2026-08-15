@@ -6,6 +6,7 @@ from datetime import datetime
 from disaster_monitor.application.disaster import ReportSection, SelectedEventSummary
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import SourceReference
+from disaster_monitor.domain.models import MapNavigationAction
 from disaster_monitor.domain.multimodal import (
     CommonOperationalPicture,
     MultimodalEvidenceState,
@@ -67,10 +68,28 @@ class ModelMessage:
 
 
 @dataclass(frozen=True, slots=True)
+class ModelTool:
+    """Provider-neutral function tool exposed to a language model."""
+
+    name: str
+    description: str
+    parameters: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class ModelToolCall:
+    """One model-requested function call; execution remains application-owned."""
+
+    name: str
+    arguments: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
 class ModelRequest:
     """Provider-neutral model invocation request."""
 
     messages: tuple[ModelMessage, ...]
+    tools: tuple[ModelTool, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +98,7 @@ class ModelResponse:
 
     text: str
     model: str
+    tool_calls: tuple[ModelToolCall, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +117,7 @@ class AssistantAnswer:
     message: str
     conversation_id: str
     model: str
+    map_action: MapNavigationAction | None = None
     response_type: str = "assistant"
     selected_event: SelectedEventSummary | None = None
     retrieval_time: datetime | None = None

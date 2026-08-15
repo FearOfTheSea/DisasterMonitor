@@ -9,27 +9,26 @@ export type MapAreaBounds = readonly [number, number, number, number];
 export type AssistantMapAreaOfInterest = {
   id: string;
   bounds: MapAreaBounds;
-};
-
-// Mirrors the bounded country extents in the backend's packaged geography catalog.
-// These are navigation extents only, not legal borders or new geocoding data.
-const SUPPORTED_COUNTRIES: Readonly<
-  Record<string, { code: string; bounds: MapAreaBounds }>
-> = {
-  JPN: { code: 'JPN', bounds: [122, 20, 154, 46] },
-  JAPAN: { code: 'JPN', bounds: [122, 20, 154, 46] },
-  VNM: { code: 'VNM', bounds: [102.14, 8.18, 109.47, 23.4] },
-  VIETNAM: { code: 'VNM', bounds: [102.14, 8.18, 109.47, 23.4] },
-  'VIET NAM': { code: 'VNM', bounds: [102.14, 8.18, 109.47, 23.4] },
-  VEN: { code: 'VEN', bounds: [-73.35, 0.63, -59.8, 12.2] },
-  VENEZUELA: { code: 'VEN', bounds: [-73.35, 0.63, -59.8, 12.2] },
+  maxZoom?: number;
 };
 
 export function assistantMapAreaOfInterest(
   messages: readonly ConversationMessage[],
 ): AssistantMapAreaOfInterest | undefined {
   const latestMessage = messages[messages.length - 1];
-  if (!latestMessage || latestMessage.role !== 'assistant' || !latestMessage.report) {
+  if (!latestMessage || latestMessage.role !== 'assistant') {
+    return undefined;
+  }
+
+  if (latestMessage.mapAction) {
+    return {
+      id: `${latestMessage.id}:action:${latestMessage.mapAction.type}`,
+      bounds: latestMessage.mapAction.bounds,
+      maxZoom: latestMessage.mapAction.max_zoom,
+    };
+  }
+
+  if (!latestMessage.report) {
     return undefined;
   }
 
@@ -54,18 +53,7 @@ export function assistantMapAreaOfInterest(
     };
   }
 
-  const country = latestMessage.report.investigation?.country?.trim();
-  if (!country) {
-    return undefined;
-  }
-  const supportedCountry = SUPPORTED_COUNTRIES[country.toUpperCase()];
-  if (!supportedCountry) {
-    return undefined;
-  }
-  return {
-    id: `${latestMessage.id}:country:${supportedCountry.code}`,
-    bounds: supportedCountry.bounds,
-  };
+  return undefined;
 }
 
 function boundsForCommonOperationalPicture(

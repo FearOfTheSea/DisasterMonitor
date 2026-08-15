@@ -18,7 +18,20 @@ describe('SessionConversationStore', () => {
     const store = new SessionConversationStore(browserStorage);
     const state = {
       conversationId: 'session-1',
-      messages: [{ id: 'm1', role: 'user' as const, content: 'Hello' }],
+      messages: [
+        { id: 'm1', role: 'user' as const, content: 'Zoom into Japan.' },
+        {
+          id: 'm2',
+          role: 'assistant' as const,
+          content: 'Showing Japan on the map.',
+          mapAction: {
+            type: 'fit_bounds' as const,
+            bounds: [122, 20, 154, 46] as [number, number, number, number],
+            label: 'Japan',
+            max_zoom: 10,
+          },
+        },
+      ],
     };
 
     store.save(state);

@@ -33,10 +33,15 @@ type MapAdapterOptions = {
 const DEFAULT_FIT_PADDING = 56;
 const WEB_MERCATOR_MAX_LATITUDE = 85.0511287798066;
 
+type PendingArea = {
+  bounds: MapAreaBounds;
+  maxZoom: number;
+};
+
 export class OpenLayersMapAdapter {
   private readonly map: Map;
   private copLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
-  private pendingArea?: MapAreaBounds;
+  private pendingArea?: PendingArea;
 
   constructor(private readonly options: MapAdapterOptions) {
     const baseLayer = new TileLayer({ source: new OSM() });
@@ -98,11 +103,11 @@ export class OpenLayersMapAdapter {
     }
   }
 
-  fitArea(bounds: MapAreaBounds): void {
-    if (!validAreaBounds(bounds)) {
+  fitArea(bounds: MapAreaBounds, maxZoom = 10): void {
+    if (!validAreaBounds(bounds) || !validMaxZoom(maxZoom)) {
       return;
     }
-    this.pendingArea = [...bounds];
+    this.pendingArea = { bounds: [...bounds], maxZoom };
     this.map.updateSize();
     this.applyPendingArea();
   }
@@ -115,18 +120,19 @@ export class OpenLayersMapAdapter {
     if (!size || size[0] <= 0 || size[1] <= 0) {
       return;
     }
-    const extent = projectedExtent(this.pendingArea);
+    const extent = projectedExtent(this.pendingArea.bounds);
     if (!extent) {
       this.pendingArea = undefined;
       return;
     }
+    const { maxZoom } = this.pendingArea;
     this.pendingArea = undefined;
     const view = this.map.getView();
     view.cancelAnimations();
     this.map.getView().fit(extent, {
       duration: reducedMotionPreferred() ? 0 : 400,
       padding: fitPadding(size),
-      maxZoom: 10,
+      maxZoom,
       size,
     });
   }
@@ -162,6 +168,10 @@ function validAreaBounds(bounds: MapAreaBounds): boolean {
     maxLatitude <= 90 &&
     maxLatitude >= minLatitude
   );
+}
+
+function validMaxZoom(maxZoom: number): boolean {
+  return Number.isFinite(maxZoom) && maxZoom >= 2 && maxZoom <= 18;
 }
 
 function projectedExtent(bounds: MapAreaBounds): number[] | undefined {

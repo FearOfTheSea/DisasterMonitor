@@ -29,6 +29,7 @@ from disaster_monitor.application.services.current_disaster_report import (
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
+from disaster_monitor.application.services.map_navigation import MapNavigationService
 from disaster_monitor.application.services.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
 )
@@ -113,6 +114,7 @@ def create_app(
         agent_runtime,
         language_model,
         asset_admission,
+        MapNavigationService(country_catalog),
     )
 
     @asynccontextmanager

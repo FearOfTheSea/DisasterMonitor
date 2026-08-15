@@ -6,7 +6,7 @@ import pytest
 from conftest import FakeLanguageModel
 
 from disaster_monitor.application.disaster import ProviderBatch
-from disaster_monitor.application.dto import ModelRequest
+from disaster_monitor.application.dto import ModelRequest, ModelToolCall
 from disaster_monitor.application.multimodal import (
     VisualModelPrediction,
     VisualModelReadiness,
@@ -217,6 +217,44 @@ async def test_map_context_question_cannot_be_reclassified_by_agent_model() -> N
 
 
 @pytest.mark.asyncio
+async def test_general_map_command_executes_the_agent_country_tool() -> None:
+    model = FakeLanguageModel(
+        response_text="",
+        tool_calls=(ModelToolCall("fit_country", {"country_code": "JPN"}),),
+    )
+    app = create_app(model=model)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={
+                "question": "Zoom into Japan.",
+                "map_view": {
+                    "center_latitude": 21.03,
+                    "center_longitude": 105.85,
+                    "zoom": 10,
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": "Showing Japan on the map.",
+        "conversation_id": response.json()["conversation_id"],
+        "model": "fake-qwen",
+        "map_action": {
+            "type": "fit_bounds",
+            "bounds": [122.0, 20.0, 154.0, 46.0],
+            "label": "Japan",
+            "max_zoom": 10.0,
+        },
+    }
+    assert [tool.name for tool in model.requests[0].tools] == ["fit_country"]
+
+
+@pytest.mark.asyncio
 async def test_assistant_validation_and_model_error_mapping() -> None:
     validation_app = create_app(model=FakeLanguageModel())
     error_app = create_app(
@@ -264,6 +302,12 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     assert body["selected_event"]["event_id"] == "jma:fixture-event"
     assert body["selected_event"]["latitude"] == 37.0
     assert body["selected_event"]["longitude"] == 137.0
+    assert body["map_action"] == {
+        "type": "fit_bounds",
+        "bounds": [137.0, 37.0, 137.0, 37.0],
+        "label": "Ishikawa, Japan",
+        "max_zoom": 10.0,
+    }
     assert "Situation summary" in body["message"]
     assert body["retrieval_time"] == NOW.isoformat().replace("+00:00", "Z")
     assert body["sources"][0]["source_id"] == "fixture-events"

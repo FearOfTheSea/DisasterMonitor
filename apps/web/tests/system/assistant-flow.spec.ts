@@ -5,6 +5,12 @@ test('submits the target current-disaster question and renders a source-backed r
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Open assistant' }).click();
+  await page.getByLabel('Question').fill('Zoom into Japan.');
+  await page.getByRole('button', { name: 'Ask assistant' }).click();
+  await expect(
+    page.locator('.message-assistant').filter({ hasText: 'Showing Japan on the map.' }),
+  ).toBeVisible();
+  await expect(page.getByText(/138\.00/)).toBeVisible();
   await page
     .getByLabel('Question')
     .fill(

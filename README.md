@@ -18,6 +18,9 @@ planning cannot create providers, countries, URLs, or facts. See
 - Browser-session conversation continuity using `sessionStorage`.
 - FastAPI health, readiness, and assistant endpoints.
 - Ollama adapter for a configurable local Qwen model.
+- Catalog-backed `fit_country` viewport tool that lets the local assistant move the
+  map for explicit navigation requests without granting it arbitrary geometry,
+  evidence, or consequential-action authority.
 - Bounded operator-supplied image admission, metadata-only event association, local
   Qwen3-VL analytical observations, and provenance-bearing vector COP overlays.
 - Deterministic current-earthquake request classification and event selection.

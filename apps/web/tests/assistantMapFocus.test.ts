@@ -40,29 +40,25 @@ const selectedEvent = {
 };
 
 describe('assistantMapAreaOfInterest', () => {
-  it('fits the validated investigation country when no COP geometry exists', () => {
+  it('executes an explicit agent viewport action without requiring a report', () => {
     const result = assistantMapAreaOfInterest([
-      assistantMessage({
-        ...baseReport,
-        investigation: {
-          status: 'completed',
-          task_summary: 'Current earthquake information in Japan',
-          hazard: 'earthquake',
-          country: 'JPN',
-          information_needs: [],
-          output_modalities: [],
-          actions: [],
-          source_ids: [],
-          evidence_count: 1,
-          capability_gaps: [],
-          termination_reason: 'completed',
+      {
+        id: 'assistant-map-action',
+        role: 'assistant',
+        content: 'Showing Japan on the map.',
+        mapAction: {
+          type: 'fit_bounds',
+          bounds: [122, 20, 154, 46],
+          label: 'Japan',
+          max_zoom: 8,
         },
-      }),
+      },
     ]);
 
     expect(result).toEqual({
-      id: 'assistant-1:country:JPN',
+      id: 'assistant-map-action:action:fit_bounds',
       bounds: [122, 20, 154, 46],
+      maxZoom: 8,
     });
   });
 
@@ -172,7 +168,7 @@ describe('assistantMapAreaOfInterest', () => {
     });
   });
 
-  it('falls back safely when selected-event coordinates are incomplete or invalid', () => {
+  it('does not invent a focus when selected-event coordinates are invalid', () => {
     const result = assistantMapAreaOfInterest([
       assistantMessage({
         ...baseReport,
@@ -193,10 +189,7 @@ describe('assistantMapAreaOfInterest', () => {
       }),
     ]);
 
-    expect(result).toEqual({
-      id: 'assistant-1:country:JPN',
-      bounds: [122, 20, 154, 46],
-    });
+    expect(result).toBeUndefined();
   });
 
   it('uses the short wrapped extent for COP geometry crossing the antimeridian', () => {

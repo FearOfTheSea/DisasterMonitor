@@ -72,6 +72,7 @@ export function useAssistantConversation() {
               id: crypto.randomUUID(),
               role: 'assistant',
               content: response.message,
+              ...(response.map_action ? { mapAction: response.map_action } : {}),
               ...(report ? { report } : {}),
             },
           ],

@@ -4,6 +4,7 @@ export type ConversationMessage = {
   id: string;
   role: MessageRole;
   content: string;
+  mapAction?: MapNavigationAction;
   report?: AssistantReport;
 };
 
@@ -27,6 +28,7 @@ export type AssistantResponse = {
   message: string;
   conversation_id: string;
   model: string;
+  map_action?: MapNavigationAction | null;
   response_type?: string;
   selected_event?: SelectedEvent | null;
   retrieval_time?: string | null;
@@ -38,6 +40,13 @@ export type AssistantResponse = {
   decision_support?: DecisionSupportArtifact | null;
   multimodal?: MultimodalEvidenceState | null;
   common_operational_picture?: CommonOperationalPicture | null;
+};
+
+export type MapNavigationAction = {
+  type: 'fit_bounds';
+  bounds: [number, number, number, number];
+  label: string;
+  max_zoom: number;
 };
 
 export type InvestigationSummary = {

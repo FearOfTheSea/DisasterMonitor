@@ -71,12 +71,15 @@ sequenceDiagram
         Report-->>UseCase: deterministic source-backed report
         end
     else clearly non-disaster or general knowledge
-    UseCase->>UseCase: normalize and prepare deterministic messages
-    UseCase->>Port: generate(ModelRequest)
+    UseCase->>UseCase: normalize and prepare messages + allowlisted map tool
+    UseCase->>Port: generate(ModelRequest + fit_country schema)
     Port->>Adapter: provider-neutral call
     Adapter->>Model: POST /api/chat
-    Model-->>Adapter: provider response
+    Model-->>Adapter: prose or fit_country(country_code) call
     Adapter-->>UseCase: ModelResponse
+    opt validated map tool call
+        UseCase->>UseCase: resolve country through packaged catalog
+    end
     end
     UseCase-->>Route: AssistantAnswer
     Route-->>Browser: stable JSON response
@@ -93,6 +96,9 @@ import FastAPI, Ollama, `httpx`, or Pydantic. Composition selects concrete adapt
 ## Frontend boundaries
 
 - `AssistantClient` owns HTTP transport and response-shape checks.
+- Agent-requested map changes cross the API only as validated `fit_bounds` actions;
+  the browser cannot execute arbitrary model-generated commands or treat viewport
+  movement as disaster evidence.
 - `useAssistantConversation` owns the user-message / assistant-response workflow, status, and errors.
 - `SessionConversationStore` owns browser `sessionStorage` serialization.
 - `OpenLayersMapAdapter` owns map construction, view conversion, typed COP rendering,

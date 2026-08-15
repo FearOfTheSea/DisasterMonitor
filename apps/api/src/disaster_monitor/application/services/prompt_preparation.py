@@ -3,7 +3,7 @@
 import re
 import unicodedata
 
-from disaster_monitor.application.dto import ModelMessage, ModelRequest
+from disaster_monitor.application.dto import ModelMessage, ModelRequest, ModelTool
 from disaster_monitor.domain.errors import InvalidQuestionError
 from disaster_monitor.domain.models import MapQuestion
 
@@ -12,6 +12,11 @@ Help users understand map and disaster-monitoring concepts using only the text a
 map view context supplied in the request.
 The application has no live weather, flood, satellite, geocoding, or other
 external-data connections yet. Clearly say when current data is unavailable.
+When the user explicitly asks you to move, show, locate, center, pan, or zoom the map
+to a supported country, you must call the available viewport tool instead of replying
+in prose. Resolve a supported country name to the country code listed in the tool
+schema yourself; never ask the user for that code. The viewport tool does not require
+existing map view context. A viewport change supplies no disaster evidence.
 Do not claim to see current conditions, map layers, measurements, locations, or
 observations that were not provided.
 Give general analysis, safety-aware guidance, and practical next steps when
@@ -53,10 +58,14 @@ def normalize_conversation_id(raw_conversation_id: str | None) -> str:
     return normalized
 
 
-def prepare_model_request(question: MapQuestion) -> ModelRequest:
+def prepare_model_request(
+    question: MapQuestion, tools: tuple[ModelTool, ...] = ()
+) -> ModelRequest:
     """Build the stable system and user messages sent to any model adapter."""
     if question.map_view is None:
-        map_context = "Map view context: unavailable."
+        map_context = (
+            "Map view context: not supplied. This does not prevent viewport tool use."
+        )
     else:
         view = question.map_view
         map_context = (
@@ -66,12 +75,13 @@ def prepare_model_request(question: MapQuestion) -> ModelRequest:
             f"zoom {view.zoom:.2f}."
         )
 
-    user_prompt = f"{map_context}\nUser question: {question.text}"
+    user_prompt = f"User question: {question.text}\n{map_context}"
     return ModelRequest(
         messages=(
             ModelMessage(role="system", content=SYSTEM_PROMPT),
             ModelMessage(role="user", content=user_prompt),
-        )
+        ),
+        tools=tools,
     )
 
 

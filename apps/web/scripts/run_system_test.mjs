@@ -44,10 +44,24 @@ function stopStack() {
 
 try {
   await waitForApplication('http://127.0.0.1:4173/');
+  await waitForApplication('http://127.0.0.1:8787/api/v1/health');
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: 'Open assistant' }).click();
+  await page.getByLabel('Question').fill('Zoom into Japan.');
+  const mapActionResponse = page.waitForResponse((response) =>
+    response.url().endsWith('/api/v1/assistant'),
+  );
+  await page.getByRole('button', { name: 'Ask assistant' }).click();
+  if (!(await mapActionResponse).ok()) {
+    throw new Error('The agent map-tool request failed.');
+  }
+  await page
+    .locator('.message-assistant')
+    .filter({ hasText: 'Showing Japan on the map.' })
+    .waitFor();
+  await page.getByText(/138\.00/).waitFor();
   await page
     .getByLabel('Question')
     .fill(
@@ -87,7 +101,7 @@ try {
     .first()
     .waitFor();
   await browser.close();
-  console.log('System test passed: source-backed current-disaster report rendered.');
+  console.log('System test passed: agent map tool and source-backed report rendered.');
 } finally {
   stopStack();
 }

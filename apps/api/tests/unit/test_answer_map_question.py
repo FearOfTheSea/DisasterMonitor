@@ -46,7 +46,8 @@ def test_prompt_preparation_is_deterministic_without_map_context() -> None:
 
     assert request == prepare_model_request(question)
     assert request.messages[1].content == (
-        "Map view context: unavailable.\nUser question: Explain the map"
+        "User question: Explain the map\nMap view context: not supplied. "
+        "This does not prevent viewport tool use."
     )
 
 

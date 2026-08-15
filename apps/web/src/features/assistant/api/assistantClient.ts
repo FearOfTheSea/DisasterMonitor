@@ -9,6 +9,7 @@ import {
   isCommonOperationalPicture,
   isMultimodalEvidenceState,
 } from '@/shared/validation/multimodal';
+import { isMapNavigationAction } from '@/shared/validation/mapNavigation';
 
 export class AssistantApiError extends Error {
   constructor(
@@ -81,6 +82,13 @@ export class AssistantClient {
       typeof item.model === 'string'
     ) {
       if (item.response_type !== undefined && typeof item.response_type !== 'string') {
+        return false;
+      }
+      if (
+        item.map_action !== undefined &&
+        item.map_action !== null &&
+        !isMapNavigationAction(item.map_action)
+      ) {
         return false;
       }
       if (item.retrieval_time != null && typeof item.retrieval_time !== 'string') {

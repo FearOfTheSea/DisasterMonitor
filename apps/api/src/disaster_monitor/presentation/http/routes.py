@@ -17,7 +17,7 @@ from disaster_monitor.application.services.operational_ingestion import (
 )
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.domain.decision import DecisionSupportArtifact
-from disaster_monitor.domain.models import MapView
+from disaster_monitor.domain.models import MapNavigationAction, MapView
 from disaster_monitor.domain.operations import OperatorActionRecord
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.presentation.http.metrics import OperationalMetrics
@@ -37,6 +37,7 @@ from disaster_monitor.presentation.http.schemas import (
     EvidenceSnapshotResponse,
     HealthResponse,
     InvestigationResponse,
+    MapNavigationActionResponse,
     OperatorActionRequest,
     OperatorActionResponse,
     ProviderFreshnessResponse,
@@ -338,6 +339,14 @@ async def assistant(
         )
     )
     if result.response_type == "assistant":
+        map_action = _map_action_response(result.map_action)
+        if map_action is not None:
+            return AssistantResponse(
+                message=result.message,
+                conversation_id=result.conversation_id,
+                model=result.model,
+                map_action=map_action,
+            )
         return AssistantResponse(
             message=result.message,
             conversation_id=result.conversation_id,
@@ -348,6 +357,7 @@ async def assistant(
         message=result.message,
         conversation_id=result.conversation_id,
         model=result.model,
+        map_action=_map_action_response(result.map_action),
         response_type=result.response_type,
         selected_event=(
             None
@@ -399,6 +409,19 @@ async def assistant(
         decision_support=_decision_support_response(result.decision_support),
         multimodal=multimodal_state_response(result.multimodal_state),
         common_operational_picture=cop_response(result.common_operational_picture),
+    )
+
+
+def _map_action_response(
+    action: MapNavigationAction | None,
+) -> MapNavigationActionResponse | None:
+    if action is None:
+        return None
+    return MapNavigationActionResponse(
+        type="fit_bounds",
+        bounds=action.bounds,
+        label=action.label,
+        max_zoom=action.max_zoom,
     )
 
 

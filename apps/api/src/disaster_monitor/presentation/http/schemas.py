@@ -1,7 +1,7 @@
 """HTTP request and response schemas."""
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,12 +36,24 @@ class AssistantRequest(BaseModel):
     )
 
 
+class MapNavigationActionResponse(BaseModel):
+    """One validated viewport-only action requested by the assistant."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["fit_bounds"] = "fit_bounds"
+    bounds: tuple[float, float, float, float]
+    label: Annotated[str, Field(min_length=1, max_length=160)]
+    max_zoom: Annotated[float, Field(ge=2, le=18)] = 10
+
+
 class AssistantResponse(BaseModel):
     """Stable assistant response returned to the frontend."""
 
     message: str
     conversation_id: str
     model: str
+    map_action: MapNavigationActionResponse | None = None
     response_type: str = "assistant"
     selected_event: "SelectedEventResponse | None" = None
     retrieval_time: datetime | None = None

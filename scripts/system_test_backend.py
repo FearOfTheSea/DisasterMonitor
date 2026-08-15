@@ -13,6 +13,8 @@ from disaster_monitor.application.disaster import ProviderBatch  # noqa: E402
 from disaster_monitor.application.dto import (  # noqa: E402
     ModelReadiness,
     ModelRequest,
+    ModelResponse,
+    ModelToolCall,
 )
 from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
     CurrentDisasterReportService,
@@ -42,7 +44,13 @@ assert JAPAN is not None and VENEZUELA is not None
 
 
 class FakeSystemModel:
-    async def generate(self, _request: ModelRequest):
+    async def generate(self, request: ModelRequest):
+        if any(tool.name == "fit_country" for tool in request.tools):
+            return ModelResponse(
+                text="",
+                model="fake-qwen",
+                tool_calls=(ModelToolCall("fit_country", {"country_code": "JPN"}),),
+            )
         raise AssertionError(f"{MODEL_SENTINEL}: source-backed request reached model")
 
     async def check_readiness(self) -> ModelReadiness:

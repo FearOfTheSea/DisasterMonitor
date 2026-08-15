@@ -48,11 +48,12 @@ export function DisasterMap({
     if (!areaOfInterest || !adapter.current) {
       return;
     }
-    const key = `${areaOfInterest.id}:${areaOfInterest.bounds.join(',')}`;
+    const maxZoom = areaOfInterest.maxZoom ?? 10;
+    const key = `${areaOfInterest.id}:${areaOfInterest.bounds.join(',')}:${maxZoom}`;
     if (fittedAreaKey.current === key) {
       return;
     }
-    adapter.current.fitArea(areaOfInterest.bounds);
+    adapter.current.fitArea(areaOfInterest.bounds, maxZoom);
     fittedAreaKey.current = key;
   }, [areaOfInterest]);
 
