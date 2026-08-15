@@ -17,6 +17,7 @@ import {
   copStyleSemantics,
   type CopAuthority,
 } from '@/features/map/model/copRenderPlan';
+import type { MapAreaBounds } from '@/features/map/model/assistantMapFocus';
 import type {
   CommonOperationalPicture,
   CopGeometry,
@@ -89,6 +90,25 @@ export class OpenLayersMapAdapter {
       this.map.addLayer(layer);
       this.copLayers.push(layer);
     }
+  }
+
+  fitArea(bounds: MapAreaBounds): void {
+    const [minLongitude, minLatitude, maxLongitude, maxLatitude] = bounds;
+    const [minX, minY] = fromLonLat([minLongitude, minLatitude]);
+    const [maxX, maxY] = fromLonLat([maxLongitude, maxLatitude]);
+    this.map.getView().fit(
+      [
+        Math.min(minX, maxX),
+        Math.min(minY, maxY),
+        Math.max(minX, maxX),
+        Math.max(minY, maxY),
+      ],
+      {
+        duration: 400,
+        padding: [56, 56, 56, 56],
+        maxZoom: 10,
+      },
+    );
   }
 
   private reportView(): void {

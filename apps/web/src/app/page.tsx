@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { AssistantPanel } from '@/features/assistant/ui/AssistantPanel';
 import { useAssistantConversation } from '@/features/assistant/hooks/useAssistantConversation';
+import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
 import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
 import { DEFAULT_MAP_VIEW } from '@/shared/config/runtime';
@@ -15,6 +16,10 @@ export default function Home() {
   const [mapView, setMapView] = useState<MapView>(DEFAULT_MAP_VIEW);
   const conversation = useAssistantConversation();
   const handleViewChange = useCallback((view: MapView) => setMapView(view), []);
+  const areaOfInterest = useMemo(
+    () => assistantMapAreaOfInterest(conversation.messages),
+    [conversation.messages],
+  );
   const commonOperationalPicture = [...conversation.messages]
     .reverse()
     .find((message) => message.report?.commonOperationalPicture)
@@ -59,6 +64,7 @@ export default function Home() {
           <DisasterMap
             onViewChange={handleViewChange}
             commonOperationalPicture={commonOperationalPicture}
+            areaOfInterest={areaOfInterest}
           />
           <div className="map-overlay">OpenStreetMap base layer · Hanoi view</div>
         </div>

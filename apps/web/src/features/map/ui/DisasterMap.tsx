@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import 'ol/ol.css';
 
 import { OpenLayersMapAdapter } from '@/features/map/adapters/openLayersMapAdapter';
+import type { AssistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import { copStyleSemantics } from '@/features/map/model/copRenderPlan';
 import { DEFAULT_MAP_VIEW } from '@/features/map/model/mapView';
 import type { CommonOperationalPicture, MapView } from '@/shared/types/assistant';
@@ -11,11 +12,13 @@ import type { CommonOperationalPicture, MapView } from '@/shared/types/assistant
 type DisasterMapProps = {
   onViewChange: (view: MapView) => void;
   commonOperationalPicture?: CommonOperationalPicture;
+  areaOfInterest?: AssistantMapAreaOfInterest;
 };
 
 export function DisasterMap({
   onViewChange,
   commonOperationalPicture,
+  areaOfInterest,
 }: DisasterMapProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const adapter = useRef<OpenLayersMapAdapter | null>(null);
@@ -38,6 +41,12 @@ export function DisasterMap({
   useEffect(() => {
     adapter.current?.setCommonOperationalPicture(commonOperationalPicture);
   }, [commonOperationalPicture]);
+
+  useEffect(() => {
+    if (areaOfInterest) {
+      adapter.current?.fitArea(areaOfInterest.bounds);
+    }
+  }, [areaOfInterest]);
 
   return (
     <>
