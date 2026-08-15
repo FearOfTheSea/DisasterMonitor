@@ -94,21 +94,19 @@ export class OpenLayersMapAdapter {
 
   fitArea(bounds: MapAreaBounds): void {
     const [minLongitude, minLatitude, maxLongitude, maxLatitude] = bounds;
-    const [minX, minY] = fromLonLat([minLongitude, minLatitude]);
-    const [maxX, maxY] = fromLonLat([maxLongitude, maxLatitude]);
-    this.map.getView().fit(
-      [
-        Math.min(minX, maxX),
-        Math.min(minY, maxY),
-        Math.max(minX, maxX),
-        Math.max(minY, maxY),
-      ],
-      {
-        duration: 400,
-        padding: [56, 56, 56, 56],
-        maxZoom: 10,
-      },
-    );
+    const minimum = fromLonLat([minLongitude, minLatitude]);
+    const maximum = fromLonLat([maxLongitude, maxLatitude]);
+    const extent = [
+      Math.min(minimum[0], maximum[0]),
+      Math.min(minimum[1], maximum[1]),
+      Math.max(minimum[0], maximum[0]),
+      Math.max(minimum[1], maximum[1]),
+    ];
+    this.map.getView().fit(extent, {
+      duration: 400,
+      padding: [56, 56, 56, 56],
+      maxZoom: 10,
+    });
   }
 
   private reportView(): void {
