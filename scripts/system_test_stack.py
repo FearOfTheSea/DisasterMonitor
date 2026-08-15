@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from threading import Thread
 
@@ -14,27 +15,35 @@ web_directory = script_directory.parent / "apps" / "web"
 sys.path.insert(0, str(api_src))
 sys.path.insert(0, str(script_directory))
 
-from disaster_monitor.main import create_app  # noqa: E402
+from system_test_backend import (  # noqa: E402
+    NOW,
+    FakeSystemEventProvider,
+    FakeSystemModel,
+    FakeSystemSituationProvider,
+)
+
+from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
+    CurrentDisasterReportService,
+)
 from disaster_monitor.infrastructure.configuration import Settings  # noqa: E402
 from disaster_monitor.infrastructure.disaster.composite import (  # noqa: E402
     CompositeDisasterEventProvider,
 )
-from system_test_backend import (  # noqa: E402
-    FakeSystemEventProvider,
-    FakeSystemModel,
-    FakeSystemSituationProvider,
-    NOW,
-)
-from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
-    CurrentDisasterReportService,
-)
+from disaster_monitor.main import create_app  # noqa: E402
 
 
 def main() -> int:
+    catalog_directory = tempfile.TemporaryDirectory(
+        prefix="disaster-monitor-system-country-catalog-"
+    )
     api_server = uvicorn.Server(
         uvicorn.Config(
             create_app(
-                settings=Settings(allowed_origins="http://127.0.0.1:4173"),
+                settings=Settings(
+                    allowed_origins="http://127.0.0.1:4173",
+                    country_catalog_automatic_updates=False,
+                    country_catalog_root=Path(catalog_directory.name),
+                ),
                 model=FakeSystemModel(),
                 current_disaster_report=CurrentDisasterReportService(
                     CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
@@ -83,6 +92,7 @@ def main() -> int:
         if web_process.poll() is None:
             web_process.terminate()
             web_process.wait(timeout=10)
+        catalog_directory.cleanup()
 
 
 if __name__ == "__main__":

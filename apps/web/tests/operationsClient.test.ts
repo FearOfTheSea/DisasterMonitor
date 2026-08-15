@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  fetchCountryCatalogStatus,
   fetchEvidenceHistory,
   fetchProviderFreshness,
   recordOperatorReview,
+  requestCountryCatalogUpdate,
 } from '@/features/operations/api/operationsClient';
 
 describe('operationsClient', () => {
@@ -79,5 +81,43 @@ describe('operationsClient', () => {
     await expect(
       recordOperatorReview('world-state:1', 'Attempted review.'),
     ).rejects.toThrow('Trusted operator identity is not configured.');
+  });
+
+  it('loads and requests autonomous country catalog updates', async () => {
+    const catalog = {
+      state: 'unchanged',
+      active_version: 'natural-earth-5.1.2.tzdb-2026b.abc123',
+      country_count: 242,
+      automatic_updates_enabled: true,
+      trigger: 'scheduled',
+      last_attempt_at: '2026-08-01T00:00:00Z',
+      last_success_at: '2026-08-01T00:00:00Z',
+      next_scheduled_at: '2026-09-01T00:00:00Z',
+      message: 'Catalog is current.',
+      failure_code: null,
+      sources: [],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(catalog), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...catalog, state: 'updated' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect((await fetchCountryCatalogStatus()).country_count).toBe(242);
+    expect((await requestCountryCatalogUpdate()).state).toBe('updated');
+    expect(fetchMock.mock.calls[1]).toEqual([
+      expect.stringContaining('/operations/country-catalog/update'),
+      { method: 'POST' },
+    ]);
   });
 });

@@ -26,12 +26,13 @@ never dynamically imports or constructs providers.
 | JMA tsunami status         | Situation evidence               | Earthquake         | Japan (`JPN`)                              | Selected event has a JMA identifier |
 | ReliefWeb                  | Supplementary situation evidence | Recognized hazards | Global                                     | Approved `RELIEFWEB_APP_NAME`       |
 
-Earthquakes can therefore receive real event verification for Japan, Vietnam, and
-Venezuela, the countries in catalog version 1.0.0. Japan additionally has configured
-national situation providers. Tsunami, flood, wildfire, landslide, and tropical
-cyclone requests are recognized but currently return coverage unavailable because no
-event-discovery provider for those hazards is registered. ReliefWeb alone cannot verify
-an event and is never treated as an official national total.
+USGS earthquake verification applies to every country admitted by the active catalog;
+the packaged fallback initially contains Japan, Vietnam, and Venezuela. The autonomous
+catalog updater can promote global Natural Earth country metadata without widening any
+provider's declared role or hazard. Japan additionally has configured national
+situation providers. Other hazards depend on the executable registrations shown above;
+ReliefWeb alone cannot verify an event and is never treated as an official national
+total.
 
 The API accepts bounded operator-supplied PNG/JPEG bytes with explicit provenance and
 event metadata. Associated images may produce local analytical observations and a
@@ -68,10 +69,10 @@ never inside provider transport.
 
 ## Geography metadata
 
-The packaged country metadata records ISO alpha-3 codes, canonical English names,
-declared exact aliases, query bounds, simplified polygons, and deterministic calendar
-offsets. The initial codes/names follow ISO 3166-1; geographic extents are simplified
-from Natural Earth 1:110m Admin 0 data, which is public domain. Polygons are query and
-validation approximations, not legal borders or maritime claims. Japan uses UTC+09:00,
-Vietnam UTC+07:00, and Venezuela UTC-04:00; none of these defaults has a seasonal
-daylight-saving transition.
+The packaged fallback records three preservation countries. The autonomous updater
+generates a content-versioned global catalog from a released Natural Earth 1:50m Admin
+0 revision and the latest validated IANA tzdata archive. It retains source revisions,
+checksums, licenses, canonical names, unambiguous aliases, query bounds, simplified
+polygons, and deterministic default timezones. Polygons are query approximations, not
+legal borders or maritime claims. See
+[Autonomous country catalog updates](country-catalog-automation.md).

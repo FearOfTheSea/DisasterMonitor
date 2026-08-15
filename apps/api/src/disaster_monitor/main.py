@@ -17,6 +17,7 @@ from disaster_monitor.application.agent.multimodal_tools import (
 )
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.ports.agent_model import AgentModel
+from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
@@ -42,6 +43,7 @@ from disaster_monitor.application.use_cases.run_disaster_agent import RunDisaste
 from disaster_monitor.infrastructure.composition import (
     build_agent_model,
     build_country_catalog,
+    build_country_catalog_automation,
     build_current_disaster_report,
     build_disaster_query_parser,
     build_language_model,
@@ -66,11 +68,15 @@ def create_app(
     agent_model: AgentModel | None = None,
     visual_analyzer: VisualAnalyzer | None = None,
     operational_repository: OperationalRepository | None = None,
+    country_catalog_automation: CountryCatalogUpdateAutomation | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
     language_model = model or build_language_model(app_settings)
-    country_catalog = build_country_catalog()
+    country_catalog = build_country_catalog(app_settings)
+    catalog_automation = country_catalog_automation or build_country_catalog_automation(
+        app_settings, country_catalog
+    )
     operational = build_operational_services(app_settings, operational_repository)
     disaster_report = current_disaster_report or build_current_disaster_report(
         app_settings,
@@ -123,7 +129,9 @@ def create_app(
             operational.repository, PostgresOperationalRepository
         ):
             await operational.repository.migrate()
+        await catalog_automation.start()
         yield
+        await catalog_automation.aclose()
         close = getattr(app.state.language_model, "aclose", None)
         if close is not None:
             await close()
@@ -185,6 +193,7 @@ def create_app(
         disaster_agent=disaster_agent,
     )
     app.state.operational_repository = operational.repository
+    app.state.country_catalog_automation = catalog_automation
     app.state.settings = app_settings
     app.state.operational_metrics = metrics
     app.include_router(router, prefix="/api/v1")

@@ -31,6 +31,8 @@ test-results/
 *.log
 data/*
 !data/README.md
+apps/api/data/
+apps/web/data/
 session/
 project-owner-context.txt
 deep-research-report-*.md

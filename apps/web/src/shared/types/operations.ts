@@ -12,6 +12,30 @@ export type ProviderFreshness = {
   latest_error_code: string | null;
 };
 
+export type CountryCatalogUpdateState =
+  'never_run' | 'running' | 'updated' | 'unchanged' | 'failed';
+
+export type CountryCatalogSource = {
+  source_id: string;
+  version: string;
+  revision: string;
+  sha256: string;
+};
+
+export type CountryCatalogStatus = {
+  state: CountryCatalogUpdateState;
+  active_version: string;
+  country_count: number;
+  automatic_updates_enabled: boolean;
+  trigger: 'manual' | 'scheduled' | 'script' | null;
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  next_scheduled_at: string | null;
+  message: string;
+  failure_code: string | null;
+  sources: CountryCatalogSource[];
+};
+
 export type EvidenceSnapshot = {
   snapshot_id: string;
   source_id: string;

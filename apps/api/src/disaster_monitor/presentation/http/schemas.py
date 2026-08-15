@@ -215,6 +215,31 @@ class ProviderFreshnessResponse(BaseModel):
     latest_error_code: str | None = None
 
 
+class CountryCatalogSourceResponse(BaseModel):
+    """Immutable upstream revision admitted to the active catalog."""
+
+    source_id: str
+    version: str
+    revision: str
+    sha256: str
+
+
+class CountryCatalogUpdateResponse(BaseModel):
+    """Current autonomous update and monthly scheduling status."""
+
+    state: Literal["never_run", "running", "updated", "unchanged", "failed"]
+    active_version: str
+    country_count: int
+    automatic_updates_enabled: bool
+    trigger: Literal["manual", "scheduled", "script"] | None = None
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    next_scheduled_at: datetime | None = None
+    message: str
+    failure_code: str | None = None
+    sources: list[CountryCatalogSourceResponse] = Field(default_factory=list)
+
+
 class EvidenceSnapshotResponse(BaseModel):
     """Immutable evidence metadata; blob locations remain server-private."""
 

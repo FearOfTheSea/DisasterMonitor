@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '@/shared/config/runtime';
 import type {
+  CountryCatalogStatus,
   EvidenceSnapshot,
   OperatorReviewResult,
   ProviderFreshness,
@@ -29,6 +30,20 @@ export async function fetchEvidenceHistory(signal?: AbortSignal) {
     signal,
   });
   return responseJson<EvidenceSnapshot[]>(response);
+}
+
+export async function fetchCountryCatalogStatus(signal?: AbortSignal) {
+  const response = await fetch(`${API_BASE_URL}/operations/country-catalog`, {
+    signal,
+  });
+  return responseJson<CountryCatalogStatus>(response);
+}
+
+export async function requestCountryCatalogUpdate() {
+  const response = await fetch(`${API_BASE_URL}/operations/country-catalog/update`, {
+    method: 'POST',
+  });
+  return responseJson<CountryCatalogStatus>(response);
 }
 
 export async function recordOperatorReview(stateVersion: string, rationale: string) {

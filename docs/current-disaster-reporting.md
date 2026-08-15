@@ -2,7 +2,10 @@
 
 The agent-first assistant has a deterministic current-disaster path for recognized
 hazard and country requests. A `DisasterQueryParser` resolves exact hazard aliases and
-a packaged country catalog before source-backed tool execution:
+the active versioned country catalog before source-backed tool execution. The packaged
+three-country catalog is a fail-closed fallback; validated global updates are promoted
+autonomously as described in
+[Autonomous country catalog updates](country-catalog-automation.md):
 
 See [Capability and promotion status](capability-status.md) for the authoritative
 distinction between this implemented path, passing automated gates, and normative

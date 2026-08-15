@@ -1,6 +1,9 @@
 """Shared deterministic model doubles for backend tests."""
 
 from dataclasses import dataclass, field
+from pathlib import Path
+
+import pytest
 
 from disaster_monitor.application.dto import (
     ModelReadiness,
@@ -8,6 +11,14 @@ from disaster_monitor.application.dto import (
     ModelResponse,
     ModelToolCall,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolated_country_catalog_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep ignored live catalog data from changing deterministic test baselines."""
+    monkeypatch.setenv("COUNTRY_CATALOG_ROOT", str(tmp_path / "country-catalog"))
 
 
 @dataclass

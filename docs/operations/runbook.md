@@ -1,5 +1,13 @@
 # Operational evidence runbook
 
+## Country catalog automation
+
+The API performs a catch-up-safe country update at 00:00 UTC on the first day of every
+month and retries failures while retaining the last known-good catalog. Status and an
+immediate request are available in the Evidence operations panel. For headless
+operation and complete gate details, see
+[Autonomous country catalog updates](../country-catalog-automation.md).
+
 ## Topology and authority
 
 The production-like local topology is `web + api + scheduler + worker +

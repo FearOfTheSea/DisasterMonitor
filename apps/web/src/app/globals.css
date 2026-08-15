@@ -296,6 +296,7 @@ button {
 .provider-grid,
 .snapshot-list,
 .review-form,
+.catalog-status,
 .provider-status,
 .snapshot-card {
   display: grid;
@@ -321,6 +322,25 @@ button {
   overflow-wrap: anywhere;
 }
 
+.catalog-status {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px;
+}
+
+.catalog-status > div {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.catalog-status small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
 .freshness,
 .snapshot-card span {
   border: 1px solid var(--line);
@@ -335,13 +355,26 @@ button {
   color: #17603a;
 }
 
+.freshness-updated,
+.freshness-unchanged {
+  background: #e8f7ee;
+  color: #17603a;
+}
+
 .freshness-stale,
-.freshness-unavailable {
+.freshness-unavailable,
+.freshness-failed {
   background: var(--warning-bg);
   color: var(--warning);
 }
 
 .freshness-never_ingested {
+  background: #edf2f7;
+  color: #475569;
+}
+
+.freshness-never_run,
+.freshness-running {
   background: #edf2f7;
   color: #475569;
 }

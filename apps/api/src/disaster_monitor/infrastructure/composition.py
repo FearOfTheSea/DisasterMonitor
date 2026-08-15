@@ -1,6 +1,7 @@
 """Manual composition root for the local API."""
 
 from dataclasses import dataclass
+from datetime import timedelta
 
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.language_model import LanguageModel
@@ -62,6 +63,12 @@ from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
 )
 from disaster_monitor.infrastructure.disaster.usgs_adapter import UsgsEarthquakeAdapter
+from disaster_monitor.infrastructure.geography.country_catalog_updates import (
+    AutonomousCountryCatalogUpdater,
+    CountryCatalogAutomation,
+    NaturalEarthCountryCatalogSource,
+    VersionedCountryCatalogStore,
+)
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -172,15 +179,40 @@ def build_source_catalog(settings: Settings | None = None) -> StaticSourceCatalo
     )
 
 
-def build_country_catalog() -> StaticCountryCatalog:
-    """Construct the packaged deterministic country/geography adapter."""
-    return StaticCountryCatalog()
+def build_country_catalog(settings: Settings | None = None) -> StaticCountryCatalog:
+    """Construct the packaged-fallback and runtime-refresh geography adapter."""
+    root = settings.country_catalog_root if settings is not None else None
+    return StaticCountryCatalog(root)
+
+
+def build_country_catalog_automation(
+    settings: Settings,
+    country_catalog: StaticCountryCatalog,
+) -> CountryCatalogAutomation:
+    """Construct the fail-closed monthly and on-request catalog updater."""
+    source = NaturalEarthCountryCatalogSource(
+        timeout_seconds=settings.country_catalog_update_timeout_seconds,
+        max_response_bytes=settings.country_catalog_max_response_bytes,
+    )
+    updater = AutonomousCountryCatalogUpdater(
+        catalog=country_catalog,
+        store=VersionedCountryCatalogStore(
+            settings.country_catalog_root, country_catalog
+        ),
+        source=source,
+        automatic_updates_enabled=settings.country_catalog_automatic_updates,
+    )
+    return CountryCatalogAutomation(
+        updater,
+        automatic_updates_enabled=settings.country_catalog_automatic_updates,
+        retry_interval=timedelta(hours=settings.country_catalog_retry_hours),
+    )
 
 
 def build_disaster_query_parser(
     country_catalog: StaticCountryCatalog | None = None,
 ) -> DisasterQueryParser:
-    """Construct deterministic disaster parsing with packaged country metadata."""
+    """Construct deterministic disaster parsing with active country metadata."""
     return DisasterQueryParser(country_catalog or build_country_catalog())
 
 

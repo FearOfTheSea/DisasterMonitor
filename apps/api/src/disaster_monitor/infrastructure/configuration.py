@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     operational_database_url: SecretStr | None = Field(default=None, repr=False)
     operational_blob_root: Path = Path("data/operational/blobs")
     operational_auto_migrate: bool = True
+    country_catalog_root: Path = Path("data/geography")
+    country_catalog_automatic_updates: bool = True
+    country_catalog_update_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    country_catalog_max_response_bytes: int = Field(
+        default=10_000_000, ge=1_000_000, le=50_000_000
+    )
+    country_catalog_retry_hours: int = Field(default=6, ge=1, le=168)
     trusted_operator_identity_enabled: bool = False
     trusted_operator_identity_header: str = Field(
         default="x-disastermonitor-operator", pattern=r"^[a-z0-9-]+$"

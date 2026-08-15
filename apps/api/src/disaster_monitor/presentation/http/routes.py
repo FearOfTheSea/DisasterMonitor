@@ -10,6 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from disaster_monitor.application.dto import ModelReadiness
 from disaster_monitor.application.multimodal import AssetAdmissionInput
+from disaster_monitor.application.ports.geography import (
+    CountryCatalogUpdateAutomation,
+    CountryCatalogUpdateStatus,
+    CountryCatalogUpdateTrigger,
+)
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.services.operational_ingestion import (
@@ -31,6 +36,8 @@ from disaster_monitor.presentation.http.multimodal_serialization import (
 from disaster_monitor.presentation.http.schemas import (
     AssistantRequest,
     AssistantResponse,
+    CountryCatalogSourceResponse,
+    CountryCatalogUpdateResponse,
     DecisionEstimateResponse,
     DecisionFactResponse,
     DecisionSupportResponse,
@@ -63,6 +70,14 @@ def get_language_model(request: Request) -> LanguageModel:
 def get_operational_repository(request: Request) -> OperationalRepository:
     """Retrieve the operational store built by the composition root."""
     return cast(OperationalRepository, request.app.state.operational_repository)
+
+
+def get_country_catalog_automation(request: Request) -> CountryCatalogUpdateAutomation:
+    """Retrieve autonomous catalog updates from the composition root."""
+    return cast(
+        CountryCatalogUpdateAutomation,
+        request.app.state.country_catalog_automation,
+    )
 
 
 _FRESHNESS_EXPECTATIONS = {
@@ -126,6 +141,61 @@ async def provider_freshness(
         )
         for item in values
     ]
+
+
+@router.get(
+    "/operations/country-catalog",
+    response_model=CountryCatalogUpdateResponse,
+    tags=["operations"],
+)
+async def country_catalog_status(
+    automation: Annotated[
+        CountryCatalogUpdateAutomation, Depends(get_country_catalog_automation)
+    ],
+) -> CountryCatalogUpdateResponse:
+    """Expose active provenance and the next autonomous monthly attempt."""
+    return _country_catalog_response(automation.status())
+
+
+@router.post(
+    "/operations/country-catalog/update",
+    response_model=CountryCatalogUpdateResponse,
+    tags=["operations"],
+)
+async def update_country_catalog(
+    automation: Annotated[
+        CountryCatalogUpdateAutomation, Depends(get_country_catalog_automation)
+    ],
+) -> CountryCatalogUpdateResponse:
+    """Run the same fail-closed path used by monthly automation immediately."""
+    result = await automation.request_update(CountryCatalogUpdateTrigger.MANUAL)
+    return _country_catalog_response(result)
+
+
+def _country_catalog_response(
+    value: CountryCatalogUpdateStatus,
+) -> CountryCatalogUpdateResponse:
+    return CountryCatalogUpdateResponse(
+        state=value.state.value,
+        active_version=value.active_version,
+        country_count=value.country_count,
+        automatic_updates_enabled=value.automatic_updates_enabled,
+        trigger=value.trigger.value if value.trigger else None,
+        last_attempt_at=value.last_attempt_at,
+        last_success_at=value.last_success_at,
+        next_scheduled_at=value.next_scheduled_at,
+        message=value.message,
+        failure_code=value.failure_code,
+        sources=[
+            CountryCatalogSourceResponse(
+                source_id=source.source_id,
+                version=source.version,
+                revision=source.revision,
+                sha256=source.sha256,
+            )
+            for source in value.sources
+        ],
+    )
 
 
 @router.get("/metrics", tags=["operations"])

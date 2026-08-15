@@ -5,6 +5,11 @@ import httpx
 import pytest
 from conftest import FakeLanguageModel
 
+from disaster_monitor.application.ports.geography import (
+    CountryCatalogUpdateState,
+    CountryCatalogUpdateStatus,
+    CountryCatalogUpdateTrigger,
+)
 from disaster_monitor.application.services.operational_ingestion import (
     AcquiredSourcePayload,
     SnapshotPersistenceService,
@@ -20,6 +25,46 @@ from disaster_monitor.infrastructure.operations.memory_repository import (
 from disaster_monitor.main import create_app
 
 NOW = datetime(2026, 8, 13, 8, tzinfo=UTC)
+
+
+class FakeCountryCatalogAutomation:
+    def __init__(self) -> None:
+        self.requested: list[CountryCatalogUpdateTrigger] = []
+
+    def status(self) -> CountryCatalogUpdateStatus:
+        return CountryCatalogUpdateStatus(
+            CountryCatalogUpdateState.UNCHANGED,
+            "natural-earth-5.1.2.tzdb-2026b.test",
+            242,
+            True,
+            last_attempt_at=NOW,
+            last_success_at=NOW,
+            next_scheduled_at=datetime(2026, 9, 1, tzinfo=UTC),
+            message="Catalog is current.",
+        )
+
+    async def request_update(
+        self, trigger: CountryCatalogUpdateTrigger
+    ) -> CountryCatalogUpdateStatus:
+        self.requested.append(trigger)
+        current = self.status()
+        return CountryCatalogUpdateStatus(
+            CountryCatalogUpdateState.UPDATED,
+            current.active_version,
+            current.country_count,
+            True,
+            trigger=trigger,
+            last_attempt_at=NOW,
+            last_success_at=NOW,
+            next_scheduled_at=current.next_scheduled_at,
+            message="Catalog update completed.",
+        )
+
+    async def start(self) -> None:
+        return None
+
+    async def aclose(self) -> None:
+        return None
 
 
 @pytest.mark.asyncio
@@ -125,3 +170,29 @@ async def test_operator_review_is_fail_closed_without_identity_boundary(
         )
 
     assert response.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_country_catalog_status_and_manual_update(tmp_path: Path) -> None:
+    automation = FakeCountryCatalogAutomation()
+    app = create_app(
+        settings=Settings(
+            operational_blob_root=tmp_path,
+            country_catalog_root=tmp_path / "geography",
+        ),
+        model=FakeLanguageModel(),
+        operational_repository=InMemoryOperationalRepository(),
+        country_catalog_automation=automation,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        status_response = await client.get("/api/v1/operations/country-catalog")
+        update_response = await client.post("/api/v1/operations/country-catalog/update")
+
+    assert status_response.status_code == 200
+    assert status_response.json()["country_count"] == 242
+    assert status_response.json()["next_scheduled_at"] == "2026-09-01T00:00:00Z"
+    assert update_response.status_code == 200
+    assert update_response.json()["state"] == "updated"
+    assert automation.requested == [CountryCatalogUpdateTrigger.MANUAL]

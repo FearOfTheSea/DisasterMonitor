@@ -3,11 +3,17 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 import {
+  fetchCountryCatalogStatus,
   fetchEvidenceHistory,
   fetchProviderFreshness,
   recordOperatorReview,
+  requestCountryCatalogUpdate,
 } from '@/features/operations/api/operationsClient';
-import type { EvidenceSnapshot, ProviderFreshness } from '@/shared/types/operations';
+import type {
+  CountryCatalogStatus,
+  EvidenceSnapshot,
+  ProviderFreshness,
+} from '@/shared/types/operations';
 
 type OperationsPanelProps = {
   evidenceStateVersion?: string;
@@ -26,21 +32,27 @@ export function OperationsPanel({
 }: OperationsPanelProps) {
   const [providers, setProviders] = useState<ProviderFreshness[]>([]);
   const [history, setHistory] = useState<EvidenceSnapshot[]>([]);
+  const [countryCatalog, setCountryCatalog] = useState<CountryCatalogStatus | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [rationale, setRationale] = useState('');
   const [reviewStatus, setReviewStatus] = useState<string | null>(null);
+  const [catalogUpdating, setCatalogUpdating] = useState(false);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const [nextProviders, nextHistory] = await Promise.all([
+      const [nextProviders, nextHistory, nextCatalog] = await Promise.all([
         fetchProviderFreshness(signal),
         fetchEvidenceHistory(signal),
+        fetchCountryCatalogStatus(signal),
       ]);
       setProviders(nextProviders);
       setHistory(nextHistory);
+      setCountryCatalog(nextCatalog);
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
         setError(caught instanceof Error ? caught.message : 'Operations data failed.');
@@ -55,10 +67,12 @@ export function OperationsPanel({
     void Promise.all([
       fetchProviderFreshness(controller.signal),
       fetchEvidenceHistory(controller.signal),
+      fetchCountryCatalogStatus(controller.signal),
     ])
-      .then(([nextProviders, nextHistory]) => {
+      .then(([nextProviders, nextHistory, nextCatalog]) => {
         setProviders(nextProviders);
         setHistory(nextHistory);
+        setCountryCatalog(nextCatalog);
       })
       .catch((caught) => {
         if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
@@ -72,6 +86,20 @@ export function OperationsPanel({
       });
     return () => controller.abort();
   }, []);
+
+  async function updateCountryCatalog() {
+    setCatalogUpdating(true);
+    setError(null);
+    try {
+      setCountryCatalog(await requestCountryCatalogUpdate());
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Country catalog update failed.',
+      );
+    } finally {
+      setCatalogUpdating(false);
+    }
+  }
 
   async function submitReview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -102,6 +130,46 @@ export function OperationsPanel({
       <div className="operations-scroll">
         {loading && <p role="status">Loading operational evidence…</p>}
         {error && <div className="assistant-error">{error}</div>}
+        <section className="operations-section">
+          <div className="operations-heading">
+            <h3>Country catalog automation</h3>
+            <button
+              type="button"
+              onClick={() => void updateCountryCatalog()}
+              disabled={loading || catalogUpdating}
+            >
+              {catalogUpdating ? 'Updating countries…' : 'Update countries now'}
+            </button>
+          </div>
+          {countryCatalog ? (
+            <div className="catalog-status">
+              <div>
+                <strong>{countryCatalog.country_count} active countries</strong>
+                <span className={`freshness freshness-${countryCatalog.state}`}>
+                  {countryCatalog.state.replaceAll('_', ' ')}
+                </span>
+              </div>
+              <small>Version: {countryCatalog.active_version}</small>
+              <small>
+                Last successful update: {formatTime(countryCatalog.last_success_at)}
+              </small>
+              <small>
+                Next automatic attempt: {formatTime(countryCatalog.next_scheduled_at)}
+              </small>
+              <p role="status">{countryCatalog.message}</p>
+              {countryCatalog.failure_code && (
+                <small>Failure code: {countryCatalog.failure_code}</small>
+              )}
+              {countryCatalog.sources.map((source) => (
+                <small key={source.source_id}>
+                  {source.source_id}: {source.version}
+                </small>
+              ))}
+            </div>
+          ) : (
+            !loading && <p>Country catalog status is unavailable.</p>
+          )}
+        </section>
         <section className="operations-section">
           <div className="operations-heading">
             <h3>Provider freshness</h3>

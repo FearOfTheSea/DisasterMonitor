@@ -239,16 +239,17 @@ causal forecasting, or autonomous user-visible hypotheses.
 ## Composition and testing
 
 `create_app` accepts optional adapters for tests. Production construction builds
-`Settings`, the packaged `StaticCountryCatalog`, `DisasterQueryParser`, source
-providers, `OllamaQwenAdapter`, and `AnswerMapQuestion`. Backend tests use a fake
-model and `httpx.ASGITransport`; adapter tests use `httpx.MockTransport`.
+`Settings`, the refreshable `StaticCountryCatalog`, `DisasterQueryParser`, source
+providers, `OllamaQwenAdapter`, and `AnswerMapQuestion`. Backend tests use a fake model
+and `httpx.ASGITransport`; adapter tests use `httpx.MockTransport`.
 
-The versioned MVP country resource currently recognizes Japan, Vietnam, and
-Venezuela by canonical English name, ISO alpha-2/alpha-3 code, and declared exact
-aliases. Its query rectangles and simplified polygons are Natural Earth-derived
-geographic approximations, not legal borders or maritime claims. Fixed calendar
-offsets are used for these three countries,
-which do not use seasonal daylight-saving transitions.
+The packaged country fallback recognizes Japan, Vietnam, and Venezuela. The same
+catalog adapter can atomically activate the autonomous global artifact generated from
+released Natural Earth 1:50m Admin 0 geometry and versioned IANA timezone data. The
+updater runs on the first day of each month, catches up after downtime, and retries
+failures without replacing the last known-good catalog. Its bounds and polygons are
+query approximations, not legal borders or maritime claims. See
+[Autonomous country catalog updates](country-catalog-automation.md).
 
 ## Adding a future external-data capability
 

@@ -31,7 +31,8 @@ def scheduled_investigations(
     settings: Settings | None = None,
 ) -> tuple[ScheduledInvestigation, ...]:
     """Return the reviewed continuous-ingestion coverage matrix."""
-    countries = build_country_catalog()
+    configured = settings or Settings()
+    countries = build_country_catalog(configured)
     japan = countries.get_by_alpha3("JPN")
     vietnam = countries.get_by_alpha3("VNM")
     if japan is None or vietnam is None:
@@ -42,7 +43,6 @@ def scheduled_investigations(
         ("nchmf-vietnam-warnings", Hazard.LANDSLIDE, vietnam, 30, 7),
         ("nchmf-vietnam-warnings", Hazard.TROPICAL_CYCLONE, vietnam, 30, 7),
     ]
-    configured = settings or Settings()
     if (
         configured.firms_map_key is not None
         and configured.firms_map_key.get_secret_value().strip()
@@ -99,7 +99,7 @@ async def _scheduler(settings: Settings, *, once: bool) -> None:
 async def _worker(settings: Settings, *, once: bool) -> None:
     repository = _postgres(settings)
     operational = build_operational_services(settings, repository)
-    countries = build_country_catalog()
+    countries = build_country_catalog(settings)
     report = build_current_disaster_report(
         settings,
         countries,

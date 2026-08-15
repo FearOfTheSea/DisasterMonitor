@@ -42,6 +42,8 @@ services:
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
       OPERATIONAL_AUTO_MIGRATE: "false"
+      COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
+      COUNTRY_CATALOG_AUTOMATIC_UPDATES: "true"
       RELIEFWEB_APP_NAME: ${RELIEFWEB_APP_NAME:-}
       FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
       GFM_ACCESS_TOKEN: ${GFM_ACCESS_TOKEN:-}
@@ -61,6 +63,7 @@ services:
     restart: unless-stopped
     volumes:
       - operational-blobs:/var/lib/disaster-monitor/blobs
+      - country-catalog-data:/var/lib/disaster-monitor/geography
     ports:
       - "8001:8001"
 
@@ -74,10 +77,13 @@ services:
       - scheduler
     environment:
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
+      COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
     depends_on:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+    volumes:
+      - country-catalog-data:/var/lib/disaster-monitor/geography
 
   worker:
     build:
@@ -91,6 +97,7 @@ services:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
+      COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
       RELIEFWEB_APP_NAME: ${RELIEFWEB_APP_NAME:-}
       FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
       GFM_ACCESS_TOKEN: ${GFM_ACCESS_TOKEN:-}
@@ -101,6 +108,7 @@ services:
     restart: unless-stopped
     volumes:
       - operational-blobs:/var/lib/disaster-monitor/blobs
+      - country-catalog-data:/var/lib/disaster-monitor/geography
 
   backup-tool:
     image: alpine:3.22
@@ -126,3 +134,4 @@ volumes:
   postgres-data:
   operational-blobs:
   operational-backups:
+  country-catalog-data:
