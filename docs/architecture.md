@@ -233,8 +233,10 @@ is pending the locked external historical provenance and adjudicated hidden outc
 specified in [Capability and promotion status](capability-status.md).
 
 Canonical EW and multimodal state remain request-scoped. This implementation does not
-claim a persistent event store, continuous monitoring or image retrieval, learned
-causal forecasting, or autonomous user-visible hypotheses.
+claim a persistent event store, continuous monitoring, analytical/satellite image
+retrieval, learned causal forecasting, or autonomous user-visible hypotheses. A
+separate bounded source-media service can attach contextual publisher previews to the
+selected event without entering EW or multimodal state.
 
 ## Composition and testing
 

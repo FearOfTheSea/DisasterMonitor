@@ -1,10 +1,15 @@
 # Multimodal situational awareness
 
 Disaster Monitor has a bounded, local-first multimodal path for operator-supplied PNG
-or JPEG images. It does not retrieve imagery. An API caller may attach at most three
+or JPEG images. It does not retrieve analytical imagery. An API caller may attach at most three
 images, each no larger than 5 MB, to `POST /api/v1/assistant` as base64 plus explicit
 source attribution, capture time, WGS84 footprint, hazard, country, and capture role.
 URLs and filesystem paths are not accepted as image inputs.
+
+The separate [event-associated source-media](event-media.md) path may retrieve bounded
+publisher previews for display after a physical event has been selected. Those previews
+are not admitted multimodal assets, are not sent to the visual analyzer, cannot produce
+visual observations or map geometry, and cannot enter canonical evidence state.
 
 This capability extends the selected `PhysicalEventIdentity` and canonical
 `EvidenceWorldState`; it does not establish a separate event or truth system.
@@ -140,9 +145,11 @@ exist. Automated harness tests cannot satisfy it.
 
 ## Intentionally unsupported
 
-There is no automatic image retrieval, continuous satellite/aerial monitoring, live
-raster service, imagery provider, official-warning overlay provider, arbitrary map
+There is no automatic analytical/satellite image retrieval, continuous satellite/aerial
+monitoring, live raster service, official-warning overlay provider, arbitrary map
 publication, OCR pipeline, persistent multimodal database, background worker, hosted
-vision model, or operational instruction generation. Triage and advisory decision
-support are implemented over canonical evidence, but visual observations remain
-analytical inputs and cannot become source facts or authorize consequential action.
+vision model, or operational instruction generation. The source-media gallery is a
+bounded contextual presentation feature, not this analytical pipeline. Triage and
+advisory decision support are implemented over canonical evidence, but visual
+observations remain analytical inputs and cannot become source facts or authorize
+consequential action.

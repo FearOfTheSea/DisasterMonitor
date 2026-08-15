@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Image from 'next/image';
 
 import type {
   AssistantReport,
@@ -10,6 +11,7 @@ import type {
   DecisionFactStatementType,
   DecisionSupportArtifact,
   MultimodalEvidenceState,
+  DisasterMediaGallery,
 } from '@/shared/types/assistant';
 
 type AssistantPanelProps = {
@@ -184,6 +186,70 @@ function CopSummary({ cop }: { cop: CommonOperationalPicture }) {
   );
 }
 
+function SourceMediaGallery({ gallery }: { gallery: DisasterMediaGallery }) {
+  return (
+    <section
+      className="source-media-gallery"
+      aria-label="Event-associated source photos"
+    >
+      <div className="source-media-heading">
+        <h3>Event-associated source photos</h3>
+        <small>
+          {gallery.items.length} shown · {gallery.rejected_count} rejected
+        </small>
+      </div>
+      {gallery.warnings.map((warning) => (
+        <p className="source-media-warning" key={warning}>
+          {warning}
+        </p>
+      ))}
+      <div className="source-media-grid">
+        {gallery.items.map((item) => (
+          <figure className="source-media-card" key={item.media_id}>
+            <Image
+              src={item.image_url}
+              alt={item.caption}
+              loading="lazy"
+              width={item.width}
+              height={item.height}
+              unoptimized
+            />
+            <figcaption>
+              <div className="evidence-badges">
+                <span>{item.role.replaceAll('_', ' ')}</span>
+                <span>{item.association_status.replaceAll('_', ' ')}</span>
+                <span>
+                  {item.rights_status === 'source_preview'
+                    ? 'Source-controlled preview'
+                    : 'Licensed reuse'}
+                </span>
+              </div>
+              <strong>{item.caption}</strong>
+              <span>
+                Credit: {item.credit} ({item.credit_kind})
+              </span>
+              <small>
+                {item.captured_at
+                  ? `Captured: ${formatTime(item.captured_at)}`
+                  : `Published: ${formatTime(item.published_at)}`}
+              </small>
+              <a href={item.source_page_url} target="_blank" rel="noreferrer">
+                Source: {item.publisher}
+              </a>
+              <details>
+                <summary>Association and uncertainty</summary>
+                <p>{item.association_detail}</p>
+                <p>{item.uncertainty}</p>
+                <small>{item.association_rule_ids.join(', ')}</small>
+              </details>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function DisasterReportView({
   report,
   message,
@@ -224,6 +290,7 @@ function DisasterReportView({
           </section>
         ))}
       </div>
+      {report.mediaGallery && <SourceMediaGallery gallery={report.mediaGallery} />}
       {report.decisionSupport && (
         <DecisionEvidenceView artifact={report.decisionSupport} />
       )}
@@ -399,9 +466,9 @@ export function AssistantPanel({
       </header>
       <div className="availability-note">
         Source-backed current disaster reports are available for recognized requests;
-        unsupported coverage is reported explicitly. Bounded operator-supplied imagery
-        with explicit event metadata can produce analytical overlays through the API;
-        automatic imagery retrieval and live satellite feeds remain unconnected.
+        unsupported coverage is reported explicitly. Selected events can include bounded
+        source-photo previews when date, hazard, geography, credit, and source policy
+        agree. Operator-supplied imagery remains a separate analytical path.
       </div>
       <div className="message-list" aria-live="polite">
         {messages.length === 0 ? (

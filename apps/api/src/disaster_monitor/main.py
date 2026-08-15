@@ -17,6 +17,10 @@ from disaster_monitor.application.agent.multimodal_tools import (
 )
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.ports.agent_model import AgentModel
+from disaster_monitor.application.ports.event_media import (
+    EventMediaDiscovery,
+    MediaAssetStore,
+)
 from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
@@ -44,17 +48,20 @@ from disaster_monitor.application.services.visual_analysis import VisualAnalysis
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.infrastructure.composition import (
+    EventMediaServices,
     build_agent_model,
     build_country_catalog,
     build_country_catalog_automation,
     build_current_disaster_report,
     build_disaster_query_parser,
+    build_event_media_services,
     build_language_model,
     build_operational_services,
     build_source_catalog,
     build_visual_analyzer,
 )
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.media.memory_store import InMemoryMediaAssetStore
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
 )
@@ -73,6 +80,8 @@ def create_app(
     operational_repository: OperationalRepository | None = None,
     country_catalog_automation: CountryCatalogUpdateAutomation | None = None,
     global_earthquake_report: GlobalEarthquakeReportService | None = None,
+    event_media: EventMediaDiscovery | None = None,
+    media_asset_store: MediaAssetStore | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -106,6 +115,14 @@ def create_app(
     def clock() -> datetime:
         return datetime.now(UTC)
 
+    if event_media is None:
+        media_services = build_event_media_services(app_settings, clock=clock)
+    else:
+        media_services = EventMediaServices(
+            event_media,
+            media_asset_store or InMemoryMediaAssetStore(),
+        )
+
     asset_admission = MultimodalAssetAdmissionService(clock=clock)
     multimodal_tools = build_multimodal_agent_tools(
         MultimodalToolDependencies(
@@ -133,6 +150,7 @@ def create_app(
         MapNavigationService(country_catalog),
         worldwide_earthquakes,
         country_catalog,
+        media_services.discovery,
     )
 
     @asynccontextmanager
@@ -156,6 +174,9 @@ def create_app(
         close_visual = getattr(app.state.visual_analyzer, "aclose", None)
         if close_visual is not None:
             await close_visual()
+        close_media = getattr(app.state.event_media, "aclose", None)
+        if close_media is not None:
+            await close_media()
 
     app = FastAPI(
         title=app_settings.app_name,
@@ -199,6 +220,8 @@ def create_app(
     app.state.global_earthquake_report = worldwide_earthquakes
     app.state.agent_model = configured_agent_model
     app.state.visual_analyzer = configured_visual_analyzer
+    app.state.event_media = media_services.discovery
+    app.state.media_asset_store = media_services.store
     app.state.answer_map_question = AnswerMapQuestion(
         language_model,
         disaster_report,

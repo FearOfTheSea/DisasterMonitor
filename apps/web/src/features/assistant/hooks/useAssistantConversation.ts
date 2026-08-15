@@ -19,7 +19,7 @@ const welcomeMessage: ConversationMessage = {
   id: 'welcome',
   role: 'assistant',
   content:
-    'Ask about the map, disaster concepts, or supported source-backed investigations. The API can analyze bounded operator-supplied images when explicit event, time, and location metadata is present; automatic imagery retrieval and live satellite monitoring are not connected.',
+    'Ask about the map, disaster concepts, or supported source-backed investigations. Selected current events may include conservatively associated source photos; operator-supplied images remain a separate analytical path.',
 };
 
 export function useAssistantConversation() {

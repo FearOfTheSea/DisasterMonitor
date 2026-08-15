@@ -212,6 +212,88 @@ describe('AssistantPanel', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders source photos with caption, date, credit, and association status', () => {
+    render(
+      <AssistantPanel
+        messages={[
+          {
+            id: 'media-report',
+            role: 'assistant',
+            content: 'Source-backed report with media.',
+            report: {
+              responseType: 'current_disaster',
+              warnings: [],
+              sections: [],
+              sources: [],
+              partial: false,
+              mediaGallery: {
+                event_id: 'us6000tjl2',
+                physical_event_id: 'physical-event:colombia',
+                generated_at: '2026-08-15T12:00:00Z',
+                rejected_count: 1,
+                provider_ids: ['bounded-news-event-media-v1'],
+                warnings: [],
+                items: [
+                  {
+                    media_id: `media:${'a'.repeat(32)}`,
+                    image_url: 'http://localhost:8001/api/v1/media/fixture',
+                    event_id: 'us6000tjl2',
+                    physical_event_id: 'physical-event:colombia',
+                    source_id: 'event-media-nbc-news',
+                    publisher: 'NBC News',
+                    source_page_url: 'https://www.nbcnews.com/event',
+                    caption: 'Rescue workers search through rubble in Colombia.',
+                    credit: 'Jane Doe / AP',
+                    credit_kind: 'agency',
+                    published_at: '2026-08-10T06:32:00Z',
+                    captured_at: null,
+                    license_name: null,
+                    license_url: null,
+                    rights_status: 'source_preview',
+                    role: 'rescue_effort',
+                    association_status: 'corroborated',
+                    association_rule_ids: [
+                      'media.association.publication_window',
+                      'media.association.hazard_text',
+                      'media.association.country_text',
+                    ],
+                    association_detail:
+                      'Publication time, hazard, and selected-event geography agree.',
+                    uncertainty: 'Source-associated preview, not a verified fact.',
+                    content_sha256: 'b'.repeat(64),
+                    width: 1200,
+                    height: 675,
+                  },
+                ],
+              },
+            },
+          },
+        ]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Event-associated source photos' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', {
+        name: 'Rescue workers search through rubble in Colombia.',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Credit: Jane Doe \/ AP/)).toBeInTheDocument();
+    expect(screen.getByText(/Published:/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Source: NBC News' })).toHaveAttribute(
+      'href',
+      'https://www.nbcnews.com/event',
+    );
+    expect(screen.getByText('corroborated')).toBeInTheDocument();
+    expect(screen.getByText(/1 rejected/)).toBeInTheDocument();
+  });
+
   it('keeps source epistemic status distinct from DM analytical estimates', () => {
     render(
       <AssistantPanel

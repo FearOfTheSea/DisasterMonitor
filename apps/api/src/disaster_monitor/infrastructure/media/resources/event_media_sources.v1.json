@@ -1,0 +1,106 @@
+{
+  "version": "2026-08-15",
+  "sources": [
+    {
+      "source_id": "event-media-international-rescue-committee",
+      "display_name": "International Rescue Committee",
+      "page_hosts": ["www.rescue.org"],
+      "asset_hosts": ["www.rescue.org"],
+      "priority": 10,
+      "search_preferred": true
+    },
+    {
+      "source_id": "event-media-ifrc",
+      "display_name": "International Federation of Red Cross and Red Crescent Societies",
+      "page_hosts": ["www.ifrc.org"],
+      "asset_hosts": ["www.ifrc.org", "media.ifrc.org"],
+      "priority": 10
+    },
+    {
+      "source_id": "event-media-nbc-news",
+      "display_name": "NBC News",
+      "page_hosts": ["www.nbcnews.com"],
+      "asset_hosts": ["media-cldnry.s-nbcnews.com"],
+      "priority": 20,
+      "search_preferred": true
+    },
+    {
+      "source_id": "event-media-cnn",
+      "display_name": "CNN",
+      "page_hosts": ["www.cnn.com"],
+      "asset_hosts": ["media.cnn.com", "cdn.cnn.com"],
+      "priority": 20
+    },
+    {
+      "source_id": "event-media-cbs-news",
+      "display_name": "CBS News",
+      "page_hosts": ["www.cbsnews.com"],
+      "asset_hosts": ["assets1.cbsnewsstatic.com", "www.cbsnews.com"],
+      "priority": 20
+    },
+    {
+      "source_id": "event-media-npr",
+      "display_name": "NPR",
+      "page_hosts": ["www.npr.org"],
+      "asset_hosts": ["media.npr.org", "npr.brightspotcdn.com"],
+      "priority": 20
+    },
+    {
+      "source_id": "event-media-bbc",
+      "display_name": "BBC News",
+      "page_hosts": ["www.bbc.com", "www.bbc.co.uk"],
+      "asset_hosts": ["ichef.bbci.co.uk"],
+      "priority": 20
+    },
+    {
+      "source_id": "event-media-the-guardian",
+      "display_name": "The Guardian",
+      "page_hosts": ["www.theguardian.com"],
+      "asset_hosts": ["i.guim.co.uk"],
+      "priority": 20
+    },
+    {
+      "source_id": "event-media-cnbc",
+      "display_name": "CNBC",
+      "page_hosts": ["www.cnbc.com"],
+      "asset_hosts": ["image.cnbcfm.com"],
+      "priority": 25,
+      "search_preferred": true
+    },
+    {
+      "source_id": "event-media-vov",
+      "display_name": "Voice of Vietnam",
+      "page_hosts": ["english.vov.vn"],
+      "asset_hosts": ["media.vov.vn"],
+      "priority": 25
+    },
+    {
+      "source_id": "event-media-yahoo-news",
+      "display_name": "Yahoo News",
+      "page_hosts": ["www.yahoo.com"],
+      "asset_hosts": ["s.yimg.com"],
+      "priority": 30
+    },
+    {
+      "source_id": "event-media-moneycontrol",
+      "display_name": "Moneycontrol",
+      "page_hosts": ["www.moneycontrol.com"],
+      "asset_hosts": ["images.moneycontrol.com"],
+      "priority": 30
+    },
+    {
+      "source_id": "event-media-msn",
+      "display_name": "MSN",
+      "page_hosts": ["www.msn.com"],
+      "asset_hosts": ["img-s-msn-com.akamaized.net", "assets.msn.com"],
+      "priority": 35
+    },
+    {
+      "source_id": "event-media-eturbonews",
+      "display_name": "eTurboNews",
+      "page_hosts": ["eturbonews.com"],
+      "asset_hosts": ["eturbonews.com"],
+      "priority": 40
+    }
+  ]
+}

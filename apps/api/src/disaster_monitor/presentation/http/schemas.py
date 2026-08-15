@@ -65,6 +65,43 @@ class AssistantResponse(BaseModel):
     decision_support: "DecisionSupportResponse | None" = None
     multimodal: MultimodalStateResponse | None = None
     common_operational_picture: CommonOperationalPictureResponse | None = None
+    media_gallery: "DisasterMediaGalleryResponse | None" = None
+
+
+class DisasterMediaItemResponse(BaseModel):
+    media_id: str
+    image_url: str
+    event_id: str
+    physical_event_id: str
+    source_id: str
+    publisher: str
+    source_page_url: str
+    caption: str
+    credit: str
+    credit_kind: str
+    published_at: datetime
+    captured_at: datetime | None = None
+    license_name: str | None = None
+    license_url: str | None = None
+    rights_status: str
+    role: str
+    association_status: str
+    association_rule_ids: list[str] = Field(default_factory=list)
+    association_detail: str
+    uncertainty: str
+    content_sha256: str
+    width: int
+    height: int
+
+
+class DisasterMediaGalleryResponse(BaseModel):
+    event_id: str
+    physical_event_id: str
+    generated_at: datetime
+    items: list[DisasterMediaItemResponse] = Field(default_factory=list)
+    rejected_count: int = 0
+    provider_ids: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class InvestigationResponse(BaseModel):

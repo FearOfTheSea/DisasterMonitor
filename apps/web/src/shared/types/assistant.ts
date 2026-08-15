@@ -40,6 +40,7 @@ export type AssistantResponse = {
   decision_support?: DecisionSupportArtifact | null;
   multimodal?: MultimodalEvidenceState | null;
   common_operational_picture?: CommonOperationalPicture | null;
+  media_gallery?: DisasterMediaGallery | null;
 };
 
 export type MapNavigationAction = {
@@ -171,6 +172,48 @@ export type AssistantReport = {
   decisionSupport?: DecisionSupportArtifact;
   multimodal?: MultimodalEvidenceState;
   commonOperationalPicture?: CommonOperationalPicture;
+  mediaGallery?: DisasterMediaGallery;
+};
+
+export type DisasterMediaItem = {
+  media_id: string;
+  image_url: string;
+  event_id: string;
+  physical_event_id: string;
+  source_id: string;
+  publisher: string;
+  source_page_url: string;
+  caption: string;
+  credit: string;
+  credit_kind: 'photographer' | 'agency' | 'publisher';
+  published_at: string;
+  captured_at?: string | null;
+  license_name?: string | null;
+  license_url?: string | null;
+  rights_status: 'licensed_reuse' | 'source_preview';
+  role:
+    | 'aftermath'
+    | 'rescue_effort'
+    | 'relief_operation'
+    | 'scientific_overview'
+    | 'relevant_scene';
+  association_status: 'exact_event_link' | 'corroborated';
+  association_rule_ids: string[];
+  association_detail: string;
+  uncertainty: string;
+  content_sha256: string;
+  width: number;
+  height: number;
+};
+
+export type DisasterMediaGallery = {
+  event_id: string;
+  physical_event_id: string;
+  generated_at: string;
+  items: DisasterMediaItem[];
+  rejected_count: number;
+  provider_ids: string[];
+  warnings: string[];
 };
 
 export type Wgs84PointGeometry = {

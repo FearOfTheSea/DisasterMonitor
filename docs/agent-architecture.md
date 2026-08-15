@@ -176,9 +176,11 @@ supported text may continue. With a qualifying asset, the agent may produce only
 bounded analytical COP described in
 [Multimodal situational awareness](multimodal-awareness.md).
 
-Disaster image retrieval, satellite/aerial monitoring, live raster services, arbitrary
-agent-generated layers, CARTO, TerraLabo, online source crawling, and generated
-retrieval code remain absent.
+Analytical disaster-image retrieval, satellite/aerial monitoring, live raster services,
+arbitrary agent-generated layers, CARTO, TerraLabo, open-ended source crawling, and
+generated retrieval code remain absent. The optional source-media gallery uses a fixed
+application service and a maintained exact-host registry after event selection; the
+agent and model cannot choose its URLs or promote its output into evidence.
 
 EW state also remains request-scoped: there is no database, continuous ingestion,
 background revision monitor, cross-request state recovery, or LLM probability model.

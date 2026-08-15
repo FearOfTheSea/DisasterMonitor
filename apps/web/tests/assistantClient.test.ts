@@ -219,6 +219,137 @@ describe('AssistantClient', () => {
     });
   });
 
+  it('accepts only provenance-complete media associated to the selected event', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Source-backed event with photos.',
+          conversation_id: 'session-media',
+          model: 'source-backed-agent',
+          response_type: 'current_disaster',
+          selected_event: {
+            event_id: 'us6000tjl2',
+            hazard: 'earthquake',
+            location: 'San José del Palmar, Colombia',
+            event_time: '2026-08-10T05:54:00Z',
+            source: {
+              source_id: 'usgs-earthquakes',
+              publisher: 'USGS',
+              title: 'M 7.4 event',
+              canonical_url: 'https://earthquake.usgs.gov/event',
+              retrieved_at: '2026-08-15T12:00:00Z',
+            },
+          },
+          media_gallery: {
+            event_id: 'us6000tjl2',
+            physical_event_id: 'physical-event:colombia',
+            generated_at: '2026-08-15T12:00:00Z',
+            rejected_count: 1,
+            provider_ids: ['bounded-news-event-media-v1'],
+            warnings: [],
+            items: [
+              {
+                media_id: `media:${'a'.repeat(32)}`,
+                image_url: `http://localhost:8001/api/v1/media/media:${'a'.repeat(32)}`,
+                event_id: 'us6000tjl2',
+                physical_event_id: 'physical-event:colombia',
+                source_id: 'event-media-nbc-news',
+                publisher: 'NBC News',
+                source_page_url: 'https://www.nbcnews.com/event',
+                caption: 'Rescue workers search through rubble in Colombia.',
+                credit: 'Jane Doe / AP',
+                credit_kind: 'agency',
+                published_at: '2026-08-10T06:32:00Z',
+                captured_at: null,
+                license_name: null,
+                license_url: null,
+                rights_status: 'source_preview',
+                role: 'rescue_effort',
+                association_status: 'corroborated',
+                association_rule_ids: [
+                  'media.association.publication_window',
+                  'media.association.hazard_text',
+                  'media.association.country_text',
+                ],
+                association_detail: 'Source metadata agrees with the event.',
+                uncertainty: 'Source-associated preview, not a verified fact.',
+                content_sha256: 'b'.repeat(64),
+                width: 1200,
+                height: 675,
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    const response = await client.ask('Latest Colombia earthquake?', null, {
+      centerLatitude: 5,
+      centerLongitude: -76,
+      zoom: 7,
+    });
+
+    expect(response.media_gallery?.items).toHaveLength(1);
+    expect(toAssistantReport(response)?.mediaGallery?.rejected_count).toBe(1);
+  });
+
+  it('rejects media that the API labels as event-unmatched', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Unsafe media response.',
+          conversation_id: 'session-media',
+          model: 'source-backed-agent',
+          response_type: 'current_disaster',
+          media_gallery: {
+            event_id: 'selected-event',
+            physical_event_id: 'physical-event:selected',
+            generated_at: '2026-08-15T12:00:00Z',
+            rejected_count: 0,
+            provider_ids: [],
+            warnings: [],
+            items: [
+              {
+                media_id: `media:${'a'.repeat(32)}`,
+                image_url: 'http://localhost:8001/api/v1/media/unsafe',
+                event_id: 'selected-event',
+                physical_event_id: 'physical-event:selected',
+                source_id: 'source',
+                publisher: 'Publisher',
+                source_page_url: 'https://example.test/article',
+                caption: 'Old unrelated image',
+                credit: 'Publisher',
+                credit_kind: 'publisher',
+                published_at: '2026-08-15T12:00:00Z',
+                rights_status: 'source_preview',
+                role: 'relevant_scene',
+                association_status: 'rejected',
+                association_rule_ids: ['media.association.explicit_year_mismatch'],
+                association_detail: 'Rejected.',
+                uncertainty: 'Unmatched.',
+                content_sha256: 'b'.repeat(64),
+                width: 1200,
+                height: 675,
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Show the earthquake.', null, {
+        centerLatitude: 0,
+        centerLongitude: 0,
+        zoom: 2,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+  });
+
   it('accepts nullable optional fields in a clarification response', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

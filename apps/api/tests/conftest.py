@@ -19,6 +19,7 @@ def isolated_country_catalog_root(
 ) -> None:
     """Keep ignored live catalog data from changing deterministic test baselines."""
     monkeypatch.setenv("COUNTRY_CATALOG_ROOT", str(tmp_path / "country-catalog"))
+    monkeypatch.setenv("EVENT_MEDIA_ENABLED", "false")
 
 
 @dataclass

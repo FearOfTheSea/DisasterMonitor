@@ -527,7 +527,8 @@ button {
 }
 
 .visual-evidence,
-.cop-summary {
+.cop-summary,
+.source-media-gallery {
   border-top: 1px solid var(--line);
   display: grid;
   gap: 0.6rem;
@@ -537,9 +538,79 @@ button {
 
 .visual-evidence h3,
 .cop-summary h3,
+.source-media-gallery h3,
 .visual-evidence p,
 .cop-summary p {
   margin: 0;
+}
+
+.source-media-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.source-media-heading h3,
+.source-media-heading small,
+.source-media-card,
+.source-media-card figcaption,
+.source-media-card strong,
+.source-media-card span,
+.source-media-card p {
+  margin: 0;
+}
+
+.source-media-heading small,
+.source-media-card small,
+.source-media-card span {
+  color: var(--muted);
+}
+
+.source-media-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.source-media-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.source-media-card img {
+  aspect-ratio: 16 / 9;
+  background: #e8edf4;
+  display: block;
+  height: auto;
+  object-fit: cover;
+  width: 100%;
+}
+
+.source-media-card figcaption {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.7rem;
+}
+
+.source-media-card a {
+  color: var(--accent);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.source-media-card details {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.source-media-warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.78rem;
+  padding: 0.45rem 0.55rem;
 }
 
 .visual-asset,

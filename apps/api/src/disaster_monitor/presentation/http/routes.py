@@ -9,7 +9,9 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from disaster_monitor.application.dto import ModelReadiness
+from disaster_monitor.application.media import DisasterMediaGallery
 from disaster_monitor.application.multimodal import AssetAdmissionInput
+from disaster_monitor.application.ports.event_media import MediaAssetStore
 from disaster_monitor.application.ports.geography import (
     CountryCatalogUpdateAutomation,
     CountryCatalogUpdateStatus,
@@ -41,6 +43,8 @@ from disaster_monitor.presentation.http.schemas import (
     DecisionEstimateResponse,
     DecisionFactResponse,
     DecisionSupportResponse,
+    DisasterMediaGalleryResponse,
+    DisasterMediaItemResponse,
     EvidenceSnapshotResponse,
     HealthResponse,
     InvestigationResponse,
@@ -65,6 +69,10 @@ def get_answer_use_case(request: Request) -> AnswerMapQuestion:
 def get_language_model(request: Request) -> LanguageModel:
     """Retrieve the provider-neutral model port built by the composition root."""
     return cast(LanguageModel, request.app.state.language_model)
+
+
+def get_media_asset_store(request: Request) -> MediaAssetStore:
+    return cast(MediaAssetStore, request.app.state.media_asset_store)
 
 
 def get_operational_repository(request: Request) -> OperationalRepository:
@@ -155,6 +163,32 @@ async def country_catalog_status(
 ) -> CountryCatalogUpdateResponse:
     """Expose active provenance and the next autonomous monthly attempt."""
     return _country_catalog_response(automation.status())
+
+
+@router.get(
+    "/media/{media_id}",
+    name="event_media_asset",
+    status_code=status.HTTP_200_OK,
+    tags=["assistant"],
+)
+async def event_media_asset(
+    media_id: str,
+    store: Annotated[MediaAssetStore, Depends(get_media_asset_store)],
+) -> Response:
+    """Serve only bounded image bytes already admitted by source-media policy."""
+    asset = store.get(media_id)
+    if asset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Media not found."
+        )
+    return Response(
+        content=asset.content,
+        media_type=asset.media_type,
+        headers={
+            "Cache-Control": "private, max-age=300",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.post(
@@ -308,25 +342,24 @@ async def operator_action(
     tags=["assistant"],
 )
 async def assistant(
-    request: AssistantRequest,
+    body: AssistantRequest,
+    http_request: Request,
     use_case: Annotated[AnswerMapQuestion, Depends(get_answer_use_case)],
 ) -> AssistantResponse:
     """Answer a map-related question through the application use case."""
     result = await use_case.execute(
-        question=request.question,
-        conversation_id=request.conversation_id,
+        question=body.question,
+        conversation_id=body.conversation_id,
         map_view=(
             None
-            if request.map_view is None
+            if body.map_view is None
             else MapView(
-                center_latitude=request.map_view.center_latitude,
-                center_longitude=request.map_view.center_longitude,
-                zoom=request.map_view.zoom,
+                center_latitude=body.map_view.center_latitude,
+                center_longitude=body.map_view.center_longitude,
+                zoom=body.map_view.zoom,
             )
         ),
-        multimodal_inputs=tuple(
-            _asset_input(item) for item in request.multimodal_assets
-        ),
+        multimodal_inputs=tuple(_asset_input(item) for item in body.multimodal_assets),
     )
     investigation = (
         None
@@ -480,6 +513,52 @@ async def assistant(
         decision_support=_decision_support_response(result.decision_support),
         multimodal=multimodal_state_response(result.multimodal_state),
         common_operational_picture=cop_response(result.common_operational_picture),
+        media_gallery=_media_gallery_response(result.media_gallery, http_request),
+    )
+
+
+def _media_gallery_response(
+    value: DisasterMediaGallery | None, request: Request
+) -> DisasterMediaGalleryResponse | None:
+    if value is None:
+        return None
+    return DisasterMediaGalleryResponse(
+        event_id=value.event_id,
+        physical_event_id=value.physical_event_id,
+        generated_at=value.generated_at,
+        rejected_count=value.rejected_count,
+        provider_ids=list(value.provider_ids),
+        warnings=list(value.warnings),
+        items=[
+            DisasterMediaItemResponse(
+                media_id=item.media_id,
+                image_url=str(
+                    request.url_for("event_media_asset", media_id=item.media_id)
+                ),
+                event_id=item.event_id,
+                physical_event_id=item.physical_event_id,
+                source_id=item.source_id,
+                publisher=item.publisher,
+                source_page_url=item.source_page_url,
+                caption=item.caption,
+                credit=item.credit,
+                credit_kind=item.credit_kind.value,
+                published_at=item.published_at,
+                captured_at=item.captured_at,
+                license_name=item.license_name,
+                license_url=item.license_url,
+                rights_status=item.rights_status.value,
+                role=item.role.value,
+                association_status=item.association_status.value,
+                association_rule_ids=list(item.association_rule_ids),
+                association_detail=item.association_detail,
+                uncertainty=item.uncertainty,
+                content_sha256=item.content_sha256,
+                width=item.width,
+                height=item.height,
+            )
+            for item in value.items
+        ],
     )
 
 

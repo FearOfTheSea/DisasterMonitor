@@ -129,6 +129,7 @@ export class AssistantClient {
       }
       const multimodal = item.multimodal;
       const cop = item.common_operational_picture;
+      const mediaGallery = item.media_gallery;
       if (
         multimodal !== undefined &&
         multimodal !== null &&
@@ -144,6 +145,13 @@ export class AssistantClient {
         cop !== null &&
         (!isMultimodalEvidenceState(multimodal) ||
           !copMatchesMultimodalState(cop, multimodal))
+      ) {
+        return false;
+      }
+      if (
+        mediaGallery !== undefined &&
+        mediaGallery !== null &&
+        !this.isMediaGallery(mediaGallery, item.selected_event)
       ) {
         return false;
       }
@@ -353,12 +361,83 @@ export class AssistantClient {
         typeof item.coordination_analytical_release_id === 'string')
     );
   }
+
+  private isMediaGallery(value: unknown, selectedEvent: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const gallery = value as Record<string, unknown>;
+    const selectedEventId =
+      selectedEvent && typeof selectedEvent === 'object'
+        ? (selectedEvent as Record<string, unknown>).event_id
+        : undefined;
+    if (
+      typeof gallery.event_id !== 'string' ||
+      typeof gallery.physical_event_id !== 'string' ||
+      typeof gallery.generated_at !== 'string' ||
+      typeof gallery.rejected_count !== 'number' ||
+      !this.isStringArray(gallery.provider_ids) ||
+      !this.isStringArray(gallery.warnings) ||
+      !Array.isArray(gallery.items) ||
+      gallery.items.length > 6 ||
+      (selectedEventId !== undefined && gallery.event_id !== selectedEventId)
+    ) {
+      return false;
+    }
+    return gallery.items.every((value) => {
+      if (!value || typeof value !== 'object') {
+        return false;
+      }
+      const media = value as Record<string, unknown>;
+      return (
+        typeof media.media_id === 'string' &&
+        typeof media.image_url === 'string' &&
+        /^https?:\/\//.test(media.image_url) &&
+        media.event_id === gallery.event_id &&
+        media.physical_event_id === gallery.physical_event_id &&
+        typeof media.source_id === 'string' &&
+        typeof media.publisher === 'string' &&
+        typeof media.source_page_url === 'string' &&
+        media.source_page_url.startsWith('https://') &&
+        typeof media.caption === 'string' &&
+        typeof media.credit === 'string' &&
+        ['photographer', 'agency', 'publisher'].includes(String(media.credit_kind)) &&
+        typeof media.published_at === 'string' &&
+        (media.captured_at == null || typeof media.captured_at === 'string') &&
+        (media.license_name == null || typeof media.license_name === 'string') &&
+        (media.license_url == null || typeof media.license_url === 'string') &&
+        ['licensed_reuse', 'source_preview'].includes(String(media.rights_status)) &&
+        [
+          'aftermath',
+          'rescue_effort',
+          'relief_operation',
+          'scientific_overview',
+          'relevant_scene',
+        ].includes(String(media.role)) &&
+        ['exact_event_link', 'corroborated'].includes(
+          String(media.association_status),
+        ) &&
+        this.isStringArray(media.association_rule_ids) &&
+        typeof media.association_detail === 'string' &&
+        typeof media.uncertainty === 'string' &&
+        typeof media.content_sha256 === 'string' &&
+        /^[a-f0-9]{64}$/.test(media.content_sha256) &&
+        typeof media.width === 'number' &&
+        media.width > 0 &&
+        typeof media.height === 'number' &&
+        media.height > 0
+      );
+    });
+  }
 }
 
 export function toAssistantReport(
   response: AssistantResponse,
 ): AssistantReport | undefined {
-  if (response.response_type !== 'current_disaster') {
+  if (
+    !response.response_type?.startsWith('current_disaster') ||
+    (!response.selected_event && !(response.sections?.length || 0))
+  ) {
     return undefined;
   }
   return {
@@ -373,5 +452,6 @@ export function toAssistantReport(
     decisionSupport: response.decision_support ?? undefined,
     multimodal: response.multimodal ?? undefined,
     commonOperationalPicture: response.common_operational_picture ?? undefined,
+    mediaGallery: response.media_gallery ?? undefined,
   };
 }

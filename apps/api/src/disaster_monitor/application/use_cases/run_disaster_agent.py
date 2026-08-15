@@ -11,9 +11,11 @@ from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.agent.task_normalization import (
     global_earthquake_query,
 )
-from disaster_monitor.application.disaster import DisasterReport
+from disaster_monitor.application.disaster import DisasterReport, SelectedEventSummary
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
+from disaster_monitor.application.media import DisasterMediaGallery, MediaEventContext
 from disaster_monitor.application.multimodal import AssetAdmissionInput
+from disaster_monitor.application.ports.event_media import EventMediaDiscovery
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.services.global_earthquake_report import (
@@ -29,6 +31,7 @@ from disaster_monitor.application.services.prompt_preparation import (
     normalize_question,
     prepare_model_request,
 )
+from disaster_monitor.domain.disaster import Country
 from disaster_monitor.domain.errors import ModelResponseError, ModelRuntimeError
 from disaster_monitor.domain.models import MapQuestion, MapView
 
@@ -42,6 +45,7 @@ class RunDisasterAgent:
         map_navigation: MapNavigationService | None = None,
         global_earthquake_report: GlobalEarthquakeReportService | None = None,
         country_catalog: CountryCatalog | None = None,
+        event_media: EventMediaDiscovery | None = None,
     ) -> None:
         self._runtime = runtime
         self._general_model = general_model
@@ -49,6 +53,7 @@ class RunDisasterAgent:
         self._map_navigation = map_navigation
         self._global_earthquake_report = global_earthquake_report
         self._country_catalog = country_catalog
+        self._event_media = event_media
 
     async def execute(
         self,
@@ -77,6 +82,11 @@ class RunDisasterAgent:
             and self._global_earthquake_report is not None
         ):
             global_report = await self._global_earthquake_report.execute(global_query)
+            media_gallery = await self._discover_media(
+                global_report.selected_event,
+                country=None,
+                physical_event_id=None,
+            )
             return AssistantAnswer(
                 message=global_report.message,
                 conversation_id=_conversation_id(conversation),
@@ -98,6 +108,7 @@ class RunDisasterAgent:
                 sections=global_report.sections,
                 partial=global_report.partial,
                 investigation=_global_summary(normalized, global_report),
+                media_gallery=media_gallery,
             )
         state = (
             await self._runtime.run(normalized, multimodal_assets=assets)
@@ -131,6 +142,15 @@ class RunDisasterAgent:
                 partial=True,
                 investigation=_summary(state),
             )
+        media_gallery = await self._discover_media(
+            report.selected_event,
+            country=state.task.country,
+            physical_event_id=(
+                state.workspace.selected_physical_event.physical_event_id
+                if state.workspace.selected_physical_event is not None
+                else None
+            ),
+        )
         return AssistantAnswer(
             message=report.message,
             conversation_id=_conversation_id(conversation),
@@ -155,7 +175,38 @@ class RunDisasterAgent:
             decision_support=state.workspace.decision_support,
             multimodal_state=state.workspace.multimodal_state,
             common_operational_picture=state.workspace.common_operational_picture,
+            media_gallery=media_gallery,
         )
+
+    async def _discover_media(
+        self,
+        event: SelectedEventSummary | None,
+        *,
+        country: Country | None,
+        physical_event_id: str | None,
+    ) -> DisasterMediaGallery | None:
+        if event is None or self._event_media is None:
+            return None
+        context = MediaEventContext(
+            event_id=event.event_id,
+            physical_event_id=physical_event_id or f"selected-event:{event.event_id}",
+            hazard=event.hazard,
+            location=event.location,
+            event_time=event.event_time,
+            provider_ids=event.provider_ids,
+            country_code=country.alpha3_code if country is not None else None,
+            country_terms=(
+                ()
+                if country is None
+                else tuple(dict.fromkeys((country.canonical_name, *country.aliases)))
+            ),
+            latitude=event.latitude,
+            longitude=event.longitude,
+        )
+        try:
+            return await self._event_media.discover(context)
+        except Exception:
+            return None
 
     async def _general_answer(
         self, question: str, conversation: str, map_view: MapView | None

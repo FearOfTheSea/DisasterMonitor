@@ -124,6 +124,14 @@ The flow is:
     and WGS84 footprint metadata. Only uniquely associated assets enter bounded local
     visual analysis. Store results as analytical observations linked to the EW version,
     then build a typed analytical COP when pixel-supported damage and geometry exist.
+13. After event selection, independently ask the optional event-media service for three
+    contextual source photos. Candidate pages and image hosts must match the maintained
+    event-media registry. Application policy checks publication/capture windows, hazard,
+    selected-event geography, explicit years, event identifiers, media dimensions, and
+    duplicate checksums. Rejected candidates are never displayed. Accepted items retain
+    caption, publication/capture date, credit, source, rights status, association status,
+    and selected-event lineage. This optional presentation step cannot add facts, alter
+    event selection, or prevent the text report from completing.
 
 The current report path does not use model memory for current facts. This keeps
 the report useful when Ollama is unavailable and prevents generated prose from
@@ -194,8 +202,11 @@ NCHMF adds Vietnam national warning headlines for flood, landslide/flash-flood, 
 tropical cyclone. Configured FIRMS adds satellite active-fire observations and
 configured GFM adds analytical flood-product availability; neither is an official
 incident declaration. A generic CAP adapter is available only through explicit
-authority registration. Weather, automatic imagery retrieval, geocoding, broad news,
-authentication, and official warning map overlays remain unsupported.
+authority registration. Weather, automatic satellite imagery retrieval, geocoding,
+broad news evidence aggregation, authentication, and official warning map overlays
+remain unsupported. The bounded event-photo presentation path is documented in
+[Event-associated source media](event-media.md); its pages and images are contextual
+media, not provider evidence.
 
 Physical-event clustering is application policy rather than transport composition.
 The earthquake policy can merge matching JMA and USGS observations while preserving

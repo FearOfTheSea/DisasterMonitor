@@ -32,6 +32,8 @@ planning cannot create providers, countries, URLs, or facts. See
   provider freshness, attributed reviews, retention tombstones, and an operations UI.
 - Source-attributed report sections, conflict/partial/stale warnings, and
   clickable source metadata in the assistant drawer.
+- Three event-associated source photos when bounded discovery finds enough candidates,
+  with caption, date, credit, source link, rights status, and association status.
 - Evidence-bounded triage, decision support, typed specialist coordination, and
   governed analytical follow-up ordering with closed authority and rollback.
 - Deterministic request normalization, prompt preparation, and provider-error translation.

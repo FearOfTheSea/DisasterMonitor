@@ -1,9 +1,14 @@
 """Manual composition root for the local API."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from disaster_monitor.application.ports.agent_model import AgentModel
+from disaster_monitor.application.ports.event_media import (
+    EventMediaDiscovery,
+    MediaAssetStore,
+)
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
@@ -16,6 +21,7 @@ from disaster_monitor.application.services.disaster_query_parser import (
 from disaster_monitor.application.services.disaster_report_renderer import (
     DisasterReportRenderer,
 )
+from disaster_monitor.application.services.event_media import DisasterMediaService
 from disaster_monitor.application.services.event_resolution import (
     default_event_policy_registry,
 )
@@ -76,6 +82,8 @@ from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAd
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
     StructuredAgentModel,
 )
+from disaster_monitor.infrastructure.media.memory_store import InMemoryMediaAssetStore
+from disaster_monitor.infrastructure.media.news_scraper import NewsEventMediaProvider
 from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
     FilesystemBlobStore,
 )
@@ -100,6 +108,37 @@ class OperationalServices:
     repository: OperationalRepository
     snapshots: SnapshotPersistenceService
     evidence: OperationalEvidenceRecorder
+
+
+@dataclass(frozen=True, slots=True)
+class EventMediaServices:
+    discovery: EventMediaDiscovery | None
+    store: MediaAssetStore
+
+
+def build_event_media_services(
+    settings: Settings, *, clock: Callable[[], datetime]
+) -> EventMediaServices:
+    store = InMemoryMediaAssetStore(
+        maximum_bytes=settings.event_media_store_maximum_bytes
+    )
+    if not settings.event_media_enabled:
+        return EventMediaServices(None, store)
+    provider = NewsEventMediaProvider(
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        maximum_page_bytes=settings.disaster_provider_max_response_bytes,
+        maximum_image_bytes=settings.event_media_max_image_bytes,
+        candidate_limit=settings.event_media_candidate_limit,
+    )
+    return EventMediaServices(
+        DisasterMediaService(
+            (provider,),
+            store,
+            clock=clock,
+            target_count=settings.event_media_target_count,
+        ),
+        store,
+    )
 
 
 def build_operational_services(

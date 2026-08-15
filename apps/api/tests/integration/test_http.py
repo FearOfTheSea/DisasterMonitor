@@ -1,5 +1,6 @@
 import base64
 from datetime import UTC, datetime
+from hashlib import sha256
 
 import httpx
 import pytest
@@ -10,6 +11,15 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
 )
 from disaster_monitor.application.dto import ModelRequest, ModelToolCall
+from disaster_monitor.application.media import (
+    DisasterMediaGallery,
+    DisasterMediaItem,
+    MediaAssociationStatus,
+    MediaContentRole,
+    MediaCreditKind,
+    MediaRightsStatus,
+    StoredMediaAsset,
+)
 from disaster_monitor.application.multimodal import (
     VisualModelPrediction,
     VisualModelReadiness,
@@ -437,11 +447,30 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
         ),
         clock=lambda: NOW,
     )
+
+    class RecordingMediaDiscovery:
+        def __init__(self) -> None:
+            self.contexts = []
+
+        async def discover(self, context):
+            self.contexts.append(context)
+            return None
+
+    class EmptyMediaStore:
+        def put(self, media):
+            raise AssertionError("No media should be stored by this fixture.")
+
+        def get(self, media_id):
+            return None
+
+    media_discovery = RecordingMediaDiscovery()
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
     app = create_app(
         model=model,
         current_disaster_report=build_current_service(),
         global_earthquake_report=global_report,
+        event_media=media_discovery,
+        media_asset_store=EmptyMediaStore(),
     )
 
     async with httpx.AsyncClient(
@@ -460,7 +489,100 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
     assert body["investigation"]["country"] is None
     assert body["investigation"]["geographic_scope"] == "worldwide"
     assert body["investigation"]["source_ids"] == ["usgs-earthquakes"]
+    assert len(media_discovery.contexts) == 1
+    assert media_discovery.contexts[0].event_id == "usgs:global"
+    assert media_discovery.contexts[0].country_code is None
     assert model.requests == []
+
+
+@pytest.mark.asyncio
+async def test_current_event_returns_three_typed_source_photos_and_serves_bytes() -> (
+    None
+):
+    media_id = "media:" + "a" * 32
+    media_bytes = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+        "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    checksum = sha256(media_bytes).hexdigest()
+
+    class Store:
+        def put(self, media):
+            raise AssertionError("The fixture discovery already stored its media.")
+
+        def get(self, requested_id):
+            if requested_id != media_id:
+                return None
+            return StoredMediaAsset(media_id, media_bytes, "image/png", checksum)
+
+    class Discovery:
+        async def discover(self, context):
+            assert context.event_id == "jma:fixture-event"
+            items = tuple(
+                DisasterMediaItem(
+                    media_id=media_id,
+                    event_id=context.event_id,
+                    physical_event_id=context.physical_event_id,
+                    source_id=f"fixture-photo-source-{index}",
+                    publisher=f"Fixture publisher {index}",
+                    source_page_url=f"https://example.test/photo-{index}",
+                    caption=f"Rescue response photo {index}",
+                    credit=f"Fixture agency {index}",
+                    credit_kind=MediaCreditKind.AGENCY,
+                    published_at=NOW,
+                    captured_at=None,
+                    license_name=None,
+                    license_url=None,
+                    rights_status=MediaRightsStatus.SOURCE_PREVIEW,
+                    role=MediaContentRole.RESCUE_EFFORT,
+                    association_status=MediaAssociationStatus.CORROBORATED,
+                    association_rule_ids=(
+                        "media.association.publication_window",
+                        "media.association.hazard_text",
+                        "media.association.country_text",
+                    ),
+                    association_detail="Source metadata matches the selected event.",
+                    uncertainty="Source-associated preview, not a verified fact.",
+                    content_sha256=checksum,
+                    width=640,
+                    height=360,
+                )
+                for index in range(1, 4)
+            )
+            return DisasterMediaGallery(
+                event_id=context.event_id,
+                physical_event_id=context.physical_event_id,
+                generated_at=NOW,
+                items=items,
+                rejected_count=1,
+                provider_ids=("fixture-media",),
+            )
+
+    app = create_app(
+        model=FakeLanguageModel(error=AssertionError("model must not be called")),
+        current_disaster_report=build_current_service(),
+        event_media=Discovery(),
+        media_asset_store=Store(),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant", json={"question": CURRENT_PROMPT}
+        )
+        image_response = await client.get(f"/api/v1/media/{media_id}")
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["media_gallery"]["event_id"] == "jma:fixture-event"
+    assert len(body["media_gallery"]["items"]) == 3
+    assert body["media_gallery"]["rejected_count"] == 1
+    assert body["media_gallery"]["items"][0]["image_url"].endswith(
+        f"/api/v1/media/{media_id}"
+    )
+    assert image_response.status_code == 200
+    assert image_response.headers["content-type"] == "image/png"
+    assert image_response.content == media_bytes
 
 
 @pytest.mark.asyncio

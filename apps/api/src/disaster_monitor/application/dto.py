@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from disaster_monitor.application.disaster import ReportSection, SelectedEventSummary
+from disaster_monitor.application.media import DisasterMediaGallery
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import SourceReference
 from disaster_monitor.domain.models import MapNavigationAction
@@ -130,3 +131,4 @@ class AssistantAnswer:
     decision_support: DecisionSupportArtifact | None = None
     multimodal_state: MultimodalEvidenceState | None = None
     common_operational_picture: CommonOperationalPicture | None = None
+    media_gallery: DisasterMediaGallery | None = None

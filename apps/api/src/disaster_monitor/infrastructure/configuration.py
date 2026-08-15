@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     disaster_provider_max_response_bytes: int = Field(
         default=1_000_000, ge=10_000, le=5_000_000
     )
+    event_media_enabled: bool = True
+    event_media_target_count: int = Field(default=3, ge=1, le=6)
+    event_media_candidate_limit: int = Field(default=12, ge=3, le=30)
+    event_media_max_image_bytes: int = Field(
+        default=3_000_000, ge=100_000, le=10_000_000
+    )
+    event_media_store_maximum_bytes: int = Field(
+        default=24_000_000, ge=3_000_000, le=100_000_000
+    )
     reliefweb_app_name: str | None = None
     firms_map_key: SecretStr | None = Field(default=None, repr=False)
     firms_dataset: str = Field(default="VIIRS_NOAA20_NRT", min_length=1)

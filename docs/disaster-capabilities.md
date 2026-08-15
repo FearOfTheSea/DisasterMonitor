@@ -47,10 +47,14 @@ casualty, damage, warning, or response evidence, and every response states that 
 The API accepts bounded operator-supplied PNG/JPEG bytes with explicit provenance and
 event metadata. Associated images may produce local analytical observations and a
 typed vector COP; this request boundary is not a live provider and does not alter the
-catalog above. Image retrieval, satellite/aerial monitoring, live raster products,
-official-warning overlay providers, CARTO, TerraLabo, and online source crawling remain
-unsupported. Structured source-candidate metadata can be screened into a separate
-review queue, but it cannot alter this matrix or contribute evidence.
+catalog above. Separately, the assistant can display bounded contextual source photos
+associated with the already-selected event. That gallery uses exact registered page and
+asset hosts and remains outside the provider/evidence matrix. Analytical or satellite/
+aerial image retrieval, live raster products, official-warning overlay providers,
+CARTO, TerraLabo, and open-ended source crawling remain unsupported. Structured
+source-candidate metadata can be screened into a separate review queue, but it cannot
+alter this matrix or contribute evidence. See
+[Event-associated source media](event-media.md).
 
 Triage, advisory decision support, deterministic specialist coordination, and governed
 analytical follow-up ordering are implemented over admitted evidence. They do not add

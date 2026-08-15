@@ -1,0 +1,1 @@
+"""Source-media infrastructure adapters."""
