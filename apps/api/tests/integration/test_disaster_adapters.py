@@ -769,7 +769,8 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
     bodies = {
         "/": index.encode(),
         "/new.html": (
-            "死者 38名、負傷者 120名、全壊 5棟、半壊 9棟、消防隊が対応。"
+            "死者 38名、負傷者 120名、全壊 5棟、半壊 9棟、"
+            "救助：発生していた64件は全て対応済み、消防隊が対応。"
         ).encode(),
         "/old.pdf": "死者 30名、負傷者 100名".encode(),
         "/tokyo.html": "死者 999名".encode(),
@@ -817,6 +818,13 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
         for fact in result.records[0].facts
     )
     assert not any(fact.value == "999" for fact in result.records[0].facts)
+    rescue = next(
+        fact for fact in result.records[0].facts if fact.category == "rescue_operations"
+    )
+    assert rescue.label == "Rescue incidents (救助)"
+    assert rescue.value == "64"
+    assert len(result.records[0].narrative) < 300
+    assert "死者 38" not in result.records[0].narrative
     await client.aclose()
 
 

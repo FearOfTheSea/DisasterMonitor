@@ -1,4 +1,37 @@
 services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: disastermonitor
+      POSTGRES_USER: disastermonitor
+      POSTGRES_PASSWORD: disastermonitor-local-only
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U disastermonitor -d disastermonitor",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - operational-backups:/backups
+
+  migrate:
+    build:
+      context: ./apps/api
+    command:
+      - python
+      - -m
+      - disaster_monitor.infrastructure.operations.runtime
+      - migrate
+    environment:
+      OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: ./apps/api
@@ -6,8 +39,75 @@ services:
       ALLOWED_ORIGINS: http://localhost:3000
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: qwen3:1.7b
+      OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
+      OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
+      OPERATIONAL_AUTO_MIGRATE: "false"
+      RELIEFWEB_APP_NAME: ${RELIEFWEB_APP_NAME:-}
+      FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
+      GFM_ACCESS_TOKEN: ${GFM_ACCESS_TOKEN:-}
+      GFM_USER_ID: ${GFM_USER_ID:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/v1/health', timeout=2)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    volumes:
+      - operational-blobs:/var/lib/disaster-monitor/blobs
     ports:
       - "8001:8001"
+
+  scheduler:
+    build:
+      context: ./apps/api
+    command:
+      - python
+      - -m
+      - disaster_monitor.infrastructure.operations.runtime
+      - scheduler
+    environment:
+      OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./apps/api
+    command:
+      - python
+      - -m
+      - disaster_monitor.infrastructure.operations.runtime
+      - worker
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
+      OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
+      RELIEFWEB_APP_NAME: ${RELIEFWEB_APP_NAME:-}
+      FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
+      GFM_ACCESS_TOKEN: ${GFM_ACCESS_TOKEN:-}
+      GFM_USER_ID: ${GFM_USER_ID:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    volumes:
+      - operational-blobs:/var/lib/disaster-monitor/blobs
+
+  backup-tool:
+    image: alpine:3.22
+    profiles: ["tools"]
+    volumes:
+      - operational-blobs:/blobs
+      - operational-backups:/backups
 
   web:
     build:
@@ -17,6 +117,12 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8001/api/v1
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "3000:3000"
+
+volumes:
+  postgres-data:
+  operational-blobs:
+  operational-backups:

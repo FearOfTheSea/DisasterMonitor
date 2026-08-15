@@ -2,8 +2,9 @@
 
 Disaster Monitor is a local-first MVP for exploring a basic interactive map and
 asking a locally running Qwen model map or disaster-monitoring questions. It also
-has a bounded, source-backed current-earthquake reporting workflow for the packaged
-country catalog, with national situation coverage for Japan.
+has a bounded, source-backed disaster reporting workflow with preserved Japan
+earthquake coverage and reviewed Vietnam flood, landslide, cyclone, and active-fire
+source paths.
 
 Assistant requests enter a bounded agent-first control plane. Current facts are
 composed only from normalized trusted-source evidence; local Qwen interpretation and
@@ -22,6 +23,10 @@ planning cannot create providers, countries, URLs, or facts. See
 - Deterministic current-earthquake request classification and event selection.
 - JMA earthquake/tsunami feeds, USGS earthquake GeoJSON, and supplementary
   ReliefWeb situation reports behind focused provider ports.
+- NCHMF official Vietnam warnings, configurable NASA FIRMS observations, configurable
+  Copernicus GFM analytical products, and an explicit-registration CAP adapter.
+- Optional PostgreSQL/PostGIS history, immutable raw snapshots, idempotent workers,
+  provider freshness, attributed reviews, retention tombstones, and an operations UI.
 - Source-attributed report sections, conflict/partial/stale warnings, and
   clickable source metadata in the assistant drawer.
 - Evidence-bounded triage, decision support, typed specialist coordination, and
@@ -29,8 +34,8 @@ planning cannot create providers, countries, URLs, or facts. See
 - Deterministic request normalization, prompt preparation, and provider-error translation.
 - Unit, HTTP integration, component, adapter, and deterministic Playwright system tests.
 
-The assistant clearly reports that live weather, flood, satellite, geocoding, and
-other unimplemented data are not connected. The current-earthquake workflow only
+The assistant clearly reports unsupported combinations and missing provider
+configuration. The disaster workflow only
 uses retrieved provider evidence and does not substitute model memory for current
 facts. See [docs/current-disaster-reporting.md](docs/current-disaster-reporting.md)
 for the implemented flow and limitations.
@@ -44,10 +49,11 @@ and fail-closed supply procedures are in
 
 ## Deferred capabilities
 
-Live weather, geocoding, satellite catalogs and imagery retrieval, flood providers, broad
-news aggregation, remote model providers, paid map services, authentication,
-queues, background workers, cloud deployment, multi-user persistence, and
-unbounded predictive or consequential analytics are intentionally deferred.
+Live weather, geocoding, automatic satellite imagery retrieval, broad news aggregation,
+remote model providers, paid map services, production identity/TLS, cloud deployment,
+and unbounded predictive or consequential analytics remain deferred. External datasets,
+human evaluations, and the pilot remain release blockers; see
+[docs/project-owner-actions.md](docs/project-owner-actions.md).
 
 ## Repository layout
 
@@ -56,7 +62,7 @@ apps/api/       FastAPI application and Python tests
 apps/web/       Next.js application, OpenLayers map, and frontend tests
 docs/           Architecture and other documentation
 scripts/        Deterministic system-test server and optional smoke helpers
-compose.yaml    Optional local two-service orchestration
+compose.yaml    Production-like local API/web/scheduler/worker/PostGIS orchestration
 ```
 
 ## Prerequisites
@@ -112,7 +118,10 @@ With Docker Desktop running and Ollama running on the host:
 docker compose up --build
 ```
 
-Then open <http://localhost:3000>. The API container uses `host.docker.internal` to reach Ollama on Docker Desktop. Compose configuration is included for convenience; it is not required for independent development.
+Then open <http://localhost:3000>. The API container uses `host.docker.internal` to
+reach Ollama. Compose also starts PostgreSQL/PostGIS, migration, scheduler, and worker
+services with durable volumes. See
+[docs/operations/runbook.md](docs/operations/runbook.md).
 
 ## Test commands
 

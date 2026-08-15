@@ -36,7 +36,9 @@ _PHYSICAL = frozenset(
         "damage_status",
     }
 )
-_RESPONSE = frozenset({"response", "government_response", "emergency_response"})
+_RESPONSE = frozenset(
+    {"response", "government_response", "emergency_response", "rescue_operations"}
+)
 
 GENERIC_REPORT_PROFILE = ReportProfile(_HUMAN, _PHYSICAL, _RESPONSE)
 EARTHQUAKE_REPORT_PROFILE = ReportProfile(

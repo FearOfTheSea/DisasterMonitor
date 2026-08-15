@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AssistantApiError,
   AssistantClient,
+  toAssistantReport,
 } from '@/features/assistant/api/assistantClient';
 import { commonOperationalPicture, multimodalState } from './fixtures/multimodal';
 
@@ -142,6 +143,91 @@ describe('AssistantClient', () => {
       partial: true,
       investigation: { status: 'partial' },
     });
+  });
+
+  it('accepts nullable optional fields in a clarification response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message:
+            'This phase can investigate exactly one country at a time. Which country should I use?',
+          conversation_id: 'session-clarification',
+          model: 'disaster-agent',
+          response_type: 'current_disaster_clarification',
+          selected_event: null,
+          retrieval_time: null,
+          sources: [],
+          warnings: [],
+          sections: [],
+          partial: true,
+          investigation: {
+            status: 'clarification_required',
+            task_summary: 'Which country should I use?',
+            hazard: 'earthquake',
+            country: null,
+            information_needs: ['event_overview'],
+            output_modalities: ['text'],
+            actions: [],
+            source_ids: [],
+            evidence_count: 0,
+            capability_gaps: ['Which country should I use?'],
+            termination_reason: 'clarification_required',
+            triage_priority: null,
+            triage_score: null,
+            triage_action: null,
+            triage_autonomy_mode: null,
+            triage_requires_human_intervention: null,
+            decision_action: null,
+            decision_autonomy_mode: null,
+            decision_requires_human_intervention: null,
+            decision_termination_reason: null,
+            decision_state_revision: null,
+            decision_active_internal_states: [],
+            specialist_handoff_count: 0,
+            specialist_roles: [],
+            collaboration_status: null,
+            collaboration_finding_count: 0,
+            collaboration_deadlock_count: 0,
+            collaboration_iterations: null,
+            collaboration_fallback_reason: null,
+            coordination_supervision_id: null,
+            coordination_supervisor_status: null,
+            coordination_sufficient: null,
+            coordination_required_finding_keys: [],
+            coordination_missing_finding_keys: [],
+            coordination_termination_reason: null,
+            coordination_final_rationale: null,
+            coordination_evidence_ids: [],
+            coordination_analytical_focus: null,
+            coordination_analytical_parameter_set_id: null,
+            coordination_analytical_release_id: null,
+          },
+          decision_support: null,
+          multimodal: null,
+          common_operational_picture: null,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    const response = await client.ask(
+      'Compare the latest earthquakes in Japan and Venezuela.',
+      null,
+      {
+        centerLatitude: 20,
+        centerLongitude: 0,
+        zoom: 2,
+      },
+    );
+
+    expect(response).toMatchObject({
+      response_type: 'current_disaster_clarification',
+      selected_event: null,
+      retrieval_time: null,
+      investigation: { country: null },
+    });
+    expect(toAssistantReport(response)).toBeUndefined();
   });
 
   it('rejects investigation metadata containing an invalid action shape', async () => {

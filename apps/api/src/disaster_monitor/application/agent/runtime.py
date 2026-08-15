@@ -48,12 +48,6 @@ class DisasterAgentRuntime:
     ) -> AgentExecutionState:
         model_calls = 0
         draft = deterministic_task_draft(question)
-        if self._agent_model is not None:
-            try:
-                draft = await self._agent_model.interpret(question)
-                model_calls += 1
-            except Exception:
-                model_calls += 1
         task = validate_disaster_task(
             question,
             draft,

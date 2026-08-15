@@ -29,6 +29,8 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
 from disaster_monitor.infrastructure.disaster.http import (
+    SourcePayloadRecorder,
+    build_snapshot_capture,
     get_json,
     get_text,
     validate_network_target,
@@ -81,22 +83,32 @@ class JmaEarthquakeAdapter:
         self,
         *,
         client: httpx.AsyncClient | None = None,
+        snapshot_recorder: SourcePayloadRecorder | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 1_000_000,
     ) -> None:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._max_response_bytes = max_response_bytes
+        self._snapshot_recorder = snapshot_recorder
 
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
     ) -> ProviderBatch[DisasterEvent]:
+        capture = build_snapshot_capture(
+            self._snapshot_recorder,
+            source_id=self.source_id,
+            parameters={"feed": "rolling-earthquakes-v1"},
+            rights_id="jma-public-information-terms-2026-08",
+            retrieved_at=now,
+        )
         payload = await get_json(
             self._client,
             JMA_EARTHQUAKE_LIST_URL,
             allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
+            capture=capture,
         )
         if not isinstance(payload, list):
             raise DisasterProviderResponseError(
@@ -132,6 +144,9 @@ class JmaEarthquakeAdapter:
                 updated_at=published_at,
                 retrieved_at=now,
                 authority=SourceAuthority.NATIONAL_AUTHORITY,
+                snapshot_id=capture.snapshot.snapshot_id
+                if capture and capture.snapshot
+                else None,
             )
             magnitude = None
             try:
@@ -187,12 +202,14 @@ class JmaTsunamiSituationAdapter:
         self,
         *,
         client: httpx.AsyncClient | None = None,
+        snapshot_recorder: SourcePayloadRecorder | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 1_000_000,
     ) -> None:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._max_response_bytes = max_response_bytes
+        self._snapshot_recorder = snapshot_recorder
 
     async def get_situation_reports(
         self,
@@ -201,12 +218,20 @@ class JmaTsunamiSituationAdapter:
         *,
         now: datetime,
     ) -> ProviderBatch[SituationReport]:
+        capture = build_snapshot_capture(
+            self._snapshot_recorder,
+            source_id=self.source_id,
+            parameters={"feed": "tsunami-status-v1", "event": event.event_id},
+            rights_id="jma-public-information-terms-2026-08",
+            retrieved_at=now,
+        )
         payload = await get_json(
             self._client,
             JMA_TSUNAMI_LIST_URL,
             allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
+            capture=capture,
         )
         if not isinstance(payload, list):
             raise DisasterProviderResponseError(
@@ -237,6 +262,9 @@ class JmaTsunamiSituationAdapter:
                 updated_at=published_at,
                 retrieved_at=now,
                 authority=SourceAuthority.NATIONAL_AUTHORITY,
+                snapshot_id=capture.snapshot.snapshot_id
+                if capture and capture.snapshot
+                else None,
             )
             kinds = item.get("kind")
             labels = []
@@ -383,22 +411,32 @@ class JmaSignificantEarthquakeAdapter:
         self,
         *,
         client: httpx.AsyncClient | None = None,
+        snapshot_recorder: SourcePayloadRecorder | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 1_000_000,
     ) -> None:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._max_response_bytes = max_response_bytes
+        self._snapshot_recorder = snapshot_recorder
 
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
     ) -> ProviderBatch[DisasterEvent]:
+        index_capture = build_snapshot_capture(
+            self._snapshot_recorder,
+            source_id=self.source_id,
+            parameters={"feed": "significant-earthquake-index-v1"},
+            rights_id="jma-public-information-terms-2026-08",
+            retrieved_at=now,
+        )
         markup = await get_text(
             self._client,
             JMA_EEW_HISTORY_URL,
             allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
+            capture=index_capture,
         )
         parser = _JmaHistoryParser()
         try:
@@ -427,6 +465,7 @@ class JmaSignificantEarthquakeAdapter:
             longitude = _number_from_attr(attrs, "longitude")
             depth_km = _number_from_attr(attrs, "depth")
             detail_url = urljoin(JMA_EEW_HISTORY_URL, href) if href else None
+            detail_capture = None
             if detail_url is not None:
                 try:
                     validate_network_target(detail_url, self.allowed_hosts)
@@ -434,12 +473,20 @@ class JmaSignificantEarthquakeAdapter:
                     detail_url = None
             if detail_url and (latitude is None or longitude is None):
                 try:
+                    detail_capture = build_snapshot_capture(
+                        self._snapshot_recorder,
+                        source_id=self.source_id,
+                        parameters={"document": detail_url},
+                        rights_id="jma-public-information-terms-2026-08",
+                        retrieved_at=now,
+                    )
                     detail = await get_text(
                         self._client,
                         detail_url,
                         allowed_hosts=self.allowed_hosts,
                         max_bytes=self._max_response_bytes,
                         provider_name=self.provider_name,
+                        capture=detail_capture,
                     )
                     latitude, longitude, detail_depth = _detail_coordinates(detail)
                     depth_km = depth_km or detail_depth
@@ -455,6 +502,15 @@ class JmaSignificantEarthquakeAdapter:
                 updated_at=event_time,
                 retrieved_at=now,
                 authority=SourceAuthority.NATIONAL_AUTHORITY,
+                snapshot_id=(
+                    detail_capture.snapshot.snapshot_id
+                    if detail_capture and detail_capture.snapshot
+                    else (
+                        index_capture.snapshot.snapshot_id
+                        if index_capture and index_capture.snapshot
+                        else None
+                    )
+                ),
             )
             events.append(
                 DisasterEvent(

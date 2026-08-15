@@ -249,6 +249,7 @@ function DisasterReportView({
                 {formatTime(source.updated_at ?? source.published_at)}
                 {' · '}Retrieved: {formatTime(source.retrieved_at)}
               </small>
+              {source.snapshot_id && <small>Snapshot: {source.snapshot_id}</small>}
             </a>
           ))}
         </div>

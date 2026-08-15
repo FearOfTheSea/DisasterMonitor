@@ -349,11 +349,11 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     ).run("Give me the latest earthquake information in Japan.")
 
     assert reviewed.replan_count == 1
-    assert reviewed.model_call_count == 3
+    assert reviewed.model_call_count == 2
     assert any("no distinct" in warning.lower() for warning in reviewed.warnings)
 
 
-def test_packaged_source_catalog_has_only_six_implemented_non_visual_sources() -> None:
+def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> None:
     catalog = StaticSourceCatalog()
 
     assert {item.source_id for item in catalog.sources()} == {
@@ -363,6 +363,9 @@ def test_packaged_source_catalog_has_only_six_implemented_non_visual_sources() -
         "fdma-situation-reports",
         "jma-tsunami-status",
         "reliefweb-situation-reports",
+        "nchmf-vietnam-warnings",
+        "nasa-firms-active-fire",
+        "copernicus-gfm-vietnam",
     }
     assert all(
         item.implementation_status == "implemented" for item in catalog.sources()

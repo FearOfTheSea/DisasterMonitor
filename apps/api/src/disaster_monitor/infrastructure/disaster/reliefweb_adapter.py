@@ -32,6 +32,8 @@ from disaster_monitor.infrastructure.disaster.errors import (
 )
 from disaster_monitor.infrastructure.disaster.http import (
     HttpParam,
+    SourcePayloadRecorder,
+    build_snapshot_capture,
     get_json,
     validate_network_target,
 )
@@ -213,6 +215,7 @@ class ReliefWebSituationAdapter:
         *,
         app_name: str | None = None,
         client: httpx.AsyncClient | None = None,
+        snapshot_recorder: SourcePayloadRecorder | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 1_000_000,
     ) -> None:
@@ -220,6 +223,7 @@ class ReliefWebSituationAdapter:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._max_response_bytes = max_response_bytes
+        self._snapshot_recorder = snapshot_recorder
 
     @property
     def configured(self) -> bool:
@@ -246,6 +250,17 @@ class ReliefWebSituationAdapter:
             return ProviderBatch(records=())
         assert self._app_name is not None
         params = build_reliefweb_params(event, query, now=now, app_name=self._app_name)
+        capture = build_snapshot_capture(
+            self._snapshot_recorder,
+            source_id=self.source_id,
+            parameters={
+                "country": query.country.alpha3_code,
+                "hazard": query.hazard.value,
+                "event": event.event_id,
+            },
+            rights_id="reliefweb-api-partner-rights-2026-08",
+            retrieved_at=now,
+        )
         payload = await get_json(
             self._client,
             RELIEFWEB_REPORTS_URL,
@@ -253,6 +268,7 @@ class ReliefWebSituationAdapter:
             params=params,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
+            capture=capture,
         )
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
             raise DisasterProviderResponseError(
@@ -297,6 +313,9 @@ class ReliefWebSituationAdapter:
                 updated_at=updated_at,
                 retrieved_at=now,
                 authority=SourceAuthority.HUMANITARIAN_AGGREGATOR,
+                snapshot_id=capture.snapshot.snapshot_id
+                if capture and capture.snapshot
+                else None,
             )
             raw_body = fields.get("body") or ""
             if not raw_body:

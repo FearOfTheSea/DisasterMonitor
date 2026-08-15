@@ -35,6 +35,9 @@ from disaster_monitor.application.services.event_resolution import (
 from disaster_monitor.application.services.evidence_reconciliation import (
     EvidenceReconciler,
 )
+from disaster_monitor.application.services.operational_evidence import (
+    OperationalEvidenceRecorder,
+)
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
@@ -76,6 +79,7 @@ class CurrentDisasterReportService:
         renderer: DisasterReportRenderer | None = None,
         clock: Callable[[], datetime] = _now_utc,
         source_catalog: SourceCatalog | None = None,
+        operational_evidence: OperationalEvidenceRecorder | None = None,
     ) -> None:
         self._event_provider = event_provider
         self._situation_report_provider = situation_report_provider
@@ -87,6 +91,7 @@ class CurrentDisasterReportService:
         self._renderer = renderer or DisasterReportRenderer()
         self._clock = clock
         self._source_catalog = source_catalog or _EmptySourceCatalog()
+        self._operational_evidence = operational_evidence
         self._agent_tools = self.build_agent_tools(self._source_catalog)
 
     @property
@@ -113,6 +118,7 @@ class CurrentDisasterReportService:
                 self._evidence_reconciler,
                 self._renderer,
                 self._clock,
+                operational_evidence=self._operational_evidence,
             ),
             additional_tools,
         )

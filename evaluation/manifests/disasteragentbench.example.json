@@ -1,0 +1,23 @@
+{
+  "schema_version": "dm.disasteragentbench.v1",
+  "manifest_id": "dab-YYYYqN-release",
+  "role": "release",
+  "created_from_commit": "0000000000000000000000000000000000000000",
+  "created_at_utc": "2026-08-17T00:00:00+00:00",
+  "episodes": [
+    {
+      "episode_id": "vnm-flood-stable-id",
+      "hazard": "flood",
+      "country_code": "VNM",
+      "time_window": {
+        "start": "2026-01-01T00:00:00+00:00",
+        "end": "2026-01-02T00:00:00+00:00"
+      },
+      "source_snapshot_manifest": "episodes/vnm-flood-stable-id/snapshots.json",
+      "source_snapshot_manifest_sha256": "sha256:REPLACE_WITH_64_HEX_CHARACTERS",
+      "hidden_labels_ref": "release-labels/vnm-flood-stable-id.json",
+      "hidden_labels_sha256": "sha256:REPLACE_WITH_64_HEX_CHARACTERS"
+    }
+  ],
+  "manifest_sha256": "sha256:REPLACE_WITH_CANONICAL_MANIFEST_HASH"
+}

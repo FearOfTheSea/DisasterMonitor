@@ -1,12 +1,19 @@
 """Small shared helpers for bounded JSON feed adapters."""
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
 
+from disaster_monitor.application.services.operational_ingestion import (
+    AcquiredSourcePayload,
+    canonical_request_identity,
+)
+from disaster_monitor.domain.operations import SourceSnapshotRecord
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
     DisasterProviderResponseError,
@@ -15,6 +22,41 @@ from disaster_monitor.infrastructure.disaster.errors import (
 
 _RETRYABLE_CODES = {"timeout", "network_error", "rate_limited", "http_server_error"}
 HttpParam = str | int | float | bool | None | Sequence[str | int | float | bool | None]
+SourcePayloadRecorder = Callable[
+    [AcquiredSourcePayload], Awaitable[SourceSnapshotRecord]
+]
+
+
+@dataclass(slots=True)
+class SnapshotCapture:
+    """Registry-bound metadata required to persist one successful response."""
+
+    source_id: str
+    request_identity: str
+    rights_id: str
+    retrieved_at: datetime
+    recorder: SourcePayloadRecorder
+    snapshot: SourceSnapshotRecord | None = None
+
+
+def build_snapshot_capture(
+    recorder: SourcePayloadRecorder | None,
+    *,
+    source_id: str,
+    parameters: Mapping[str, str],
+    rights_id: str,
+    retrieved_at: datetime,
+) -> SnapshotCapture | None:
+    """Build credential-free capture identity for an allowlisted request."""
+    if recorder is None:
+        return None
+    return SnapshotCapture(
+        source_id,
+        canonical_request_identity(source_id, parameters),
+        rights_id,
+        retrieved_at,
+        recorder,
+    )
 
 
 def validate_network_target(url: str, allowed_hosts: frozenset[str]) -> None:
@@ -69,6 +111,8 @@ async def get_json(
     url: str,
     *,
     params: Mapping[str, HttpParam] | None = None,
+    headers: Mapping[str, str] | None = None,
+    capture: SnapshotCapture | None = None,
     allowed_hosts: frozenset[str],
     max_bytes: int = 1_000_000,
     provider_name: str = "provider",
@@ -77,7 +121,9 @@ async def get_json(
     validate_network_target(url, allowed_hosts)
     for attempt in range(2):
         try:
-            async with client.stream("GET", url, params=params) as response:
+            async with client.stream(
+                "GET", url, params=params, headers=headers
+            ) as response:
                 try:
                     response.raise_for_status()
                 except httpx.HTTPStatusError as error:
@@ -114,6 +160,7 @@ async def get_json(
                             reason_code="response_too_large",
                         )
                 content = bytes(body)
+                await _capture_response(response, content, capture)
         except DisasterProviderResponseError:
             raise
         except httpx.TimeoutException as error:
@@ -151,6 +198,8 @@ async def get_text(
     url: str,
     *,
     params: Mapping[str, HttpParam] | None = None,
+    headers: Mapping[str, str] | None = None,
+    capture: SnapshotCapture | None = None,
     allowed_hosts: frozenset[str],
     max_bytes: int = 1_000_000,
     provider_name: str = "provider",
@@ -159,7 +208,9 @@ async def get_text(
     validate_network_target(url, allowed_hosts)
     for attempt in range(2):
         try:
-            async with client.stream("GET", url, params=params) as response:
+            async with client.stream(
+                "GET", url, params=params, headers=headers
+            ) as response:
                 try:
                     response.raise_for_status()
                 except httpx.HTTPStatusError as error:
@@ -168,7 +219,10 @@ async def get_text(
                         continue
                     raise failure from error
                 content_type = response.headers.get("content-type", "").lower()
-                if not any(value in content_type for value in ("text/", "html", "pdf")):
+                if not any(
+                    value in content_type
+                    for value in ("text/", "html", "pdf", "xml", "rss", "atom")
+                ):
                     raise DisasterProviderResponseError(
                         "The source returned an unexpected content type.",
                         reason_code="unexpected_content_type",
@@ -195,6 +249,7 @@ async def get_text(
                             reason_code="response_too_large",
                         )
                 content = bytes(body)
+                await _capture_response(response, content, capture)
         except DisasterProviderResponseError:
             raise
         except httpx.TimeoutException as error:
@@ -227,6 +282,8 @@ async def get_bytes(
     url: str,
     *,
     params: Mapping[str, HttpParam] | None = None,
+    headers: Mapping[str, str] | None = None,
+    capture: SnapshotCapture | None = None,
     allowed_hosts: frozenset[str],
     max_bytes: int = 1_000_000,
     provider_name: str = "provider",
@@ -235,7 +292,9 @@ async def get_bytes(
     validate_network_target(url, allowed_hosts)
     for attempt in range(2):
         try:
-            async with client.stream("GET", url, params=params) as response:
+            async with client.stream(
+                "GET", url, params=params, headers=headers
+            ) as response:
                 try:
                     response.raise_for_status()
                 except httpx.HTTPStatusError as error:
@@ -255,6 +314,7 @@ async def get_bytes(
                             reason_code="response_too_large",
                         )
                 content = bytes(body)
+                await _capture_response(response, content, capture)
         except DisasterProviderResponseError:
             raise
         except httpx.TimeoutException as error:
@@ -280,3 +340,29 @@ async def get_bytes(
             "The source returned an empty response.", reason_code="empty_result"
         )
     return content
+
+
+async def _capture_response(
+    response: httpx.Response,
+    content: bytes,
+    capture: SnapshotCapture | None,
+) -> None:
+    if capture is None:
+        return
+    revision = response.headers.get("etag") or response.headers.get("last-modified")
+    capture.snapshot = await capture.recorder(
+        AcquiredSourcePayload(
+            source_id=capture.source_id,
+            canonical_request_identity=capture.request_identity,
+            provider_revision=revision,
+            content=content,
+            content_type=response.headers.get(
+                "content-type", "application/octet-stream"
+            ).partition(";")[0],
+            response_status=response.status_code,
+            retrieved_at=capture.retrieved_at,
+            published_at=None,
+            observed_at=None,
+            rights_id=capture.rights_id,
+        )
+    )

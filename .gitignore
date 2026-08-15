@@ -29,7 +29,8 @@ test-results/
 *.sqlite3
 *.db
 *.log
-data/
+data/*
+!data/README.md
 session/
 project-owner-context.txt
-deep-research-report-15a01b2.md
+deep-research-report-*.md

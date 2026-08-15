@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "2.0.0",
   "sources": [
     {
       "source_id": "jma-rolling-earthquakes",
@@ -105,6 +105,78 @@
       "provider_registration_name": "JMA tsunami status",
       "implementation_status": "implemented",
       "allowed_hosts": ["www.jma.go.jp"]
+    },
+    {
+      "source_id": "nchmf-vietnam-warnings",
+      "organization_name": "Vietnam National Center for Hydro-Meteorological Forecasting",
+      "display_name": "NCHMF official Vietnam warning RSS",
+      "jurisdiction": "Vietnam",
+      "authority_level": "national_authority",
+      "information_roles": ["event_discovery", "official_warning"],
+      "supported_hazards": ["flood", "landslide", "tropical_cyclone"],
+      "country_codes": ["VNM"],
+      "supported_languages": ["vi", "en"],
+      "endpoint_kind": "official_rss_feed",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "publication based; feed cadence varies by hazard",
+      "attribution_guidance": "Attribute warning headlines to NCHMF and do not infer unreported impacts.",
+      "limitations": [
+        "RSS items can contain only a headline and publication time.",
+        "Published reuse terms permit individuals/nonprofits but allow withdrawal; production rights review remains required."
+      ],
+      "registered_tool_names": ["find_disaster_event", "retrieve_situation_evidence"],
+      "provider_registration_name": "NCHMF Vietnam warnings",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["nchmf.gov.vn"]
+    },
+    {
+      "source_id": "nasa-firms-active-fire",
+      "organization_name": "NASA Fire Information for Resource Management System",
+      "display_name": "NASA FIRMS active-fire observations",
+      "jurisdiction": "global satellite observation",
+      "authority_level": "scientific_authority",
+      "information_roles": ["event_discovery", "satellite_observation"],
+      "supported_hazards": ["wildfire"],
+      "country_codes": null,
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_csv_api",
+      "requires_configuration": true,
+      "configured": false,
+      "expected_freshness": "near-real-time satellite product; source-specific latency applies",
+      "attribution_guidance": "Identify records as NASA FIRMS satellite detections, not official wildfire incidents.",
+      "limitations": [
+        "A NASA FIRMS map key is required.",
+        "Active-fire detections do not establish incident boundaries, impacts, or official declarations."
+      ],
+      "registered_tool_names": ["find_disaster_event", "retrieve_situation_evidence"],
+      "provider_registration_name": "NASA FIRMS active fire",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["firms.modaps.eosdis.nasa.gov"]
+    },
+    {
+      "source_id": "copernicus-gfm-vietnam",
+      "organization_name": "Copernicus Emergency Management Service",
+      "display_name": "Copernicus GFM Vietnam product notifications",
+      "jurisdiction": "owner-configured Vietnam areas of interest",
+      "authority_level": "scientific_authority",
+      "information_roles": ["event_discovery", "analytical_model"],
+      "supported_hazards": ["flood"],
+      "country_codes": ["VNM"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "authenticated_official_json_api",
+      "requires_configuration": true,
+      "configured": false,
+      "expected_freshness": "satellite product notification; acquisition and product latency apply",
+      "attribution_guidance": "Present as a Copernicus satellite-derived analytical product, never a national warning.",
+      "limitations": [
+        "Requires a GFM token, user ID, and reviewed Vietnam-only areas of interest.",
+        "Notification availability does not itself quantify flood extent or impacts."
+      ],
+      "registered_tool_names": ["find_disaster_event", "retrieve_situation_evidence"],
+      "provider_registration_name": "Copernicus GFM Vietnam notifications",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["api.gfm.eodc.eu"]
     },
     {
       "source_id": "reliefweb-situation-reports",

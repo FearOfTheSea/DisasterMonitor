@@ -83,9 +83,16 @@ export class AssistantClient {
       if (item.response_type !== undefined && typeof item.response_type !== 'string') {
         return false;
       }
+      if (item.retrieval_time != null && typeof item.retrieval_time !== 'string') {
+        return false;
+      }
+      if (item.partial !== undefined && typeof item.partial !== 'boolean') {
+        return false;
+      }
       if (
-        item.retrieval_time !== undefined &&
-        typeof item.retrieval_time !== 'string'
+        item.selected_event !== undefined &&
+        item.selected_event !== null &&
+        !this.isSelectedEvent(item.selected_event)
       ) {
         return false;
       }
@@ -100,6 +107,7 @@ export class AssistantClient {
       }
       if (
         item.investigation !== undefined &&
+        item.investigation !== null &&
         !this.isInvestigation(item.investigation)
       ) {
         return false;
@@ -153,9 +161,32 @@ export class AssistantClient {
           typeof source.publisher === 'string' &&
           typeof source.title === 'string' &&
           typeof source.canonical_url === 'string' &&
-          typeof source.retrieved_at === 'string'
+          typeof source.retrieved_at === 'string' &&
+          (source.published_at == null || typeof source.published_at === 'string') &&
+          (source.updated_at == null || typeof source.updated_at === 'string') &&
+          (source.snapshot_id === undefined ||
+            source.snapshot_id === null ||
+            typeof source.snapshot_id === 'string')
         );
       })
+    );
+  }
+
+  private isSelectedEvent(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const item = value as Record<string, unknown>;
+    return (
+      typeof item.event_id === 'string' &&
+      typeof item.hazard === 'string' &&
+      typeof item.location === 'string' &&
+      typeof item.event_time === 'string' &&
+      (item.magnitude == null || typeof item.magnitude === 'number') &&
+      (item.intensity == null || typeof item.intensity === 'string') &&
+      (item.depth_km == null || typeof item.depth_km === 'number') &&
+      (item.provider_ids == null || this.isStringArray(item.provider_ids)) &&
+      this.isSources([item.source])
     );
   }
 
@@ -239,8 +270,8 @@ export class AssistantClient {
     return (
       typeof item.status === 'string' &&
       typeof item.task_summary === 'string' &&
-      (item.hazard === undefined || typeof item.hazard === 'string') &&
-      (item.country === undefined || typeof item.country === 'string') &&
+      (item.hazard == null || typeof item.hazard === 'string') &&
+      (item.country == null || typeof item.country === 'string') &&
       this.isStringArray(item.information_needs) &&
       this.isStringArray(item.output_modalities) &&
       this.isStringArray(item.actions) &&
@@ -308,18 +339,18 @@ export class AssistantClient {
 export function toAssistantReport(
   response: AssistantResponse,
 ): AssistantReport | undefined {
-  if (!response.response_type || response.response_type === 'assistant') {
+  if (response.response_type !== 'current_disaster') {
     return undefined;
   }
   return {
     responseType: response.response_type,
-    selectedEvent: response.selected_event,
-    retrievalTime: response.retrieval_time,
+    selectedEvent: response.selected_event ?? undefined,
+    retrievalTime: response.retrieval_time ?? undefined,
     sources: response.sources ?? [],
     warnings: response.warnings ?? [],
     sections: response.sections ?? [],
     partial: response.partial ?? false,
-    investigation: response.investigation,
+    investigation: response.investigation ?? undefined,
     decisionSupport: response.decision_support ?? undefined,
     multimodal: response.multimodal ?? undefined,
     commonOperationalPicture: response.common_operational_picture ?? undefined,

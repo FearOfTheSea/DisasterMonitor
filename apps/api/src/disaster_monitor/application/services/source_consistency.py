@@ -16,6 +16,8 @@ _SITUATION_INFORMATION_ROLES = frozenset(
         SourceInformationRole.EMERGENCY_RESPONSE,
         SourceInformationRole.HUMANITARIAN_REPORTING,
         SourceInformationRole.TSUNAMI_STATUS,
+        SourceInformationRole.SATELLITE_OBSERVATION,
+        SourceInformationRole.ANALYTICAL_MODEL,
     }
 )
 

@@ -24,6 +24,8 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
 from disaster_monitor.infrastructure.disaster.http import (
+    SourcePayloadRecorder,
+    build_snapshot_capture,
     get_json,
     validate_network_target,
 )
@@ -97,6 +99,7 @@ class UsgsEarthquakeAdapter:
         *,
         geography: CountryCatalog,
         client: httpx.AsyncClient | None = None,
+        snapshot_recorder: SourcePayloadRecorder | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 1_000_000,
     ) -> None:
@@ -104,6 +107,7 @@ class UsgsEarthquakeAdapter:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._max_response_bytes = max_response_bytes
+        self._snapshot_recorder = snapshot_recorder
 
     def _parse_feature(
         self,
@@ -112,6 +116,7 @@ class UsgsEarthquakeAdapter:
         *,
         now: datetime,
         index: int,
+        snapshot_id: str | None,
     ) -> tuple[DisasterEvent | None, ProviderIssue | None]:
         try:
             if not isinstance(raw_feature, dict):
@@ -162,6 +167,7 @@ class UsgsEarthquakeAdapter:
             updated_at=updated_at,
             retrieved_at=now,
             authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
+            snapshot_id=snapshot_id,
         )
         return (
             DisasterEvent(
@@ -193,6 +199,20 @@ class UsgsEarthquakeAdapter:
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
     ) -> ProviderBatch[DisasterEvent]:
+        capture = build_snapshot_capture(
+            self._snapshot_recorder,
+            source_id=self.source_id,
+            parameters={
+                "country": query.country.alpha3_code,
+                "from": (
+                    query.date_from or now - timedelta(days=query.time_window_days)
+                ).isoformat(),
+                "to": (query.date_to or now).isoformat(),
+                "event": query.event_identifier or "",
+            },
+            rights_id="usgs-earthquake-api-terms-2026-08",
+            retrieved_at=now,
+        )
         payload = await get_json(
             self._client,
             USGS_QUERY_URL,
@@ -200,6 +220,7 @@ class UsgsEarthquakeAdapter:
             params=build_usgs_params(query, now=now),
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
+            capture=capture,
         )
         if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
             raise DisasterProviderResponseError(
@@ -213,7 +234,15 @@ class UsgsEarthquakeAdapter:
         events: list[DisasterEvent] = []
         issues: list[ProviderIssue] = []
         for index, raw_feature in enumerate(raw_features):
-            event, issue = self._parse_feature(raw_feature, query, now=now, index=index)
+            event, issue = self._parse_feature(
+                raw_feature,
+                query,
+                now=now,
+                index=index,
+                snapshot_id=capture.snapshot.snapshot_id
+                if capture and capture.snapshot
+                else None,
+            )
             if event is not None:
                 events.append(event)
             if issue is not None:

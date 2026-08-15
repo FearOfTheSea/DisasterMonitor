@@ -110,6 +110,8 @@ class SourceInformationRole(StrEnum):
     EMERGENCY_RESPONSE = "emergency_response"
     HUMANITARIAN_REPORTING = "humanitarian_situation_reporting"
     TSUNAMI_STATUS = "tsunami_status"
+    SATELLITE_OBSERVATION = "satellite_observation"
+    ANALYTICAL_MODEL = "analytical_model"
     IMAGERY = "imagery"
     MAP_LAYERS = "map_layers"
 

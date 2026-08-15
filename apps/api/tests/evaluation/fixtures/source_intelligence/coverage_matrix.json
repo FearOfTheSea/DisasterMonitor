@@ -33,6 +33,42 @@
       "source_ids": ["usgs-earthquakes"]
     },
     {
+      "country": "VNM",
+      "hazard": "flood",
+      "role": "event_discovery",
+      "source_ids": ["nchmf-vietnam-warnings"]
+    },
+    {
+      "country": "VNM",
+      "hazard": "flood",
+      "role": "situation_evidence",
+      "source_ids": ["nchmf-vietnam-warnings"]
+    },
+    {
+      "country": "VNM",
+      "hazard": "landslide",
+      "role": "event_discovery",
+      "source_ids": ["nchmf-vietnam-warnings"]
+    },
+    {
+      "country": "VNM",
+      "hazard": "landslide",
+      "role": "situation_evidence",
+      "source_ids": ["nchmf-vietnam-warnings"]
+    },
+    {
+      "country": "VNM",
+      "hazard": "tropical_cyclone",
+      "role": "event_discovery",
+      "source_ids": ["nchmf-vietnam-warnings"]
+    },
+    {
+      "country": "VNM",
+      "hazard": "tropical_cyclone",
+      "role": "situation_evidence",
+      "source_ids": ["nchmf-vietnam-warnings"]
+    },
+    {
       "country": "VEN",
       "hazard": "earthquake",
       "role": "event_discovery",

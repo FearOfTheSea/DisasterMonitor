@@ -117,6 +117,11 @@ def validate_plan(
         raise ValueError(
             "The investigation plan omitted required bounded multimodal tools."
         )
+    if not requires_multimodal and set(MULTIMODAL_TOOL_ORDER).intersection(seen_tools):
+        raise ValueError(
+            "The investigation plan requested multimodal tools without an "
+            "admitted asset."
+        )
     if "analyze_multimodal_assets" in seen_tools and (
         "build_common_operational_picture" not in seen_tools
     ):

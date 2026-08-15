@@ -104,6 +104,40 @@ def test_general_knowledge_and_non_disaster_are_distinct() -> None:
     assert validate("What is this map for?").kind == TaskKind.NON_DISASTER
 
 
+def test_model_draft_cannot_expand_user_task_scope() -> None:
+    map_question = (
+        "What is this map for, and what can you infer from the current map center "
+        "and zoom? Do not claim to see unavailable layers."
+    )
+    invented_disaster = DisasterTaskDraft(
+        disaster_related=True,
+        current_or_event_specific=True,
+        hazard_mentions=("earthquake",),
+        place_mentions=("Japan",),
+        information_needs=("map_visualization",),
+        output_modalities=("text", "map"),
+    )
+    expanded_investigation = DisasterTaskDraft(
+        disaster_related=True,
+        current_or_event_specific=True,
+        hazard_mentions=("earthquake", "tsunami"),
+        place_mentions=("Japan", "Venezuela"),
+        information_needs=("event_overview", "images", "decision_support"),
+        output_modalities=("text", "images", "map"),
+    )
+
+    map_task = validate(map_question, invented_disaster)
+    investigation = validate("Latest earthquake in Japan.", expanded_investigation)
+
+    assert map_task.kind == TaskKind.NON_DISASTER
+    assert investigation.kind == TaskKind.INVESTIGATION
+    assert investigation.hazard == Hazard.EARTHQUAKE
+    assert investigation.country is not None
+    assert investigation.country.alpha3_code == "JPN"
+    assert investigation.information_needs == (InformationNeed.EVENT_OVERVIEW,)
+    assert investigation.output_modalities == (OutputModality.TEXT,)
+
+
 def test_image_request_records_capability_modality_without_faking_it() -> None:
     task = validate(
         "Show me pictures of the damage from the August 5, 2026 Japan earthquake."

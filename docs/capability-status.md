@@ -31,6 +31,7 @@ The vocabulary is exact:
 | Decision Support (DS)       | Advisory facts/observations/estimates/options; source epistemic status preserved end to end; paired scenarios; confirmed-premise recommendation eligibility; reversible internal-only autonomy.              | **Passing:** DS-A/DS-B/DS-C lineage, epistemic truth table, calibration, constraints, mutation, rollback, and pass^8 tests.                           | **Pending.** DS-A/DS-B lack blind expert review on provenance-locked historical packets and independently held outcomes/policy adjudications. Repository-authored labels cannot establish expert acceptance or real-world calibration.                                     |
 | Coordination (CO)           | Typed least-privilege handoffs; deterministic specialists; bounded merge; explicit sufficiency/termination; default-plan fallback on any unsafe or incomplete state.                                         | **Passing:** CO-A/CO-B/CO-C schema, provenance, privilege, end-state, deadlock, outage, policy-attack, budget, and pass^8 tests.                      | **Passed for bounded deterministic analytical coordination.** The declared CO protocol is an adversarial simulation gate and requires no human study. This status does not satisfy or bypass pending MM, TR, or DS evidence.                                               |
 | Continuous Learning (CL)    | Offline parameter selection; typed drift detection and safe mode; allowlisted reversible optimization; production-derived continuous supervisor signals; checksum-bound V3 analytical release with rollback. | **Passing:** CL-A/CL-B/CL-C partition, drift, production-effect, reachability, multi-family, regression, protected-scope, safety, and rollback tests. | **Pending for real-trajectory/operational promotion.** The active V3 release is an automated non-authority fixture release; CL-A inputs contain no locked historical task provenance or genuine reviewer corrections. It is not evidence of learning from real operations. |
+| Operational evidence (OP)   | Immutable source snapshots, snapshot-linked observations, PostgreSQL/PostGIS history, idempotent scheduler/workers, freshness/status, retention tombstones, attributed bounded review, and backup/restore tooling. | **Passing locally:** lineage, duplicate delivery, retry/dead-letter, freshness, retention, HTTP, UI, migration, replay-integrity, and Compose checks. | **Pending.** No owner-approved rights/retention package, trusted deployed identity boundary, successful recovery drill, long-running failure evidence, or 30-day supervised pilot exists. |
 
 Run the family gates from the repository root:
 
@@ -49,9 +50,9 @@ uv run --directory apps/api pytest -q tests/evaluation/test_continuous_learning.
 EW promotion requires a deidentified, immutable manifest for the historical event and
 claim episodes: source record IDs, origin, license/use basis, content checksums,
 adjudicator identities or study-local codes, adjudication method, and hidden outcomes.
-The evaluator must load that locked bundle without rewriting it into repository-authored
-facts, then rerun `test_evidence_world_state.py`. No external-bundle loader exists yet,
-so EW remains pending until that validation boundary is implemented and reviewed.
+The DisasterAgentBench validator and replay boundary can load that locked bundle without
+putting hidden labels in runtime episode objects. EW remains pending until legitimate
+external episodes and outcomes are supplied and the frozen evaluator is run.
 
 TR promotion requires a locked historical episode manifest plus blinded SME rankings.
 The bundle must record study-local reviewer codes, qualifying expertise, independent
@@ -102,9 +103,10 @@ or human attestations are absent.
 
 ## Intentionally unsupported
 
-Automatic imagery retrieval; continuous satellite/aerial or raster monitoring;
-weather, flood, wildfire, landslide, or cyclone event providers; geocoding; arbitrary
-map publication; official warning overlays; OCR; online source crawling or automatic
-source trust promotion; hosted models; authentication/RBAC; queues/background workers;
-multi-user persistence; cloud deployment; and public warnings, evacuation directives,
-or resource-allocation orders remain intentionally unsupported.
+Automatic imagery retrieval or raster monitoring; live weather; geocoding; arbitrary
+map publication; official warning map overlays; OCR; online source crawling or automatic
+source trust promotion; hosted models; production authentication/RBAC and TLS;
+multi-user conversation persistence; cloud deployment; and public warnings, evacuation
+directives, or resource-allocation orders remain intentionally unsupported. The
+implemented FIRMS/GFM paths are typed observations/products, not automatic imagery or
+official incident declarations.

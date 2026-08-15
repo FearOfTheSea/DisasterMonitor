@@ -170,6 +170,53 @@ async def test_readiness_and_assistant_use_injected_fake_model() -> None:
 
 
 @pytest.mark.asyncio
+async def test_map_context_question_cannot_be_reclassified_by_agent_model() -> None:
+    class ShouldNotInterpretMapQuestion:
+        calls = 0
+
+        async def interpret(self, question):
+            self.calls += 1
+            raise AssertionError(
+                "Non-disaster map questions must bypass interpretation"
+            )
+
+        async def propose_plan(self, task, tool_descriptions):
+            raise AssertionError("A general map question must not create a plan")
+
+        async def review_progress(self, task, completed_steps):
+            raise AssertionError("A general map question must not create a review")
+
+    question = (
+        "What is this map for, and what can you infer from the current map center "
+        "and zoom? Do not claim to see unavailable layers."
+    )
+    agent_model = ShouldNotInterpretMapQuestion()
+    model = FakeLanguageModel(response_text="I can explain the supplied map context.")
+    app = create_app(model=model, agent_model=agent_model)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={
+                "question": question,
+                "map_view": {
+                    "center_latitude": 21.03,
+                    "center_longitude": 105.85,
+                    "zoom": 10,
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "I can explain the supplied map context."
+    assert response.json()["model"] == "fake-qwen"
+    assert agent_model.calls == 0
+    assert len(model.requests) == 1
+
+
+@pytest.mark.asyncio
 async def test_assistant_validation_and_model_error_mapping() -> None:
     validation_app = create_app(model=FakeLanguageModel())
     error_app = create_app(
@@ -434,14 +481,14 @@ async def test_recognized_unsupported_hazard_returns_coverage_unavailable() -> N
     ) as client:
         response = await client.post(
             "/api/v1/assistant",
-            json={"question": "Please give me the latest flood in Vietnam."},
+            json={"question": "Please give me the latest wildfire in Vietnam."},
         )
 
     body = response.json()
     assert response.status_code == 200
     assert body["response_type"] == "current_disaster_coverage_unavailable"
     assert body["selected_event"] is None
-    assert "flood" in body["message"]
+    assert "wildfire" in body["message"]
     assert "Vietnam" in body["message"]
     assert "No live factual claim" in body["message"]
 
@@ -767,7 +814,7 @@ async def test_invalid_agent_model_output_uses_default_plan_not_general_model() 
     assert response.status_code == 200
     assert body["selected_event"]["event_id"] == "jma:fixture-event"
     assert len(body["investigation"]["actions"]) == 5
-    assert agent_model.calls == 3
+    assert agent_model.calls == 2
     assert general.requests == []
     forbidden = {"reasoning", "prompt", "raw_model_output", "chain_of_thought"}
     assert forbidden.isdisjoint(body["investigation"])

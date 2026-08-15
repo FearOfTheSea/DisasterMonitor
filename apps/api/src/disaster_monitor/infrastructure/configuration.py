@@ -1,6 +1,8 @@
 """Environment-backed infrastructure settings."""
 
-from pydantic import Field
+from pathlib import Path
+
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,7 +22,18 @@ class Settings(BaseSettings):
     disaster_provider_max_response_bytes: int = Field(
         default=1_000_000, ge=10_000, le=5_000_000
     )
-    reliefweb_app_name: str | None = Field(default=None, min_length=1)
+    reliefweb_app_name: str | None = None
+    firms_map_key: SecretStr | None = Field(default=None, repr=False)
+    firms_dataset: str = Field(default="VIIRS_NOAA20_NRT", min_length=1)
+    gfm_access_token: SecretStr | None = Field(default=None, repr=False)
+    gfm_user_id: str | None = None
+    operational_database_url: SecretStr | None = Field(default=None, repr=False)
+    operational_blob_root: Path = Path("data/operational/blobs")
+    operational_auto_migrate: bool = True
+    trusted_operator_identity_enabled: bool = False
+    trusted_operator_identity_header: str = Field(
+        default="x-disastermonitor-operator", pattern=r"^[a-z0-9-]+$"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

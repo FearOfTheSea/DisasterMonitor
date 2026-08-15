@@ -330,6 +330,7 @@ def build_evidence_packet(
         "injuries",
         "missing",
         "rescued",
+        "rescue_operations",
         "evacuations",
         "shelters",
         "buildings",

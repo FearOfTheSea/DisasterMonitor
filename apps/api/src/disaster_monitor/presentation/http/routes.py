@@ -2,16 +2,25 @@
 
 import base64
 import binascii
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, cast
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from disaster_monitor.application.dto import ModelReadiness
 from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.operational_state import OperationalRepository
+from disaster_monitor.application.services.operational_ingestion import (
+    record_operator_review,
+)
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.models import MapView
+from disaster_monitor.domain.operations import OperatorActionRecord
+from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.presentation.http.metrics import OperationalMetrics
 from disaster_monitor.presentation.http.multimodal_schemas import (
     MultimodalAssetRequest,
 )
@@ -25,8 +34,12 @@ from disaster_monitor.presentation.http.schemas import (
     DecisionEstimateResponse,
     DecisionFactResponse,
     DecisionSupportResponse,
+    EvidenceSnapshotResponse,
     HealthResponse,
     InvestigationResponse,
+    OperatorActionRequest,
+    OperatorActionResponse,
+    ProviderFreshnessResponse,
     ReadinessResponse,
     ReportSectionResponse,
     SelectedEventResponse,
@@ -44,6 +57,24 @@ def get_answer_use_case(request: Request) -> AnswerMapQuestion:
 def get_language_model(request: Request) -> LanguageModel:
     """Retrieve the provider-neutral model port built by the composition root."""
     return cast(LanguageModel, request.app.state.language_model)
+
+
+def get_operational_repository(request: Request) -> OperationalRepository:
+    """Retrieve the operational store built by the composition root."""
+    return cast(OperationalRepository, request.app.state.operational_repository)
+
+
+_FRESHNESS_EXPECTATIONS = {
+    "jma-rolling-earthquakes": timedelta(minutes=15),
+    "jma-significant-earthquakes": timedelta(hours=24),
+    "usgs-earthquakes": timedelta(minutes=15),
+    "fdma-situation-reports": timedelta(hours=6),
+    "jma-tsunami-status": timedelta(minutes=15),
+    "reliefweb-situation-reports": timedelta(hours=6),
+    "nchmf-vietnam-warnings": timedelta(hours=1),
+    "nasa-firms-active-fire": timedelta(hours=3),
+    "copernicus-gfm-vietnam": timedelta(hours=1),
+}
 
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
@@ -65,6 +96,136 @@ async def readiness(
         ollama_available=result.ollama_available,
         model_available=result.model_available,
         model=result.model,
+    )
+
+
+@router.get(
+    "/operations/providers",
+    response_model=list[ProviderFreshnessResponse],
+    tags=["operations"],
+)
+async def provider_freshness(
+    repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+) -> list[ProviderFreshnessResponse]:
+    """Expose upstream freshness and failures without hiding unavailable sources."""
+    values = await repository.freshness(
+        now=datetime.now(UTC), expectations=_FRESHNESS_EXPECTATIONS
+    )
+    return [
+        ProviderFreshnessResponse(
+            source_id=item.source_id,
+            state=item.state.value,
+            last_attempt_at=item.last_attempt_at,
+            last_success_at=item.last_success_at,
+            effective_at=item.effective_at,
+            age_seconds=item.age_seconds,
+            expected_freshness_seconds=item.expected_freshness_seconds,
+            consecutive_failures=item.consecutive_failures,
+            latest_error_code=item.latest_error_code,
+        )
+        for item in values
+    ]
+
+
+@router.get("/metrics", tags=["operations"])
+async def metrics(
+    request: Request,
+    repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+) -> Response:
+    """Expose API and durable queue metrics for an owner-selected scraper."""
+    operational_metrics = cast(
+        OperationalMetrics, request.app.state.operational_metrics
+    )
+    operational_metrics.update_jobs(await repository.job_status_counts())
+    content, content_type = operational_metrics.render()
+    return Response(content=content, media_type=content_type)
+
+
+@router.get(
+    "/operations/evidence-history",
+    response_model=list[EvidenceSnapshotResponse],
+    tags=["operations"],
+)
+async def evidence_history(
+    repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+    source_id: str | None = None,
+    limit: int = 100,
+) -> list[EvidenceSnapshotResponse]:
+    """Return bounded immutable snapshot metadata, newest first."""
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
+    snapshots = await repository.snapshots(source_id=source_id, limit=limit)
+    return [
+        EvidenceSnapshotResponse(
+            snapshot_id=item.snapshot_id,
+            source_id=item.source_id,
+            provider_revision=item.provider_revision,
+            retrieved_at=item.retrieved_at,
+            published_at=item.published_at,
+            observed_at=item.observed_at,
+            effective_at=item.effective_at,
+            content_type=item.content_type,
+            payload_sha256=item.payload_sha256,
+            payload_size_bytes=item.payload_size_bytes,
+            rights_id=item.rights_id,
+            content_available=item.content_available,
+            content_deleted_at=item.content_deleted_at,
+            content_deletion_reason=item.content_deletion_reason,
+        )
+        for item in snapshots
+    ]
+
+
+@router.post(
+    "/operations/operator-actions",
+    response_model=OperatorActionResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["operations"],
+)
+async def operator_action(
+    body: OperatorActionRequest,
+    request: Request,
+    repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+) -> OperatorActionResponse:
+    """Record an attributable bounded review from a trusted identity boundary."""
+    settings = cast(Settings, request.app.state.settings)
+    if not settings.trusted_operator_identity_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Trusted operator identity is not configured.",
+        )
+    operator_id = request.headers.get(
+        settings.trusted_operator_identity_header, ""
+    ).strip()
+    if not operator_id or len(operator_id) > 200:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="A trusted operator identity is required.",
+        )
+    if not await repository.world_state_exists(body.state_version):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The reviewed evidence state does not exist.",
+        )
+    reviewed_at = datetime.now(UTC)
+    action = OperatorActionRecord(
+        action_id=f"operator-action:{uuid4()}",
+        operator_id=operator_id,
+        decision=body.decision,
+        state_version=body.state_version,
+        rationale=body.rationale,
+        evidence_ids=tuple(dict.fromkeys(body.evidence_ids)),
+        policy_ids=tuple(dict.fromkeys(body.policy_ids)),
+        reviewed_at=reviewed_at,
+    )
+    created = await record_operator_review(repository, action)
+    return OperatorActionResponse(
+        action_id=action.action_id,
+        operator_id=operator_id,
+        state_version=body.state_version,
+        decision=body.decision,
+        reviewed_at=reviewed_at,
+        created=created,
     )
 
 
@@ -208,6 +369,7 @@ async def assistant(
                     published_at=selected_event.source.published_at,
                     updated_at=selected_event.source.updated_at,
                     retrieved_at=selected_event.source.retrieved_at,
+                    snapshot_id=selected_event.source.snapshot_id,
                 ),
             )
         ),
@@ -221,6 +383,7 @@ async def assistant(
                 published_at=source.published_at,
                 updated_at=source.updated_at,
                 retrieved_at=source.retrieved_at,
+                snapshot_id=source.snapshot_id,
             )
             for source in result.sources
         ],

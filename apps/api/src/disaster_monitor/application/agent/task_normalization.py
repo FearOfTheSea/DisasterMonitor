@@ -1,7 +1,6 @@
 """Deterministic safety gating and canonical disaster-task validation."""
 
 import re
-from collections.abc import Callable
 
 from disaster_monitor.application.agent.models import (
     DisasterTaskDraft,
@@ -153,20 +152,12 @@ def validate_disaster_task(
     """Canonicalize only through maintained deterministic application metadata."""
     safety_requires_evidence = disaster_safety_gate(question)
     deterministic_hazards = _hazard_mentions(question)
-    draft_hazards = tuple(_canonical_hazard(value) for value in draft.hazard_mentions)
-    hazards = tuple(
-        dict.fromkeys(
-            hazard
-            for hazard in (*deterministic_hazards, *draft_hazards)
-            if hazard is not None
-        )
-    )
-    disaster_related = bool(deterministic_hazards) or draft.disaster_related
-    requires_evidence = safety_requires_evidence or draft.current_or_event_specific
-    if not disaster_related:
+    if not deterministic_hazards:
         return ValidatedDisasterTask(
             question, TaskKind.NON_DISASTER, False, information_needs=()
         )
+    hazards = deterministic_hazards
+    requires_evidence = safety_requires_evidence
     if not requires_evidence:
         return ValidatedDisasterTask(
             question,
@@ -189,16 +180,6 @@ def validate_disaster_task(
         )
 
     countries = country_catalog.find_mentions(question)
-    draft_countries = tuple(
-        country
-        for mention in draft.place_mentions
-        for country in country_catalog.find_mentions(mention)
-    )
-    countries = tuple(
-        {
-            country.alpha3_code: country for country in (*countries, *draft_countries)
-        }.values()
-    )
     if len(countries) > 1:
         return _limited_task(
             question,
@@ -248,12 +229,8 @@ def validate_disaster_task(
             parsed.detail or "The disaster request could not be normalized safely.",
             hazard=hazards[0],
         )
-    needs = _merge_enum_values(
-        _information_needs(question), draft.information_needs, InformationNeed
-    )
-    modalities = _merge_enum_values(
-        _output_modalities(question), draft.output_modalities, OutputModality
-    )
+    needs = _information_needs(question)
+    modalities = _output_modalities(question)
     return ValidatedDisasterTask(
         question=question,
         kind=TaskKind.INVESTIGATION,
@@ -262,7 +239,7 @@ def validate_disaster_task(
         country=countries[0],
         date_from=parsed.query.date_from,
         date_to=parsed.query.date_to,
-        event_discriminators=draft.event_discriminators,
+        event_discriminators=(),
         information_needs=needs or (InformationNeed.EVENT_OVERVIEW,),
         output_modalities=modalities or (OutputModality.TEXT,),
         query=parsed.query,
@@ -289,14 +266,6 @@ def _limited_task(
         information_needs=_information_needs(question),
         output_modalities=_output_modalities(question) or (OutputModality.TEXT,),
     )
-
-
-def _canonical_hazard(value: str) -> Hazard | None:
-    normalized = value.strip().lower().replace(" ", "_")
-    for hazard, aliases in _HAZARDS.items():
-        if normalized == hazard.value or normalized.replace("_", " ") in aliases:
-            return hazard
-    return None
 
 
 def _hazard_mentions(text: str) -> tuple[Hazard, ...]:
@@ -422,19 +391,3 @@ def _extract_raw_places(text: str) -> tuple[str, ...]:
         if country.lower() in text.lower() and country not in found:
             found.append(country)
     return tuple(found[:4])
-
-
-def _merge_enum_values[T](
-    deterministic: tuple[T, ...],
-    raw_values: tuple[str, ...],
-    enum_type: Callable[[str], T],
-) -> tuple[T, ...]:
-    values = list(deterministic)
-    for raw in raw_values[:12]:
-        try:
-            value = enum_type(raw)
-        except ValueError:
-            continue
-        if value not in values:
-            values.append(value)
-    return tuple(values)

@@ -76,8 +76,7 @@ The flow is:
     and, when decision support exists, the decision specialist. The broker derives task
     ownership and granted permissions from a closed role policy; each artifact carries
     state, evidence, and source provenance. Malformed, ambiguous, or privilege-expanding
-    handoffs are rejected and the existing single-supervisor path remains active. No
-    background worker or inherited sender permission is introduced. When at least two
+    handoffs are rejected and the existing single-supervisor path remains active. When at least two
     eligible specialists have artifacts, they emit typed provenance-bound findings and
     a bounded coordinator merges only identical conclusions for the same finding key.
     Unknown evidence, a changed safety fingerprint, a specialist disagreement, or more
@@ -86,7 +85,9 @@ The flow is:
     deterministic sufficiency checklist derived from the EW, decision, conflict, and
     multimodal artifacts present. It terminates only on a complete bounded end state;
     outages, missing findings, policy/provenance violations, deadlocks, and handoff/
-    finding/iteration overruns preserve the already-completed default plan. The API
+    finding/iteration overruns preserve the already-completed default plan. This
+    request-scoped handoff cannot grant background or inherited authority; the separate
+    Roadmap-2 scheduler only runs allowlisted evidence investigations. The API
     exposes status, artifact identity, provenance, checklist, bounded rationale, and
     termination reason without specialist scratch work or chain-of-thought. The first
     highlighted analytical follow-up uses the governed
@@ -110,13 +111,18 @@ the report useful when Ollama is unavailable and prevents generated prose from
 introducing unsupported live claims. Ordinary assistant and map questions still
 use the existing local Qwen path.
 
-Every request enters the disaster-agent use case before delegation. A structured local
-agent model may interpret and propose the bounded plan, while the deterministic safety
-gate and validator control factual routing. If agent inference is unavailable or
-invalid, the five-step default tool plan runs without Ollama. The legacy report service
-is a compatibility facade over those same tools. Responses may add safe actions,
+Every request enters the disaster-agent use case before delegation. The deterministic
+safety gate and validator finish factual routing before any optional structured-model
+planning or review. If agent inference is unavailable or invalid, the five-step default
+tool plan runs without Ollama. The legacy report service is a compatibility facade over
+those same tools. Responses may add safe actions,
 source IDs, evidence count, gaps, and termination status; they never expose hidden
 reasoning, prompts, raw model/provider output, secrets, or stack traces.
+Hazards, countries, requested information needs, and output modalities must be present
+in the normalized user text; structured model output cannot add them. Questions about
+the map that contain no recognized disaster hazard remain on the ordinary map-assistant
+path. A plan also cannot invoke multimodal tools unless an asset crossed the explicit
+admission boundary.
 The same metadata includes priority, score, internal triage action, autonomy mode, and
 whether human intervention is required. These are policy outcomes, not model reasoning.
 The machine-readable decision-support response and browser presentation preserve source
@@ -165,9 +171,12 @@ target before making a request when it is outside that set, and the composite re
 normalized records whose stable source ID or canonical source URL does not match the
 registration. Startup validation keeps the packaged catalog, registration, and adapter
 source policies aligned.
-No weather, flood, satellite/imagery retrieval, geocoding, news, authentication, or
-official map-overlay provider is implemented by this feature. Operator-supplied images
-are request inputs, not trusted live providers.
+NCHMF adds Vietnam national warning headlines for flood, landslide/flash-flood, and
+tropical cyclone. Configured FIRMS adds satellite active-fire observations and
+configured GFM adds analytical flood-product availability; neither is an official
+incident declaration. A generic CAP adapter is available only through explicit
+authority registration. Weather, automatic imagery retrieval, geocoding, broad news,
+authentication, and official warning map overlays remain unsupported.
 
 Physical-event clustering is application policy rather than transport composition.
 The earthquake policy can merge matching JMA and USGS observations while preserving
@@ -302,4 +311,7 @@ FDMA extraction is intentionally text-only. It supports HTML and extractable
 text-based PDFs, preserves Japanese labels in fact provenance, and returns a
 typed partial-provider issue when a PDF requires OCR, has an image-only table,
 or changes structure. It does not infer values from images or silently convert
-unknown fields to zero.
+unknown fields to zero. Raw report content remains in its immutable snapshot; the
+rendered qualitative section uses a short source notice instead of exposing a large
+PDF text extraction. Counts expressed as rescue incidents remain operational-response
+facts and are not relabeled as rescued people.

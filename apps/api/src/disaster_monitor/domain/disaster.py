@@ -184,12 +184,15 @@ class SourceReference:
     updated_at: datetime | None
     retrieved_at: datetime
     authority: SourceAuthority = SourceAuthority.SECONDARY
+    snapshot_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.source_id.strip():
             raise ValueError("A source reference requires a stable source ID.")
         if not self.canonical_url.startswith("https://"):
             raise ValueError("A source reference requires a canonical HTTPS URL.")
+        if self.snapshot_id is not None and not self.snapshot_id.strip():
+            raise ValueError("A source snapshot ID must not be empty.")
 
     @property
     def effective_at(self) -> datetime:

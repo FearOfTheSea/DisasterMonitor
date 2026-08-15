@@ -3,10 +3,13 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from time import perf_counter
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import Response
 
 from disaster_monitor.application.agent.multimodal_tools import (
     MultimodalToolDependencies,
@@ -15,6 +18,7 @@ from disaster_monitor.application.agent.multimodal_tools import (
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.services.common_operational_picture import (
     CommonOperationalPictureBuilder,
@@ -40,11 +44,16 @@ from disaster_monitor.infrastructure.composition import (
     build_current_disaster_report,
     build_disaster_query_parser,
     build_language_model,
+    build_operational_services,
     build_source_catalog,
     build_visual_analyzer,
 )
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.operations.postgres_repository import (
+    PostgresOperationalRepository,
+)
 from disaster_monitor.presentation.http.error_handlers import register_error_handlers
+from disaster_monitor.presentation.http.metrics import OperationalMetrics
 from disaster_monitor.presentation.http.routes import router
 
 
@@ -55,13 +64,18 @@ def create_app(
     disaster_query_parser: DisasterQueryParser | None = None,
     agent_model: AgentModel | None = None,
     visual_analyzer: VisualAnalyzer | None = None,
+    operational_repository: OperationalRepository | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
     language_model = model or build_language_model(app_settings)
     country_catalog = build_country_catalog()
+    operational = build_operational_services(app_settings, operational_repository)
     disaster_report = current_disaster_report or build_current_disaster_report(
-        app_settings, country_catalog
+        app_settings,
+        country_catalog,
+        snapshot_recorder=operational.snapshots.persist,
+        operational_evidence=operational.evidence,
     )
     query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
     source_catalog = build_source_catalog(app_settings)
@@ -103,6 +117,10 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if app_settings.operational_auto_migrate and isinstance(
+            operational.repository, PostgresOperationalRepository
+        ):
+            await operational.repository.migrate()
         yield
         close = getattr(app.state.language_model, "aclose", None)
         if close is not None:
@@ -122,6 +140,31 @@ def create_app(
         version="0.1.0",
         lifespan=lifespan,
     )
+    metrics = OperationalMetrics()
+
+    @app.middleware("http")
+    async def record_http_metrics(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        path = request.url.path
+        started = perf_counter()
+        metrics.in_progress.inc()
+        try:
+            response = await call_next(request)
+        except Exception:
+            metrics.requests.labels(request.method, path, "500").inc()
+            raise
+        else:
+            metrics.requests.labels(
+                request.method, path, str(response.status_code)
+            ).inc()
+            return response
+        finally:
+            metrics.request_duration.labels(request.method, path).observe(
+                perf_counter() - started
+            )
+            metrics.in_progress.dec()
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,
@@ -139,6 +182,9 @@ def create_app(
         query_parser,
         disaster_agent=disaster_agent,
     )
+    app.state.operational_repository = operational.repository
+    app.state.settings = app_settings
+    app.state.operational_metrics = metrics
     app.include_router(router, prefix="/api/v1")
     register_error_handlers(app)
     return app

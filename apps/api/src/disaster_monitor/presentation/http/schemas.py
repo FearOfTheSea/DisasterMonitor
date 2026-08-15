@@ -5,6 +5,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from disaster_monitor.domain.operations import OperatorDecision
 from disaster_monitor.presentation.http.multimodal_schemas import (
     CommonOperationalPictureResponse,
     MultimodalAssetRequest,
@@ -145,6 +146,7 @@ class SourceResponse(BaseModel):
     published_at: datetime | None = None
     updated_at: datetime | None = None
     retrieved_at: datetime
+    snapshot_id: str | None = None
 
 
 class SelectedEventResponse(BaseModel):
@@ -183,3 +185,63 @@ class ReadinessResponse(BaseModel):
     ollama_available: bool
     model_available: bool
     model: str
+
+
+class ProviderFreshnessResponse(BaseModel):
+    """Operator-safe source freshness without credentials or raw payloads."""
+
+    source_id: str
+    state: str
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    effective_at: datetime | None = None
+    age_seconds: int | None = None
+    expected_freshness_seconds: int
+    consecutive_failures: int
+    latest_error_code: str | None = None
+
+
+class EvidenceSnapshotResponse(BaseModel):
+    """Immutable evidence metadata; blob locations remain server-private."""
+
+    snapshot_id: str
+    source_id: str
+    provider_revision: str
+    retrieved_at: datetime
+    published_at: datetime | None = None
+    observed_at: datetime | None = None
+    effective_at: datetime
+    content_type: str
+    payload_sha256: str
+    payload_size_bytes: int
+    rights_id: str
+    content_available: bool
+    content_deleted_at: datetime | None = None
+    content_deletion_reason: str | None = None
+
+
+class OperatorActionRequest(BaseModel):
+    """A bounded review record, not permission for an external action."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    state_version: Annotated[str, Field(min_length=1, max_length=200)]
+    decision: OperatorDecision
+    rationale: Annotated[str, Field(min_length=1, max_length=2_000)]
+    evidence_ids: Annotated[list[str], Field(max_length=100)] = Field(
+        default_factory=list
+    )
+    policy_ids: Annotated[list[str], Field(max_length=100)] = Field(
+        default_factory=list
+    )
+
+
+class OperatorActionResponse(BaseModel):
+    """Identity of the attributable review stored by the server."""
+
+    action_id: str
+    operator_id: str
+    state_version: str
+    decision: OperatorDecision
+    reviewed_at: datetime
+    created: bool

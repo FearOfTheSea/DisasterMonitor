@@ -18,13 +18,22 @@ flowchart LR
     api --> jma["JMA JSON feeds"]
     api --> usgs["USGS GeoJSON"]
     api --> reliefweb["ReliefWeb JSON"]
+    api --> nchmf["NCHMF RSS"]
+    api --> firms["NASA FIRMS CSV"]
+    api --> gfm["Copernicus GFM JSON"]
+    scheduler["Scheduler"] --> postgres["PostgreSQL / PostGIS"]
+    worker["Worker"] --> postgres
+    worker --> api
+    api --> postgres
+    api --> blobs["Content-addressed blobs"]
     web --> osm["OpenStreetMap tiles"]
 ```
 
 OpenStreetMap is used only for the basic base map. The current-disaster workflow
-normalizes a typed hazard and country before provider access. Earthquake event discovery
-is live for the packaged country catalog; national situation coverage remains specific
-to Japan. Other live disaster datasets remain unimplemented. The browser retains the
+normalizes a typed hazard and country before provider access. Earthquake coverage
+preserves the Japan baseline; reviewed Vietnam warning and configured analytical
+satellite paths add flood, landslide, cyclone, and active-fire coverage without
+conflating observations with official incidents. The browser retains the
 conversation for the current tab session; the API does not persist multi-user
 conversations.
 The assistant API also accepts bounded operator-supplied image bytes with explicit
@@ -89,6 +98,8 @@ import FastAPI, Ollama, `httpx`, or Pydantic. Composition selects concrete adapt
 - `OpenLayersMapAdapter` owns map construction, view conversion, typed COP rendering,
   replacement, and cleanup.
 - `AssistantPanel` and `DisasterMap` render state and emit user actions.
+- `OperationsClient` and `OperationsPanel` own provider freshness, snapshot history,
+  and bounded-review transport/rendering. The browser never asserts operator identity.
 - `app/page.tsx` composes the map, assistant drawer, and current map-view context.
 
 React components do not call Ollama, manipulate browser storage directly, or construct arbitrary OpenLayers layers beyond the adapter boundary.

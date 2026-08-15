@@ -98,6 +98,21 @@ button {
   padding: 10px 14px;
 }
 
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.header-actions > button:not(.assistant-toggle) {
+  background: var(--surface);
+  border: 1px solid #c7d0de;
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 700;
+  padding: 9px 12px;
+}
+
 .assistant-toggle:hover,
 .assistant-submit:hover:not(:disabled) {
   background: var(--accent-dark);
@@ -215,6 +230,133 @@ button {
   top: 0;
   width: clamp(360px, 36vw, 500px);
   z-index: 5;
+}
+
+.operations-panel {
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: clamp(390px, 42vw, 620px);
+  z-index: 6;
+}
+
+.operations-panel-header,
+.operations-heading,
+.provider-status > div,
+.snapshot-card > div {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.operations-panel-header {
+  border-bottom: 1px solid var(--line);
+  padding: 18px 20px;
+}
+
+.operations-panel-header h2,
+.operations-panel-header p,
+.operations-section h3,
+.operations-section p {
+  margin: 0;
+}
+
+.operations-panel-header p,
+.operations-section p {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.operations-panel button,
+.review-form button {
+  background: var(--surface);
+  border: 1px solid #c7d0de;
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.operations-scroll {
+  display: grid;
+  gap: 18px;
+  overflow-y: auto;
+  padding: 18px 20px 30px;
+}
+
+.operations-section,
+.provider-grid,
+.snapshot-list,
+.review-form,
+.provider-status,
+.snapshot-card {
+  display: grid;
+  gap: 8px;
+}
+
+.provider-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.provider-status,
+.snapshot-card {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px;
+}
+
+.provider-status small,
+.snapshot-card small,
+.snapshot-card code {
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.freshness,
+.snapshot-card span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  padding: 2px 7px;
+  text-transform: capitalize;
+}
+
+.freshness-fresh {
+  background: #e8f7ee;
+  color: #17603a;
+}
+
+.freshness-stale,
+.freshness-unavailable {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.freshness-never_ingested {
+  background: #edf2f7;
+  color: #475569;
+}
+
+.review-form textarea {
+  border: 1px solid #c7d0de;
+  border-radius: 8px;
+  padding: 9px;
+  resize: vertical;
+}
+
+.review-form button {
+  background: var(--accent);
+  color: white;
+  justify-self: start;
 }
 
 .assistant-panel-header {
@@ -571,6 +713,11 @@ button {
   .assistant-panel {
     border-left: 0;
     box-shadow: none;
+    width: 100%;
+  }
+
+  .operations-panel {
+    border-left: 0;
     width: 100%;
   }
 }

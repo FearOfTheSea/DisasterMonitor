@@ -1,5 +1,6 @@
 """Allowlisted typed tools exposing the existing trusted disaster workflow."""
 
+import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -54,6 +55,9 @@ from disaster_monitor.application.services.hypothesis_reasoning import (
 from disaster_monitor.application.services.incident_priority import (
     IncidentPriorityRanker,
 )
+from disaster_monitor.application.services.operational_evidence import (
+    OperationalEvidenceRecorder,
+)
 from disaster_monitor.application.services.provider_registry import (
     ProviderRegistry,
     ProviderRole,
@@ -61,6 +65,7 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 
 MAX_TOOL_CALLS = 12
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +143,7 @@ class DisasterToolDependencies:
     coordination_supervisor: CoordinationSupervisor = field(
         default_factory=CoordinationSupervisor
     )
+    operational_evidence: OperationalEvidenceRecorder | None = None
 
 
 def build_disaster_tool_registry(
@@ -395,6 +401,23 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
         )
         state.workspace.evidence_state = packet.world_state
         if packet.world_state is not None:
+            if self.dependencies.operational_evidence is not None:
+                try:
+                    persistence = await self.dependencies.operational_evidence.record(
+                        packet.world_state
+                    )
+                except Exception:
+                    logger.exception("Durable evidence persistence failed")
+                    state.warnings.append(
+                        "Durable evidence persistence failed; this response remains "
+                        "request-scoped and is not presented as stored history."
+                    )
+                else:
+                    if not persistence.persisted:
+                        state.warnings.append(
+                            "Durable evidence history was not written because one or "
+                            "more facts lacked an immutable source snapshot."
+                        )
             state.workspace.hypotheses = (
                 self.dependencies.hypothesis_generator.generate(packet.world_state)
             )

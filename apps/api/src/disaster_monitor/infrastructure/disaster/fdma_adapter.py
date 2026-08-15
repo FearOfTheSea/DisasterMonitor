@@ -34,7 +34,12 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
     DisasterProviderResponseError,
 )
-from disaster_monitor.infrastructure.disaster.http import get_bytes, get_text
+from disaster_monitor.infrastructure.disaster.http import (
+    SourcePayloadRecorder,
+    build_snapshot_capture,
+    get_bytes,
+    get_text,
+)
 
 FDMA_INDEX_URL = "https://www.fdma.go.jp/disaster/info/"
 JAPAN_TIMEZONE = timezone(timedelta(hours=9))
@@ -221,10 +226,10 @@ def _extract_facts(
             (rf"行方不明\D{{0,12}}{_NUMBER}", rf"missing\D{{0,12}}{_NUMBER}"),
         ),
         (
-            "rescued",
-            "Rescued people",
+            "rescue_operations",
+            "Rescue incidents",
             "救助",
-            (rf"救助\D{{0,12}}{_NUMBER}", rf"rescued\D{{0,12}}{_NUMBER}"),
+            (rf"救助\D{{0,12}}{_NUMBER}\s*件",),
         ),
         (
             "evacuations",
@@ -258,35 +263,6 @@ def _extract_facts(
         ),
     )
     dead = "\u6b7b\u8005"
-    injured = "\u8ca0\u50b7\u8005"
-    missing = "\u884c\u65b9\u4e0d\u660e"
-    rescued = "\u6551\u52a9"
-    evacuees = "\u907f\u96e3\u8005"
-    shelters = "\u907f\u96e3\u6240"
-    destroyed = "\u5168\u58ca"
-    damaged = "(?:\u534a\u58ca|\u4e00\u90e8\u7834\u640d)"
-    fires = "\u706b\u707d"
-    patterns += (
-        ("fatalities", "Fatalities", dead, (rf"{dead}\D{{0,12}}{_NUMBER}",)),
-        ("injuries", "Injuries", injured, (rf"{injured}\D{{0,12}}{_NUMBER}",)),
-        ("missing", "Missing people", missing, (rf"{missing}\D{{0,12}}{_NUMBER}",)),
-        ("rescued", "Rescued people", rescued, (rf"{rescued}\D{{0,12}}{_NUMBER}",)),
-        ("evacuations", "Evacuees", evacuees, (rf"{evacuees}\D{{0,12}}{_NUMBER}",)),
-        ("shelters", "Shelters", shelters, (rf"{shelters}\D{{0,12}}{_NUMBER}",)),
-        (
-            "buildings_destroyed",
-            "Residential buildings destroyed",
-            destroyed,
-            (rf"{destroyed}\D{{0,12}}{_NUMBER}",),
-        ),
-        (
-            "buildings_damaged",
-            "Residential buildings damaged",
-            damaged,
-            (rf"{damaged}\D{{0,12}}{_NUMBER}",),
-        ),
-        ("fires", "Fires", fires, (rf"{fires}\D{{0,12}}{_NUMBER}",)),
-    )
     facts: list[ReportedFact] = []
     for category, label, japanese_label, expressions in patterns:
         value = None
@@ -408,12 +384,14 @@ class FdmaSituationReportAdapter:
         self,
         *,
         client: httpx.AsyncClient | None = None,
+        snapshot_recorder: SourcePayloadRecorder | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 1_000_000,
     ) -> None:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._max_response_bytes = max_response_bytes
+        self._snapshot_recorder = snapshot_recorder
 
     async def get_situation_reports(
         self,
@@ -422,12 +400,20 @@ class FdmaSituationReportAdapter:
         *,
         now: datetime,
     ) -> ProviderBatch[SituationReport]:
+        index_capture = build_snapshot_capture(
+            self._snapshot_recorder,
+            source_id=self.source_id,
+            parameters={"document": "disaster-index-v1"},
+            rights_id="fdma-public-information-terms-2026-08",
+            retrieved_at=now,
+        )
         markup = await get_text(
             self._client,
             FDMA_INDEX_URL,
             allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
+            capture=index_capture,
         )
         parser = _IndexParser()
         try:
@@ -466,6 +452,13 @@ class FdmaSituationReportAdapter:
             )
         selected = matches[0]
         issues: list[ProviderIssue] = []
+        report_capture = build_snapshot_capture(
+            self._snapshot_recorder,
+            source_id=self.source_id,
+            parameters={"document": selected.url},
+            rights_id="fdma-public-information-terms-2026-08",
+            retrieved_at=now,
+        )
         try:
             payload = await get_bytes(
                 self._client,
@@ -473,6 +466,7 @@ class FdmaSituationReportAdapter:
                 allowed_hosts=self.allowed_hosts,
                 max_bytes=self._max_response_bytes,
                 provider_name=self.provider_name,
+                capture=report_capture,
             )
             if payload.startswith(b"%PDF") or selected.url.lower().endswith(".pdf"):
                 text = _extract_pdf_text(payload)
@@ -509,10 +503,20 @@ class FdmaSituationReportAdapter:
             updated_at=published_at,
             retrieved_at=now,
             authority=SourceAuthority.NATIONAL_AUTHORITY,
+            snapshot_id=(
+                report_capture.snapshot.snapshot_id
+                if report_capture and report_capture.snapshot
+                else None
+            ),
         )
         report = SituationReport(
             source=source,
-            narrative=sanitize_provider_text(text),
+            narrative=(
+                "FDMA published an official situation report matched to the selected "
+                "event. Structured facts extracted from the document are listed "
+                "separately; consult the linked source for the complete narrative "
+                "and revision notes."
+            ),
             facts=_extract_facts(text, source, event, published_at),
             reported_event_time=event.event_time,
             locations=(event.location,),

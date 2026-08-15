@@ -28,13 +28,13 @@ export type AssistantResponse = {
   conversation_id: string;
   model: string;
   response_type?: string;
-  selected_event?: SelectedEvent;
-  retrieval_time?: string;
+  selected_event?: SelectedEvent | null;
+  retrieval_time?: string | null;
   sources?: AssistantSource[];
   warnings?: string[];
   sections?: ReportSection[];
   partial?: boolean;
-  investigation?: InvestigationSummary;
+  investigation?: InvestigationSummary | null;
   decision_support?: DecisionSupportArtifact | null;
   multimodal?: MultimodalEvidenceState | null;
   common_operational_picture?: CommonOperationalPicture | null;
@@ -43,8 +43,8 @@ export type AssistantResponse = {
 export type InvestigationSummary = {
   status: string;
   task_summary: string;
-  hazard?: string;
-  country?: string;
+  hazard?: string | null;
+  country?: string | null;
   information_needs: string[];
   output_modalities: string[];
   actions: string[];
@@ -91,6 +91,7 @@ export type AssistantSource = {
   published_at?: string;
   updated_at?: string;
   retrieved_at: string;
+  snapshot_id?: string | null;
 };
 
 export type SelectedEvent = {

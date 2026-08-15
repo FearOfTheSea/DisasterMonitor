@@ -1,7 +1,10 @@
 """Manual composition root for the local API."""
 
+from dataclasses import dataclass
+
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
@@ -17,6 +20,12 @@ from disaster_monitor.application.services.event_resolution import (
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
     EvidenceReconciler,
+)
+from disaster_monitor.application.services.operational_evidence import (
+    OperationalEvidenceRecorder,
+)
+from disaster_monitor.application.services.operational_ingestion import (
+    SnapshotPersistenceService,
 )
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
@@ -36,11 +45,19 @@ from disaster_monitor.infrastructure.disaster.composite import (
 from disaster_monitor.infrastructure.disaster.fdma_adapter import (
     FdmaSituationReportAdapter,
 )
+from disaster_monitor.infrastructure.disaster.firms_adapter import (
+    FirmsActiveFireAdapter,
+)
+from disaster_monitor.infrastructure.disaster.gfm_adapter import (
+    GfmFloodNotificationAdapter,
+)
+from disaster_monitor.infrastructure.disaster.http import SourcePayloadRecorder
 from disaster_monitor.infrastructure.disaster.jma_adapter import (
     JmaEarthquakeAdapter,
     JmaSignificantEarthquakeAdapter,
     JmaTsunamiSituationAdapter,
 )
+from disaster_monitor.infrastructure.disaster.nchmf_adapter import NchmfWarningAdapter
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
 )
@@ -52,12 +69,58 @@ from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAd
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
     StructuredAgentModel,
 )
+from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
+    FilesystemBlobStore,
+)
+from disaster_monitor.infrastructure.operations.memory_repository import (
+    InMemoryOperationalRepository,
+)
+from disaster_monitor.infrastructure.operations.postgres_repository import (
+    PostgresOperationalRepository,
+)
 from disaster_monitor.infrastructure.sources.static_source_catalog import (
     StaticSourceCatalog,
 )
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
     OllamaVisionAdapter,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class OperationalServices:
+    """Explicit operational persistence dependencies for API composition."""
+
+    repository: OperationalRepository
+    snapshots: SnapshotPersistenceService
+    evidence: OperationalEvidenceRecorder
+
+
+def build_operational_services(
+    settings: Settings,
+    repository: OperationalRepository | None = None,
+) -> OperationalServices:
+    """Build PostgreSQL-backed services or a transparent local in-process fallback."""
+    configured_repository = repository
+    if configured_repository is None:
+        dsn = (
+            settings.operational_database_url.get_secret_value()
+            if settings.operational_database_url is not None
+            else ""
+        )
+        configured_repository = (
+            PostgresOperationalRepository(dsn)
+            if dsn
+            else InMemoryOperationalRepository()
+        )
+    persistence = SnapshotPersistenceService(
+        configured_repository,
+        FilesystemBlobStore(settings.operational_blob_root),
+    )
+    return OperationalServices(
+        configured_repository,
+        persistence,
+        OperationalEvidenceRecorder(configured_repository),
+    )
 
 
 def build_language_model(settings: Settings) -> LanguageModel:
@@ -93,7 +156,20 @@ def build_source_catalog(settings: Settings | None = None) -> StaticSourceCatalo
     configured = bool(
         name and name not in {"disaster-monitor-local", "change-me", "your-app-name"}
     )
-    return StaticSourceCatalog({"reliefweb-situation-reports": configured})
+    return StaticSourceCatalog(
+        {
+            "reliefweb-situation-reports": configured,
+            "nasa-firms-active-fire": bool(
+                settings.firms_map_key is not None
+                and settings.firms_map_key.get_secret_value().strip()
+            ),
+            "copernicus-gfm-vietnam": bool(
+                settings.gfm_access_token is not None
+                and settings.gfm_access_token.get_secret_value().strip()
+                and settings.gfm_user_id
+            ),
+        }
+    )
 
 
 def build_country_catalog() -> StaticCountryCatalog:
@@ -111,32 +187,68 @@ def build_disaster_query_parser(
 def build_current_disaster_report(
     settings: Settings,
     country_catalog: StaticCountryCatalog | None = None,
+    snapshot_recorder: SourcePayloadRecorder | None = None,
+    operational_evidence: OperationalEvidenceRecorder | None = None,
 ) -> CurrentDisasterReportService:
     """Construct capability-registered live disaster providers."""
     jma_rolling = JmaEarthquakeAdapter(
+        snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
     jma_significant = JmaSignificantEarthquakeAdapter(
+        snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
     geography = country_catalog or build_country_catalog()
     usgs = UsgsEarthquakeAdapter(
         geography=geography,
+        snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
     fdma = FdmaSituationReportAdapter(
+        snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
     jma_tsunami = JmaTsunamiSituationAdapter(
+        snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
     reliefweb = ReliefWebSituationAdapter(
         app_name=settings.reliefweb_app_name,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    nchmf = NchmfWarningAdapter(
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    firms = FirmsActiveFireAdapter(
+        geography=geography,
+        map_key=(
+            settings.firms_map_key.get_secret_value()
+            if settings.firms_map_key is not None
+            else None
+        ),
+        dataset=settings.firms_dataset,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    gfm = GfmFloodNotificationAdapter(
+        access_token=(
+            settings.gfm_access_token.get_secret_value()
+            if settings.gfm_access_token is not None
+            else None
+        ),
+        user_id=settings.gfm_user_id,
+        snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
@@ -205,10 +317,72 @@ def build_current_disaster_report(
                 configured=reliefweb.configured,
                 allowed_hosts=reliefweb.allowed_hosts,
             ),
+            ProviderRegistration(
+                "NCHMF Vietnam warnings",
+                nchmf,
+                ProviderCapabilities(
+                    roles=frozenset(
+                        {
+                            ProviderRole.EVENT_DISCOVERY,
+                            ProviderRole.SITUATION_EVIDENCE,
+                        }
+                    ),
+                    hazards=frozenset(
+                        {
+                            Hazard.FLOOD,
+                            Hazard.LANDSLIDE,
+                            Hazard.TROPICAL_CYCLONE,
+                        }
+                    ),
+                    country_codes=frozenset({"VNM"}),
+                ),
+                source_id="nchmf-vietnam-warnings",
+                allowed_hosts=nchmf.allowed_hosts,
+            ),
+            ProviderRegistration(
+                "NASA FIRMS active fire",
+                firms,
+                ProviderCapabilities(
+                    roles=frozenset(
+                        {
+                            ProviderRole.EVENT_DISCOVERY,
+                            ProviderRole.SITUATION_EVIDENCE,
+                        }
+                    ),
+                    hazards=frozenset({Hazard.WILDFIRE}),
+                    country_codes=None,
+                    requires_configuration=True,
+                ),
+                source_id="nasa-firms-active-fire",
+                configured=firms.configured,
+                allowed_hosts=firms.allowed_hosts,
+            ),
+            ProviderRegistration(
+                "Copernicus GFM Vietnam notifications",
+                gfm,
+                ProviderCapabilities(
+                    roles=frozenset(
+                        {
+                            ProviderRole.EVENT_DISCOVERY,
+                            ProviderRole.SITUATION_EVIDENCE,
+                        }
+                    ),
+                    hazards=frozenset({Hazard.FLOOD}),
+                    country_codes=frozenset({"VNM"}),
+                    requires_configuration=True,
+                ),
+                source_id="copernicus-gfm-vietnam",
+                configured=gfm.configured,
+                allowed_hosts=gfm.allowed_hosts,
+            ),
         )
     )
     source_catalog = StaticSourceCatalog(
-        {"reliefweb-situation-reports": reliefweb.configured}
+        {
+            "reliefweb-situation-reports": reliefweb.configured,
+            "nasa-firms-active-fire": firms.configured,
+            "copernicus-gfm-vietnam": gfm.configured,
+        }
     )
     validate_provider_source_consistency(registry, source_catalog)
     event_provider = CompositeDisasterEventProvider(registry)
@@ -221,4 +395,5 @@ def build_current_disaster_report(
         evidence_reconciler=EvidenceReconciler(),
         renderer=DisasterReportRenderer(),
         source_catalog=source_catalog,
+        operational_evidence=operational_evidence,
     )
