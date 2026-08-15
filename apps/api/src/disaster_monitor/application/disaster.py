@@ -34,6 +34,13 @@ class QueryParseStatus(StrEnum):
     DATE_TIMEZONE_UNAVAILABLE = "date_timezone_unavailable"
 
 
+class GlobalEventSelection(StrEnum):
+    """Deterministic ranking requested for an explicitly worldwide lookup."""
+
+    LATEST = "latest"
+    STRONGEST = "strongest"
+
+
 @dataclass(frozen=True, slots=True)
 class DisasterQuery:
     """Normalized user intent for a bounded current-disaster lookup."""
@@ -61,6 +68,35 @@ class DisasterQuery:
     def country_code(self) -> str:
         """Return the canonical ISO alpha-3 code."""
         return self.country.alpha3_code
+
+
+@dataclass(frozen=True, slots=True)
+class GlobalEarthquakeQuery:
+    """Bounded worldwide earthquake lookup with no invented country identity."""
+
+    selection: GlobalEventSelection = GlobalEventSelection.LATEST
+    time_window_days: int = 30
+    minimum_magnitude: float = 4.5
+    limit: int = 50
+
+
+@dataclass(frozen=True, slots=True)
+class GlobalDisasterEvent:
+    """Source-backed event discovered without assigning it to a country."""
+
+    event_id: str
+    hazard: Hazard
+    location: str
+    event_time: datetime
+    source: SourceReference
+    latitude: float | None = None
+    longitude: float | None = None
+    magnitude: float | None = None
+    magnitude_type: str | None = None
+    intensity: str | None = None
+    depth_km: float | None = None
+    significance: float | None = None
+    provider_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,7 +16,8 @@ from disaster_monitor.application.services.prompt_preparation import normalize_q
 from disaster_monitor.domain.disaster import Hazard
 
 _CURRENT_TERMS = re.compile(
-    r"\b(?:recent|latest|current|today|now|update|updates|developments|this week)\b",
+    r"\b(?:recent|latest|current|today|now|news|update|updates|developments|"
+    r"this week)\b",
     re.IGNORECASE,
 )
 _MAP_TERMS = re.compile(

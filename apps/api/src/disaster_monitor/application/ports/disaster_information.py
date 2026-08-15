@@ -3,7 +3,12 @@
 from datetime import datetime
 from typing import Protocol
 
-from disaster_monitor.application.disaster import DisasterQuery, ProviderBatch
+from disaster_monitor.application.disaster import (
+    DisasterQuery,
+    GlobalDisasterEvent,
+    GlobalEarthquakeQuery,
+    ProviderBatch,
+)
 from disaster_monitor.domain.disaster import DisasterEvent, SituationReport
 
 
@@ -25,6 +30,14 @@ class SituationReportProvider(Protocol):
         *,
         now: datetime,
     ) -> ProviderBatch[SituationReport]: ...
+
+
+class GlobalEarthquakeProvider(Protocol):
+    """Find bounded worldwide earthquake events without inventing a country."""
+
+    async def find_global_earthquakes(
+        self, query: GlobalEarthquakeQuery, *, now: datetime
+    ) -> ProviderBatch[GlobalDisasterEvent]: ...
 
 
 class Clock(Protocol):

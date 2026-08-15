@@ -1,11 +1,27 @@
 # Current-disaster reporting
 
 The agent-first assistant has a deterministic current-disaster path for recognized
-hazard and country requests. A `DisasterQueryParser` resolves exact hazard aliases and
-the active versioned country catalog before source-backed tool execution. The packaged
+hazard and country requests. Current-event wording includes requests for “news,” so
+questions such as “Any news about earthquakes in Thailand?” cannot fall through to the
+general-purpose model. A `DisasterQueryParser` resolves exact hazard aliases and the
+active versioned country catalog before source-backed tool execution. Short ISO codes
+must be written in uppercase; this prevents ordinary words such as “can,” “are,” or
+“in” from being mistaken for countries after a global catalog is activated. The packaged
 three-country catalog is a fail-closed fallback; validated global updates are promoted
 autonomously as described in
 [Autonomous country catalog updates](country-catalog-automation.md):
+
+An explicit worldwide earthquake request follows a separate deterministic branch:
+
+> Any earthquake news worldwide?
+
+That branch queries the same registry-approved USGS adapter without country bounds,
+within a 30-day window, with a minimum magnitude of 4.5 and a maximum of 50 records.
+It selects the latest event by event time, or the strongest by magnitude when the
+request says "strongest," "largest," or equivalent wording. It does not assign a fake
+country to offshore events and it does not invoke the general-purpose model. The
+result is deliberately partial because globally complete impact, warning, and response
+evidence is not connected.
 
 See [Capability and promotion status](capability-status.md) for the authoritative
 distinction between this implemented path, passing automated gates, and normative

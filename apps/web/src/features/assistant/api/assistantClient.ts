@@ -297,6 +297,7 @@ export class AssistantClient {
       typeof item.evidence_count === 'number' &&
       this.isStringArray(item.capability_gaps) &&
       typeof item.termination_reason === 'string' &&
+      (item.geographic_scope == null || typeof item.geographic_scope === 'string') &&
       (item.triage_priority == null || typeof item.triage_priority === 'string') &&
       (item.triage_score == null || typeof item.triage_score === 'number') &&
       (item.triage_action == null || typeof item.triage_action === 'string') &&

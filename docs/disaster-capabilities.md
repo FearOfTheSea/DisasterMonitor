@@ -21,18 +21,28 @@ never dynamically imports or constructs providers.
 | -------------------------- | -------------------------------- | ------------------ | ------------------------------------------ | ----------------------------------- |
 | JMA rolling earthquake     | Event discovery                  | Earthquake         | Japan (`JPN`)                              | None                                |
 | JMA significant earthquake | Event discovery                  | Earthquake         | Japan (`JPN`)                              | None                                |
-| USGS                       | Event discovery                  | Earthquake         | Global within the packaged country catalog | Country coordinate validation       |
+| USGS                       | Event discovery                  | Earthquake         | Named countries and worldwide              | Country validation for named scope  |
 | FDMA                       | Situation evidence               | Earthquake         | Japan (`JPN`)                              | Matching official report            |
 | JMA tsunami status         | Situation evidence               | Earthquake         | Japan (`JPN`)                              | Selected event has a JMA identifier |
 | ReliefWeb                  | Supplementary situation evidence | Recognized hazards | Global                                     | Approved `RELIEFWEB_APP_NAME`       |
 
 USGS earthquake verification applies to every country admitted by the active catalog;
-the packaged fallback initially contains Japan, Vietnam, and Venezuela. The autonomous
+this is global named-country coverage, with one explicitly named country per request.
+“News” requests are deterministically routed to that evidence path. Country names are
+case-insensitive, while short ISO codes are uppercase-only to avoid collisions with
+ordinary language in the global alias set.
+The packaged fallback initially contains Japan, Vietnam, and Venezuela. The autonomous
 catalog updater can promote global Natural Earth country metadata without widening any
 provider's declared role or hazard. Japan additionally has configured national
 situation providers. Other hazards depend on the executable registrations shown above;
 ReliefWeb alone cannot verify an event and is never treated as an official national
 total.
+
+Explicit worldwide, global, or across-the-world earthquake requests use a separate
+bounded USGS query and select the latest event by default or the strongest event when
+requested. They do not invent a country for offshore events. Worldwide scope currently
+provides scientific event discovery only; it does not provide globally complete
+casualty, damage, warning, or response evidence, and every response states that gap.
 
 The API accepts bounded operator-supplied PNG/JPEG bytes with explicit provenance and
 event metadata. Associated images may produce local analytical observations and a

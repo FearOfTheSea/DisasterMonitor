@@ -81,6 +81,7 @@ class InvestigationResponse(BaseModel):
     evidence_count: int = 0
     capability_gaps: list[str] = Field(default_factory=list)
     termination_reason: str
+    geographic_scope: str = "country"
     triage_priority: str | None = None
     triage_score: int | None = None
     triage_action: str | None = None

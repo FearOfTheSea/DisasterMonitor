@@ -259,6 +259,8 @@ function DisasterReportView({
           <summary>Investigation details</summary>
           <p>
             Status: <strong>{report.investigation.status}</strong>
+            {report.investigation.geographic_scope &&
+              ` / scope ${report.investigation.geographic_scope}`}
           </p>
           {report.investigation.triage_priority && (
             <p>

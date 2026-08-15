@@ -5,7 +5,10 @@ import httpx
 import pytest
 from conftest import FakeLanguageModel
 
-from disaster_monitor.application.disaster import ProviderBatch
+from disaster_monitor.application.disaster import (
+    GlobalDisasterEvent,
+    ProviderBatch,
+)
 from disaster_monitor.application.dto import ModelRequest, ModelToolCall
 from disaster_monitor.application.multimodal import (
     VisualModelPrediction,
@@ -14,12 +17,21 @@ from disaster_monitor.application.multimodal import (
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
+from disaster_monitor.application.services.global_earthquake_report import (
+    GlobalEarthquakeReportService,
+)
+from disaster_monitor.application.services.provider_registry import (
+    ProviderCapabilities,
+    ProviderRegistration,
+    ProviderRole,
+)
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
     FactStatus,
     Hazard,
     ReportedFact,
     SituationReport,
+    SourceAuthority,
     SourceReference,
 )
 from disaster_monitor.domain.multimodal import (
@@ -314,6 +326,141 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     assert body["sources"][0]["canonical_url"] == "https://example.test/jma-event"
     assert any(source["publisher"] == "ReliefWeb" for source in body["sources"])
     assert body["sections"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("question", "country_code"),
+    (
+        ("Any news about earthquakes in Vietnam", "VNM"),
+        ("Any news about earthquakes in Venezuela?", "VEN"),
+    ),
+)
+async def test_earthquake_news_never_falls_through_to_general_model(
+    question: str, country_code: str
+) -> None:
+    received_queries = []
+
+    class CountryEventProvider:
+        async def find_recent_events(self, query, *, now):
+            received_queries.append(query)
+            source = SourceReference(
+                source_id="fixture-global-earthquakes",
+                publisher="Fixture scientific authority",
+                title=f"Fixture earthquake in {query.country.canonical_name}",
+                canonical_url="https://example.test/global-earthquake",
+                published_at=now,
+                updated_at=now,
+                retrieved_at=now,
+            )
+            return ProviderBatch(
+                (
+                    DisasterEvent(
+                        event_id=f"fixture:{query.country.alpha3_code.lower()}",
+                        hazard=Hazard.EARTHQUAKE,
+                        location=query.country.canonical_name,
+                        country=query.country,
+                        event_time=now,
+                        source=source,
+                        magnitude=5.0,
+                    ),
+                )
+            )
+
+    class EmptySituationProvider:
+        async def get_situation_reports(self, event, query, *, now):
+            return ProviderBatch()
+
+    model = FakeLanguageModel(error=AssertionError("general model must not be called"))
+    service = CurrentDisasterReportService(
+        CountryEventProvider(), EmptySituationProvider(), clock=lambda: NOW
+    )
+    app = create_app(model=model, current_disaster_report=service)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/assistant", json={"question": question})
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["response_type"] == "current_disaster"
+    assert body["selected_event"]["event_id"] == f"fixture:{country_code.lower()}"
+    assert body["investigation"]["country"] == country_code
+    assert [query.country_code for query in received_queries] == [country_code]
+    assert model.requests == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> None:
+    source = SourceReference(
+        source_id="usgs-earthquakes",
+        publisher="United States Geological Survey",
+        title="Fixture worldwide earthquake",
+        canonical_url="https://earthquake.usgs.gov/earthquakes/eventpage/global",
+        published_at=NOW,
+        updated_at=NOW,
+        retrieved_at=NOW,
+        authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
+    )
+
+    class GlobalProvider:
+        async def find_global_earthquakes(self, query, *, now):
+            return ProviderBatch(
+                (
+                    GlobalDisasterEvent(
+                        event_id="usgs:global",
+                        hazard=Hazard.EARTHQUAKE,
+                        location="South Pacific Ocean",
+                        event_time=now,
+                        source=source,
+                        latitude=-20.0,
+                        longitude=-170.0,
+                        magnitude=6.4,
+                        depth_km=18.0,
+                        provider_ids=("usgs:global",),
+                    ),
+                )
+            )
+
+    global_report = GlobalEarthquakeReportService(
+        ProviderRegistration(
+            "USGS",
+            GlobalProvider(),
+            ProviderCapabilities(
+                roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                hazards=frozenset({Hazard.EARTHQUAKE}),
+                country_codes=None,
+            ),
+            source_id="usgs-earthquakes",
+            allowed_hosts=frozenset({"earthquake.usgs.gov"}),
+        ),
+        clock=lambda: NOW,
+    )
+    model = FakeLanguageModel(error=AssertionError("general model must not be called"))
+    app = create_app(
+        model=model,
+        current_disaster_report=build_current_service(),
+        global_earthquake_report=global_report,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={"question": "Any earthquake news worldwide?"},
+        )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["response_type"] == "current_disaster_global_earthquake"
+    assert body["selected_event"]["event_id"] == "usgs:global"
+    assert body["map_action"]["label"] == "South Pacific Ocean"
+    assert body["investigation"]["country"] is None
+    assert body["investigation"]["geographic_scope"] == "worldwide"
+    assert body["investigation"]["source_ids"] == ["usgs-earthquakes"]
+    assert model.requests == []
 
 
 @pytest.mark.asyncio

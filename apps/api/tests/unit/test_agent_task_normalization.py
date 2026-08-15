@@ -8,8 +8,10 @@ from disaster_monitor.application.agent.models import (
 from disaster_monitor.application.agent.task_normalization import (
     deterministic_task_draft,
     disaster_safety_gate,
+    global_earthquake_query,
     validate_disaster_task,
 )
+from disaster_monitor.application.disaster import GlobalEventSelection
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
@@ -33,6 +35,9 @@ def validate(question: str, draft: DisasterTaskDraft | None = None):
 
 def test_safety_gate_keeps_factual_disaster_requests_out_of_general_model() -> None:
     guarded = (
+        "Any news about earthquakes in Vietnam?",
+        "Any news about earthquakes in Venezuela?",
+        "Any news about earthquakes in Thailand?",
         "Give me the latest earthquake information in Thailand.",
         "Latest earthquake in Japan and Venezuela.",
         "Latest earthquake.",
@@ -45,6 +50,54 @@ def test_safety_gate_keeps_factual_disaster_requests_out_of_general_model() -> N
     assert all(disaster_safety_gate(question) for question in guarded)
     assert not disaster_safety_gate("What causes earthquakes?")
     assert not disaster_safety_gate("What is this map for?")
+
+
+def test_news_request_uses_trusted_path_for_any_admitted_country() -> None:
+    catalog = StaticCountryCatalog()
+    catalog.activate_payload(
+        {
+            "metadata": {"version": "test-global"},
+            "countries": [
+                {
+                    "alpha3": "THA",
+                    "name": "Thailand",
+                    "aliases": ["TH"],
+                    "timezone": "Asia/Bangkok",
+                    "bounds": [5.5, 20.5, 97.3, 105.7],
+                    "polygons": [],
+                }
+            ],
+        }
+    )
+    parser = DisasterQueryParser(catalog)
+    question = "Any news about earthquakes in Thailand?"
+
+    task = validate_disaster_task(
+        question,
+        deterministic_task_draft(question),
+        country_catalog=catalog,
+        query_parser=parser,
+    )
+
+    assert task.kind == TaskKind.INVESTIGATION
+    assert task.validation_status == ValidationStatus.VALID
+    assert task.requires_evidence
+    assert task.country is not None and task.country.alpha3_code == "THA"
+    assert task.query is not None and task.query.country is task.country
+
+
+def test_worldwide_earthquake_scope_is_explicit_and_current_only() -> None:
+    latest = global_earthquake_query("Any earthquake news worldwide?")
+    strongest = global_earthquake_query(
+        "What was the strongest earthquake across the world this week?"
+    )
+
+    assert latest is not None and latest.selection == GlobalEventSelection.LATEST
+    assert strongest is not None
+    assert strongest.selection == GlobalEventSelection.STRONGEST
+    assert global_earthquake_query("Latest earthquake anywhere?") is not None
+    assert global_earthquake_query("What causes earthquakes globally?") is None
+    assert global_earthquake_query("Any flood news worldwide?") is None
 
 
 def test_explicit_dated_event_is_an_investigation_without_model_help() -> None:

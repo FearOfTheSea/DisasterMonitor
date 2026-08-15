@@ -18,6 +18,7 @@ PARSER = DisasterQueryParser(StaticCountryCatalog())
     ("text", "hazard", "country_code"),
     [
         ("Latest earthquake in Japan", Hazard.EARTHQUAKE, "JPN"),
+        ("Any news about earthquakes in Vietnam?", Hazard.EARTHQUAKE, "VNM"),
         ("Latest earthquakes in JP", Hazard.EARTHQUAKE, "JPN"),
         ("Current quake in JPN", Hazard.EARTHQUAKE, "JPN"),
         ("Current quakes in Nippon", Hazard.EARTHQUAKE, "JPN"),
@@ -80,3 +81,11 @@ def test_recognized_unsupported_hazard_is_still_current_disaster_intent() -> Non
     assert classification.request_type == RequestType.CURRENT_DISASTER
     assert classification.query is not None
     assert classification.query.hazard == Hazard.FLOOD
+
+
+def test_earthquake_news_is_current_disaster_intent() -> None:
+    classification = PARSER.classify("Any news about earthquakes in Venezuela?")
+
+    assert classification.request_type == RequestType.CURRENT_DISASTER
+    assert classification.query is not None
+    assert classification.query.country.alpha3_code == "VEN"

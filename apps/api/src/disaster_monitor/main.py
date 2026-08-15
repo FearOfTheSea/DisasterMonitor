@@ -30,6 +30,9 @@ from disaster_monitor.application.services.current_disaster_report import (
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
+from disaster_monitor.application.services.global_earthquake_report import (
+    GlobalEarthquakeReportService,
+)
 from disaster_monitor.application.services.map_navigation import MapNavigationService
 from disaster_monitor.application.services.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
@@ -69,6 +72,7 @@ def create_app(
     visual_analyzer: VisualAnalyzer | None = None,
     operational_repository: OperationalRepository | None = None,
     country_catalog_automation: CountryCatalogUpdateAutomation | None = None,
+    global_earthquake_report: GlobalEarthquakeReportService | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -83,6 +87,12 @@ def create_app(
         country_catalog,
         snapshot_recorder=operational.snapshots.persist,
         operational_evidence=operational.evidence,
+    )
+    worldwide_earthquakes = (
+        global_earthquake_report
+        or GlobalEarthquakeReportService.from_registry(
+            disaster_report.provider_registry
+        )
     )
     query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
     source_catalog = build_source_catalog(app_settings)
@@ -121,6 +131,8 @@ def create_app(
         language_model,
         asset_admission,
         MapNavigationService(country_catalog),
+        worldwide_earthquakes,
+        country_catalog,
     )
 
     @asynccontextmanager
@@ -184,6 +196,7 @@ def create_app(
     )
     app.state.language_model = language_model
     app.state.current_disaster_report = disaster_report
+    app.state.global_earthquake_report = worldwide_earthquakes
     app.state.agent_model = configured_agent_model
     app.state.visual_analyzer = configured_visual_analyzer
     app.state.answer_map_question = AnswerMapQuestion(

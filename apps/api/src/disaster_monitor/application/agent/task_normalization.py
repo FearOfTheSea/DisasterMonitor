@@ -10,7 +10,11 @@ from disaster_monitor.application.agent.models import (
     ValidatedDisasterTask,
     ValidationStatus,
 )
-from disaster_monitor.application.disaster import QueryParseStatus
+from disaster_monitor.application.disaster import (
+    GlobalEarthquakeQuery,
+    GlobalEventSelection,
+    QueryParseStatus,
+)
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
@@ -65,7 +69,7 @@ _HAZARDS: dict[Hazard, tuple[str, ...]] = {
     ),
 }
 _CURRENT_EVENT_MARKERS = re.compile(
-    r"(?:\b(?:latest|recent|current|today|now|ongoing|reported|confirmed|"
+    r"(?:\b(?:latest|recent|current|today|now|news|ongoing|reported|confirmed|"
     r"this week|as of|struck|hit|occurred)\b|"
     r"\b(?:actual|reciente|hoy|ahora|reportad[oa]s?|confirmad[oa]s?)\b|"
     r"(?:mới nhất|gần đây|hiện tại|hôm nay|đã báo cáo|đã xác nhận|"
@@ -111,7 +115,32 @@ _EVENT_DATE_MARKER = re.compile(
 _PLACE_AFTER_IN = re.compile(
     r"\b(?:in|from|across)\s+([A-Z][A-Za-z .'-]{1,60}?)(?=[?.!,]|\s+(?:on|and)\b|$)"
 )
-_KNOWN_UNCATALOGED_COUNTRIES = ("Thailand",)
+_WORLDWIDE_MARKERS = re.compile(
+    r"(?:\b(?:worldwide|globally|global|world|anywhere)\b|"
+    r"\b(?:around|across|throughout)\s+the\s+world\b)",
+    re.I,
+)
+_STRONGEST_MARKERS = re.compile(
+    r"\b(?:strongest|largest|biggest|highest[- ]magnitude|most powerful)\b", re.I
+)
+
+
+def global_earthquake_query(question: str) -> GlobalEarthquakeQuery | None:
+    """Admit only explicit current worldwide earthquake requests."""
+    hazards = _hazard_mentions(question)
+    if (
+        hazards != (Hazard.EARTHQUAKE,)
+        or not disaster_safety_gate(question)
+        or not _WORLDWIDE_MARKERS.search(question)
+    ):
+        return None
+    return GlobalEarthquakeQuery(
+        selection=(
+            GlobalEventSelection.STRONGEST
+            if _STRONGEST_MARKERS.search(question)
+            else GlobalEventSelection.LATEST
+        )
+    )
 
 
 def disaster_safety_gate(question: str) -> bool:
@@ -191,11 +220,7 @@ def validate_disaster_task(
         )
     if not countries:
         unresolved = next(iter(draft.place_mentions), None) or next(
-            (
-                name
-                for name in _KNOWN_UNCATALOGED_COUNTRIES
-                if name.lower() in question.lower()
-            ),
+            (match.group(1).strip() for match in _PLACE_AFTER_IN.finditer(question)),
             None,
         )
         detail = (
@@ -387,7 +412,4 @@ def _matches_alias(text: str, alias: str) -> bool:
 
 def _extract_raw_places(text: str) -> tuple[str, ...]:
     found = [match.group(1).strip() for match in _PLACE_AFTER_IN.finditer(text)]
-    for country in _KNOWN_UNCATALOGED_COUNTRIES:
-        if country.lower() in text.lower() and country not in found:
-            found.append(country)
     return tuple(found[:4])

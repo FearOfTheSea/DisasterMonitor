@@ -267,6 +267,66 @@ def test_invalid_active_catalog_falls_back_to_packaged_metadata(tmp_path: Path) 
     ]
 
 
+def test_short_country_codes_do_not_capture_ordinary_lowercase_words() -> None:
+    catalog = StaticCountryCatalog()
+    catalog.activate_payload(
+        {
+            "metadata": {"version": "collision-test"},
+            "countries": [
+                {
+                    "alpha3": "CAN",
+                    "name": "Canada",
+                    "aliases": ["CA"],
+                    "timezone": "America/Toronto",
+                    "bounds": [41.0, 84.0, -141.0, -52.0],
+                    "polygons": [],
+                },
+                {
+                    "alpha3": "ARE",
+                    "name": "United Arab Emirates",
+                    "aliases": ["AE", "UAE"],
+                    "timezone": "Asia/Dubai",
+                    "bounds": [22.0, 27.0, 51.0, 57.0],
+                    "polygons": [],
+                },
+                {
+                    "alpha3": "THA",
+                    "name": "Thailand",
+                    "aliases": ["TH"],
+                    "timezone": "Asia/Bangkok",
+                    "bounds": [5.5, 20.5, 97.3, 105.7],
+                    "polygons": [],
+                },
+                {
+                    "alpha3": "VNM",
+                    "name": "Vietnam",
+                    "aliases": ["VN"],
+                    "timezone": "Asia/Ho_Chi_Minh",
+                    "bounds": [8.0, 24.0, 102.0, 110.0],
+                    "polygons": [],
+                },
+            ],
+        }
+    )
+
+    assert [
+        country.alpha3_code
+        for country in catalog.find_mentions(
+            "Can you tell me what the latest earthquakes are in Vietnam?"
+        )
+    ] == ["VNM"]
+    assert [
+        country.alpha3_code
+        for country in catalog.find_mentions(
+            "What are the latest earthquakes in Thailand?"
+        )
+    ] == ["THA"]
+    assert [
+        country.alpha3_code
+        for country in catalog.find_mentions("Latest earthquake in CAN")
+    ] == ["CAN"]
+
+
 @pytest.mark.asyncio
 async def test_automation_runs_a_due_monthly_update_without_intervention() -> None:
     updater = FakeUpdater()

@@ -7,6 +7,8 @@ import pytest
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
+    GlobalEarthquakeQuery,
+    GlobalEventSelection,
 )
 from disaster_monitor.application.services.event_resolution import resolve_recent_event
 from disaster_monitor.application.services.evidence_reconciliation import (
@@ -561,6 +563,38 @@ async def test_usgs_generic_query_is_bounded_and_magnitude_ordered() -> None:
     assert query_params["maxlongitude"] == "154.0"
     assert "includeallorigins" not in query_params
     assert "includeallmagnitudes" not in query_params
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_worldwide_query_has_no_country_bounds_and_preserves_event() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=json.dumps(usgs_payload()).encode(),
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = UsgsEarthquakeAdapter(geography=CATALOG, client=client)
+
+    result = await adapter.find_global_earthquakes(
+        GlobalEarthquakeQuery(selection=GlobalEventSelection.LATEST), now=NOW
+    )
+    params = dict(requests[0].url.params.multi_items())
+
+    assert params["orderby"] == "time"
+    assert params["minmagnitude"] == "4.5"
+    assert "minlatitude" not in params
+    assert "maxlatitude" not in params
+    assert "minlongitude" not in params
+    assert "maxlongitude" not in params
+    assert result.records[0].event_id == "usgs:us7000fixture"
+    assert result.records[0].location == "near Honshu, Japan"
     await client.aclose()
 
 

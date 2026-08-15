@@ -45,25 +45,51 @@ class StaticCountryCatalog:
         """Replace in-memory indexes only after complete payload validation."""
         metadata, countries = parse_country_catalog_payload(payload)
         term_countries: dict[str, tuple[Country, ...]] = {}
+        short_code_terms: set[str] = set()
         for country in countries:
             for term in (
                 country.canonical_name,
                 country.alpha3_code,
                 *country.aliases,
             ):
+                if re.fullmatch(r"[A-Z]{2,3}", term):
+                    short_code_terms.add(term)
                 key = term.casefold()
                 existing = term_countries.get(key, ())
                 if all(item.alpha3_code != country.alpha3_code for item in existing):
                     term_countries[key] = (*existing, country)
-        ordered_terms = sorted(term_countries, key=lambda value: (-len(value), value))
-        mention_pattern = (
+        short_codes = tuple(short_code_terms)
+        short_code_keys = {term.casefold() for term in short_codes}
+        country_names = tuple(
+            term for term in term_countries if term not in short_code_keys
+        )
+        code_pattern = (
             re.compile(
                 r"(?<!\w)(?:"
-                + "|".join(re.escape(term) for term in ordered_terms)
+                + "|".join(
+                    re.escape(term)
+                    for term in sorted(
+                        short_codes, key=lambda value: (-len(value), value)
+                    )
+                )
+                + r")(?!\w)",
+            )
+            if short_codes
+            else None
+        )
+        name_pattern = (
+            re.compile(
+                r"(?<!\w)(?:"
+                + "|".join(
+                    re.escape(term)
+                    for term in sorted(
+                        country_names, key=lambda value: (-len(value), value)
+                    )
+                )
                 + r")(?!\w)",
                 re.I,
             )
-            if ordered_terms
+            if country_names
             else None
         )
         with self._lock:
@@ -73,7 +99,8 @@ class StaticCountryCatalog:
                 country.alpha3_code: country for country in self._countries
             }
             self._term_countries = term_countries
-            self._mention_pattern = mention_pattern
+            self._code_mention_pattern = code_pattern
+            self._name_mention_pattern = name_pattern
 
     def _refresh_if_changed(self) -> None:
         path = self._active_path
@@ -104,13 +131,21 @@ class StaticCountryCatalog:
     def find_mentions(self, text: str) -> tuple[Country, ...]:
         self._refresh_if_changed()
         with self._lock:
-            pattern = self._mention_pattern
+            code_pattern = self._code_mention_pattern
+            name_pattern = self._name_mention_pattern
             term_countries = self._term_countries
-        if pattern is None:
+        if code_pattern is None and name_pattern is None:
             return ()
         found: list[Country] = []
         found_codes: set[str] = set()
-        for match in pattern.finditer(text):
+        matches = [
+            match
+            for pattern in (code_pattern, name_pattern)
+            if pattern is not None
+            for match in pattern.finditer(text)
+        ]
+        matches.sort(key=lambda match: (match.start(), -len(match.group(0))))
+        for match in matches:
             for country in term_countries.get(match.group(0).casefold(), ()):
                 if country.alpha3_code not in found_codes:
                     found.append(country)

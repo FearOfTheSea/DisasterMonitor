@@ -8,9 +8,17 @@ from disaster_monitor.application.agent.models import (
     TaskKind,
 )
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
+from disaster_monitor.application.agent.task_normalization import (
+    global_earthquake_query,
+)
+from disaster_monitor.application.disaster import DisasterReport
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
 from disaster_monitor.application.multimodal import AssetAdmissionInput
+from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.services.global_earthquake_report import (
+    GlobalEarthquakeReportService,
+)
 from disaster_monitor.application.services.map_navigation import MapNavigationService
 from disaster_monitor.application.services.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
@@ -32,11 +40,15 @@ class RunDisasterAgent:
         general_model: LanguageModel,
         asset_admission: MultimodalAssetAdmissionService | None = None,
         map_navigation: MapNavigationService | None = None,
+        global_earthquake_report: GlobalEarthquakeReportService | None = None,
+        country_catalog: CountryCatalog | None = None,
     ) -> None:
         self._runtime = runtime
         self._general_model = general_model
         self._asset_admission = asset_admission
         self._map_navigation = map_navigation
+        self._global_earthquake_report = global_earthquake_report
+        self._country_catalog = country_catalog
 
     async def execute(
         self,
@@ -52,6 +64,41 @@ class RunDisasterAgent:
             if multimodal_inputs and self._asset_admission is not None
             else ()
         )
+        global_query = global_earthquake_query(normalized)
+        admitted_countries = (
+            self._country_catalog.find_mentions(normalized)
+            if self._country_catalog is not None
+            else ()
+        )
+        if (
+            global_query is not None
+            and not admitted_countries
+            and not assets
+            and self._global_earthquake_report is not None
+        ):
+            global_report = await self._global_earthquake_report.execute(global_query)
+            return AssistantAnswer(
+                message=global_report.message,
+                conversation_id=_conversation_id(conversation),
+                model="source-backed-agent",
+                map_action=(
+                    self._map_navigation.for_disaster_context(
+                        cop=None,
+                        selected_event=global_report.selected_event,
+                        country=None,
+                    )
+                    if self._map_navigation is not None
+                    else None
+                ),
+                response_type=global_report.response_type,
+                selected_event=global_report.selected_event,
+                retrieval_time=global_report.retrieval_time,
+                sources=global_report.sources,
+                warnings=global_report.warnings,
+                sections=global_report.sections,
+                partial=global_report.partial,
+                investigation=_global_summary(normalized, global_report),
+            )
         state = (
             await self._runtime.run(normalized, multimodal_assets=assets)
             if assets
@@ -272,4 +319,34 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
         coordination_analytical_release_id=(
             supervision.analytical_release_id if supervision else None
         ),
+    )
+
+
+def _global_summary(question: str, report: DisasterReport) -> InvestigationSummary:
+    verified = report.selected_event is not None
+    gap = "Worldwide casualty, damage, warning, and response coverage is not complete."
+    return InvestigationSummary(
+        status="partial" if verified else "coverage_unavailable",
+        task_summary=question[:500],
+        hazard="earthquake",
+        country=None,
+        information_needs=("event_overview",),
+        output_modalities=("text",),
+        actions=(
+            "Queried the registry-approved worldwide USGS earthquake catalog.",
+            *(
+                ("Selected and rendered one source-backed worldwide event.",)
+                if verified
+                else ()
+            ),
+        ),
+        source_ids=tuple(dict.fromkeys(source.source_id for source in report.sources)),
+        evidence_count=1 if verified else 0,
+        capability_gaps=(gap,),
+        termination_reason=(
+            "partial_global_event_evidence"
+            if verified
+            else "global_event_verification_failed"
+        ),
+        geographic_scope="worldwide",
     )

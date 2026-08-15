@@ -28,6 +28,7 @@ class InvestigationSummary:
     evidence_count: int
     capability_gaps: tuple[str, ...]
     termination_reason: str
+    geographic_scope: str = "country"
     triage_priority: str | None = None
     triage_score: int | None = None
     triage_action: str | None = None

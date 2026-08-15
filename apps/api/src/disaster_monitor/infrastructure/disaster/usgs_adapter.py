@@ -6,6 +6,9 @@ import httpx
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
+    GlobalDisasterEvent,
+    GlobalEarthquakeQuery,
+    GlobalEventSelection,
     ProviderBatch,
     ProviderIssue,
 )
@@ -85,6 +88,23 @@ def build_usgs_params(
     if query.magnitude is not None:
         params["minmagnitude"] = query.magnitude - 0.1
     return params
+
+
+def build_global_usgs_params(
+    query: GlobalEarthquakeQuery, *, now: datetime
+) -> dict[str, str | int | float]:
+    """Build a bounded worldwide query with an explicit ranking policy."""
+    return {
+        "format": "geojson",
+        "eventtype": "earthquake",
+        "starttime": (now - timedelta(days=query.time_window_days)).isoformat(),
+        "endtime": now.isoformat(),
+        "minmagnitude": query.minimum_magnitude,
+        "orderby": (
+            "magnitude" if query.selection == GlobalEventSelection.STRONGEST else "time"
+        ),
+        "limit": query.limit,
+    }
 
 
 class UsgsEarthquakeAdapter:
@@ -196,6 +216,83 @@ class UsgsEarthquakeAdapter:
             None,
         )
 
+    def _parse_global_feature(
+        self,
+        raw_feature: object,
+        *,
+        now: datetime,
+        index: int,
+        snapshot_id: str | None,
+    ) -> tuple[GlobalDisasterEvent | None, ProviderIssue | None]:
+        try:
+            if not isinstance(raw_feature, dict):
+                raise ValueError("feature is not an object")
+            properties = raw_feature.get("properties")
+            geometry = raw_feature.get("geometry")
+            if not isinstance(properties, dict) or not isinstance(geometry, dict):
+                raise ValueError("properties or geometry is missing")
+            coordinates = geometry.get("coordinates")
+            if not isinstance(coordinates, list) or len(coordinates) < 3:
+                raise ValueError("coordinates are invalid")
+            event_time = normalize_timestamp(properties.get("time"))
+            event_id = _text(raw_feature.get("id"))
+            if not event_id or event_time is None:
+                raise ValueError("identifier or event time is missing")
+            longitude, latitude, depth_km = (
+                float(coordinates[0]),
+                float(coordinates[1]),
+                float(coordinates[2]),
+            )
+            if not -180 <= longitude <= 180 or not -90 <= latitude <= 90:
+                raise ValueError("coordinates are outside the world extent")
+            if depth_km < 0:
+                raise ValueError("depth is negative")
+        except (TypeError, ValueError, OverflowError) as error:
+            return None, ProviderIssue(
+                self.provider_name,
+                f"{self.provider_name}: A malformed event record was skipped.",
+                reason_code="invalid_record",
+                detail=f"feature[{index}]: {error}",
+            )
+        url = _text(properties.get("url"))
+        try:
+            validate_network_target(url, self.allowed_hosts)
+        except DisasterProviderResponseError:
+            url = f"https://earthquake.usgs.gov/earthquakes/eventpage/{event_id}"
+        source = SourceReference(
+            source_id=self.source_id,
+            publisher="United States Geological Survey",
+            title=_text(properties.get("title")) or "USGS earthquake event",
+            canonical_url=url,
+            published_at=event_time,
+            updated_at=normalize_timestamp(properties.get("updated")),
+            retrieved_at=now,
+            authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
+            snapshot_id=snapshot_id,
+        )
+        return (
+            GlobalDisasterEvent(
+                event_id=f"usgs:{event_id}",
+                hazard=Hazard.EARTHQUAKE,
+                location=_text(properties.get("place")) or "Worldwide earthquake",
+                event_time=event_time,
+                source=source,
+                latitude=latitude,
+                longitude=longitude,
+                magnitude=_number(properties.get("mag")),
+                magnitude_type=_text(properties.get("magType")) or None,
+                intensity=(
+                    f"MMI {properties['mmi']}"
+                    if isinstance(properties.get("mmi"), (int, float))
+                    else None
+                ),
+                depth_km=depth_km,
+                significance=_number(properties.get("sig")),
+                provider_ids=(f"usgs:{event_id}",),
+            ),
+            None,
+        )
+
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
     ) -> ProviderBatch[DisasterEvent]:
@@ -269,6 +366,68 @@ class UsgsEarthquakeAdapter:
                 )
             )
         return ProviderBatch(records=tuple(events), issues=tuple(issues))
+
+    async def find_global_earthquakes(
+        self, query: GlobalEarthquakeQuery, *, now: datetime
+    ) -> ProviderBatch[GlobalDisasterEvent]:
+        """Find bounded worldwide events without assigning a synthetic country."""
+        capture = build_snapshot_capture(
+            self._snapshot_recorder,
+            source_id=self.source_id,
+            parameters={
+                "scope": "worldwide",
+                "selection": query.selection.value,
+                "from": (now - timedelta(days=query.time_window_days)).isoformat(),
+                "to": now.isoformat(),
+                "minimum_magnitude": str(query.minimum_magnitude),
+            },
+            rights_id="usgs-earthquake-api-terms-2026-08",
+            retrieved_at=now,
+        )
+        payload = await get_json(
+            self._client,
+            USGS_QUERY_URL,
+            allowed_hosts=self.allowed_hosts,
+            params=build_global_usgs_params(query, now=now),
+            max_bytes=self._max_response_bytes,
+            provider_name=self.provider_name,
+            capture=capture,
+        )
+        if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
+            raise DisasterProviderResponseError(
+                "The USGS response was not a GeoJSON FeatureCollection."
+            )
+        raw_features = payload.get("features")
+        if not isinstance(raw_features, list):
+            raise DisasterProviderResponseError(
+                "The USGS GeoJSON response had no feature list."
+            )
+        events: list[GlobalDisasterEvent] = []
+        issues: list[ProviderIssue] = []
+        for index, raw_feature in enumerate(raw_features):
+            event, issue = self._parse_global_feature(
+                raw_feature,
+                now=now,
+                index=index,
+                snapshot_id=(
+                    capture.snapshot.snapshot_id
+                    if capture and capture.snapshot
+                    else None
+                ),
+            )
+            if event is not None:
+                events.append(event)
+            if issue is not None:
+                issues.append(issue)
+        if not events and not issues:
+            issues.append(
+                ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: The provider returned no matching records.",
+                    reason_code="empty_result",
+                )
+            )
+        return ProviderBatch(tuple(events), tuple(issues))
 
     async def aclose(self) -> None:
         if self._owns_client:
