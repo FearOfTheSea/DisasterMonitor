@@ -19,6 +19,9 @@ from disaster_monitor.application.ports.geography import (
 )
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
+from disaster_monitor.application.ports.operator_identity import (
+    TrustedOperatorIdentityPolicy,
+)
 from disaster_monitor.application.services.operational_ingestion import (
     record_operator_review,
 )
@@ -26,7 +29,6 @@ from disaster_monitor.application.use_cases.answer_map_question import AnswerMap
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.models import MapNavigationAction, MapView
 from disaster_monitor.domain.operations import OperatorActionRecord
-from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.presentation.http.metrics import OperationalMetrics
 from disaster_monitor.presentation.http.multimodal_schemas import (
     MultimodalAssetRequest,
@@ -78,6 +80,16 @@ def get_media_asset_store(request: Request) -> MediaAssetStore:
 def get_operational_repository(request: Request) -> OperationalRepository:
     """Retrieve the operational store built by the composition root."""
     return cast(OperationalRepository, request.app.state.operational_repository)
+
+
+def get_trusted_operator_identity_policy(
+    request: Request,
+) -> TrustedOperatorIdentityPolicy:
+    """Retrieve the application-facing identity policy from the composition root."""
+    return cast(
+        TrustedOperatorIdentityPolicy,
+        request.app.state.trusted_operator_identity_policy,
+    )
 
 
 def get_country_catalog_automation(request: Request) -> CountryCatalogUpdateAutomation:
@@ -290,18 +302,19 @@ async def evidence_history(
 async def operator_action(
     body: OperatorActionRequest,
     request: Request,
+    policy: Annotated[
+        TrustedOperatorIdentityPolicy,
+        Depends(get_trusted_operator_identity_policy),
+    ],
     repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
 ) -> OperatorActionResponse:
     """Record an attributable bounded review from a trusted identity boundary."""
-    settings = cast(Settings, request.app.state.settings)
-    if not settings.trusted_operator_identity_enabled:
+    if not policy.enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Trusted operator identity is not configured.",
         )
-    operator_id = request.headers.get(
-        settings.trusted_operator_identity_header, ""
-    ).strip()
+    operator_id = request.headers.get(policy.header_name, "").strip()
     if not operator_id or len(operator_id) > 200:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

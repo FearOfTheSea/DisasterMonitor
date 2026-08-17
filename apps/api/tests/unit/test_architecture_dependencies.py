@@ -6,6 +6,7 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "disaster_monitor"
 DOMAIN = SRC / "domain"
 APPLICATION = SRC / "application"
 INFRASTRUCTURE = SRC / "infrastructure"
+PRESENTATION = SRC / "presentation"
 
 
 def _python_files(directory: Path) -> tuple[Path, ...]:
@@ -63,6 +64,18 @@ def test_application_does_not_import_outward_dependencies() -> None:
                 )
             ):
                 violations.append(f"{path.relative_to(SRC)} imports {name}")
+
+    assert violations == []
+
+
+def test_presentation_does_not_import_infrastructure() -> None:
+    violations = [
+        f"{path.relative_to(SRC)} imports {name}"
+        for path in _python_files(PRESENTATION)
+        for name in _imports(path)
+        if name == "disaster_monitor.infrastructure"
+        or name.startswith("disaster_monitor.infrastructure.")
+    ]
 
     assert violations == []
 

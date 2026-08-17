@@ -24,6 +24,9 @@ from disaster_monitor.application.ports.event_media import (
 from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
+from disaster_monitor.application.ports.operator_identity import (
+    TrustedOperatorIdentityPolicy,
+)
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.services.common_operational_picture import (
     CommonOperationalPictureBuilder,
@@ -230,6 +233,10 @@ def create_app(
     )
     app.state.operational_repository = operational.repository
     app.state.country_catalog_automation = catalog_automation
+    app.state.trusted_operator_identity_policy = TrustedOperatorIdentityPolicy(
+        enabled=app_settings.trusted_operator_identity_enabled,
+        header_name=app_settings.trusted_operator_identity_header,
+    )
     app.state.settings = app_settings
     app.state.operational_metrics = metrics
     app.include_router(router, prefix="/api/v1")

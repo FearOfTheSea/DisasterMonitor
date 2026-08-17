@@ -99,6 +99,7 @@ async def test_operational_status_history_and_attributed_review(tmp_path: Path) 
         settings=Settings(
             operational_blob_root=tmp_path / "api-blobs",
             trusted_operator_identity_enabled=True,
+            trusted_operator_identity_header="x-custom-operator",
         ),
         model=FakeLanguageModel(),
         operational_repository=repository,
@@ -117,9 +118,18 @@ async def test_operational_status_history_and_attributed_review(tmp_path: Path) 
                 "rationale": "Checked the source snapshot and freshness.",
             },
         )
+        invalid_identity = await client.post(
+            "/api/v1/operations/operator-actions",
+            headers={"x-custom-operator": "o" * 201},
+            json={
+                "state_version": world_state.state_version,
+                "decision": "reviewed",
+                "rationale": "An overlong identity must not be accepted.",
+            },
+        )
         review = await client.post(
             "/api/v1/operations/operator-actions",
-            headers={"x-disastermonitor-operator": "operator-7"},
+            headers={"x-custom-operator": "operator-7"},
             json={
                 "state_version": world_state.state_version,
                 "decision": "reviewed",
@@ -141,6 +151,7 @@ async def test_operational_status_history_and_attributed_review(tmp_path: Path) 
     assert "disastermonitor_http_requests_total" in metrics.text
     assert 'disastermonitor_ingest_jobs{status="queued"} 0.0' in metrics.text
     assert missing_identity.status_code == 401
+    assert invalid_identity.status_code == 401
     assert review.status_code == 201
     assert review.json()["operator_id"] == "operator-7"
     assert len(repository.operator_actions) == 1
