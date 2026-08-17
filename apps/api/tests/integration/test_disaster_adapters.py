@@ -1,6 +1,7 @@
 import json
 from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 import pytest
@@ -17,6 +18,7 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     DisasterEvent,
+    EventGeographyStatus,
     Hazard,
     SourceReference,
 )
@@ -48,10 +50,13 @@ from disaster_monitor.infrastructure.geography.static_country_catalog import (
 
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
 CATALOG = StaticCountryCatalog()
+ACTIVE_CATALOG = StaticCountryCatalog(Path("../../data/geography"))
 JAPAN = CATALOG.get_by_alpha3("JPN")
 VENEZUELA = CATALOG.get_by_alpha3("VEN")
 VIETNAM = CATALOG.get_by_alpha3("VNM")
 assert JAPAN is not None and VENEZUELA is not None and VIETNAM is not None
+INDONESIA = ACTIVE_CATALOG.get_by_alpha3("IDN")
+assert INDONESIA is not None
 QUERY = DisasterQuery(
     hazard=Hazard.EARTHQUAKE,
     country=JAPAN,
@@ -248,6 +253,54 @@ async def test_reliefweb_adapter_extracts_preliminary_situation_facts() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reliefweb_scope_search_does_not_require_event_location_terms() -> None:
+    payload = {
+        "data": [
+            {
+                "fields": {
+                    "title": "Kumamoto earthquake situation update",
+                    "url": "https://reliefweb.int/report/japan/kumamoto",
+                    "date": {"created": "2026-08-05T10:30:00+00:00"},
+                    "country": [{"name": "Japan"}],
+                    "body": "Relief teams continue work in Kumamoto.",
+                }
+            }
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # The real API treats an AND free-text query as a required conjunction;
+        # this models the empty result caused by the old event-location query.
+        response_payload = (
+            {"data": []} if request.url.params.get("query[value]") else payload
+        )
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=json.dumps(response_payload).encode(),
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    event = DisasterEvent(
+        "usgs:fixture",
+        Hazard.EARTHQUAKE,
+        "12 km N of Tsunagi, Japan",
+        JAPAN,
+        NOW,
+        _source_for_test(),
+    )
+
+    result = await ReliefWebSituationAdapter(
+        client=client, app_name="approved-test"
+    ).get_situation_reports(event, QUERY, now=NOW)
+
+    assert len(result.records) == 1
+    assert result.records[0].source.title == "Kumamoto earthquake situation update"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_reliefweb_rejects_unapproved_canonical_source_url() -> None:
     payload = {
         "data": [
@@ -348,6 +401,54 @@ async def test_reliefweb_adapter_correlates_reports_to_selected_event() -> None:
     await client.aclose()
 
 
+@pytest.mark.asyncio
+async def test_reliefweb_matches_narrative_event_clues() -> None:
+    payload = {
+        "data": [
+            {
+                "fields": {
+                    "title": "Indonesia 7.7 earthquake strikes Flores",
+                    "url": "https://reliefweb.int/report/indonesia/flores-update",
+                    "date": {"created": "2026-08-17T11:43:19+00:00"},
+                    "primary_country": [{"name": "Indonesia"}],
+                    "country": [{"name": "Indonesia"}],
+                    "disaster_type": [{"name": "Earthquake"}],
+                    "body": (
+                        "A powerful 7.7 earthquake struck Flores Island in East "
+                        "Nusa Tenggara, 30 km northeast of Mbay. Homes and schools "
+                        "were damaged. The Trans Ende-Bajawa road was affected."
+                    ),
+                }
+            }
+        ]
+    }
+    client = client_for(payload)
+    event = DisasterEvent(
+        "usgs:us6000tkt2",
+        Hazard.EARTHQUAKE,
+        "68 km NNW of Ende, Indonesia",
+        INDONESIA,
+        datetime(2026, 8, 14, 21, 58, tzinfo=UTC),
+        _source_for_test(),
+        magnitude=7.7,
+    )
+    query = DisasterQuery(
+        Hazard.EARTHQUAKE,
+        INDONESIA,
+        "recent",
+        ("damage",),
+    )
+
+    result = await ReliefWebSituationAdapter(
+        client=client, app_name="approved-test"
+    ).get_situation_reports(event, query, now=datetime(2026, 8, 17, 12, tzinfo=UTC))
+
+    assert result.records[0].magnitude == 7.7
+    assert result.records[0].correlation == CorrelationStatus.MATCHED
+    assert result.records[0].event_id == event.event_id
+    await client.aclose()
+
+
 @pytest.mark.parametrize(
     ("hazard", "country", "expected_hazard"),
     [
@@ -385,7 +486,7 @@ def test_reliefweb_request_uses_normalized_country_and_hazard(
     assert params["filter[conditions][0][value]"] == country.canonical_name
     assert params["filter[conditions][1][field]"] == "disaster_type.name"
     assert params["filter[conditions][1][value]"] == expected_hazard
-    assert expected_hazard in str(params["query[value]"])
+    assert not any(key.startswith("query[") for key in params)
 
 
 def test_reliefweb_request_preserves_explicit_date_range() -> None:
@@ -404,11 +505,13 @@ def test_reliefweb_request_preserves_explicit_date_range() -> None:
     )
     params = build_reliefweb_params(event, query, now=NOW, app_name="approved-test")
 
-    assert params["filter[conditions][2][value][from]"] == "2026-08-04"
-    assert params["filter[conditions][2][value][to]"] == "2026-08-05"
+    assert params["filter[conditions][2][value][from]"] == "2026-08-04T15:00:00+00:00"
+    assert params["filter[conditions][2][value][to]"] == "2026-08-05T15:00:00+00:00"
+    assert params["fields[include][0]"] == "id"
+    assert params["fields[include][7]"] == "primary_country"
 
 
-def test_reliefweb_request_does_not_require_external_provider_identifiers() -> None:
+def test_reliefweb_request_does_not_narrow_by_event_text_or_identifiers() -> None:
     event = DisasterEvent(
         "usgs:us6000fixture",
         Hazard.EARTHQUAKE,
@@ -421,10 +524,7 @@ def test_reliefweb_request_does_not_require_external_provider_identifiers() -> N
 
     params = build_reliefweb_params(event, QUERY, now=NOW, app_name="approved-test")
 
-    search = str(params["query[value]"])
-    assert "Ishikawa" in search
-    assert "us6000fixture" not in search
-    assert "20260805180000" not in search
+    assert not any(key.startswith("query[") for key in params)
 
 
 @pytest.mark.asyncio
@@ -655,6 +755,32 @@ async def test_usgs_excludes_coordinate_inside_rectangle_but_outside_country() -
 
     assert result.records == ()
     assert result.issues[0].reason_code == "country_mismatch"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_accepts_near_shore_event_with_explicit_country_place() -> None:
+    payload = usgs_payload()
+    feature = payload["features"][0]  # type: ignore[index]
+    feature["properties"]["place"] = "68 km NNW of Ende, Indonesia"  # type: ignore[index]
+    feature["geometry"]["coordinates"] = [121.3517, -8.3101, 10.0]  # type: ignore[index]
+    client = client_for(payload)
+    query = DisasterQuery(
+        Hazard.EARTHQUAKE,
+        INDONESIA,
+        "recent",
+        ("damage",),
+    )
+
+    result = await UsgsEarthquakeAdapter(
+        geography=ACTIVE_CATALOG, client=client
+    ).find_recent_events(query, now=NOW)
+
+    assert len(result.records) == 1
+    assert (
+        result.records[0].geography_status
+        == EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
+    )
     await client.aclose()
 
 

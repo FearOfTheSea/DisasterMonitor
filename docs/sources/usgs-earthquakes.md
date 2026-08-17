@@ -9,6 +9,9 @@ magnitude, and record limits, and select latest or strongest deterministically w
 assigning a synthetic country. USGS IDs compare within their namespace; cross-source
 equivalence is application-owned. Transport,
 content, JSON, and payload failures are diagnostics; foreign/out-of-bounds events are
-excluded. Packaged boundaries are approximations, not legal borders; latency, accuracy,
+excluded. A near-shore event outside the polygon is admitted only when it is within the
+bounded 100 km association distance and USGS place text explicitly names the requested
+country; it is labelled `country_associated_offshore` rather than treated as land-based.
+Packaged boundaries are approximations, not legal borders; latency, accuracy,
 and availability guarantees are unknown. Tests: USGS adapter, geography, event policy,
 and regression suites. New countries require maintained geography, not agent branches.

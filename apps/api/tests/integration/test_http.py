@@ -322,6 +322,7 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     assert response.status_code == 200
     assert body["response_type"] == "current_disaster"
     assert body["selected_event"]["event_id"] == "jma:fixture-event"
+    assert body["selected_event"]["geography_status"] == "in_country"
     assert body["selected_event"]["latitude"] == 37.0
     assert body["selected_event"]["longitude"] == 137.0
     assert body["map_action"] == {

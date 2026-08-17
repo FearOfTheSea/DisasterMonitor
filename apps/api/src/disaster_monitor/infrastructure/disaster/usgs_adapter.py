@@ -1,5 +1,6 @@
 """Country-neutral USGS GeoJSON earthquake catalog adapter."""
 
+import re
 from datetime import datetime, timedelta
 
 import httpx
@@ -18,7 +19,9 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 )
 from disaster_monitor.domain.disaster import (
     BoundaryValidationQuality,
+    Country,
     DisasterEvent,
+    EventGeographyStatus,
     Hazard,
     SourceAuthority,
     SourceReference,
@@ -34,6 +37,7 @@ from disaster_monitor.infrastructure.disaster.http import (
 )
 
 USGS_QUERY_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+_MAX_OFFSHORE_ASSOCIATION_DISTANCE_KM = 100.0
 
 
 def _number(value: object) -> float | None:
@@ -42,6 +46,16 @@ def _number(value: object) -> float | None:
 
 def _text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
+
+
+def _place_mentions_country(place: str, country: Country) -> bool:
+    """Require explicit provider place text before assigning an offshore event."""
+    terms = (country.canonical_name, country.alpha3_code, *country.aliases)
+    return any(
+        re.search(rf"(?<!\w){re.escape(term)}(?!\w)", place, re.IGNORECASE)
+        for term in terms
+        if term
+    )
 
 
 def build_usgs_params(
@@ -164,14 +178,25 @@ class UsgsEarthquakeAdapter:
                 reason_code="invalid_record",
                 detail=f"feature[{index}]: {error}",
             )
+        place = _text(properties.get("place"))
+        geography_status = EventGeographyStatus.IN_COUNTRY
         if not self._geography.contains(query.country, latitude, longitude):
-            return None, ProviderIssue(
-                self.provider_name,
-                f"{self.provider_name}: An event outside "
-                f"{query.country.canonical_name} was excluded.",
-                reason_code="country_mismatch",
-                detail=f"feature[{index}] coordinate failed country validation",
+            distance_km = query.country.geographic_area.distance_to_boundary_km(
+                latitude, longitude
             )
+            if (
+                distance_km is None
+                or distance_km > _MAX_OFFSHORE_ASSOCIATION_DISTANCE_KM
+                or not _place_mentions_country(place, query.country)
+            ):
+                return None, ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: An event outside "
+                    f"{query.country.canonical_name} was excluded.",
+                    reason_code="country_mismatch",
+                    detail=f"feature[{index}] coordinate failed country validation",
+                )
+            geography_status = EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
         url = _text(properties.get("url"))
         try:
             validate_network_target(url, self.allowed_hosts)
@@ -193,9 +218,7 @@ class UsgsEarthquakeAdapter:
             DisasterEvent(
                 event_id=f"usgs:{event_id}",
                 hazard=Hazard.EARTHQUAKE,
-                location=(
-                    _text(properties.get("place")) or query.country.canonical_name
-                ),
+                location=(place or query.country.canonical_name),
                 country=query.country,
                 event_time=event_time,
                 source=source,
@@ -212,6 +235,7 @@ class UsgsEarthquakeAdapter:
                 significance=_number(properties.get("sig")),
                 is_aftershock="aftershock" in _text(properties.get("title")).lower(),
                 provider_ids=(f"usgs:{event_id}",),
+                geography_status=geography_status,
             ),
             None,
         )

@@ -7,6 +7,7 @@ from enum import StrEnum
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
+    EventGeographyStatus,
     EvidenceWorldState,
     Hazard,
     ReportedFact,
@@ -179,6 +180,7 @@ class SelectedEventSummary:
     depth_km: float | None
     source: SourceReference
     provider_ids: tuple[str, ...] = ()
+    geography_status: EventGeographyStatus = EventGeographyStatus.IN_COUNTRY
 
 
 @dataclass(frozen=True, slots=True)

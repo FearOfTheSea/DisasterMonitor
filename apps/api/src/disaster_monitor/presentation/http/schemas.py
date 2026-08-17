@@ -213,6 +213,7 @@ class SelectedEventResponse(BaseModel):
     depth_km: float | None = None
     source: SourceResponse
     provider_ids: list[str] = Field(default_factory=list)
+    geography_status: str = "in_country"
 
 
 class ReportSectionResponse(BaseModel):

@@ -280,6 +280,9 @@ function DisasterReportView({
               ? ` · M${report.selectedEvent.magnitude}`
               : ''}
           </span>
+          {report.selectedEvent.geography_status === 'country_associated_offshore' && (
+            <small>Country-associated offshore event</small>
+          )}
         </div>
       )}
       <div className="report-sections">

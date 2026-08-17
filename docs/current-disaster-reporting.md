@@ -250,9 +250,12 @@ environment:
   disabled and visible as a configuration limitation.
 
 ReliefWeb requests use the normalized country name, a typed hazard-to-ReliefWeb mapping,
-the normalized date range, selected-event location, and provider identifiers. Nested
-filter conditions are built in one tested request builder. ReliefWeb remains
-supplementary and its extracted figures are not promoted to official national totals.
+and the normalized date range. They do not use the selected event's location or provider
+identifiers as mandatory free-text terms: ReliefWeb's ``AND`` query parser would make
+valid country/hazard reports disappear when a report uses a different place description.
+Event-specific correlation remains application-owned after retrieval. Nested filter
+conditions are built in one tested request builder. ReliefWeb remains supplementary and
+its extracted figures are not promoted to official national totals.
 
 The default unit, adapter, HTTP, and system tests use deterministic fixtures and
 do not require network access, Ollama, or cloud credentials. The Playwright

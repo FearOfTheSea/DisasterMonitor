@@ -212,6 +212,7 @@ export class AssistantClient {
       (item.intensity == null || typeof item.intensity === 'string') &&
       (item.depth_km == null || typeof item.depth_km === 'number') &&
       (item.provider_ids == null || this.isStringArray(item.provider_ids)) &&
+      (item.geography_status == null || typeof item.geography_status === 'string') &&
       this.isSources([item.source])
     );
   }

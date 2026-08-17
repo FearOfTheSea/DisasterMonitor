@@ -3,7 +3,7 @@
 import html
 import re
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -65,6 +65,13 @@ _RELIEFWEB_HAZARDS = {
 }
 
 
+def _reliefweb_datetime(value: datetime) -> str:
+    """Return a URL-safe ISO-8601 timestamp for ReliefWeb date filters."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat(timespec="seconds")
+
+
 def build_reliefweb_params(
     event: DisasterEvent,
     query: DisasterQuery,
@@ -72,31 +79,39 @@ def build_reliefweb_params(
     now: datetime,
     app_name: str,
 ) -> dict[str, HttpParam]:
-    """Build documented nested ReliefWeb filters for one normalized query."""
+    """Build bounded ReliefWeb scope filters for one normalized query.
+
+    Event location is deliberately not sent as a free-text query. ReliefWeb's
+    query parser treats whitespace-separated terms as required when the
+    operator is ``AND``; requiring every selected-provider location token
+    makes otherwise relevant country/hazard reports disappear. Event-specific
+    correlation remains application-owned after retrieval.
+    """
     fields = (
+        "id",
         "title",
         "body",
         "url",
         "date",
         "disaster",
         "country",
+        "primary_country",
+        "disaster_type",
+        "format",
         "source",
-        "location",
     )
     start = query.date_from or now - timedelta(days=query.time_window_days)
     end = query.date_to or now + timedelta(minutes=5)
     params: dict[str, HttpParam] = {
         "appname": app_name,
-        "query[value]": f"{_RELIEFWEB_HAZARDS[query.hazard]} {event.location}".strip(),
-        "query[operator]": "AND",
         "filter[operator]": "AND",
         "filter[conditions][0][field]": "country.name",
         "filter[conditions][0][value]": query.country.canonical_name,
         "filter[conditions][1][field]": "disaster_type.name",
         "filter[conditions][1][value]": _RELIEFWEB_HAZARDS[query.hazard],
         "filter[conditions][2][field]": "date.created",
-        "filter[conditions][2][value][from]": start.date().isoformat(),
-        "filter[conditions][2][value][to]": end.date().isoformat(),
+        "filter[conditions][2][value][from]": _reliefweb_datetime(start),
+        "filter[conditions][2][value][to]": _reliefweb_datetime(end),
         "limit": 20,
         "sort[]": "date.created:desc",
     }
@@ -122,12 +137,20 @@ def _nested_text(value: object) -> str:
 
 def _metadata(
     fields: dict[str, object],
-) -> tuple[datetime | None, tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    narrative: str = "",
+) -> tuple[
+    datetime | None,
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[str, ...],
+    float | None,
+]:
     """Extract only bounded event metadata from the ReliefWeb shape."""
     event_time: datetime | None = None
     event_ids: list[str] = []
     locations: list[str] = []
     countries: list[str] = []
+    magnitude: float | None = None
     disasters = fields.get("disaster")
     items = disasters if isinstance(disasters, list) else [disasters]
     for item in items:
@@ -162,11 +185,25 @@ def _metadata(
             value_text = _nested_text(value)
             if value_text:
                 countries.append(value_text)
+    magnitude_values: list[float] = []
+    for expression in (
+        r"(?:\bm\s*|magnitude\s*(?:of\s*)?|earthquake\s+measuring\s+)"
+        r"(?P<magnitude>[0-9]+(?:\.[0-9]+)?)\b",
+        r"\b(?P<magnitude>[0-9]+(?:\.[0-9]+)?)\s+earthquake\b",
+        r"\b(?P<magnitude>[0-9]+(?:\.[0-9]+)?)\s+magnitude\s+earthquake\b",
+    ):
+        magnitude_values.extend(
+            float(match.group("magnitude"))
+            for match in re.finditer(expression, narrative, re.IGNORECASE)
+        )
+    if magnitude_values:
+        magnitude = max(magnitude_values)
     return (
         event_time,
         tuple(dict.fromkeys(locations)),
         tuple(dict.fromkeys(countries)),
         tuple(dict.fromkeys(event_ids)),
+        magnitude,
     )
 
 
@@ -322,9 +359,13 @@ class ReliefWebSituationAdapter:
                 malformed = True
             narrative = sanitize_provider_text(html.unescape(_text(raw_body)))
             facts = self._extract_facts(narrative, source, event, published_at)
-            reported_event_time, locations, countries, provider_event_ids = _metadata(
-                fields
-            )
+            (
+                reported_event_time,
+                locations,
+                countries,
+                provider_event_ids,
+                magnitude,
+            ) = _metadata(fields, narrative)
             report = SituationReport(
                 source=source,
                 narrative=narrative,
@@ -333,6 +374,7 @@ class ReliefWebSituationAdapter:
                 locations=locations,
                 countries=countries,
                 hazard=query.hazard,
+                magnitude=magnitude,
                 provider_event_ids=provider_event_ids,
             )
             status = correlate_situation_report(report, event)

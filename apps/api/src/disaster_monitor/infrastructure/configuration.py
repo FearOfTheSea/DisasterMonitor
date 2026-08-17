@@ -52,7 +52,9 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Support both direct API development from apps/api and the documented
+        # repository-root command without requiring callers to change cwd.
+        env_file=(".env", "apps/api/.env"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,

@@ -117,6 +117,7 @@ export type SelectedEvent = {
   depth_km?: number;
   source: AssistantSource;
   provider_ids?: string[];
+  geography_status?: string;
 };
 
 export type ReportSection = {

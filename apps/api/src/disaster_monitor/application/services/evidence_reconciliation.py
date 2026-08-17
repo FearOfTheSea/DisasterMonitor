@@ -137,6 +137,8 @@ def correlate_situation_report(
     )
     if date_matches and location_matches:
         return CorrelationStatus.MATCHED
+    if magnitude_matches and location_matches:
+        return CorrelationStatus.MATCHED
     if (date_matches and (country_matches or magnitude_matches)) or location_matches:
         return CorrelationStatus.POSSIBLE
     return CorrelationStatus.UNMATCHED
@@ -214,7 +216,7 @@ def build_evidence_packet(
 ) -> EvidencePacket:
     """Reconcile duplicate, newer, missing, and conflicting provider facts."""
     correlated_reports: list[SituationReport] = []
-    correlation_warnings: list[str] = []
+    correlation_warning_counts: dict[tuple[CorrelationStatus, str], int] = {}
     for report in reports:
         hard_scope_mismatch = (
             report.hazard is not None
@@ -231,20 +233,29 @@ def build_evidence_packet(
         if report.correlation is not None or _has_correlation_metadata(report):
             if status == CorrelationStatus.MATCHED:
                 correlated_reports.append(report)
-            elif status == CorrelationStatus.POSSIBLE:
-                correlation_warnings.append(
-                    f"A {report.source.publisher} report may describe a different "
-                    f"{query.hazard.value} event in "
-                    f"{query.country.canonical_name} and was excluded from event facts."
-                )
             else:
-                correlation_warnings.append(
-                    f"A {report.source.publisher} report did not match the selected "
-                    f"{query.hazard.value} event in "
-                    f"{query.country.canonical_name} and was excluded."
+                key = (status, report.source.publisher)
+                correlation_warning_counts[key] = (
+                    correlation_warning_counts.get(key, 0) + 1
                 )
         else:
             correlated_reports.append(report)
+    correlation_warnings: list[str] = []
+    for (status, publisher), count in correlation_warning_counts.items():
+        article = "report" if count == 1 else "reports"
+        quantity = "A" if count == 1 else str(count)
+        if status == CorrelationStatus.POSSIBLE:
+            correlation_warnings.append(
+                f"{quantity} {publisher} {article} may describe a different "
+                f"{query.hazard.value} event in {query.country.canonical_name} "
+                "and was excluded from event facts."
+            )
+        else:
+            correlation_warnings.append(
+                f"{quantity} {publisher} {article} did not match the selected "
+                f"{query.hazard.value} event in {query.country.canonical_name} "
+                "and was excluded."
+            )
     normalized_reports: list[SituationReport] = []
     for report in correlated_reports:
         normalized_facts: list[ReportedFact] = []
