@@ -1,64 +1,37 @@
 # Disaster Monitor
 
-Disaster Monitor is a local-first MVP for exploring a basic interactive map and
-asking a locally running Qwen model map or disaster-monitoring questions. It also
-has a bounded, source-backed disaster reporting workflow with preserved Japan
-earthquake coverage and reviewed Vietnam flood, landslide, cyclone, and active-fire
-source paths.
+Disaster Monitor is a local-first disaster-monitoring MVP. It combines a Next.js map,
+a FastAPI backend, bounded source-backed reporting, and optional local Qwen models.
 
-Assistant requests enter a bounded agent-first control plane. Current facts are
-composed only from normalized trusted-source evidence; local Qwen interpretation and
-planning cannot create providers, countries, URLs, or facts. See
-[`docs/agent-architecture.md`](docs/agent-architecture.md).
+Assistant requests enter a bounded agent runtime. Current facts come from normalized
+trusted-source evidence; model output cannot create providers, countries, URLs, or
+facts. See [docs/agent-runtime.md](docs/agent-runtime.md).
 
-## Current MVP
+## Included
 
-- Next.js and OpenLayers frontend with an OpenStreetMap base layer centered on Hanoi.
-- Assistant drawer with typed requests, conversation rendering, loading and error states.
-- Browser-session conversation continuity using `sessionStorage`.
-- FastAPI health, readiness, and assistant endpoints.
-- Ollama adapter for a configurable local Qwen model.
-- Catalog-backed `fit_country` viewport tool that lets the local assistant move the
-  map for explicit navigation requests without granting it arbitrary geometry,
-  evidence, or consequential-action authority.
-- Bounded operator-supplied image admission, metadata-only event association, local
-  Qwen3-VL analytical observations, and provenance-bearing vector COP overlays.
-- Deterministic current-earthquake request classification and event selection.
-- JMA earthquake/tsunami feeds, USGS earthquake GeoJSON, and supplementary
-  ReliefWeb situation reports behind focused provider ports.
-- NCHMF official Vietnam warnings, configurable NASA FIRMS observations, configurable
-  Copernicus GFM analytical products, and an explicit-registration CAP adapter.
-- Optional PostgreSQL/PostGIS history, immutable raw snapshots, idempotent workers,
-  provider freshness, attributed reviews, retention tombstones, and an operations UI.
-- Source-attributed report sections, conflict/partial/stale warnings, and
-  clickable source metadata in the assistant drawer.
-- Three event-associated source photos when bounded discovery finds enough candidates,
-  with caption, date, credit, source link, rights status, and association status.
-- Evidence-bounded triage, decision support, typed specialist coordination, and
-  governed analytical follow-up ordering with closed authority and rollback.
-- Deterministic request normalization, prompt preparation, and provider-error translation.
-- Unit, HTTP integration, component, adapter, and deterministic Playwright system tests.
+- Next.js/OpenLayers map and assistant UI with session-local conversation state.
+- FastAPI health, readiness, assistant, and operations endpoints.
+- Optional local Qwen text and vision adapters.
+- Deterministic request normalization, event selection, evidence reconciliation, and
+  source-attributed reports.
+- JMA, USGS, FDMA, ReliefWeb, NCHMF, FIRMS, GFM, and explicitly registered CAP paths.
+- Optional PostgreSQL/PostGIS history, snapshots, workers, freshness, reviews, and
+  backup tooling.
+- Bounded multimodal observations, contextual event media, triage, decision support,
+  specialist coordination, and governed analytical ordering.
+- Backend, frontend, adapter, integration, evaluation, and Playwright tests.
 
-The assistant clearly reports unsupported combinations and missing provider
-configuration. The disaster workflow only
-uses retrieved provider evidence and does not substitute model memory for current
-facts. See [docs/current-disaster-reporting.md](docs/current-disaster-reporting.md)
-for the implemented flow and limitations.
-The multimodal boundary and its still-pending external benchmark/human gates are
-documented in
-[docs/multimodal-awareness.md](docs/multimodal-awareness.md).
-Implementation and automated-test success are not treated as normative release
-evidence. The authoritative family-by-family status, missing external/human evidence,
-and fail-closed supply procedures are in
-[docs/capability-status.md](docs/capability-status.md).
+Unsupported combinations and missing configuration are reported explicitly. See
+[current-disaster-reporting.md](docs/current-disaster-reporting.md),
+[multimodal-awareness.md](docs/multimodal-awareness.md), and
+[capability-status.md](docs/capability-status.md).
 
-## Deferred capabilities
+## Deferred
 
-Live weather, geocoding, automatic satellite imagery retrieval, broad news aggregation,
-remote model providers, paid map services, production identity/TLS, cloud deployment,
-and unbounded predictive or consequential analytics remain deferred. External datasets,
-human evaluations, and the pilot remain release blockers; see
-[docs/project-owner-actions.md](docs/project-owner-actions.md).
+Live weather, geocoding, automatic imagery retrieval, broad news aggregation, hosted
+models, paid map services, production identity/TLS, cloud deployment, and consequential
+analytics remain deferred. External datasets, human evaluations, and pilot evidence
+remain release gates.
 
 ## Repository layout
 

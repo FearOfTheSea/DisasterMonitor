@@ -113,11 +113,3 @@ Invalid provenance, privilege escalation, policy drift, conflicts, or budget ove
 Agent state is request-scoped.
 
 There is no persistent agent memory, continuous investigation loop, autonomous background monitoring, cross-request evidence recovery, or unrestricted self-modification.
-
-## Related documentation
-
-- `architecture.md` - codebase structure and dependency boundaries
-- `current-disaster-reporting.md` - disaster evidence and reporting
-- `multimodal-awareness.md` - visual analysis and COP behavior
-- `event-media.md` - contextual event media
-- `capability-status.md` - implementation, evaluation, and promotion status

@@ -1,7 +1,6 @@
 import json
 from dataclasses import replace
 from datetime import UTC, datetime
-from pathlib import Path
 
 import httpx
 import pytest
@@ -16,9 +15,12 @@ from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
 )
 from disaster_monitor.domain.disaster import (
+    BoundaryValidationQuality,
     CorrelationStatus,
+    Country,
     DisasterEvent,
     EventGeographyStatus,
+    GeographicArea,
     Hazard,
     SourceReference,
 )
@@ -50,13 +52,30 @@ from disaster_monitor.infrastructure.geography.static_country_catalog import (
 
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
 CATALOG = StaticCountryCatalog()
-ACTIVE_CATALOG = StaticCountryCatalog(Path("../../data/geography"))
 JAPAN = CATALOG.get_by_alpha3("JPN")
 VENEZUELA = CATALOG.get_by_alpha3("VEN")
 VIETNAM = CATALOG.get_by_alpha3("VNM")
 assert JAPAN is not None and VENEZUELA is not None and VIETNAM is not None
-INDONESIA = ACTIVE_CATALOG.get_by_alpha3("IDN")
-assert INDONESIA is not None
+INDONESIA = Country(
+    alpha3_code="IDN",
+    canonical_name="Indonesia",
+    aliases=(),
+    geographic_area=GeographicArea(
+        min_latitude=-10.909668,
+        max_latitude=5.907031,
+        min_longitude=95.206641,
+        max_longitude=140.975977,
+        validation_quality=BoundaryValidationQuality.POLYGON,
+        polygons=(
+            (
+                (-8.0, 121.4),
+                (-8.0, 121.8),
+                (-8.6, 121.8),
+                (-8.6, 121.4),
+            ),
+        ),
+    ),
+)
 QUERY = DisasterQuery(
     hazard=Hazard.EARTHQUAKE,
     country=JAPAN,
@@ -773,7 +792,7 @@ async def test_usgs_accepts_near_shore_event_with_explicit_country_place() -> No
     )
 
     result = await UsgsEarthquakeAdapter(
-        geography=ACTIVE_CATALOG, client=client
+        geography=CATALOG, client=client
     ).find_recent_events(query, now=NOW)
 
     assert len(result.records) == 1

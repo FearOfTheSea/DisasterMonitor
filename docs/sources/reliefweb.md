@@ -3,7 +3,7 @@
 Configured supplementary humanitarian situation reporting from ReliefWeb. It is not
 event verification and not an official national-total source. Queries use normalized
 country, hazard, and bounded UTC ISO-8601 created dates; selected-event location and
-JMA/USGS IDs are not mandatory free-text terms because ReliefWeb's ``AND`` query parser
+JMA/USGS IDs are not mandatory free-text terms because ReliefWeb's `AND` query parser
 would otherwise discard valid reports that use different place wording. Sanitized
 narrative and recognized facts remain preliminary humanitarian-aggregator evidence.
 ReliefWeb-local IDs are not compared with JMA/USGS IDs; correlation uses hazard, country,
@@ -18,5 +18,4 @@ Upstream duplication and exact accuracy, licensing, latency, and availability gu
 are unknown. Tests: realistic local-ID, structured scope, narrative-magnitude,
 sanitization, and reconciliation regressions. The v2 request only asks for fields accepted
 by the reports endpoint; report location metadata remains optional because it is not a
-selectable report field. See [event association acceptance criteria](../reliefweb-event-association-acceptance.md).
-Never promote this source to event discovery or official totals.
+selectable report field. Never promote this source to event discovery or official totals.

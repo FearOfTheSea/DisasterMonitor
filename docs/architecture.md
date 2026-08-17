@@ -20,8 +20,6 @@ compose.yaml    Local service orchestration
 
 ## Backend
 
-Backend source lives in:
-
 ```text
 apps/api/src/disaster_monitor/
 
@@ -50,8 +48,6 @@ infrastructure --> application ports
 Architecture boundaries are enforced by `apps/api/tests/unit/test_architecture_dependencies.py`.
 
 ## Frontend
-
-Frontend source lives in:
 
 ```text
 apps/web/src/
