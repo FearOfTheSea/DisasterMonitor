@@ -1,4 +1,3 @@
-.migration-sources/
 AGENTS.md
 
 # Python
@@ -34,5 +33,4 @@ data/*
 apps/api/data/
 apps/web/data/
 session/
-project-owner-context.txt
 deep-research-report-*.md
