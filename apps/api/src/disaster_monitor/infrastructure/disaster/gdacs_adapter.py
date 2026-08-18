@@ -56,6 +56,28 @@ def _identifier(value: object) -> str:
     return _text(value)
 
 
+def _iso3_code(value: object) -> str:
+    code = _text(value).upper()
+    return code if len(code) == 3 and code.isascii() and code.isalpha() else ""
+
+
+def _associated_country_codes(properties: dict[object, object]) -> frozenset[str]:
+    """Return only GDACS structured ISO-3 country-association evidence."""
+    codes: set[str] = set()
+    primary_code = _iso3_code(properties.get("iso3"))
+    if primary_code:
+        codes.add(primary_code)
+    affected_countries = properties.get("affectedcountries")
+    if isinstance(affected_countries, list):
+        for country in affected_countries:
+            if not isinstance(country, dict):
+                continue
+            affected_code = _iso3_code(country.get("iso3"))
+            if affected_code:
+                codes.add(affected_code)
+    return frozenset(codes)
+
+
 def build_gdacs_params(
     query: WorldwideDisasterQuery, *, now: datetime
 ) -> dict[str, str | int]:
@@ -112,10 +134,10 @@ class GdacsTropicalCycloneAdapter:
                 raise ValueError("properties are missing")
             if _text(properties.get("eventtype")) != _GDACS_EVENT_TYPE:
                 raise ValueError("event type is not tropical cyclone")
-            if country_query is not None and properties.get("iso3") != (
-                country_query.country.alpha3_code
+            if country_query is not None and country_query.country.alpha3_code not in (
+                _associated_country_codes(properties)
             ):
-                return None, (_country_mismatch(index),)
+                return None, ()
             raw_event_id = _identifier(properties.get("eventid"))
             event_time = normalize_timestamp(properties.get("fromdate"))
             end_time = normalize_timestamp(properties.get("todate"))
@@ -313,7 +335,7 @@ class GdacsTropicalCycloneAdapter:
             if event is not None:
                 events.append(event)
             issues.extend(feature_issues)
-        if not events and not issues:
+        if not events and not issues and (country_query is None or not raw_features):
             issues.append(
                 ProviderIssue(
                     self.provider_name,
@@ -375,16 +397,6 @@ def _invalid_record(index: int, error: Exception) -> ProviderIssue:
         "GDACS tropical cyclones: A malformed event record was skipped.",
         reason_code="invalid_record",
         detail=f"feature[{index}]: {error}",
-    )
-
-
-def _country_mismatch(index: int) -> ProviderIssue:
-    return ProviderIssue(
-        GdacsTropicalCycloneAdapter.provider_name,
-        "GDACS tropical cyclones: A record without an exact requested ISO-3 "
-        "association was excluded.",
-        reason_code="country_mismatch",
-        detail=f"feature[{index}] properties.iso3 did not match the requested country",
     )
 
 

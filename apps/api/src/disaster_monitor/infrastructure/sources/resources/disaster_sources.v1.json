@@ -18,7 +18,7 @@
       "expected_freshness": "near-real-time event list; exact latency is source-dependent",
       "attribution_guidance": "Attribute country-associated or worldwide tropical-cyclone event discovery to GDACS. GDACS alert/model output is not a national warning, local impact assessment, or current-news source.",
       "limitations": [
-        "Country queries admit a record only when properties.iso3 exactly matches the requested ISO-3 code and a usable point can be projected against the maintained country geometry.",
+        "Country queries use the structured properties.iso3 primary-country field or properties.affectedcountries[].iso3 affected-country fields, and require a usable point to classify the association against maintained country geometry.",
         "This source provides event discovery only; it is not a national warning, impact report, casualty source, or current-news source.",
         "GDACS alert and model output does not establish local warnings, impacts, casualties, or national totals."
       ],
