@@ -199,6 +199,7 @@ def _preferred_event(events: list[DisasterEvent]) -> DisasterEvent:
     return max(
         events,
         key=lambda event: (
+            event.provider_tier.precedence,
             event.source.effective_at,
             event_observation_key(event),
         ),
@@ -214,6 +215,11 @@ def _merge_event(events: list[DisasterEvent]) -> DisasterEvent:
         sorted(
             set(measurement for event in events for measurement in event.measurements),
             key=lambda item: (
+                -next(
+                    event.provider_tier.precedence
+                    for event in events
+                    if item.source == event.source
+                ),
                 item.kind.value,
                 item.unit or "",
                 str(item.value),

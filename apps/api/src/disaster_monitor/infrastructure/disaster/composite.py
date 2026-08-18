@@ -1,6 +1,7 @@
 """Bounded composites that isolate failures from individual sources."""
 
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import datetime
 
 from disaster_monitor.application.disaster import (
@@ -145,13 +146,14 @@ class CompositeDisasterEventProvider:
                         accepted.append(record)
                         continue
                     try:
+                        accepted_record = validate_event_evidence(
+                            record,
+                            query,
+                            source_id=registration.source_id or "",
+                            allowed_hosts=registration.allowed_hosts,
+                        )
                         accepted.append(
-                            validate_event_evidence(
-                                record,
-                                query,
-                                source_id=registration.source_id or "",
-                                allowed_hosts=registration.allowed_hosts,
-                            )
+                            replace(accepted_record, provider_tier=registration.tier)
                         )
                     except SourceEvidencePolicyError as error:
                         issues.append(_policy_issue(name, error))

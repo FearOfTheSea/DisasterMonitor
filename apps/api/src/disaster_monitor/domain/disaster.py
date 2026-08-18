@@ -32,6 +32,18 @@ class EventGeographyStatus(StrEnum):
     WORLDWIDE = "worldwide"
 
 
+class ProviderTier(StrEnum):
+    """Explicit authority tier assigned to a provider observation."""
+
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
+
+    @property
+    def precedence(self) -> int:
+        """Return the deterministic canonical-selection precedence."""
+        return 2 if self is ProviderTier.PRIMARY else 1
+
+
 @dataclass(frozen=True, slots=True)
 class GeographicArea:
     """A bounded query area and its validation quality."""
@@ -406,8 +418,11 @@ class DisasterEvent:
     measurements: tuple[EventMeasurement, ...] = ()
     provider_ids: tuple[str, ...] = ()
     geography_status: EventGeographyStatus = EventGeographyStatus.IN_COUNTRY
+    provider_tier: ProviderTier = ProviderTier.SECONDARY
 
     def __post_init__(self) -> None:
+        if not isinstance(self.provider_tier, ProviderTier):
+            raise TypeError("A disaster event requires a typed provider tier.")
         if not isinstance(self.measurements, tuple) or any(
             not isinstance(item, EventMeasurement) for item in self.measurements
         ):

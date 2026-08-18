@@ -60,7 +60,7 @@
       "country": "VNM",
       "hazard": "tropical_cyclone",
       "role": "event_discovery",
-      "source_ids": ["gdacs-tropical-cyclones", "nchmf-vietnam-warnings"]
+      "source_ids": ["nchmf-vietnam-warnings", "gdacs-tropical-cyclones"]
     },
     {
       "country": "VNM",

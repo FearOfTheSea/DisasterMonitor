@@ -36,6 +36,12 @@ to event discovery, not global impact coverage.
 
 ## Evidence and authority
 
+Provider registrations declare a primary or secondary tier for each role and geographic
+scope. The registry rejects multiple configured primaries for one authority key and
+queries both tiers in explicit precedence order. When observations resolve to one
+physical event, primary metadata is canonical where present; secondary observations,
+measurements, corroboration, and conflicts remain retained with provenance. A valid
+secondary-only event is still usable when the primary returns no matching observation.
 Official and scientific sources outrank supplementary reports. Every fact retains its
 source, stable ID, canonical URL, event ID when available, and source/retrieval times.
 Same-source corrections supersede the current projection but do not erase history.

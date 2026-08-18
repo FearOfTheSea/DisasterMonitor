@@ -116,8 +116,8 @@ def test_country_tropical_cyclone_queries_do_not_select_worldwide_gdacs() -> Non
     )
 
     assert [registration.name for registration in selection.registrations] == [
-        "GDACS tropical cyclones",
         "NCHMF Vietnam warnings",
+        "GDACS tropical cyclones",
     ]
 
 

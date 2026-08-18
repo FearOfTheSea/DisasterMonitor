@@ -16,7 +16,17 @@ from disaster_monitor.application.ports.disaster_information import (
     WorldwideDisasterProvider,
     WorldwideSituationProvider,
 )
-from disaster_monitor.domain.disaster import DisasterEvent, Hazard
+from disaster_monitor.domain.disaster import DisasterEvent, Hazard, ProviderTier
+
+__all__ = [
+    "ProviderCapabilities",
+    "ProviderIdentity",
+    "ProviderRegistration",
+    "ProviderRegistry",
+    "ProviderRole",
+    "ProviderSelection",
+    "ProviderTier",
+]
 
 
 class ProviderRole(StrEnum):
@@ -70,6 +80,7 @@ class ProviderRegistration:
     name: str
     provider: ProviderIdentity
     capabilities: ProviderCapabilities
+    tier: ProviderTier = ProviderTier.SECONDARY
     source_id: str | None = None
     configured: bool = True
     event_eligibility: Callable[[DisasterEvent], bool] | None = None
@@ -80,6 +91,8 @@ class ProviderRegistration:
     worldwide_situation_provider: WorldwideSituationProvider | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.tier, ProviderTier):
+            raise TypeError("A provider registration requires a typed provider tier.")
         roles = self.capabilities.roles
         if (
             ProviderRole.EVENT_DISCOVERY in roles
@@ -132,6 +145,7 @@ class ProviderRegistry:
 
     def __init__(self, registrations: Iterable[ProviderRegistration]) -> None:
         self._registrations = tuple(registrations)
+        self._validate_primary_authority()
 
     @property
     def registrations(self) -> tuple[ProviderRegistration, ...]:
@@ -160,4 +174,58 @@ class ProviderRegistry:
             ):
                 continue
             selected.append(registration)
+        selected.sort(key=self._precedence_key)
+        unavailable.sort()
         return ProviderSelection(tuple(selected), tuple(unavailable))
+
+    def _validate_primary_authority(self) -> None:
+        primary_coverage: dict[
+            tuple[Hazard, ProviderRole, GeographicScope],
+            list[tuple[str, frozenset[str] | None]],
+        ] = {}
+        for registration in self._registrations:
+            if (
+                not registration.configured
+                or registration.tier is not ProviderTier.PRIMARY
+            ):
+                continue
+            for role in registration.capabilities.roles:
+                scopes = (
+                    registration.capabilities.event_scopes
+                    if role is ProviderRole.EVENT_DISCOVERY
+                    else registration.capabilities.situation_scopes
+                )
+                for hazard in registration.capabilities.hazards:
+                    for scope in scopes:
+                        key = (hazard, role, scope)
+                        countries = (
+                            registration.capabilities.country_codes
+                            if scope is GeographicScope.COUNTRY
+                            else None
+                        )
+                        for previous, previous_countries in primary_coverage.get(
+                            key, []
+                        ):
+                            if countries is not None and previous_countries is not None:
+                                overlaps = bool(countries & previous_countries)
+                            else:
+                                overlaps = True
+                            if overlaps:
+                                raise ValueError(
+                                    "Multiple configured primary providers for "
+                                    f"{hazard.value}/{role.value}/{scope.value}: "
+                                    f"{previous} and {registration.name}."
+                                )
+                        primary_coverage.setdefault(key, []).append(
+                            (registration.name, countries)
+                        )
+
+    @staticmethod
+    def _precedence_key(
+        registration: ProviderRegistration,
+    ) -> tuple[int, str, str]:
+        return (
+            -registration.tier.precedence,
+            registration.name.casefold(),
+            registration.source_id or "",
+        )

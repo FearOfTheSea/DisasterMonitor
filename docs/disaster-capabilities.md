@@ -18,14 +18,14 @@ never dynamically imports or constructs providers.
 
 ## Current live capability matrix
 
-| Provider                   | Role                             | Hazards            | Countries                     | Additional requirement              |
-| -------------------------- | -------------------------------- | ------------------ | ----------------------------- | ----------------------------------- |
-| JMA rolling earthquake     | Event discovery                  | Earthquake         | Japan (`JPN`)                 | None                                |
-| JMA significant earthquake | Event discovery                  | Earthquake         | Japan (`JPN`)                 | None                                |
-| USGS                       | Event discovery                  | Earthquake         | Named countries and worldwide | Country validation for named scope  |
-| FDMA                       | Situation evidence               | Earthquake         | Japan (`JPN`)                 | Matching official report            |
-| JMA tsunami status         | Situation evidence               | Earthquake         | Japan (`JPN`)                 | Selected event has a JMA identifier |
-| ReliefWeb                  | Supplementary situation evidence | Recognized hazards | Global                        | Approved `RELIEFWEB_APP_NAME`       |
+| Provider                   | Tier      | Role                             | Hazards            | Countries                     | Additional requirement              |
+| -------------------------- | --------- | -------------------------------- | ------------------ | ----------------------------- | ----------------------------------- |
+| JMA rolling earthquake     | Primary   | Event discovery                  | Earthquake         | Japan (`JPN`)                 | None                                |
+| JMA significant earthquake | Secondary | Event discovery                  | Earthquake         | Japan (`JPN`)                 | None                                |
+| USGS                       | Secondary | Event discovery                  | Earthquake         | Named countries and worldwide | Country validation for named scope  |
+| FDMA                       | Primary   | Situation evidence               | Earthquake         | Japan (`JPN`)                 | Matching official report            |
+| JMA tsunami status         | Secondary | Situation evidence               | Earthquake         | Japan (`JPN`)                 | Selected event has a JMA identifier |
+| ReliefWeb                  | Secondary | Supplementary situation evidence | Recognized hazards | Global                        | Approved `RELIEFWEB_APP_NAME`       |
 
 USGS earthquake verification applies to every country admitted by the active catalog;
 this is global named-country coverage, with one explicitly named country per request.
