@@ -7,7 +7,14 @@ import httpx
 import pytest
 
 from disaster_monitor.application.disaster import WorldwideDisasterQuery
-from disaster_monitor.domain.disaster import Hazard, MeasurementKind
+from disaster_monitor.application.services.worldwide_disaster_policy import (
+    DefaultWorldwideDisasterPolicy,
+)
+from disaster_monitor.domain.disaster import (
+    Hazard,
+    MeasurementKind,
+    SourceAuthority,
+)
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
@@ -70,14 +77,25 @@ async def test_gdacs_translates_fixed_search_fixture_with_provenance() -> None:
         "gdacs:tc:1001303",
         "gdacs:tc:1001304",
     ]
+    assert [item.event_time for item in result.records] == [
+        datetime(2026, 8, 12, 15, tzinfo=UTC),
+        datetime(2026, 8, 13, 3, tzinfo=UTC),
+    ]
+    latest = DefaultWorldwideDisasterPolicy().select(
+        result.records, WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE)
+    )
+    assert latest is not None
+    assert latest.event_id == "gdacs:tc:1001304"
+    assert latest.event_time == datetime(2026, 8, 13, 3, tzinfo=UTC)
     assert event.hazard is Hazard.TROPICAL_CYCLONE
     assert event.location == "United States"
-    assert event.event_time == datetime(2026, 8, 18, 9, tzinfo=UTC)
+    assert event.event_time == datetime(2026, 8, 12, 15, tzinfo=UTC)
     assert event.provider_ids == ("gdacs:tc:1001303", "gdacs:tc:1001303:24")
     assert event.source.source_id == "gdacs-tropical-cyclones"
     assert event.source.canonical_url.startswith("https://www.gdacs.org/")
     assert event.source.published_at is None
     assert event.source.updated_at == datetime(2026, 8, 18, 11, 37, 9, tzinfo=UTC)
+    assert event.source.authority is SourceAuthority.SECONDARY
     assert event.source.retrieved_at == NOW
     assert event.source.snapshot_id == "snapshot:gdacs-fixture"
     assert event.geometry is not None
@@ -88,6 +106,7 @@ async def test_gdacs_translates_fixed_search_fixture_with_provenance() -> None:
     ]
     assert not hasattr(event, "country")
     assert len(snapshots) == 1
+    assert snapshots[0].rights_id == "gdacs-terms-of-use"
     await client.aclose()
 
 
@@ -107,7 +126,7 @@ async def test_gdacs_query_is_tropical_cyclone_only_and_bounded() -> None:
         "eventlist": "TC",
         "fromDate": (NOW - timedelta(days=5)).isoformat(),
         "toDate": NOW.isoformat(),
-        "pageSize": "7",
+        "pageSize": "100",
         "pageNumber": "1",
     }
     assert result.records
@@ -134,6 +153,28 @@ async def test_gdacs_keeps_valid_records_when_one_record_is_malformed() -> None:
     )
 
     assert len(result.records) == 2
+    assert [issue.reason_code for issue in result.issues] == ["invalid_record"]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_does_not_fallback_to_end_time_without_onset() -> None:
+    payload = gdacs_payload()
+    features = payload["features"]
+    assert isinstance(features, list)
+    first = features[0]
+    assert isinstance(first, dict)
+    properties = first["properties"]
+    assert isinstance(properties, dict)
+    properties["fromdate"] = None
+    requests: list[httpx.Request] = []
+    client = client_for(payload, requests)
+
+    result = await GdacsTropicalCycloneAdapter(client=client).find_worldwide_events(
+        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE), now=NOW
+    )
+
+    assert [event.event_id for event in result.records] == ["gdacs:tc:1001304"]
     assert [issue.reason_code for issue in result.issues] == ["invalid_record"]
     await client.aclose()
 

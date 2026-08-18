@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from disaster_monitor.application.agent.models import SourceInformationRole
 from disaster_monitor.application.agent.task_normalization import (
     deterministic_task_draft,
     validate_disaster_task,
@@ -86,7 +87,10 @@ def test_composition_registers_only_gdacs_for_worldwide_tropical_cyclones() -> N
     assert registration.event_provider is None
     assert registration.situation_provider is None
     assert registration.worldwide_situation_provider is None
-    assert service.source_catalog.get("gdacs-tropical-cyclones") is not None
+    descriptor = service.source_catalog.get("gdacs-tropical-cyclones")
+    assert descriptor is not None
+    assert descriptor.authority_level == "secondary"
+    assert descriptor.information_roles == (SourceInformationRole.EVENT_DISCOVERY,)
 
 
 def test_country_tropical_cyclone_queries_do_not_select_worldwide_gdacs() -> None:
@@ -134,7 +138,7 @@ def _event(event_id: str, event_time: datetime) -> WorldwideDisasterEvent:
         published_at=None,
         updated_at=event_time,
         retrieved_at=NOW,
-        authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
+        authority=SourceAuthority.SECONDARY,
     )
     return WorldwideDisasterEvent(
         event_id=f"gdacs:tc:{event_id}",
@@ -151,11 +155,11 @@ def _event(event_id: str, event_time: datetime) -> WorldwideDisasterEvent:
 
 
 @pytest.mark.asyncio
-async def test_worldwide_report_selects_latest_gdacs_event_and_is_partial() -> None:
+async def test_worldwide_report_selects_latest_gdacs_onset_and_is_partial() -> None:
     provider = GdacsFixtureProvider(
         (
-            _event("1001301", datetime(2026, 8, 15, 21, tzinfo=UTC)),
-            _event("1001303", datetime(2026, 8, 18, 9, tzinfo=UTC)),
+            _event("1001303", datetime(2026, 8, 12, 15, tzinfo=UTC)),
+            _event("1001304", datetime(2026, 8, 13, 3, tzinfo=UTC)),
         )
     )
     registry = ProviderRegistry(
@@ -182,7 +186,8 @@ async def test_worldwide_report_selects_latest_gdacs_event_and_is_partial() -> N
     )
 
     assert report.selected_event is not None
-    assert report.selected_event.event_id == "gdacs:tc:1001303"
+    assert report.selected_event.event_id == "gdacs:tc:1001304"
+    assert report.selected_event.event_time == datetime(2026, 8, 13, 3, tzinfo=UTC)
     assert report.selected_event.geography_status is EventGeographyStatus.WORLDWIDE
     assert report.partial
     assert report.capability_gaps == (

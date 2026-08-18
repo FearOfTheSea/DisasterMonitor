@@ -37,6 +37,7 @@ GDACS_SEARCH_URL = "https://www.gdacs.org/gdacsapi/api/Events/geteventlist/SEARC
 GDACS_EVENT_DATA_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventdata"
 _GDACS_EVENT_TYPE = "TC"
 _GDACS_MAX_PAGE_SIZE = 100
+_GDACS_RIGHTS_ID = "gdacs-terms-of-use"
 
 
 def _text(value: object) -> str:
@@ -59,7 +60,7 @@ def build_gdacs_params(
         "eventlist": _GDACS_EVENT_TYPE,
         "fromDate": (now - timedelta(days=query.time_window_days)).isoformat(),
         "toDate": now.isoformat(),
-        "pageSize": min(query.limit, _GDACS_MAX_PAGE_SIZE),
+        "pageSize": _GDACS_MAX_PAGE_SIZE,
         "pageNumber": 1,
     }
 
@@ -103,9 +104,8 @@ class GdacsTropicalCycloneAdapter:
             if _text(properties.get("eventtype")) != _GDACS_EVENT_TYPE:
                 raise ValueError("event type is not tropical cyclone")
             raw_event_id = _identifier(properties.get("eventid"))
-            event_time = normalize_timestamp(properties.get("todate")) or (
-                normalize_timestamp(properties.get("fromdate"))
-            )
+            event_time = normalize_timestamp(properties.get("fromdate"))
+            end_time = normalize_timestamp(properties.get("todate"))
             location = (
                 _text(properties.get("country"))
                 or _text(properties.get("name"))
@@ -114,6 +114,10 @@ class GdacsTropicalCycloneAdapter:
             )
             if not raw_event_id or event_time is None or not location:
                 raise ValueError("event identifier, time, or location is missing")
+            if properties.get("todate") is not None and end_time is None:
+                raise ValueError("event end time is invalid")
+            if end_time is not None and end_time < event_time:
+                raise ValueError("event interval ends before it starts")
         except (TypeError, ValueError, OverflowError) as error:
             return None, (_invalid_record(index, error),)
 
@@ -134,7 +138,7 @@ class GdacsTropicalCycloneAdapter:
             published_at=None,
             updated_at=normalize_timestamp(properties.get("datemodified")),
             retrieved_at=now,
-            authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
+            authority=SourceAuthority.SECONDARY,
             snapshot_id=snapshot_id,
         )
         geometry, geometry_issue = self._point_geometry(
@@ -215,7 +219,7 @@ class GdacsTropicalCycloneAdapter:
                 "to": str(params["toDate"]),
                 "limit": str(query.limit),
             },
-            rights_id="gdacs-api-terms-2025-03",
+            rights_id=_GDACS_RIGHTS_ID,
             retrieved_at=now,
         )
         payload = await get_json(
