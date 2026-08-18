@@ -9,6 +9,7 @@ from disaster_monitor.application.agent.models import (
     SourceDescriptor,
     SourceInformationRole,
 )
+from disaster_monitor.application.disaster import GeographicScope
 from disaster_monitor.domain.disaster import Hazard
 
 
@@ -46,6 +47,7 @@ def _descriptor(item: dict[str, object]) -> SourceDescriptor:
     country_codes = item["country_codes"]
     roles = cast(list[str], item["information_roles"])
     hazards = cast(list[str], item["supported_hazards"])
+    geographic_scopes = cast(list[str], item["geographic_scopes"])
     languages = cast(list[str], item["supported_languages"])
     limitations = cast(list[str], item["limitations"])
     tool_names = cast(list[str], item["registered_tool_names"])
@@ -58,6 +60,7 @@ def _descriptor(item: dict[str, object]) -> SourceDescriptor:
         authority_level=str(item["authority_level"]),
         information_roles=tuple(SourceInformationRole(value) for value in roles),
         supported_hazards=tuple(Hazard(value) for value in hazards),
+        geographic_scopes=tuple(GeographicScope(value) for value in geographic_scopes),
         country_codes=(
             None
             if country_codes is None

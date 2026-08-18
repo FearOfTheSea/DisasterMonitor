@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -28,6 +28,9 @@ from disaster_monitor.domain.disaster import (
     ReportedFact,
     SituationReport,
     SourceReference,
+)
+from disaster_monitor.infrastructure.disaster.jma_adapter import (
+    _normalize_jma_timestamp,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -322,6 +325,6 @@ def test_timestamp_normalization_keeps_distinct_source_time_semantics() -> None:
     assert normalize_timestamp(1_754_402_400_000) == datetime(
         2025, 8, 5, 14, 0, tzinfo=UTC
     )
-    assert normalize_timestamp("20260805163828") == datetime(
-        2026, 8, 5, 16, 38, 28, tzinfo=UTC
+    assert _normalize_jma_timestamp("20260805163828") == datetime(
+        2026, 8, 5, 16, 38, 28, tzinfo=timezone(timedelta(hours=9))
     )

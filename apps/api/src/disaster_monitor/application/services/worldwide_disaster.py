@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import cast
 
 from disaster_monitor.application.disaster import (
     DisasterReport,
@@ -11,9 +10,6 @@ from disaster_monitor.application.disaster import (
     SelectedEventSummary,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
-)
-from disaster_monitor.application.ports.disaster_information import (
-    WorldwideDisasterProvider,
 )
 from disaster_monitor.application.services.provider_registry import (
     ProviderRegistry,
@@ -47,7 +43,9 @@ class WorldwideDisasterReportService:
         self._policies = policies or default_worldwide_disaster_policy_registry()
         self._clock = clock
 
-    async def execute(self, query: WorldwideDisasterQuery) -> DisasterReport:
+    async def execute(
+        self, query: WorldwideDisasterQuery, *, question: str = ""
+    ) -> DisasterReport:
         now = self._clock()
         warnings: list[str] = []
         selection = self._provider_registry.select(query, ProviderRole.EVENT_DISCOVERY)
@@ -65,8 +63,8 @@ class WorldwideDisasterReportService:
                 now,
                 warnings,
             )
-        provider = registration.provider
-        if not callable(getattr(provider, "find_worldwide_events", None)):
+        provider = registration.worldwide_provider
+        if provider is None:
             return _failed_report(
                 "I could not verify a matching worldwide event because the selected "
                 "provider cannot execute worldwide queries.",
@@ -74,9 +72,7 @@ class WorldwideDisasterReportService:
                 warnings,
             )
         try:
-            raw_batch = await cast(
-                WorldwideDisasterProvider, provider
-            ).find_worldwide_events(query, now=now)
+            raw_batch = await provider.find_worldwide_events(query, now=now)
             batch = (
                 raw_batch
                 if isinstance(raw_batch, ProviderBatch)
@@ -106,7 +102,7 @@ class WorldwideDisasterReportService:
                 )
         warnings.extend(issue.message for issue in batch.issues)
         policy = self._policies.for_hazard(query.hazard)
-        selected = policy.select(tuple(accepted), query)
+        selected = policy.select(tuple(accepted), query, question)
         if selected is None:
             return _failed_report(
                 "I could not verify a matching worldwide event from the configured "
@@ -127,7 +123,7 @@ class WorldwideDisasterReportService:
             source=selected.source,
             provider_ids=selected.provider_ids,
         )
-        detail = policy.describe_selection(selected, query)
+        detail = policy.describe_selection(selected, query, question)
         limitation = (
             "This worldwide capability verifies source-backed event data only. "
             "It does not claim globally complete casualties, damage, warnings, or "
@@ -154,6 +150,15 @@ class WorldwideDisasterReportService:
             warnings=tuple(dict.fromkeys(warnings)),
             sections=sections,
             partial=True,
+            capability_gaps=(
+                "Worldwide event evidence is bounded to the configured source and "
+                "does not establish complete global impact coverage.",
+            ),
+            investigation_actions=(
+                "Queried the registry-approved worldwide event source.",
+                "Selected and rendered one source-backed worldwide event.",
+            ),
+            termination_reason="partial_worldwide_event_evidence",
         )
 
 
@@ -168,6 +173,9 @@ def _failed_report(detail: str, now: datetime, warnings: list[str]) -> DisasterR
         warnings=tuple(dict.fromkeys(warnings)),
         sections=(section,),
         partial=True,
+        capability_gaps=("Worldwide event verification is unavailable.",),
+        investigation_actions=("Attempted the configured worldwide event lookup.",),
+        termination_reason="worldwide_event_verification_failed",
     )
 
 

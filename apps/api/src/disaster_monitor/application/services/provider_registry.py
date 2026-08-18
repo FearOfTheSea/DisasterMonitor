@@ -3,11 +3,17 @@
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Protocol
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
     GeographicScope,
     WorldwideDisasterQuery,
+)
+from disaster_monitor.application.ports.disaster_information import (
+    DisasterEventProvider,
+    SituationReportProvider,
+    WorldwideDisasterProvider,
 )
 from disaster_monitor.domain.disaster import DisasterEvent, Hazard
 
@@ -17,6 +23,13 @@ class ProviderRole(StrEnum):
 
     EVENT_DISCOVERY = "event_discovery"
     SITUATION_EVIDENCE = "situation_evidence"
+
+
+class ProviderIdentity(Protocol):
+    """Source and network identity supplied by a concrete adapter."""
+
+    source_id: str
+    allowed_hosts: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,12 +60,38 @@ class ProviderRegistration:
     """A concrete provider plus capability and optional event eligibility."""
 
     name: str
-    provider: object
+    provider: ProviderIdentity
     capabilities: ProviderCapabilities
     source_id: str | None = None
     configured: bool = True
     event_eligibility: Callable[[DisasterEvent], bool] | None = None
     allowed_hosts: frozenset[str] = frozenset()
+    event_provider: DisasterEventProvider | None = None
+    situation_provider: SituationReportProvider | None = None
+    worldwide_provider: WorldwideDisasterProvider | None = None
+
+    def __post_init__(self) -> None:
+        roles = self.capabilities.roles
+        scopes = self.capabilities.geographic_scopes
+        if ProviderRole.EVENT_DISCOVERY in roles and self.event_provider is None:
+            raise ValueError(
+                f"Provider {self.name} advertises event discovery "
+                "without an event port."
+            )
+        if ProviderRole.SITUATION_EVIDENCE in roles and self.situation_provider is None:
+            raise ValueError(
+                f"Provider {self.name} advertises situation evidence "
+                "without a situation port."
+            )
+        if (
+            ProviderRole.EVENT_DISCOVERY in roles
+            and GeographicScope.WORLDWIDE in scopes
+            and self.worldwide_provider is None
+        ):
+            raise ValueError(
+                f"Provider {self.name} advertises worldwide event discovery "
+                "without a worldwide port."
+            )
 
 
 @dataclass(frozen=True, slots=True)

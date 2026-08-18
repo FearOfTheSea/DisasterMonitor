@@ -29,7 +29,11 @@ from disaster_monitor.application.agent.tooling import (
     build_disaster_tool_registry,
     execute_plan,
 )
-from disaster_monitor.application.disaster import DisasterQuery, ProviderBatch
+from disaster_monitor.application.disaster import (
+    DisasterQuery,
+    GeographicScope,
+    ProviderBatch,
+)
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
@@ -186,6 +190,7 @@ async def test_new_country_and_hazard_provider_is_discovered_without_agent_branc
             frozenset({"TST"}),
         ),
         source_id="testland-floods",
+        event_provider=provider,
     )
     registry = ProviderRegistry((registration,))
     descriptor = SourceDescriptor(
@@ -207,6 +212,7 @@ async def test_new_country_and_hazard_provider_is_discovered_without_agent_branc
         ("find_disaster_event",),
         "Testland flood authority",
         "implemented",
+        (GeographicScope.COUNTRY,),
     )
     query = DisasterQuery(Hazard.FLOOD, country, "recent", ("latest",))
     task = ValidatedDisasterTask(
@@ -282,6 +288,7 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
                     frozenset({"JPN"}),
                 ),
                 source_id="jma-rolling-earthquakes",
+                event_provider=provider,
             ),
         )
     )
@@ -410,6 +417,7 @@ def test_provider_source_consistency_detects_missing_metadata() -> None:
                     frozenset({"TST"}),
                 ),
                 source_id="not-in-catalog",
+                event_provider=NewFloodProvider(event),
             ),
         )
     )

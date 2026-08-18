@@ -28,10 +28,6 @@ from disaster_monitor.application.services.disaster_query_parser import (
 from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
-from disaster_monitor.application.services.worldwide_disaster_policy import (
-    WorldwideDisasterPolicyRegistry,
-    default_worldwide_disaster_policy_registry,
-)
 from disaster_monitor.domain.multimodal import MultimodalAsset
 
 MAX_MODEL_CALLS = 4
@@ -47,16 +43,12 @@ class DisasterAgentRuntime:
         tool_registry: ToolRegistry,
         agent_model: AgentModel | None = None,
         worldwide_report: WorldwideDisasterReportService | None = None,
-        worldwide_policies: WorldwideDisasterPolicyRegistry | None = None,
     ) -> None:
         self._country_catalog = country_catalog
         self._query_parser = query_parser
         self._tools = tool_registry
         self._agent_model = agent_model
         self._worldwide_report = worldwide_report
-        self._worldwide_policies = (
-            worldwide_policies or default_worldwide_disaster_policy_registry()
-        )
 
     async def run(
         self, question: str, *, multimodal_assets: tuple[MultimodalAsset, ...] = ()
@@ -68,7 +60,6 @@ class DisasterAgentRuntime:
             draft,
             country_catalog=self._country_catalog,
             query_parser=self._query_parser,
-            worldwide_policies=self._worldwide_policies,
         )
         empty_plan = InvestigationPlan(
             "no-plan", task.question, (), status=PlanStatus.COMPLETED
@@ -100,7 +91,8 @@ class DisasterAgentRuntime:
                 return state
             try:
                 state.workspace.report = await self._worldwide_report.execute(
-                    task.worldwide_query
+                    task.worldwide_query,
+                    question=task.question,
                 )
             except Exception:
                 state.final_status = AgentStatus.FAILED
@@ -109,32 +101,30 @@ class DisasterAgentRuntime:
                     "The bounded worldwide investigation stopped safely."
                 )
                 return state
-            state.actions.append(
-                InvestigationAction(
-                    "worldwide-event-discovery",
-                    "Queried the registry-approved worldwide event source.",
-                )
+            state.actions.extend(
+                InvestigationAction("worldwide", action)
+                for action in state.workspace.report.investigation_actions
             )
-            state.capability_gaps.append(
-                "Worldwide casualty, damage, warning, and response coverage is not "
-                "complete."
-            )
-            if state.workspace.report.selected_event is not None:
-                state.actions.append(
-                    InvestigationAction(
-                        "worldwide-event-selection",
-                        "Selected and rendered one source-backed worldwide event.",
-                    )
-                )
+            state.capability_gaps.extend(state.workspace.report.capability_gaps)
             state.workspace.source_ids.extend(
                 source.source_id for source in state.workspace.report.sources
             )
             if state.workspace.report.selected_event is None:
                 state.final_status = AgentStatus.COVERAGE_UNAVAILABLE
-                state.termination_reason = "coverage_unavailable"
-            else:
+                state.termination_reason = (
+                    state.workspace.report.termination_reason or "coverage_unavailable"
+                )
+            elif state.workspace.report.partial:
                 state.final_status = AgentStatus.PARTIAL
-                state.termination_reason = "partial_global_event_evidence"
+                state.termination_reason = (
+                    state.workspace.report.termination_reason
+                    or "partial_event_evidence"
+                )
+            else:
+                state.final_status = AgentStatus.COMPLETED
+                state.termination_reason = (
+                    state.workspace.report.termination_reason or "completed"
+                )
             state.warnings.extend(state.workspace.report.warnings)
             return state
 

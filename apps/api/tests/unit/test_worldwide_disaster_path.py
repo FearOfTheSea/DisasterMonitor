@@ -1,7 +1,9 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
+from disaster_monitor.application.agent.models import AgentStatus
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.agent.task_normalization import (
     deterministic_task_draft,
@@ -53,6 +55,9 @@ class SyntheticWorldwideProvider:
         self.queries.append(query)
         return ProviderBatch((self.event,))
 
+    async def find_recent_events(self, query, *, now):
+        return ProviderBatch()
+
 
 class NoGeneralModel:
     async def generate(self, request):
@@ -94,6 +99,8 @@ def _registry(provider: object) -> ProviderRegistry:
                 ),
                 source_id="synthetic-floods",
                 allowed_hosts=frozenset({"floods.example"}),
+                event_provider=provider,
+                worldwide_provider=provider,
             ),
         )
     )
@@ -122,6 +129,43 @@ async def test_synthetic_worldwide_hazard_uses_the_neutral_agent_path() -> None:
     assert answer.investigation is not None
     assert answer.investigation.geographic_scope == "worldwide"
     assert answer.investigation.hazard == "flood"
+
+
+@pytest.mark.asyncio
+async def test_worldwide_runtime_translates_report_status_and_capabilities() -> None:
+    provider = SyntheticWorldwideProvider(_event())
+    report_service = WorldwideDisasterReportService(
+        _registry(provider), clock=lambda: NOW
+    )
+    report = await report_service.execute(WorldwideDisasterQuery(Hazard.FLOOD))
+    result = replace(
+        report,
+        partial=False,
+        capability_gaps=("Synthetic capability gap",),
+        investigation_actions=("Synthetic investigation action",),
+        termination_reason="synthetic_completed",
+    )
+
+    class ReportResult:
+        async def execute(self, query, *, question=""):
+            return result
+
+    catalog = StaticCountryCatalog()
+    runtime = DisasterAgentRuntime(
+        country_catalog=catalog,
+        query_parser=DisasterQueryParser(catalog),
+        tool_registry=ToolRegistry(()),
+        worldwide_report=ReportResult(),  # type: ignore[arg-type]
+    )
+
+    state = await runtime.run("Any flood news worldwide?")
+
+    assert state.final_status is AgentStatus.COMPLETED
+    assert state.capability_gaps == ["Synthetic capability gap"]
+    assert [action.description for action in state.actions] == [
+        "Synthetic investigation action"
+    ]
+    assert state.termination_reason == "synthetic_completed"
 
 
 def test_country_codes_none_does_not_authorize_worldwide_queries() -> None:

@@ -2,7 +2,6 @@
 
 from collections.abc import Iterable
 from datetime import datetime
-from typing import cast
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
@@ -100,9 +99,10 @@ class CompositeDisasterEventProvider:
         if self._registry is None:
             return self._providers
         return tuple(
-            cast(DisasterEventProvider, registration.provider)
+            registration.event_provider
             for registration in self._registry.registrations
             if ProviderRole.EVENT_DISCOVERY in registration.capabilities.roles
+            and registration.event_provider is not None
         )
 
     async def find_recent_events(
@@ -116,13 +116,18 @@ class CompositeDisasterEventProvider:
         ] = tuple((None, provider) for provider in self._providers)
         if self._registry is not None:
             selected = tuple(
-                (registration, cast(DisasterEventProvider, registration.provider))
+                (registration, registration.event_provider)
                 for registration in self._registry.select(
                     query, ProviderRole.EVENT_DISCOVERY
                 ).registrations
+                if registration.event_provider is not None
             )
         for registration, provider in selected:
-            name = getattr(provider, "provider_name", provider.__class__.__name__)
+            name = (
+                registration.name
+                if registration is not None
+                else provider.__class__.__name__
+            )
             try:
                 result = await provider.find_recent_events(query, now=now)
                 batch = (
@@ -197,9 +202,10 @@ class CompositeSituationReportProvider:
         if self._registry is None:
             return self._providers
         return tuple(
-            cast(SituationReportProvider, registration.provider)
+            registration.situation_provider
             for registration in self._registry.registrations
             if ProviderRole.SITUATION_EVIDENCE in registration.capabilities.roles
+            and registration.situation_provider is not None
         )
 
     async def get_situation_reports(
@@ -219,14 +225,19 @@ class CompositeSituationReportProvider:
             selected = tuple(
                 (
                     registration,
-                    cast(SituationReportProvider, registration.provider),
+                    registration.situation_provider,
                 )
                 for registration in self._registry.select(
                     query, ProviderRole.SITUATION_EVIDENCE, event=event
                 ).registrations
+                if registration.situation_provider is not None
             )
         for registration, provider in selected:
-            name = getattr(provider, "provider_name", provider.__class__.__name__)
+            name = (
+                registration.name
+                if registration is not None
+                else provider.__class__.__name__
+            )
             try:
                 result = await provider.get_situation_reports(event, query, now=now)
                 batch = (

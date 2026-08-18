@@ -48,9 +48,6 @@ from disaster_monitor.application.services.visual_analysis import VisualAnalysis
 from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
-from disaster_monitor.application.services.worldwide_disaster_policy import (
-    default_worldwide_disaster_policy_registry,
-)
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.infrastructure.composition import (
@@ -103,10 +100,8 @@ def create_app(
         snapshot_recorder=operational.snapshots.persist,
         operational_evidence=operational.evidence,
     )
-    worldwide_policies = default_worldwide_disaster_policy_registry()
     worldwide_report = worldwide_disaster_report or WorldwideDisasterReportService(
         disaster_report.provider_registry,
-        policies=worldwide_policies,
     )
     query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
     source_catalog = build_source_catalog(app_settings)
@@ -148,7 +143,6 @@ def create_app(
         ),
         agent_model=configured_agent_model,
         worldwide_report=worldwide_report,
-        worldwide_policies=worldwide_policies,
     )
     disaster_agent = RunDisasterAgent(
         agent_runtime,

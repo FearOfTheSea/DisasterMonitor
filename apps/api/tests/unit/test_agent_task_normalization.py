@@ -8,10 +8,9 @@ from disaster_monitor.application.agent.models import (
 from disaster_monitor.application.agent.task_normalization import (
     deterministic_task_draft,
     disaster_safety_gate,
-    global_earthquake_query,
     validate_disaster_task,
+    worldwide_disaster_query,
 )
-from disaster_monitor.application.disaster import GlobalEventSelection
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
@@ -87,17 +86,16 @@ def test_news_request_uses_trusted_path_for_any_admitted_country() -> None:
 
 
 def test_worldwide_earthquake_scope_is_explicit_and_current_only() -> None:
-    latest = global_earthquake_query("Any earthquake news worldwide?")
-    strongest = global_earthquake_query(
+    latest = worldwide_disaster_query("Any earthquake news worldwide?")
+    strongest = worldwide_disaster_query(
         "What was the strongest earthquake across the world this week?"
     )
 
-    assert latest is not None and latest.selection == GlobalEventSelection.LATEST
-    assert strongest is not None
-    assert strongest.selection == GlobalEventSelection.STRONGEST
-    assert global_earthquake_query("Latest earthquake anywhere?") is not None
-    assert global_earthquake_query("What causes earthquakes globally?") is None
-    assert global_earthquake_query("Any flood news worldwide?") is None
+    assert latest is not None and latest.hazard is Hazard.EARTHQUAKE
+    assert strongest == latest
+    assert worldwide_disaster_query("Latest earthquake anywhere?") is not None
+    assert worldwide_disaster_query("What causes earthquakes globally?") is None
+    assert worldwide_disaster_query("Any flood news worldwide?") is not None
 
 
 def test_explicit_dated_event_is_an_investigation_without_model_help() -> None:

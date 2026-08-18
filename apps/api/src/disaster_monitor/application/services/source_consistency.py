@@ -55,6 +55,10 @@ def validate_provider_source_consistency(
             raise ValueError(
                 f"Hazard capability drift for provider {registration.name}."
             )
+        if frozenset(descriptor.geographic_scopes) != capabilities.geographic_scopes:
+            raise ValueError(
+                f"Geographic scope capability drift for provider {registration.name}."
+            )
         descriptor_countries = (
             None
             if descriptor.country_codes is None
@@ -68,15 +72,11 @@ def validate_provider_source_consistency(
             raise ValueError(
                 f"Network-authority drift for provider {registration.name}."
             )
-        adapter_source_id = getattr(registration.provider, "source_id", None)
-        adapter_hosts = getattr(registration.provider, "allowed_hosts", None)
+        adapter_source_id = registration.provider.source_id
+        adapter_hosts = registration.provider.allowed_hosts
         if not registration.allowed_hosts:
             raise ValueError(
                 f"Provider {registration.name} has no approved network authority."
-            )
-        if adapter_source_id is None or adapter_hosts is None:
-            raise ValueError(
-                f"Provider {registration.name} has no adapter source policy."
             )
         if adapter_source_id != registration.source_id:
             raise ValueError(

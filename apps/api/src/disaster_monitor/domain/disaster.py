@@ -319,14 +319,6 @@ class DisasterEvent:
             for identifier in identifiers
         }
 
-    @property
-    def jma_event_id(self) -> str | None:
-        """Return the preserved JMA identifier, if one was clustered here."""
-        for value in (self.event_id, *self.provider_ids):
-            if value.lower().startswith("jma:"):
-                return value.removeprefix("jma:")
-        return None
-
 
 @dataclass(frozen=True, slots=True)
 class EventObservationAssignment:

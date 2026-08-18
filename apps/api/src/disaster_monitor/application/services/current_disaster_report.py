@@ -65,6 +65,12 @@ class _EmptySourceCatalog:
         return None
 
 
+class _InjectedProviderIdentity:
+    def __init__(self, source_id: str) -> None:
+        self.source_id = source_id
+        self.allowed_hosts = frozenset[str]()
+
+
 class CurrentDisasterReportService:
     """Preserve the legacy API while executing the shared allowlisted tools."""
 
@@ -165,21 +171,23 @@ def _compatibility_registry(
         (
             ProviderRegistration(
                 "Injected event provider",
-                event_provider,
+                _InjectedProviderIdentity("injected-event-provider"),
                 ProviderCapabilities(
                     frozenset({ProviderRole.EVENT_DISCOVERY}),
                     frozenset(Hazard),
                     None,
                 ),
+                event_provider=event_provider,
             ),
             ProviderRegistration(
                 "Injected situation provider",
-                situation_provider,
+                _InjectedProviderIdentity("injected-situation-provider"),
                 ProviderCapabilities(
                     frozenset({ProviderRole.SITUATION_EVIDENCE}),
                     frozenset(Hazard),
                     None,
                 ),
+                situation_provider=situation_provider,
             ),
         )
     )

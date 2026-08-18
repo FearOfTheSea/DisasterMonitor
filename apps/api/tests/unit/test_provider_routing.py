@@ -99,6 +99,7 @@ def _registry():
                 event_japan,
                 source_id="jma-events",
                 allowed_hosts=frozenset({"example.test"}),
+                event_provider=jma,
             ),
             ProviderRegistration(
                 "USGS",
@@ -110,6 +111,7 @@ def _registry():
                 ),
                 source_id="usgs-events",
                 allowed_hosts=frozenset({"example.test"}),
+                event_provider=usgs,
             ),
             ProviderRegistration(
                 "FDMA",
@@ -121,6 +123,7 @@ def _registry():
                 ),
                 source_id="fdma-reports",
                 allowed_hosts=frozenset({"example.test"}),
+                situation_provider=fdma,
             ),
             ProviderRegistration(
                 "ReliefWeb",
@@ -134,6 +137,7 @@ def _registry():
                 source_id="reliefweb-reports",
                 configured=False,
                 allowed_hosts=frozenset({"example.test"}),
+                situation_provider=fdma,
             ),
         )
     )

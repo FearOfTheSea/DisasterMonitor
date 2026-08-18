@@ -12,18 +12,12 @@ from disaster_monitor.application.agent.models import (
 )
 from disaster_monitor.application.disaster import (
     GeographicScope,
-    GlobalEarthquakeQuery,
-    GlobalEventSelection,
     QueryParseStatus,
     WorldwideDisasterQuery,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
-)
-from disaster_monitor.application.services.worldwide_disaster_policy import (
-    WorldwideDisasterPolicyRegistry,
-    default_worldwide_disaster_policy_registry,
 )
 from disaster_monitor.domain.disaster import Hazard
 
@@ -130,8 +124,6 @@ _WORLDWIDE_MARKERS = re.compile(
 
 def worldwide_disaster_query(
     question: str,
-    *,
-    policies: WorldwideDisasterPolicyRegistry | None = None,
 ) -> WorldwideDisasterQuery | None:
     """Admit explicit current worldwide requests for any admitted hazard."""
     hazards = _hazard_mentions(question)
@@ -141,26 +133,7 @@ def worldwide_disaster_query(
         or not _WORLDWIDE_MARKERS.search(question)
     ):
         return None
-    policy_registry = policies or default_worldwide_disaster_policy_registry()
-    policy = policy_registry.for_hazard(hazards[0])
-    return WorldwideDisasterQuery(
-        hazard=hazards[0], selection=policy.selection_for(question)
-    )
-
-
-def global_earthquake_query(question: str) -> GlobalEarthquakeQuery | None:
-    """Compatibility wrapper for callers of the former earthquake-only normalizer."""
-    query = worldwide_disaster_query(question)
-    if query is None or query.hazard is not Hazard.EARTHQUAKE:
-        return None
-    return GlobalEarthquakeQuery(
-        selection=GlobalEventSelection(query.selection),
-        time_window_days=query.time_window_days,
-        minimum_magnitude=(
-            query.minimum_magnitude if query.minimum_magnitude is not None else 4.5
-        ),
-        limit=query.limit,
-    )
+    return WorldwideDisasterQuery(hazard=hazards[0])
 
 
 def disaster_safety_gate(question: str) -> bool:
@@ -197,7 +170,6 @@ def validate_disaster_task(
     *,
     country_catalog: CountryCatalog,
     query_parser: DisasterQueryParser,
-    worldwide_policies: WorldwideDisasterPolicyRegistry | None = None,
 ) -> ValidatedDisasterTask:
     """Canonicalize only through maintained deterministic application metadata."""
     safety_requires_evidence = disaster_safety_gate(question)
@@ -229,7 +201,7 @@ def validate_disaster_task(
             detail,
         )
 
-    worldwide_query = worldwide_disaster_query(question, policies=worldwide_policies)
+    worldwide_query = worldwide_disaster_query(question)
     if worldwide_query is not None:
         return ValidatedDisasterTask(
             question=question,

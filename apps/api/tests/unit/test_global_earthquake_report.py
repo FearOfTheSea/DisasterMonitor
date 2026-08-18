@@ -3,18 +3,19 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from disaster_monitor.application.disaster import (
-    GlobalDisasterEvent,
-    GlobalEarthquakeQuery,
-    GlobalEventSelection,
+    GeographicScope,
     ProviderBatch,
-)
-from disaster_monitor.application.services.global_earthquake_report import (
-    GlobalEarthquakeReportService,
+    WorldwideDisasterEvent,
+    WorldwideDisasterQuery,
 )
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
+    ProviderRegistry,
     ProviderRole,
+)
+from disaster_monitor.application.services.worldwide_disaster import (
+    WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
     Hazard,
@@ -27,7 +28,7 @@ NOW = datetime(2026, 8, 15, 8, tzinfo=UTC)
 
 def _event(
     event_id: str, *, event_time: datetime, magnitude: float, host: str = "usgs.test"
-) -> GlobalDisasterEvent:
+) -> WorldwideDisasterEvent:
     source = SourceReference(
         source_id="usgs-earthquakes",
         publisher="United States Geological Survey",
@@ -38,7 +39,7 @@ def _event(
         retrieved_at=NOW,
         authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
     )
-    return GlobalDisasterEvent(
+    return WorldwideDisasterEvent(
         event_id=f"usgs:{event_id}",
         hazard=Hazard.EARTHQUAKE,
         location=f"Location {event_id}",
@@ -57,28 +58,40 @@ class FakeGlobalProvider:
     source_id = "usgs-earthquakes"
     allowed_hosts = frozenset({"usgs.test"})
 
-    def __init__(self, records: tuple[GlobalDisasterEvent, ...]) -> None:
+    def __init__(self, records: tuple[WorldwideDisasterEvent, ...]) -> None:
         self.records = records
-        self.queries: list[GlobalEarthquakeQuery] = []
+        self.queries: list[WorldwideDisasterQuery] = []
 
-    async def find_global_earthquakes(self, query, *, now):
+    async def find_worldwide_events(self, query, *, now):
         self.queries.append(query)
         return ProviderBatch(self.records)
 
+    async def find_recent_events(self, query, *, now):
+        return ProviderBatch()
 
-def _service(records: tuple[GlobalDisasterEvent, ...]) -> GlobalEarthquakeReportService:
+
+def _service(
+    records: tuple[WorldwideDisasterEvent, ...],
+) -> WorldwideDisasterReportService:
     provider = FakeGlobalProvider(records)
-    return GlobalEarthquakeReportService(
-        ProviderRegistration(
-            "USGS",
-            provider,
-            ProviderCapabilities(
-                roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                hazards=frozenset({Hazard.EARTHQUAKE}),
-                country_codes=None,
-            ),
-            source_id=provider.source_id,
-            allowed_hosts=provider.allowed_hosts,
+    return WorldwideDisasterReportService(
+        ProviderRegistry(
+            (
+                ProviderRegistration(
+                    "USGS",
+                    provider,
+                    ProviderCapabilities(
+                        roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                        hazards=frozenset({Hazard.EARTHQUAKE}),
+                        country_codes=None,
+                        geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                    ),
+                    source_id=provider.source_id,
+                    allowed_hosts=provider.allowed_hosts,
+                    event_provider=provider,
+                    worldwide_provider=provider,
+                ),
+            )
         ),
         clock=lambda: NOW,
     )
@@ -92,9 +105,10 @@ async def test_worldwide_report_selects_latest_or_strongest_deterministically() 
     newer = _event("newer", event_time=NOW - timedelta(hours=1), magnitude=5.0)
     service = _service((older_stronger, newer))
 
-    latest = await service.execute(GlobalEarthquakeQuery())
+    latest = await service.execute(WorldwideDisasterQuery(Hazard.EARTHQUAKE))
     strongest = await service.execute(
-        GlobalEarthquakeQuery(selection=GlobalEventSelection.STRONGEST)
+        WorldwideDisasterQuery(Hazard.EARTHQUAKE),
+        question="What was the strongest earthquake worldwide?",
     )
 
     assert latest.response_type == "current_disaster_global_earthquake"
@@ -110,8 +124,10 @@ async def test_worldwide_report_selects_latest_or_strongest_deterministically() 
 async def test_worldwide_report_fails_closed_for_unapproved_source_host() -> None:
     invalid = _event("invalid", event_time=NOW, magnitude=6.0, host="evil.test")
 
-    report = await _service((invalid,)).execute(GlobalEarthquakeQuery())
+    report = await _service((invalid,)).execute(
+        WorldwideDisasterQuery(Hazard.EARTHQUAKE)
+    )
 
-    assert report.response_type == "current_disaster_global_verification_failed"
+    assert report.response_type == "current_disaster_worldwide_verification_failed"
     assert report.selected_event is None
     assert any("source policy" in warning for warning in report.warnings)

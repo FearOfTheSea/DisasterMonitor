@@ -260,4 +260,5 @@ class SourceDescriptor:
     registered_tool_names: tuple[str, ...]
     provider_registration_name: str
     implementation_status: str
+    geographic_scopes: tuple[GeographicScope, ...]
     allowed_hosts: tuple[str, ...] = ()

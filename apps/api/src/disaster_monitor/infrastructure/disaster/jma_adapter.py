@@ -72,6 +72,38 @@ def _safe_string(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def has_jma_event_id(event: DisasterEvent) -> bool:
+    return any(
+        value.lower().startswith("jma:")
+        for value in (event.event_id, *event.provider_ids)
+    )
+
+
+def _jma_event_id(event: DisasterEvent) -> str | None:
+    for value in (event.event_id, *event.provider_ids):
+        if value.lower().startswith("jma:"):
+            return value.removeprefix("jma:")
+    return None
+
+
+def _normalize_jma_timestamp(value: object) -> datetime | None:
+    if isinstance(value, str):
+        text = value.strip()
+        for pattern in (
+            "%Y%m%d%H%M%S",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y/%m/%d %H:%M",
+            "%Y-%m-%d %H:%M",
+        ):
+            try:
+                return datetime.strptime(text, pattern).replace(
+                    tzinfo=timezone(timedelta(hours=9))
+                )
+            except ValueError:
+                continue
+    return normalize_timestamp(value)
+
+
 class JmaEarthquakeAdapter:
     """Identify recent Japanese earthquakes from the official JMA JSON list."""
 
@@ -120,7 +152,7 @@ class JmaEarthquakeAdapter:
         for item in payload[:200]:
             if not isinstance(item, dict):
                 continue
-            event_time = normalize_timestamp(item.get("at"))
+            event_time = _normalize_jma_timestamp(item.get("at"))
             latitude, longitude, depth_km = _parse_jma_code(item.get("cod"))
             event_id = _safe_string(item.get("eid"))
             if not event_id or event_time is None or not _is_japan(latitude, longitude):
@@ -128,7 +160,7 @@ class JmaEarthquakeAdapter:
             if not start <= event_time <= end:
                 continue
             location = _safe_string(item.get("en_anm")) or _safe_string(item.get("anm"))
-            published_at = normalize_timestamp(item.get("rdt")) or event_time
+            published_at = _normalize_jma_timestamp(item.get("rdt")) or event_time
             detail_name = _safe_string(item.get("json"))
             source = SourceReference(
                 source_id=self.source_id,
@@ -237,7 +269,7 @@ class JmaTsunamiSituationAdapter:
             raise DisasterProviderResponseError(
                 "The JMA tsunami response was not a list."
             )
-        raw_event_id = event.jma_event_id
+        raw_event_id = _jma_event_id(event)
         if raw_event_id is None:
             return ProviderBatch(records=())
         reports: list[SituationReport] = []
@@ -247,7 +279,7 @@ class JmaTsunamiSituationAdapter:
                 or _safe_string(item.get("eid")) != raw_event_id
             ):
                 continue
-            published_at = normalize_timestamp(item.get("rdt"))
+            published_at = _normalize_jma_timestamp(item.get("rdt"))
             detail_name = _safe_string(item.get("json"))
             source = SourceReference(
                 source_id=self.source_id,
@@ -346,15 +378,7 @@ class _JmaHistoryParser(HTMLParser):
 
 
 def _history_timestamp(value: str) -> datetime | None:
-    value = value.strip()
-    for pattern in ("%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M", "%Y-%m-%d %H:%M"):
-        try:
-            return datetime.strptime(value, pattern).replace(
-                tzinfo=timezone(timedelta(hours=9))
-            )
-        except ValueError:
-            continue
-    return normalize_timestamp(value)
+    return _normalize_jma_timestamp(value)
 
 
 def _history_number(value: str) -> float | None:

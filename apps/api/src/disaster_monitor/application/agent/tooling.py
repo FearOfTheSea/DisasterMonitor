@@ -326,7 +326,7 @@ class RetrieveSituationEvidenceTool(_BaseTool):
             SourceInformationRole.CASUALTY_REPORTING.value,
             SourceInformationRole.PHYSICAL_DAMAGE.value,
             SourceInformationRole.EMERGENCY_RESPONSE.value,
-            SourceInformationRole.TSUNAMI_STATUS.value,
+            SourceInformationRole.OFFICIAL_WARNING.value,
         ),
         True,
     )

@@ -7,11 +7,9 @@ import httpx
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
-    GlobalDisasterEvent,
-    GlobalEarthquakeQuery,
-    GlobalEventSelection,
     ProviderBatch,
     ProviderIssue,
+    WorldwideDisasterEvent,
     WorldwideDisasterQuery,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
@@ -105,24 +103,17 @@ def build_usgs_params(
     return params
 
 
-def build_global_usgs_params(
-    query: GlobalEarthquakeQuery | WorldwideDisasterQuery, *, now: datetime
+def build_worldwide_usgs_params(
+    query: WorldwideDisasterQuery, *, now: datetime
 ) -> dict[str, str | int | float]:
-    """Build a bounded worldwide query with an explicit ranking policy."""
-    selection = (
-        query.selection.value
-        if isinstance(query.selection, GlobalEventSelection)
-        else query.selection
-    )
+    """Build a bounded worldwide query using provider-local defaults."""
     return {
         "format": "geojson",
         "eventtype": "earthquake",
         "starttime": (now - timedelta(days=query.time_window_days)).isoformat(),
         "endtime": now.isoformat(),
-        "minmagnitude": query.minimum_magnitude or 4.5,
-        "orderby": (
-            "magnitude" if selection == GlobalEventSelection.STRONGEST else "time"
-        ),
+        "minmagnitude": 4.5,
+        "orderby": "time",
         "limit": query.limit,
     }
 
@@ -253,7 +244,7 @@ class UsgsEarthquakeAdapter:
         now: datetime,
         index: int,
         snapshot_id: str | None,
-    ) -> tuple[GlobalDisasterEvent | None, ProviderIssue | None]:
+    ) -> tuple[WorldwideDisasterEvent | None, ProviderIssue | None]:
         try:
             if not isinstance(raw_feature, dict):
                 raise ValueError("feature is not an object")
@@ -301,7 +292,7 @@ class UsgsEarthquakeAdapter:
             snapshot_id=snapshot_id,
         )
         return (
-            GlobalDisasterEvent(
+            WorldwideDisasterEvent(
                 event_id=f"usgs:{event_id}",
                 hazard=Hazard.EARTHQUAKE,
                 location=_text(properties.get("place")) or "Worldwide earthquake",
@@ -399,21 +390,15 @@ class UsgsEarthquakeAdapter:
 
     async def find_worldwide_events(
         self, query: WorldwideDisasterQuery, *, now: datetime
-    ) -> ProviderBatch[GlobalDisasterEvent]:
+    ) -> ProviderBatch[WorldwideDisasterEvent]:
         """Find bounded worldwide events without assigning a synthetic country."""
         capture = build_snapshot_capture(
             self._snapshot_recorder,
             source_id=self.source_id,
             parameters={
                 "scope": "worldwide",
-                "selection": (
-                    query.selection.value
-                    if isinstance(query.selection, GlobalEventSelection)
-                    else query.selection
-                ),
                 "from": (now - timedelta(days=query.time_window_days)).isoformat(),
                 "to": now.isoformat(),
-                "minimum_magnitude": str(query.minimum_magnitude),
             },
             rights_id="usgs-earthquake-api-terms-2026-08",
             retrieved_at=now,
@@ -422,7 +407,7 @@ class UsgsEarthquakeAdapter:
             self._client,
             USGS_QUERY_URL,
             allowed_hosts=self.allowed_hosts,
-            params=build_global_usgs_params(query, now=now),
+            params=build_worldwide_usgs_params(query, now=now),
             max_bytes=self._max_response_bytes,
             provider_name=self.provider_name,
             capture=capture,
@@ -436,7 +421,7 @@ class UsgsEarthquakeAdapter:
             raise DisasterProviderResponseError(
                 "The USGS GeoJSON response had no feature list."
             )
-        events: list[GlobalDisasterEvent] = []
+        events: list[WorldwideDisasterEvent] = []
         issues: list[ProviderIssue] = []
         for index, raw_feature in enumerate(raw_features):
             event, issue = self._parse_global_feature(
@@ -462,21 +447,6 @@ class UsgsEarthquakeAdapter:
                 )
             )
         return ProviderBatch(tuple(events), tuple(issues))
-
-    async def find_global_earthquakes(
-        self, query: GlobalEarthquakeQuery, *, now: datetime
-    ) -> ProviderBatch[GlobalDisasterEvent]:
-        """Compatibility wrapper for the former earthquake-specific port."""
-        return await self.find_worldwide_events(
-            WorldwideDisasterQuery(
-                hazard=Hazard.EARTHQUAKE,
-                selection=query.selection.value,
-                time_window_days=query.time_window_days,
-                minimum_magnitude=query.minimum_magnitude,
-                limit=query.limit,
-            ),
-            now=now,
-        )
 
     async def aclose(self) -> None:
         if self._owns_client:

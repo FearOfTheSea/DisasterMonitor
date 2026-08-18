@@ -419,6 +419,7 @@ def _episode_registry(primary: str, secondary: str) -> ProviderRegistry:
                 capabilities,
                 source_id=provider.source_id,
                 allowed_hosts=provider.allowed_hosts,
+                event_provider=provider,
             )
             for provider in providers
         )

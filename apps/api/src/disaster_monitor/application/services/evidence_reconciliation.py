@@ -1,9 +1,11 @@
 """Normalize provider records into a bounded, source-attributed evidence packet."""
 
 import re
-from dataclasses import replace
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from html import unescape
+from typing import Protocol
 
 from disaster_monitor.application.disaster import DisasterQuery, EvidencePacket
 from disaster_monitor.application.services.evidence_state import (
@@ -16,6 +18,7 @@ from disaster_monitor.domain.disaster import (
     EvidenceDisposition,
     EvidenceFreshness,
     FactStatus,
+    Hazard,
     PhysicalEventIdentity,
     ReportedFact,
     SituationReport,
@@ -29,6 +32,16 @@ _INSTRUCTION_FRAGMENT = re.compile(
     r"tool call|prompt injection)(?:\s+\w+){0,4}[.!?:;]?",
     re.IGNORECASE,
 )
+
+
+class _CorrelationPolicy(Protocol):
+    def correlate(
+        self, report: SituationReport, event: DisasterEvent
+    ) -> CorrelationStatus: ...
+
+
+class _CorrelationPolicies(Protocol):
+    def for_hazard(self, hazard: Hazard) -> _CorrelationPolicy: ...
 
 
 def sanitize_provider_text(text: str, *, limit: int = MAX_NARRATIVE_LENGTH) -> str:
@@ -45,7 +58,7 @@ def sanitize_provider_text(text: str, *, limit: int = MAX_NARRATIVE_LENGTH) -> s
 
 
 def normalize_timestamp(value: object) -> datetime | None:
-    """Normalize ISO-8601, Unix-millisecond, and compact JMA timestamps."""
+    """Normalize provider-neutral datetime and Unix timestamp values."""
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -58,8 +71,6 @@ def normalize_timestamp(value: object) -> datetime | None:
     if not isinstance(value, str):
         return None
     text = value.strip()
-    if re.fullmatch(r"\d{14}", text):
-        return datetime.strptime(text, "%Y%m%d%H%M%S").replace(tzinfo=UTC)
     if text.endswith("Z"):
         text = f"{text[:-1]}+00:00"
     try:
@@ -69,31 +80,17 @@ def normalize_timestamp(value: object) -> datetime | None:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
-def correlate_situation_report(
-    report: SituationReport, event: DisasterEvent
-) -> CorrelationStatus:
-    """Conservatively classify whether a report describes the selected event."""
-    event_ids = {event.event_id.lower(), *(item.lower() for item in event.provider_ids)}
-    report_ids = {
-        item.lower() for item in (report.event_id, *report.provider_event_ids) if item
-    }
-    comparable_pairs = {
-        (report_id, event_id)
-        for report_id in report_ids
-        for event_id in event_ids
-        if _identifier_namespace(report_id) == _identifier_namespace(event_id)
-    }
-    if any(report_id == event_id for report_id, event_id in comparable_pairs):
-        return CorrelationStatus.MATCHED
-    if comparable_pairs:
-        return CorrelationStatus.UNMATCHED
-    if report.hazard is not None and report.hazard != event.hazard:
-        return CorrelationStatus.UNMATCHED
-    if report.country_codes and event.country.alpha3_code not in {
-        code.upper() for code in report.country_codes
-    }:
-        return CorrelationStatus.UNMATCHED
+@dataclass(frozen=True, slots=True)
+class CorrelationSignals:
+    date_matches: bool
+    location_matches: bool
+    country_matches: bool
 
+
+def correlation_signals(
+    report: SituationReport, event: DisasterEvent
+) -> CorrelationSignals:
+    """Expose neutral correlation evidence for hazard-owned policies."""
     if report.reported_event_time is not None:
         time_delta = abs(
             (report.reported_event_time - event.event_time).total_seconds()
@@ -101,7 +98,6 @@ def correlate_situation_report(
         date_matches = time_delta <= 48 * 60 * 60
     else:
         date_matches = False
-
     source_text = " ".join(
         (report.source.title, report.narrative, *report.locations, *report.countries)
     ).lower()
@@ -129,17 +125,38 @@ def correlate_situation_report(
     country_matches = bool(
         {country.lower() for country in report.countries} & country_terms
     )
-    magnitude_matches = (
-        event.hazard.value == "earthquake"
-        and report.magnitude is not None
-        and event.magnitude is not None
-        and abs(report.magnitude - event.magnitude) <= 0.3
-    )
-    if date_matches and location_matches:
+    return CorrelationSignals(date_matches, location_matches, country_matches)
+
+
+def correlate_situation_report(
+    report: SituationReport, event: DisasterEvent
+) -> CorrelationStatus:
+    """Conservatively classify whether a report describes the selected event."""
+    event_ids = {event.event_id.lower(), *(item.lower() for item in event.provider_ids)}
+    report_ids = {
+        item.lower() for item in (report.event_id, *report.provider_event_ids) if item
+    }
+    comparable_pairs = {
+        (report_id, event_id)
+        for report_id in report_ids
+        for event_id in event_ids
+        if _identifier_namespace(report_id) == _identifier_namespace(event_id)
+    }
+    if any(report_id == event_id for report_id, event_id in comparable_pairs):
         return CorrelationStatus.MATCHED
-    if magnitude_matches and location_matches:
+    if comparable_pairs:
+        return CorrelationStatus.UNMATCHED
+    if report.hazard is not None and report.hazard != event.hazard:
+        return CorrelationStatus.UNMATCHED
+    if report.country_codes and event.country.alpha3_code not in {
+        code.upper() for code in report.country_codes
+    }:
+        return CorrelationStatus.UNMATCHED
+
+    signals = correlation_signals(report, event)
+    if signals.date_matches and signals.location_matches:
         return CorrelationStatus.MATCHED
-    if (date_matches and (country_matches or magnitude_matches)) or location_matches:
+    if (signals.date_matches and signals.country_matches) or signals.location_matches:
         return CorrelationStatus.POSSIBLE
     return CorrelationStatus.UNMATCHED
 
@@ -213,6 +230,9 @@ def build_evidence_packet(
     warnings: tuple[str, ...],
     retrieved_at: datetime,
     physical_event: PhysicalEventIdentity | None = None,
+    correlation: Callable[
+        [SituationReport, DisasterEvent], CorrelationStatus
+    ] = correlate_situation_report,
 ) -> EvidencePacket:
     """Reconcile duplicate, newer, missing, and conflicting provider facts."""
     correlated_reports: list[SituationReport] = []
@@ -228,7 +248,7 @@ def build_evidence_packet(
         status = (
             CorrelationStatus.UNMATCHED
             if hard_scope_mismatch
-            else report.correlation or correlate_situation_report(report, event)
+            else report.correlation or correlation(report, event)
         )
         if report.correlation is not None or _has_correlation_metadata(report):
             if status == CorrelationStatus.MATCHED:
@@ -421,6 +441,11 @@ def build_evidence_packet(
 class EvidenceReconciler:
     """Injectable application service for deterministic evidence reconciliation."""
 
+    def __init__(
+        self, correlation_policies: _CorrelationPolicies | None = None
+    ) -> None:
+        self._correlation_policies = correlation_policies
+
     def build(
         self,
         query: DisasterQuery,
@@ -431,6 +456,15 @@ class EvidenceReconciler:
         retrieved_at: datetime,
         physical_event: PhysicalEventIdentity | None = None,
     ) -> EvidencePacket:
+        policies: _CorrelationPolicies
+        if self._correlation_policies is None:
+            from disaster_monitor.application.services.evidence_correlation import (
+                default_evidence_correlation_policies,
+            )
+
+            policies = default_evidence_correlation_policies()
+        else:
+            policies = self._correlation_policies
         return build_evidence_packet(
             query,
             event,
@@ -438,4 +472,5 @@ class EvidenceReconciler:
             warnings=warnings,
             retrieved_at=retrieved_at,
             physical_event=physical_event,
+            correlation=policies.for_hazard(query.hazard).correlate,
         )

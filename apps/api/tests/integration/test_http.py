@@ -8,8 +8,8 @@ from conftest import FakeLanguageModel
 
 from disaster_monitor.application.disaster import (
     GeographicScope,
-    GlobalDisasterEvent,
     ProviderBatch,
+    WorldwideDisasterEvent,
 )
 from disaster_monitor.application.dto import ModelRequest, ModelToolCall
 from disaster_monitor.application.media import (
@@ -421,7 +421,7 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
         async def find_worldwide_events(self, query, *, now):
             return ProviderBatch(
                 (
-                    GlobalDisasterEvent(
+                    WorldwideDisasterEvent(
                         event_id="usgs:global",
                         hazard=Hazard.EARTHQUAKE,
                         location="South Pacific Ocean",
@@ -450,6 +450,8 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
                     ),
                     source_id="usgs-earthquakes",
                     allowed_hosts=frozenset({"earthquake.usgs.gov"}),
+                    event_provider=GlobalProvider(),
+                    worldwide_provider=GlobalProvider(),
                 ),
             )
         ),

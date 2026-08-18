@@ -6,6 +6,7 @@ from disaster_monitor.application.agent.models import (
     SourceDescriptor,
     SourceInformationRole,
 )
+from disaster_monitor.application.disaster import GeographicScope, ProviderBatch
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
@@ -37,6 +38,12 @@ class FakeProvider:
     source_id: str
     allowed_hosts: frozenset[str]
 
+    async def find_recent_events(self, query, *, now):
+        return ProviderBatch()
+
+    async def get_situation_reports(self, event, query, *, now):
+        return ProviderBatch()
+
 
 def event_descriptor() -> SourceDescriptor:
     return SourceDescriptor(
@@ -48,6 +55,7 @@ def event_descriptor() -> SourceDescriptor:
         information_roles=(SourceInformationRole.EVENT_DISCOVERY,),
         supported_hazards=(Hazard.EARTHQUAKE,),
         country_codes=("TST",),
+        geographic_scopes=(GeographicScope.COUNTRY,),
         supported_languages=("en",),
         endpoint_kind="test",
         requires_configuration=False,
@@ -81,6 +89,16 @@ def registration(
         ),
         source_id="test-events",
         allowed_hosts=allowed_hosts,
+        event_provider=(
+            FakeProvider("test-events", allowed_hosts)
+            if ProviderRole.EVENT_DISCOVERY in roles
+            else None
+        ),
+        situation_provider=(
+            FakeProvider("test-events", allowed_hosts)
+            if ProviderRole.SITUATION_EVIDENCE in roles
+            else None
+        ),
     )
 
 
@@ -111,6 +129,42 @@ def test_rejects_configuration_requirement_drift() -> None:
         validate(
             replace(event_descriptor(), requires_configuration=True),
             registration(),
+        )
+
+
+def test_rejects_geographic_scope_drift() -> None:
+    with pytest.raises(ValueError, match="Geographic scope capability drift"):
+        validate(
+            replace(
+                event_descriptor(),
+                geographic_scopes=(GeographicScope.WORLDWIDE,),
+            ),
+            registration(),
+        )
+
+
+def test_rejects_roles_without_typed_executable_ports() -> None:
+    with pytest.raises(ValueError, match="without an event port"):
+        ProviderRegistration(
+            "Missing event port",
+            FakeProvider("test-events", frozenset({"events.example"})),
+            ProviderCapabilities(
+                frozenset({ProviderRole.EVENT_DISCOVERY}),
+                frozenset({Hazard.EARTHQUAKE}),
+                frozenset({"TST"}),
+            ),
+        )
+    with pytest.raises(ValueError, match="without a worldwide port"):
+        ProviderRegistration(
+            "Missing worldwide port",
+            FakeProvider("test-events", frozenset({"events.example"})),
+            ProviderCapabilities(
+                frozenset({ProviderRole.EVENT_DISCOVERY}),
+                frozenset({Hazard.EARTHQUAKE}),
+                None,
+                geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+            ),
+            event_provider=FakeProvider("test-events", frozenset({"events.example"})),
         )
 
 

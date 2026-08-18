@@ -17,11 +17,17 @@ class WorldwideDisasterPolicy(Protocol):
     def selection_for(self, question: str) -> str: ...
 
     def select(
-        self, events: tuple[WorldwideDisasterEvent, ...], query: WorldwideDisasterQuery
+        self,
+        events: tuple[WorldwideDisasterEvent, ...],
+        query: WorldwideDisasterQuery,
+        question: str = "",
     ) -> WorldwideDisasterEvent | None: ...
 
     def describe_selection(
-        self, event: WorldwideDisasterEvent, query: WorldwideDisasterQuery
+        self,
+        event: WorldwideDisasterEvent,
+        query: WorldwideDisasterQuery,
+        question: str = "",
     ) -> str: ...
 
     def response_type(self, query: WorldwideDisasterQuery) -> str: ...
@@ -34,17 +40,24 @@ class DefaultWorldwideDisasterPolicy:
         return "latest"
 
     def select(
-        self, events: tuple[WorldwideDisasterEvent, ...], query: WorldwideDisasterQuery
+        self,
+        events: tuple[WorldwideDisasterEvent, ...],
+        query: WorldwideDisasterQuery,
+        question: str = "",
     ) -> WorldwideDisasterEvent | None:
         if not events:
             return None
         return max(events, key=lambda event: event.event_time)
 
     def describe_selection(
-        self, event: WorldwideDisasterEvent, query: WorldwideDisasterQuery
+        self,
+        event: WorldwideDisasterEvent,
+        query: WorldwideDisasterQuery,
+        question: str = "",
     ) -> str:
         return (
-            f"The latest matching worldwide {query.hazard.value} event is "
+            f"{event.source.publisher} reports the latest matching worldwide "
+            f"{query.hazard.value} event as "
             f"{event.event_id}: {event.location}; event time "
             f"{_utc_text(event.event_time)}."
         )
@@ -60,11 +73,14 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
         return "strongest" if _STRONGEST_MARKERS.search(question) else "latest"
 
     def select(
-        self, events: tuple[WorldwideDisasterEvent, ...], query: WorldwideDisasterQuery
+        self,
+        events: tuple[WorldwideDisasterEvent, ...],
+        query: WorldwideDisasterQuery,
+        question: str = "",
     ) -> WorldwideDisasterEvent | None:
         if not events:
             return None
-        if query.selection == "strongest":
+        if self.selection_for(question) == "strongest":
             return max(
                 events,
                 key=lambda event: (
@@ -86,16 +102,20 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
         )
 
     def describe_selection(
-        self, event: WorldwideDisasterEvent, query: WorldwideDisasterQuery
+        self,
+        event: WorldwideDisasterEvent,
+        query: WorldwideDisasterQuery,
+        question: str = "",
     ) -> str:
-        label = "strongest" if query.selection == "strongest" else "latest"
+        label = "strongest" if self.selection_for(question) == "strongest" else "latest"
         magnitude = (
             f" magnitude {event.magnitude:g}"
             if event.magnitude is not None
             else " unknown magnitude"
         )
         return (
-            f"USGS identifies the {label} matching worldwide earthquake as "
+            f"{event.source.publisher} identifies the {label} matching worldwide "
+            "earthquake as "
             f"{event.event_id}: {event.location}; event time "
             f"{_utc_text(event.event_time)};{magnitude}."
         )

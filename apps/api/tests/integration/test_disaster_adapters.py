@@ -7,8 +7,7 @@ import pytest
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
-    GlobalEarthquakeQuery,
-    GlobalEventSelection,
+    WorldwideDisasterQuery,
 )
 from disaster_monitor.application.services.event_resolution import resolve_recent_event
 from disaster_monitor.application.services.evidence_reconciliation import (
@@ -701,8 +700,8 @@ async def test_usgs_worldwide_query_has_no_country_bounds_and_preserves_event() 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     adapter = UsgsEarthquakeAdapter(geography=CATALOG, client=client)
 
-    result = await adapter.find_global_earthquakes(
-        GlobalEarthquakeQuery(selection=GlobalEventSelection.LATEST), now=NOW
+    result = await adapter.find_worldwide_events(
+        WorldwideDisasterQuery(Hazard.EARTHQUAKE), now=NOW
     )
     params = dict(requests[0].url.params.multi_items())
 

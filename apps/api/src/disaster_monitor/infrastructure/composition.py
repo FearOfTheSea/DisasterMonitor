@@ -64,6 +64,7 @@ from disaster_monitor.infrastructure.disaster.jma_adapter import (
     JmaEarthquakeAdapter,
     JmaSignificantEarthquakeAdapter,
     JmaTsunamiSituationAdapter,
+    has_jma_event_id,
 )
 from disaster_monitor.infrastructure.disaster.nchmf_adapter import NchmfWarningAdapter
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
@@ -342,6 +343,7 @@ def build_current_disaster_report(
                 event_japan,
                 source_id="jma-rolling-earthquakes",
                 allowed_hosts=jma_rolling.allowed_hosts,
+                event_provider=jma_rolling,
             ),
             ProviderRegistration(
                 "JMA significant earthquake",
@@ -349,6 +351,7 @@ def build_current_disaster_report(
                 event_japan,
                 source_id="jma-significant-earthquakes",
                 allowed_hosts=jma_significant.allowed_hosts,
+                event_provider=jma_significant,
             ),
             ProviderRegistration(
                 "USGS",
@@ -363,6 +366,8 @@ def build_current_disaster_report(
                 ),
                 source_id="usgs-earthquakes",
                 allowed_hosts=usgs.allowed_hosts,
+                event_provider=usgs,
+                worldwide_provider=usgs,
             ),
             ProviderRegistration(
                 "FDMA",
@@ -370,14 +375,16 @@ def build_current_disaster_report(
                 situation_japan,
                 source_id="fdma-situation-reports",
                 allowed_hosts=fdma.allowed_hosts,
+                situation_provider=fdma,
             ),
             ProviderRegistration(
                 "JMA tsunami status",
                 jma_tsunami,
                 situation_japan,
                 source_id="jma-tsunami-status",
-                event_eligibility=lambda event: event.jma_event_id is not None,
+                event_eligibility=has_jma_event_id,
                 allowed_hosts=jma_tsunami.allowed_hosts,
+                situation_provider=jma_tsunami,
             ),
             ProviderRegistration(
                 "ReliefWeb",
@@ -391,6 +398,7 @@ def build_current_disaster_report(
                 source_id="reliefweb-situation-reports",
                 configured=reliefweb.configured,
                 allowed_hosts=reliefweb.allowed_hosts,
+                situation_provider=reliefweb,
             ),
             ProviderRegistration(
                 "NCHMF Vietnam warnings",
@@ -413,6 +421,8 @@ def build_current_disaster_report(
                 ),
                 source_id="nchmf-vietnam-warnings",
                 allowed_hosts=nchmf.allowed_hosts,
+                event_provider=nchmf,
+                situation_provider=nchmf,
             ),
             ProviderRegistration(
                 "NASA FIRMS active fire",
@@ -431,6 +441,8 @@ def build_current_disaster_report(
                 source_id="nasa-firms-active-fire",
                 configured=firms.configured,
                 allowed_hosts=firms.allowed_hosts,
+                event_provider=firms,
+                situation_provider=firms,
             ),
             ProviderRegistration(
                 "Copernicus GFM Vietnam notifications",
@@ -449,6 +461,8 @@ def build_current_disaster_report(
                 source_id="copernicus-gfm-vietnam",
                 configured=gfm.configured,
                 allowed_hosts=gfm.allowed_hosts,
+                event_provider=gfm,
+                situation_provider=gfm,
             ),
         )
     )

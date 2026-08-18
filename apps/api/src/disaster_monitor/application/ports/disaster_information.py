@@ -40,9 +40,6 @@ class WorldwideDisasterProvider(Protocol):
     ) -> ProviderBatch[WorldwideDisasterEvent]: ...
 
 
-GlobalEarthquakeProvider = WorldwideDisasterProvider
-
-
 class Clock(Protocol):
     """Injectable time source used by freshness and cache tests."""
 

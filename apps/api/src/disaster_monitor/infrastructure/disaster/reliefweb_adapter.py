@@ -12,8 +12,10 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
     ProviderIssue,
 )
+from disaster_monitor.application.services.evidence_correlation import (
+    default_evidence_correlation_policies,
+)
 from disaster_monitor.application.services.evidence_reconciliation import (
-    correlate_situation_report,
     normalize_timestamp,
     sanitize_provider_text,
 )
@@ -377,7 +379,11 @@ class ReliefWebSituationAdapter:
                 magnitude=magnitude,
                 provider_event_ids=provider_event_ids,
             )
-            status = correlate_situation_report(report, event)
+            status = (
+                default_evidence_correlation_policies()
+                .for_hazard(query.hazard)
+                .correlate(report, event)
+            )
             reports.append(
                 replace(
                     report,

@@ -18,6 +18,9 @@ from disaster_monitor.application.services.event_resolution import (
     cluster_physical_events,
     resolve_recent_event,
 )
+from disaster_monitor.application.services.evidence_correlation import (
+    EarthquakeEvidenceCorrelationPolicy,
+)
 from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
     correlate_situation_report,
@@ -211,7 +214,7 @@ def test_jma_and_usgs_observations_are_one_event_with_both_ids() -> None:
         "jma:20260805100000",
         "usgs:us7000fixture",
     }
-    assert normalized[0].jma_event_id == "20260805100000"
+    assert "jma:20260805100000" in normalized[0].provider_ids
 
 
 def test_qualified_provider_ids_do_not_collide_across_namespaces() -> None:
@@ -263,6 +266,37 @@ def test_rejected_report_cannot_contribute_facts_and_narrative_is_preserved() ->
     assert "Tokyo airport" not in message
     assert "airport closed" in message
     assert good_source.canonical_url in message
+
+
+def test_generic_correlation_does_not_match_equal_magnitude_without_neutral_clues() -> (
+    None
+):
+    event = _event("usgs:target", magnitude=6.0)
+    source = _source("ReliefWeb", "unrelated report")
+    report = SituationReport(
+        source=source,
+        narrative="A report with magnitude 6.0 but no matching location or date.",
+        countries=(JAPAN.canonical_name,),
+        magnitude=6.0,
+    )
+
+    assert correlate_situation_report(report, event) == CorrelationStatus.UNMATCHED
+
+
+def test_earthquake_magnitude_correlation_is_owned_by_its_policy() -> None:
+    event = _event("usgs:target", magnitude=6.0)
+    source = _source("ReliefWeb", "Ishikawa report")
+    report = SituationReport(
+        source=source,
+        narrative="Ishikawa earthquake report with magnitude 6.0.",
+        locations=("Ishikawa",),
+        magnitude=6.0,
+    )
+
+    assert (
+        EarthquakeEvidenceCorrelationPolicy().correlate(report, event)
+        == CorrelationStatus.MATCHED
+    )
 
 
 @pytest.mark.asyncio
