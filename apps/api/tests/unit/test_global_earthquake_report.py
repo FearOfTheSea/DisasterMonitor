@@ -7,6 +7,7 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
+    WorldwideSelectionIntent,
 )
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
@@ -70,10 +71,19 @@ class FakeGlobalProvider:
         return ProviderBatch()
 
 
+class RecencyBoundedGlobalProvider(FakeGlobalProvider):
+    async def find_worldwide_events(self, query, *, now):
+        self.queries.append(query)
+        if query.selection_intent is WorldwideSelectionIntent.STRONGEST:
+            return ProviderBatch((self.records[0],))
+        return ProviderBatch((self.records[-1],))
+
+
 def _service(
     records: tuple[WorldwideDisasterEvent, ...],
+    provider_type: type[FakeGlobalProvider] = FakeGlobalProvider,
 ) -> WorldwideDisasterReportService:
-    provider = FakeGlobalProvider(records)
+    provider = provider_type(records)
     return WorldwideDisasterReportService(
         ProviderRegistry(
             (
@@ -85,6 +95,7 @@ def _service(
                         hazards=frozenset({Hazard.EARTHQUAKE}),
                         country_codes=None,
                         geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                        event_scopes=frozenset({GeographicScope.WORLDWIDE}),
                     ),
                     source_id=provider.source_id,
                     allowed_hosts=provider.allowed_hosts,
@@ -107,8 +118,10 @@ async def test_worldwide_report_selects_latest_or_strongest_deterministically() 
 
     latest = await service.execute(WorldwideDisasterQuery(Hazard.EARTHQUAKE))
     strongest = await service.execute(
-        WorldwideDisasterQuery(Hazard.EARTHQUAKE),
-        question="What was the strongest earthquake worldwide?",
+        WorldwideDisasterQuery(
+            Hazard.EARTHQUAKE,
+            selection_intent=WorldwideSelectionIntent.STRONGEST,
+        ),
     )
 
     assert latest.response_type == "current_disaster_global_earthquake"
@@ -117,7 +130,61 @@ async def test_worldwide_report_selects_latest_or_strongest_deterministically() 
     assert strongest.selected_event is not None
     assert strongest.selected_event.event_id == "usgs:older-stronger"
     assert latest.partial
-    assert "does not claim globally complete" in latest.message
+    assert "does not establish complete global impact" in latest.message
+
+
+@pytest.mark.asyncio
+async def test_strongest_query_requests_a_non_recent_bounded_dataset() -> None:
+    older_stronger = _event(
+        "older-stronger", event_time=NOW - timedelta(days=10), magnitude=8.0
+    )
+    newer = _event("newer", event_time=NOW, magnitude=5.0)
+    service = _service((older_stronger, newer), RecencyBoundedGlobalProvider)
+
+    report = await service.execute(
+        WorldwideDisasterQuery(
+            Hazard.EARTHQUAKE,
+            selection_intent=WorldwideSelectionIntent.STRONGEST,
+        )
+    )
+
+    assert report.selected_event is not None
+    assert report.selected_event.event_id == "usgs:older-stronger"
+
+
+@pytest.mark.asyncio
+async def test_multiple_worldwide_providers_are_aggregated_deterministically() -> None:
+    older = _event("older", event_time=NOW - timedelta(hours=2), magnitude=5.0)
+    newer = _event("newer", event_time=NOW - timedelta(hours=1), magnitude=4.0)
+    provider = FakeGlobalProvider((older, newer))
+    capabilities = ProviderCapabilities(
+        roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+        hazards=frozenset({Hazard.EARTHQUAKE}),
+        country_codes=None,
+        geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+        event_scopes=frozenset({GeographicScope.WORLDWIDE}),
+    )
+    registry = ProviderRegistry(
+        tuple(
+            ProviderRegistration(
+                name,
+                provider,
+                capabilities,
+                source_id=provider.source_id,
+                allowed_hosts=provider.allowed_hosts,
+                worldwide_provider=provider,
+            )
+            for name in ("USGS primary", "USGS mirror")
+        )
+    )
+
+    report = await WorldwideDisasterReportService(registry, clock=lambda: NOW).execute(
+        WorldwideDisasterQuery(Hazard.EARTHQUAKE)
+    )
+
+    assert len(provider.queries) == 2
+    assert report.selected_event is not None
+    assert report.selected_event.event_id == "usgs:newer"
 
 
 @pytest.mark.asyncio

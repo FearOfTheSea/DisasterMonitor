@@ -255,6 +255,9 @@ async def test_new_country_and_hazard_provider_is_discovered_without_agent_branc
     )
     assert state.workspace.selected_event == event
     assert provider.calls == 1
+    retrieve = tools.resolve("retrieve_situation_evidence")
+    assert retrieve.description.supported_information_roles == ()
+    assert retrieve.supported_information_roles(state) == ()  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio

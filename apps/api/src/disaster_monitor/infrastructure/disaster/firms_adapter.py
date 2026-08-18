@@ -18,7 +18,6 @@ from disaster_monitor.application.services.operational_ingestion import (
     canonical_request_identity,
 )
 from disaster_monitor.domain.disaster import (
-    CorrelationStatus,
     DisasterEvent,
     FactStatus,
     Hazard,
@@ -158,7 +157,6 @@ class FirmsActiveFireAdapter:
                     ),
                     facts=facts,
                     event_id=candidate.event_id,
-                    correlation=CorrelationStatus.MATCHED,
                     reported_event_time=candidate.event_time,
                     locations=(candidate.location,),
                     countries=(query.country.canonical_name,),

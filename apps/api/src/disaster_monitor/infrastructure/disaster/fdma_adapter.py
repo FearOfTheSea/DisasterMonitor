@@ -18,11 +18,9 @@ from disaster_monitor.application.disaster import (
     ProviderIssue,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
-    correlate_situation_report,
     sanitize_provider_text,
 )
 from disaster_monitor.domain.disaster import (
-    CorrelationStatus,
     DisasterEvent,
     FactStatus,
     ReportedFact,
@@ -526,17 +524,13 @@ class FdmaSituationReportAdapter:
             magnitude=event.magnitude,
             provider_event_ids=event.provider_ids,
         )
-        status = correlate_situation_report(report, event)
         return ProviderBatch(
             records=(
                 SituationReport(
                     source=source,
                     narrative=report.narrative,
                     facts=report.facts,
-                    event_id=event.event_id
-                    if status == CorrelationStatus.MATCHED
-                    else None,
-                    correlation=status,
+                    event_id=None,
                     reported_event_time=report.reported_event_time,
                     locations=report.locations,
                     countries=report.countries,

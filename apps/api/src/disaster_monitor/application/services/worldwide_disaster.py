@@ -18,11 +18,13 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.application.services.source_evidence_policy import (
     SourceEvidencePolicyError,
     validate_worldwide_event_evidence,
+    validate_worldwide_situation_evidence,
 )
 from disaster_monitor.application.services.worldwide_disaster_policy import (
     WorldwideDisasterPolicyRegistry,
     default_worldwide_disaster_policy_registry,
 )
+from disaster_monitor.domain.disaster import SituationReport
 
 
 def _now_utc() -> datetime:
@@ -43,66 +45,64 @@ class WorldwideDisasterReportService:
         self._policies = policies or default_worldwide_disaster_policy_registry()
         self._clock = clock
 
-    async def execute(
-        self, query: WorldwideDisasterQuery, *, question: str = ""
-    ) -> DisasterReport:
+    async def execute(self, query: WorldwideDisasterQuery) -> DisasterReport:
         now = self._clock()
         warnings: list[str] = []
         selection = self._provider_registry.select(query, ProviderRole.EVENT_DISCOVERY)
-        if len(selection.registrations) != 1:
+        if not selection.registrations:
             detail = (
                 "I could not verify a matching worldwide event because worldwide "
                 "provider authority is unavailable or ambiguous."
             )
             return _failed_report(detail, now, warnings)
-        registration = selection.registrations[0]
-        if not registration.source_id or not registration.allowed_hosts:
-            return _failed_report(
-                "I could not verify a matching worldwide event because the selected "
-                "provider has incomplete source authority.",
-                now,
-                warnings,
-            )
-        provider = registration.worldwide_provider
-        if provider is None:
-            return _failed_report(
-                "I could not verify a matching worldwide event because the selected "
-                "provider cannot execute worldwide queries.",
-                now,
-                warnings,
-            )
-        try:
-            raw_batch = await provider.find_worldwide_events(query, now=now)
-            batch = (
-                raw_batch
-                if isinstance(raw_batch, ProviderBatch)
-                else ProviderBatch(tuple(raw_batch))
-            )
-        except Exception:
-            batch = ProviderBatch()
-            warnings.append(
-                "The worldwide disaster source could not be reached or "
-                "returned invalid data."
-            )
         accepted: list[WorldwideDisasterEvent] = []
-        for record in batch.records:
-            try:
-                accepted.append(
-                    validate_worldwide_event_evidence(
-                        record,
-                        query,
-                        source_id=registration.source_id,
-                        allowed_hosts=registration.allowed_hosts,
-                    )
-                )
-            except SourceEvidencePolicyError:
+        event_actions: list[str] = []
+        for registration in selection.registrations:
+            provider = registration.worldwide_provider
+            if (
+                not registration.source_id
+                or not registration.allowed_hosts
+                or provider is None
+            ):
                 warnings.append(
-                    "A worldwide disaster record violated source policy and was "
-                    "excluded."
+                    f"Worldwide provider {registration.name} has incomplete "
+                    "executable authority."
                 )
-        warnings.extend(issue.message for issue in batch.issues)
+                continue
+            try:
+                raw_batch = await provider.find_worldwide_events(query, now=now)
+                batch = (
+                    raw_batch
+                    if isinstance(raw_batch, ProviderBatch)
+                    else ProviderBatch(tuple(raw_batch))
+                )
+            except Exception:
+                batch = ProviderBatch()
+                warnings.append(
+                    f"Worldwide provider {registration.name} could not be reached "
+                    "or returned invalid data."
+                )
+            for event_record in batch.records:
+                try:
+                    accepted.append(
+                        validate_worldwide_event_evidence(
+                            event_record,
+                            query,
+                            source_id=registration.source_id,
+                            allowed_hosts=registration.allowed_hosts,
+                        )
+                    )
+                except SourceEvidencePolicyError:
+                    warnings.append(
+                        "A worldwide disaster record violated source policy and was "
+                        "excluded."
+                    )
+            warnings.extend(issue.message for issue in batch.issues)
+            event_actions.append(
+                f"Queried worldwide event provider {registration.name}."
+            )
         policy = self._policies.for_hazard(query.hazard)
-        selected = policy.select(tuple(accepted), query, question)
+        selected = policy.select(tuple(accepted), query)
         if selected is None:
             return _failed_report(
                 "I could not verify a matching worldwide event from the configured "
@@ -123,11 +123,72 @@ class WorldwideDisasterReportService:
             source=selected.source,
             provider_ids=selected.provider_ids,
         )
-        detail = policy.describe_selection(selected, query, question)
+        detail = policy.describe_selection(selected, query)
+        situation_selection = self._provider_registry.select(
+            query, ProviderRole.SITUATION_EVIDENCE
+        )
+        situation_reports: list[SituationReport] = []
+        situation_actions: list[str] = []
+        for registration in situation_selection.registrations:
+            situation_provider = registration.worldwide_situation_provider
+            if (
+                not registration.source_id
+                or not registration.allowed_hosts
+                or situation_provider is None
+            ):
+                continue
+            try:
+                raw_situation_batch = (
+                    await situation_provider.get_worldwide_situation_reports(
+                        selected, query, now=now
+                    )
+                )
+                situation_batch = (
+                    raw_situation_batch
+                    if isinstance(raw_situation_batch, ProviderBatch)
+                    else ProviderBatch(tuple(raw_situation_batch))
+                )
+            except Exception:
+                situation_batch = ProviderBatch()
+                warnings.append(
+                    f"Worldwide situation provider {registration.name} could not "
+                    "be reached."
+                )
+            for situation_record in situation_batch.records:
+                try:
+                    situation_reports.append(
+                        validate_worldwide_situation_evidence(
+                            situation_record,
+                            query,
+                            source_id=registration.source_id,
+                            allowed_hosts=registration.allowed_hosts,
+                        )
+                    )
+                except SourceEvidencePolicyError:
+                    warnings.append(
+                        "A worldwide situation record violated source policy and "
+                        "was excluded."
+                    )
+            warnings.extend(issue.message for issue in situation_batch.issues)
+            situation_actions.append(
+                f"Queried worldwide situation provider {registration.name}."
+            )
+        capability_gaps = []
+        if not situation_selection.registrations:
+            capability_gaps.append(
+                "No worldwide situation-evidence capability is configured."
+            )
+        elif not situation_reports:
+            capability_gaps.append(
+                "Configured worldwide situation sources returned no usable evidence."
+            )
+        complete = bool(situation_reports) and not capability_gaps
         limitation = (
-            "This worldwide capability verifies source-backed event data only. "
-            "It does not claim globally complete casualties, damage, warnings, or "
-            "response information."
+            "Worldwide event and situation evidence were obtained from configured "
+            "sources."
+            if complete
+            else "This worldwide capability does not establish complete global "
+            "impact coverage."
         )
         source_line = (
             f"{selected.source.publisher} - {selected.source.title} "
@@ -146,19 +207,23 @@ class WorldwideDisasterReportService:
             response_type=policy.response_type(query),
             selected_event=summary,
             retrieval_time=now,
-            sources=(selected.source,),
+            sources=(selected.source, *(report.source for report in situation_reports)),
             warnings=tuple(dict.fromkeys(warnings)),
             sections=sections,
-            partial=True,
-            capability_gaps=(
-                "Worldwide event evidence is bounded to the configured source and "
-                "does not establish complete global impact coverage.",
+            partial=not complete,
+            capability_gaps=tuple(capability_gaps),
+            investigation_actions=tuple(
+                (
+                    *event_actions,
+                    "Selected and rendered one source-backed worldwide event.",
+                    *situation_actions,
+                )
             ),
-            investigation_actions=(
-                "Queried the registry-approved worldwide event source.",
-                "Selected and rendered one source-backed worldwide event.",
+            termination_reason=(
+                "completed_worldwide_evidence"
+                if complete
+                else "partial_worldwide_event_evidence"
             ),
-            termination_reason="partial_worldwide_event_evidence",
         )
 
 

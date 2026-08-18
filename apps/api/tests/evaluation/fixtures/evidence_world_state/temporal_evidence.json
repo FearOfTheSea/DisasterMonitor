@@ -108,7 +108,7 @@
     {
       "id": "wrong-hazard-excluded",
       "reports": [
-        {"id": "matched-hazard", "source_id": "national-a", "authority": "national_authority", "published_hours_ago": 2, "hazard": "earthquake", "correlation": "matched", "facts": [{"claim": "injuries", "value": "4", "status": "confirmed"}]},
+        {"id": "matched-hazard", "source_id": "national-a", "authority": "national_authority", "published_hours_ago": 2, "event_id": "fixture:event", "hazard": "earthquake", "correlation": "matched", "facts": [{"claim": "injuries", "value": "4", "status": "confirmed"}]},
         {"id": "wrong-hazard", "source_id": "national-b", "authority": "national_authority", "published_hours_ago": 1, "hazard": "flood", "correlation": "matched", "facts": [{"claim": "injuries", "value": "40", "status": "confirmed"}]}
       ],
       "claims": {"injuries": {"availability": "present", "current": "4", "dispositions": {"matched-hazard": "current"}, "freshness": {"matched-hazard": "fresh"}}}

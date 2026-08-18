@@ -42,9 +42,7 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,
-    ProviderRole,
 )
-from disaster_monitor.domain.disaster import Hazard
 
 
 def _now_utc() -> datetime:
@@ -80,6 +78,8 @@ class CurrentDisasterReportService:
         situation_report_provider: SituationReportProvider,
         *,
         provider_registry: ProviderRegistry | None = None,
+        provider_capabilities: tuple[ProviderCapabilities, ProviderCapabilities]
+        | None = None,
         event_policies: EventPolicyRegistry | None = None,
         evidence_reconciler: EvidenceReconciler | None = None,
         renderer: DisasterReportRenderer | None = None,
@@ -89,9 +89,16 @@ class CurrentDisasterReportService:
     ) -> None:
         self._event_provider = event_provider
         self._situation_report_provider = situation_report_provider
-        self._provider_registry = provider_registry or _compatibility_registry(
-            event_provider, situation_report_provider
-        )
+        if provider_registry is not None:
+            self._provider_registry = provider_registry
+        elif provider_capabilities is not None:
+            self._provider_registry = _compatibility_registry(
+                event_provider, situation_report_provider, provider_capabilities
+            )
+        else:
+            raise ValueError(
+                "Direct provider injection requires explicit provider capabilities."
+            )
         self._event_policies = event_policies or default_event_policy_registry()
         self._evidence_reconciler = evidence_reconciler or EvidenceReconciler()
         self._renderer = renderer or DisasterReportRenderer()
@@ -166,27 +173,20 @@ class CurrentDisasterReportService:
 def _compatibility_registry(
     event_provider: DisasterEventProvider,
     situation_provider: SituationReportProvider,
+    capabilities: tuple[ProviderCapabilities, ProviderCapabilities],
 ) -> ProviderRegistry:
     return ProviderRegistry(
         (
             ProviderRegistration(
                 "Injected event provider",
                 _InjectedProviderIdentity("injected-event-provider"),
-                ProviderCapabilities(
-                    frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    frozenset(Hazard),
-                    None,
-                ),
+                capabilities[0],
                 event_provider=event_provider,
             ),
             ProviderRegistration(
                 "Injected situation provider",
                 _InjectedProviderIdentity("injected-situation-provider"),
-                ProviderCapabilities(
-                    frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    frozenset(Hazard),
-                    None,
-                ),
+                capabilities[1],
                 situation_provider=situation_provider,
             ),
         )

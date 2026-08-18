@@ -367,8 +367,8 @@ class BaseEventPolicy:
             and event.country.alpha3_code == query.country.alpha3_code
             and window_start <= event.event_time <= window_end
             and (
-                query.event_identifier is None
-                or event.has_provider_id(query.event_identifier)
+                query.discriminator("event_id") is None
+                or event.has_provider_id(query.discriminator("event_id") or "")
             )
         ]
         if query.prefecture:
@@ -465,9 +465,10 @@ class EarthquakeEventPolicy(BaseEventPolicy):
             distance = _distance_to_coordinates(event, query.latitude, query.longitude)
             if distance is not None:
                 discriminator_bonus += max(0.0, 8.0 - distance / 25.0)
-        if query.magnitude is not None and event.magnitude is not None:
+        query_magnitude = query.discriminator("magnitude")
+        if query_magnitude is not None and event.magnitude is not None:
             discriminator_bonus += max(
-                0.0, 4.0 - abs(event.magnitude - query.magnitude) * 8
+                0.0, 4.0 - abs(event.magnitude - float(query_magnitude)) * 8
             )
         return (
             recency * 0.6
@@ -522,12 +523,13 @@ class EarthquakeEventPolicy(BaseEventPolicy):
         now: datetime,
     ) -> list[DisasterEvent]:
         filtered = super()._filtered(candidates, query, now)
-        if query.magnitude is not None:
+        query_magnitude = query.discriminator("magnitude")
+        if query_magnitude is not None:
             filtered = [
                 event
                 for event in filtered
                 if event.magnitude is not None
-                and abs(event.magnitude - query.magnitude) <= 0.25
+                and abs(event.magnitude - float(query_magnitude)) <= 0.25
             ]
         return filtered
 
@@ -539,13 +541,13 @@ class EarthquakeEventPolicy(BaseEventPolicy):
             )
         if any(
             (
-                query.event_identifier,
+                query.discriminator("event_id"),
                 query.date_from,
                 query.date_to,
                 query.prefecture,
                 query.city,
                 query.latitude is not None and query.longitude is not None,
-                query.magnitude is not None,
+                query.discriminator("magnitude") is not None,
             )
         ):
             return (

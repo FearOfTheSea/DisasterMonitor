@@ -322,14 +322,32 @@ class RetrieveSituationEvidenceTool(_BaseTool):
         ("selected_event",),
         (),
         ("situation_reports", "provider_issues"),
-        (
-            SourceInformationRole.CASUALTY_REPORTING.value,
-            SourceInformationRole.PHYSICAL_DAMAGE.value,
-            SourceInformationRole.EMERGENCY_RESPONSE.value,
-            SourceInformationRole.OFFICIAL_WARNING.value,
-        ),
+        (),
         True,
     )
+
+    def supported_information_roles(
+        self, state: AgentExecutionState
+    ) -> tuple[str, ...]:
+        query = state.task.query
+        if query is None:
+            return ()
+        selection = self.dependencies.provider_registry.select(
+            query, ProviderRole.SITUATION_EVIDENCE
+        )
+        source_ids = {
+            registration.source_id
+            for registration in selection.registrations
+            if registration.source_id
+        }
+        roles = {
+            role.value
+            for source in self.dependencies.source_catalog.sources()
+            if source.source_id in source_ids
+            for role in source.information_roles
+        }
+        requested = set(_requested_source_roles(state.task.information_needs))
+        return tuple(sorted(roles & requested))
 
     async def execute(self, state: AgentExecutionState) -> str:
         event = state.workspace.selected_event

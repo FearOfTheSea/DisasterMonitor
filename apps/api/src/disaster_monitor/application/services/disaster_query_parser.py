@@ -12,6 +12,10 @@ from disaster_monitor.application.disaster import (
     RequestType,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
+from disaster_monitor.application.services.hazard_query_policy import (
+    HazardQueryPolicyRegistry,
+    default_hazard_query_policies,
+)
 from disaster_monitor.application.services.prompt_preparation import normalize_question
 from disaster_monitor.domain.disaster import Hazard
 
@@ -103,11 +107,9 @@ _MONTHS = {
         start=1,
     )
 }
-_MAGNITUDE = re.compile(r"\b(?:magnitude|mag\.?|m)\s*([0-9]+(?:\.[0-9]+)?)\b", re.I)
 _COORDINATES = re.compile(
     r"(?<![\w.])(-?\d{1,3}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)(?![\w.])"
 )
-_EVENT_ID = re.compile(r"\b(?:us\d{6,}|jma[:_-]?[A-Za-z0-9_-]+)\b", re.I)
 
 
 def _matches_alias(text: str, alias: str) -> bool:
@@ -170,8 +172,13 @@ def _extract_coordinates(text: str) -> tuple[float | None, float | None]:
 class DisasterQueryParser:
     """Parse hazard/country intent once without provider or model decisions."""
 
-    def __init__(self, country_catalog: CountryCatalog) -> None:
+    def __init__(
+        self,
+        country_catalog: CountryCatalog,
+        hazard_policies: HazardQueryPolicyRegistry | None = None,
+    ) -> None:
         self._country_catalog = country_catalog
+        self._hazard_policies = hazard_policies or default_hazard_query_policies()
 
     def parse(self, text: str) -> DisasterQueryParseResult:
         normalized = normalize_question(text)
@@ -216,9 +223,7 @@ class DisasterQueryParser:
                         f"{country.canonical_name} is unavailable."
                     ),
                 )
-        magnitude_match = _MAGNITUDE.search(normalized)
         coordinates = _extract_coordinates(normalized)
-        event_match = _EVENT_ID.search(normalized)
         prefecture_match = re.search(
             r"\b([A-Z][a-z]+(?:[- ][A-Z][a-z]+)*)\s+Prefecture\b", normalized
         )
@@ -230,12 +235,13 @@ class DisasterQueryParser:
             focus=("damage", "latest developments"),
             date_from=date_range[0] if date_range else None,
             date_to=date_range[1] if date_range else None,
-            magnitude=float(magnitude_match.group(1)) if magnitude_match else None,
             prefecture=prefecture_match.group(1) if prefecture_match else None,
             city=city_match.group(1) if city_match else None,
             latitude=coordinates[0],
             longitude=coordinates[1],
-            event_identifier=event_match.group(0) if event_match else None,
+            event_discriminators=self._hazard_policies.for_hazard(
+                hazards[0]
+            ).discriminators(normalized),
         )
         return DisasterQueryParseResult(QueryParseStatus.MATCHED, query=query)
 
@@ -247,11 +253,10 @@ class DisasterQueryParser:
             has_discriminator = any(
                 (
                     query.time_intent == "specified",
-                    query.magnitude is not None,
                     query.prefecture is not None,
                     query.city is not None,
                     query.latitude is not None,
-                    query.event_identifier is not None,
+                    bool(query.event_discriminators),
                 )
             )
             request_type = (

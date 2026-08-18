@@ -10,6 +10,9 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterQuery,
 )
 from disaster_monitor.application.services.event_resolution import resolve_recent_event
+from disaster_monitor.application.services.evidence_correlation import (
+    EarthquakeEvidenceCorrelationPolicy,
+)
 from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
 )
@@ -406,7 +409,11 @@ async def test_reliefweb_adapter_correlates_reports_to_selected_event() -> None:
     )
     result = await adapter.get_situation_reports(selected_event, QUERY, now=NOW)
 
-    assert [report.correlation for report in result.records] == [
+    assert [report.correlation for report in result.records] == [None, None, None]
+    assert [
+        EarthquakeEvidenceCorrelationPolicy().correlate(report, selected_event)
+        for report in result.records
+    ] == [
         CorrelationStatus.MATCHED,
         CorrelationStatus.POSSIBLE,
         CorrelationStatus.UNMATCHED,
@@ -462,8 +469,11 @@ async def test_reliefweb_matches_narrative_event_clues() -> None:
     ).get_situation_reports(event, query, now=datetime(2026, 8, 17, 12, tzinfo=UTC))
 
     assert result.records[0].magnitude == 7.7
-    assert result.records[0].correlation == CorrelationStatus.MATCHED
-    assert result.records[0].event_id == event.event_id
+    assert result.records[0].correlation is None
+    assert (
+        EarthquakeEvidenceCorrelationPolicy().correlate(result.records[0], event)
+        == CorrelationStatus.MATCHED
+    )
     await client.aclose()
 
 
@@ -578,7 +588,11 @@ async def test_reliefweb_local_identifier_correlates_by_event_metadata() -> None
     ).get_situation_reports(event, QUERY, now=NOW)
 
     assert result.records[0].provider_event_ids == ("reliefweb:RW-12345",)
-    assert result.records[0].correlation == CorrelationStatus.MATCHED
+    assert result.records[0].correlation is None
+    assert (
+        EarthquakeEvidenceCorrelationPolicy().correlate(result.records[0], event)
+        == CorrelationStatus.MATCHED
+    )
     await client.aclose()
 
 

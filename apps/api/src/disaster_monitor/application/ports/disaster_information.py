@@ -40,6 +40,18 @@ class WorldwideDisasterProvider(Protocol):
     ) -> ProviderBatch[WorldwideDisasterEvent]: ...
 
 
+class WorldwideSituationProvider(Protocol):
+    """Retrieve situation evidence for a worldwide event without a country."""
+
+    async def get_worldwide_situation_reports(
+        self,
+        event: WorldwideDisasterEvent,
+        query: WorldwideDisasterQuery,
+        *,
+        now: datetime,
+    ) -> ProviderBatch[SituationReport]: ...
+
+
 class Clock(Protocol):
     """Injectable time source used by freshness and cache tests."""
 

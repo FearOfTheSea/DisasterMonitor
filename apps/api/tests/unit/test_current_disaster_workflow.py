@@ -19,6 +19,10 @@ from disaster_monitor.application.services.evidence_reconciliation import (
     normalize_timestamp,
     sanitize_provider_text,
 )
+from disaster_monitor.application.services.provider_registry import (
+    ProviderCapabilities,
+    ProviderRole,
+)
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
     EvidenceAvailability,
@@ -42,6 +46,28 @@ TARGET = (
     "information about the damages in Japan."
 )
 CATALOG = StaticCountryCatalog()
+
+
+def _injected_capabilities() -> tuple[ProviderCapabilities, ProviderCapabilities]:
+    return (
+        ProviderCapabilities(
+            frozenset({ProviderRole.EVENT_DISCOVERY}),
+            frozenset({Hazard.EARTHQUAKE}),
+            None,
+        ),
+        ProviderCapabilities(
+            frozenset({ProviderRole.SITUATION_EVIDENCE}),
+            frozenset({Hazard.EARTHQUAKE}),
+            None,
+        ),
+    )
+
+
+def test_direct_provider_injection_requires_declared_capabilities() -> None:
+    with pytest.raises(ValueError, match="explicit provider capabilities"):
+        CurrentDisasterReportService(FakeEventProvider(()), FakeSituationProvider(()))
+
+
 PARSER = DisasterQueryParser(CATALOG)
 JAPAN = CATALOG.get_by_alpha3("JPN")
 assert JAPAN is not None
@@ -292,6 +318,7 @@ async def test_service_returns_source_backed_fallback() -> None:
                 ),
             )
         ),
+        provider_capabilities=_injected_capabilities(),
         clock=lambda: NOW,
     )
 
@@ -310,6 +337,7 @@ async def test_service_keeps_partial_result_and_surfaces_provider_failure() -> N
     service = CurrentDisasterReportService(
         FakeEventProvider((event("mainshock"),)),
         FakeSituationProvider(error=TimeoutError()),
+        provider_capabilities=_injected_capabilities(),
         clock=lambda: NOW,
     )
 

@@ -42,11 +42,27 @@ class GeographicScope(StrEnum):
     WORLDWIDE = "worldwide"
 
 
+class WorldwideSelectionIntent(StrEnum):
+    """Neutral ranking intent interpreted by the hazard policy."""
+
+    LATEST = "latest"
+    STRONGEST = "strongest"
+
+
+@dataclass(frozen=True, slots=True)
+class EventDiscriminator:
+    """Neutral key/value discriminator interpreted by hazard-owned policies."""
+
+    kind: str
+    value: str
+
+
 @dataclass(frozen=True, slots=True)
 class WorldwideDisasterQuery:
     """Bounded worldwide lookup with no invented country identity."""
 
     hazard: Hazard
+    selection_intent: WorldwideSelectionIntent = WorldwideSelectionIntent.LATEST
     time_window_days: int = 30
     limit: int = 50
 
@@ -62,12 +78,17 @@ class DisasterQuery:
     time_window_days: int = 30
     date_from: datetime | None = None
     date_to: datetime | None = None
-    magnitude: float | None = None
     prefecture: str | None = None
     city: str | None = None
     latitude: float | None = None
     longitude: float | None = None
-    event_identifier: str | None = None
+    event_discriminators: tuple[EventDiscriminator, ...] = ()
+
+    def discriminator(self, kind: str) -> str | None:
+        for item in self.event_discriminators:
+            if item.kind == kind:
+                return item.value
+        return None
 
     @property
     def geography(self) -> str:

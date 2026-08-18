@@ -4,6 +4,7 @@ import pytest
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
+    EventDiscriminator,
 )
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
@@ -22,8 +23,13 @@ from disaster_monitor.application.services.evidence_correlation import (
     EarthquakeEvidenceCorrelationPolicy,
 )
 from disaster_monitor.application.services.evidence_reconciliation import (
+    EvidenceReconciler,
     build_evidence_packet,
     correlate_situation_report,
+)
+from disaster_monitor.application.services.provider_registry import (
+    ProviderCapabilities,
+    ProviderRole,
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
@@ -86,6 +92,8 @@ def _event(
 
 
 def _query(**kwargs: object) -> DisasterQuery:
+    magnitude = kwargs.pop("magnitude", None)
+    event_identifier = kwargs.pop("event_identifier", None)
     values: dict[str, object] = {
         "hazard": Hazard.EARTHQUAKE,
         "country": JAPAN,
@@ -93,6 +101,12 @@ def _query(**kwargs: object) -> DisasterQuery:
         "focus": ("damage",),
     }
     values.update(kwargs)
+    discriminators = []
+    if magnitude is not None:
+        discriminators.append(EventDiscriminator("magnitude", str(magnitude)))
+    if event_identifier is not None:
+        discriminators.append(EventDiscriminator("event_id", str(event_identifier)))
+    values["event_discriminators"] = tuple(discriminators)
     return DisasterQuery(**values)  # type: ignore[arg-type]
 
 
@@ -108,7 +122,7 @@ def test_date_and_each_event_discriminator_narrows_resolution() -> None:
     assert query.city == "Kanazawa"
     assert query.latitude == 37.0
     assert query.longitude == 137.0
-    assert query.magnitude == 6.0
+    assert query.discriminator("magnitude") == "6.0"
 
     candidates = (
         _event("target", location="Ishikawa, Japan"),
@@ -299,6 +313,50 @@ def test_earthquake_magnitude_correlation_is_owned_by_its_policy() -> None:
     )
 
 
+def test_hazard_parser_does_not_apply_earthquake_discriminators_to_other_hazards() -> (
+    None
+):
+    result = PARSER.parse(
+        "Latest flood in Japan, magnitude 6.0, provider event us7000fixture."
+    )
+
+    assert result.query is not None
+    assert result.query.event_discriminators == ()
+
+
+def test_injected_correlation_policy_is_applied_once_by_reconciler() -> None:
+    event = _event("usgs:target")
+    source = _source("ReliefWeb", "Ishikawa update")
+    report = SituationReport(
+        source=source,
+        narrative="Ishikawa earthquake update.",
+        locations=("Ishikawa",),
+        correlation=CorrelationStatus.UNMATCHED,
+    )
+    calls = 0
+
+    class CountingPolicy:
+        def correlate(self, _report, _event):
+            nonlocal calls
+            calls += 1
+            return CorrelationStatus.MATCHED
+
+    class CountingPolicies:
+        def for_hazard(self, _hazard):
+            return CountingPolicy()
+
+    packet = EvidenceReconciler(CountingPolicies()).build(
+        _query(),
+        event,
+        (report,),
+        warnings=(),
+        retrieved_at=NOW,
+    )
+
+    assert calls == 1
+    assert packet.narratives and report.narrative in packet.narratives[0]
+
+
 @pytest.mark.asyncio
 async def test_event_without_situation_records_is_explicitly_partial() -> None:
     class Events:
@@ -310,7 +368,21 @@ async def test_event_without_situation_records_is_explicitly_partial() -> None:
             return ()
 
     result = await CurrentDisasterReportService(
-        Events(), NoSituation(), clock=lambda: NOW
+        Events(),
+        NoSituation(),
+        provider_capabilities=(
+            ProviderCapabilities(
+                frozenset({ProviderRole.EVENT_DISCOVERY}),
+                frozenset({Hazard.EARTHQUAKE}),
+                None,
+            ),
+            ProviderCapabilities(
+                frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                frozenset({Hazard.EARTHQUAKE}),
+                None,
+            ),
+        ),
+        clock=lambda: NOW,
     ).execute(_query())
     assert result.selected_event is not None
     assert result.partial is True

@@ -11,6 +11,7 @@ from disaster_monitor.application.disaster import (
     ProviderIssue,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
+    WorldwideSelectionIntent,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.evidence_reconciliation import (
@@ -65,13 +66,13 @@ def build_usgs_params(
     endtime = query.date_to or now
     generic_query = not any(
         (
-            query.event_identifier,
+            query.discriminator("event_id"),
             query.date_from,
             query.date_to,
             query.prefecture,
             query.city,
             query.latitude is not None and query.longitude is not None,
-            query.magnitude is not None,
+            query.discriminator("magnitude") is not None,
         )
     )
     area = query.country.geographic_area
@@ -98,8 +99,9 @@ def build_usgs_params(
     }
     if generic_query:
         params["minmagnitude"] = 4.5
-    if query.magnitude is not None:
-        params["minmagnitude"] = query.magnitude - 0.1
+    query_magnitude = query.discriminator("magnitude")
+    if query_magnitude is not None:
+        params["minmagnitude"] = float(query_magnitude) - 0.1
     return params
 
 
@@ -113,7 +115,11 @@ def build_worldwide_usgs_params(
         "starttime": (now - timedelta(days=query.time_window_days)).isoformat(),
         "endtime": now.isoformat(),
         "minmagnitude": 4.5,
-        "orderby": "time",
+        "orderby": (
+            "magnitude"
+            if query.selection_intent is WorldwideSelectionIntent.STRONGEST
+            else "time"
+        ),
         "limit": query.limit,
     }
 
@@ -326,7 +332,7 @@ class UsgsEarthquakeAdapter:
                     query.date_from or now - timedelta(days=query.time_window_days)
                 ).isoformat(),
                 "to": (query.date_to or now).isoformat(),
-                "event": query.event_identifier or "",
+                "event": query.discriminator("event_id") or "",
             },
             rights_id="usgs-earthquake-api-terms-2026-08",
             retrieved_at=now,

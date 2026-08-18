@@ -116,21 +116,6 @@ def validate_worldwide_event_evidence(
     return record
 
 
-def validate_global_event_evidence(
-    record: object,
-    *,
-    source_id: str,
-    allowed_hosts: frozenset[str],
-) -> WorldwideDisasterEvent:
-    """Compatibility wrapper for the pre-neutral worldwide adapter tests."""
-    return validate_worldwide_event_evidence(
-        record,
-        WorldwideDisasterQuery(Hazard.EARTHQUAKE),
-        source_id=source_id,
-        allowed_hosts=allowed_hosts,
-    )
-
-
 def validate_situation_evidence(
     record: object,
     query: DisasterQuery,
@@ -180,6 +165,28 @@ def validate_situation_evidence(
         _validate_source(fact.source, source_id=source_id, allowed_hosts=allowed_hosts)
         if fact.observed_at is not None and not _aware(fact.observed_at):
             raise SourceEvidencePolicyError("A reported fact time is invalid.")
+    return record
+
+
+def validate_worldwide_situation_evidence(
+    record: object,
+    query: WorldwideDisasterQuery,
+    *,
+    source_id: str,
+    allowed_hosts: frozenset[str],
+) -> SituationReport:
+    """Validate situation evidence without inventing a country scope."""
+    if not isinstance(record, SituationReport):
+        raise SourceEvidencePolicyError(
+            "The worldwide situation provider returned a wrong record type."
+        )
+    _validate_source(record.source, source_id=source_id, allowed_hosts=allowed_hosts)
+    if not isinstance(record.narrative, str):
+        raise SourceEvidencePolicyError("The worldwide situation narrative is invalid.")
+    if record.hazard is not None and record.hazard != query.hazard:
+        raise SourceEvidencePolicyError(
+            "The worldwide situation hazard is outside the selected scope."
+        )
     return record
 
 

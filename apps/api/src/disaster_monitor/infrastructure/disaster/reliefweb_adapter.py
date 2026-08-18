@@ -2,7 +2,6 @@
 
 import html
 import re
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -12,15 +11,11 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
     ProviderIssue,
 )
-from disaster_monitor.application.services.evidence_correlation import (
-    default_evidence_correlation_policies,
-)
 from disaster_monitor.application.services.evidence_reconciliation import (
     normalize_timestamp,
     sanitize_provider_text,
 )
 from disaster_monitor.domain.disaster import (
-    CorrelationStatus,
     DisasterEvent,
     FactStatus,
     Hazard,
@@ -379,20 +374,7 @@ class ReliefWebSituationAdapter:
                 magnitude=magnitude,
                 provider_event_ids=provider_event_ids,
             )
-            status = (
-                default_evidence_correlation_policies()
-                .for_hazard(query.hazard)
-                .correlate(report, event)
-            )
-            reports.append(
-                replace(
-                    report,
-                    correlation=status,
-                    event_id=event.event_id
-                    if status == CorrelationStatus.MATCHED
-                    else None,
-                )
-            )
+            reports.append(report)
         issues: tuple[ProviderIssue, ...] = ()
         if malformed and not reports:
             issues = (

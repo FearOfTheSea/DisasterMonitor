@@ -363,6 +363,9 @@ def build_current_disaster_report(
                     geographic_scopes=frozenset(
                         {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
                     ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
                 ),
                 source_id="usgs-earthquakes",
                 allowed_hosts=usgs.allowed_hosts,

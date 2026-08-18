@@ -6,7 +6,12 @@ from disaster_monitor.application.agent.models import (
     SourceDescriptor,
     SourceInformationRole,
 )
-from disaster_monitor.application.disaster import GeographicScope, ProviderBatch
+from disaster_monitor.application.disaster import (
+    DisasterQuery,
+    GeographicScope,
+    ProviderBatch,
+    WorldwideDisasterQuery,
+)
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
@@ -16,7 +21,7 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.application.services.source_consistency import (
     validate_provider_source_consistency,
 )
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Country, GeographicArea, Hazard
 
 
 @dataclass(frozen=True)
@@ -42,6 +47,9 @@ class FakeProvider:
         return ProviderBatch()
 
     async def get_situation_reports(self, event, query, *, now):
+        return ProviderBatch()
+
+    async def find_worldwide_events(self, query, *, now):
         return ProviderBatch()
 
 
@@ -154,6 +162,57 @@ def test_rejects_roles_without_typed_executable_ports() -> None:
                 frozenset({"TST"}),
             ),
         )
+
+
+def test_worldwide_only_and_mixed_scope_ports_do_not_form_a_cartesian_product() -> None:
+    provider = FakeProvider("worldwide", frozenset({"events.example"}))
+    worldwide_only = ProviderRegistration(
+        "Worldwide only",
+        provider,
+        ProviderCapabilities(
+            frozenset({ProviderRole.EVENT_DISCOVERY}),
+            frozenset({Hazard.FLOOD}),
+            None,
+            geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+            event_scopes=frozenset({GeographicScope.WORLDWIDE}),
+        ),
+        worldwide_provider=provider,
+    )
+    country_query = DisasterQuery(
+        Hazard.FLOOD,
+        Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1)),
+        "recent",
+        (),
+    )
+    assert worldwide_only.capabilities.supports(
+        WorldwideDisasterQuery(Hazard.FLOOD), ProviderRole.EVENT_DISCOVERY
+    )
+    assert not worldwide_only.capabilities.supports(
+        country_query, ProviderRole.EVENT_DISCOVERY
+    )
+
+    mixed = ProviderRegistration(
+        "Worldwide events and country situations",
+        provider,
+        ProviderCapabilities(
+            frozenset({ProviderRole.EVENT_DISCOVERY, ProviderRole.SITUATION_EVIDENCE}),
+            frozenset({Hazard.FLOOD}),
+            None,
+            geographic_scopes=frozenset(
+                {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+            ),
+            event_scopes=frozenset({GeographicScope.WORLDWIDE}),
+            situation_scopes=frozenset({GeographicScope.COUNTRY}),
+        ),
+        situation_provider=provider,
+        worldwide_provider=provider,
+    )
+    assert mixed.capabilities.supports(
+        WorldwideDisasterQuery(Hazard.FLOOD), ProviderRole.EVENT_DISCOVERY
+    )
+    assert not mixed.capabilities.supports(
+        WorldwideDisasterQuery(Hazard.FLOOD), ProviderRole.SITUATION_EVIDENCE
+    )
     with pytest.raises(ValueError, match="without a worldwide port"):
         ProviderRegistration(
             "Missing worldwide port",
@@ -163,6 +222,7 @@ def test_rejects_roles_without_typed_executable_ports() -> None:
                 frozenset({Hazard.EARTHQUAKE}),
                 None,
                 geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                event_scopes=frozenset({GeographicScope.WORLDWIDE}),
             ),
             event_provider=FakeProvider("test-events", frozenset({"events.example"})),
         )

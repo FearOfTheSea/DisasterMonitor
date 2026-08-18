@@ -7,6 +7,7 @@ from typing import Protocol
 from disaster_monitor.application.disaster import (
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
+    WorldwideSelectionIntent,
 )
 from disaster_monitor.domain.disaster import Hazard
 
@@ -14,20 +15,18 @@ from disaster_monitor.domain.disaster import Hazard
 class WorldwideDisasterPolicy(Protocol):
     """Hazard-owned worldwide query and selection semantics."""
 
-    def selection_for(self, question: str) -> str: ...
+    def selection_for(self, question: str) -> WorldwideSelectionIntent: ...
 
     def select(
         self,
         events: tuple[WorldwideDisasterEvent, ...],
         query: WorldwideDisasterQuery,
-        question: str = "",
     ) -> WorldwideDisasterEvent | None: ...
 
     def describe_selection(
         self,
         event: WorldwideDisasterEvent,
         query: WorldwideDisasterQuery,
-        question: str = "",
     ) -> str: ...
 
     def response_type(self, query: WorldwideDisasterQuery) -> str: ...
@@ -36,14 +35,13 @@ class WorldwideDisasterPolicy(Protocol):
 class DefaultWorldwideDisasterPolicy:
     """Shared latest-event behavior for hazards without special ranking rules."""
 
-    def selection_for(self, question: str) -> str:
-        return "latest"
+    def selection_for(self, question: str) -> WorldwideSelectionIntent:
+        return WorldwideSelectionIntent.LATEST
 
     def select(
         self,
         events: tuple[WorldwideDisasterEvent, ...],
         query: WorldwideDisasterQuery,
-        question: str = "",
     ) -> WorldwideDisasterEvent | None:
         if not events:
             return None
@@ -53,7 +51,6 @@ class DefaultWorldwideDisasterPolicy:
         self,
         event: WorldwideDisasterEvent,
         query: WorldwideDisasterQuery,
-        question: str = "",
     ) -> str:
         return (
             f"{event.source.publisher} reports the latest matching worldwide "
@@ -69,18 +66,21 @@ class DefaultWorldwideDisasterPolicy:
 class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
     """Earthquake-specific ranking and wording kept outside generic orchestration."""
 
-    def selection_for(self, question: str) -> str:
-        return "strongest" if _STRONGEST_MARKERS.search(question) else "latest"
+    def selection_for(self, question: str) -> WorldwideSelectionIntent:
+        return (
+            WorldwideSelectionIntent.STRONGEST
+            if _STRONGEST_MARKERS.search(question)
+            else WorldwideSelectionIntent.LATEST
+        )
 
     def select(
         self,
         events: tuple[WorldwideDisasterEvent, ...],
         query: WorldwideDisasterQuery,
-        question: str = "",
     ) -> WorldwideDisasterEvent | None:
         if not events:
             return None
-        if self.selection_for(question) == "strongest":
+        if query.selection_intent is WorldwideSelectionIntent.STRONGEST:
             return max(
                 events,
                 key=lambda event: (
@@ -105,9 +105,12 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
         self,
         event: WorldwideDisasterEvent,
         query: WorldwideDisasterQuery,
-        question: str = "",
     ) -> str:
-        label = "strongest" if self.selection_for(question) == "strongest" else "latest"
+        label = (
+            "strongest"
+            if query.selection_intent is WorldwideSelectionIntent.STRONGEST
+            else "latest"
+        )
         magnitude = (
             f" magnitude {event.magnitude:g}"
             if event.magnitude is not None

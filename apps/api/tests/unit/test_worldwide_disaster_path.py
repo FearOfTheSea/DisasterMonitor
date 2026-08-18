@@ -34,6 +34,7 @@ from disaster_monitor.domain.disaster import (
     Country,
     GeographicArea,
     Hazard,
+    SituationReport,
     SourceReference,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
@@ -57,6 +58,17 @@ class SyntheticWorldwideProvider:
 
     async def find_recent_events(self, query, *, now):
         return ProviderBatch()
+
+    async def get_worldwide_situation_reports(self, event, query, *, now):
+        return ProviderBatch(
+            (
+                SituationReport(
+                    source=event.source,
+                    narrative="Worldwide flood situation evidence.",
+                    hazard=query.hazard,
+                ),
+            )
+        )
 
 
 class NoGeneralModel:
@@ -96,6 +108,7 @@ def _registry(provider: object) -> ProviderRegistry:
                     hazards=frozenset({Hazard.FLOOD}),
                     country_codes=None,
                     geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                    event_scopes=frozenset({GeographicScope.WORLDWIDE}),
                 ),
                 source_id="synthetic-floods",
                 allowed_hosts=frozenset({"floods.example"}),
@@ -147,7 +160,7 @@ async def test_worldwide_runtime_translates_report_status_and_capabilities() -> 
     )
 
     class ReportResult:
-        async def execute(self, query, *, question=""):
+        async def execute(self, query):
             return result
 
     catalog = StaticCountryCatalog()
@@ -166,6 +179,45 @@ async def test_worldwide_runtime_translates_report_status_and_capabilities() -> 
         "Synthetic investigation action"
     ]
     assert state.termination_reason == "synthetic_completed"
+
+
+@pytest.mark.asyncio
+async def test_worldwide_completeness_changes_when_situation_capability_executes() -> (
+    None
+):
+    provider = SyntheticWorldwideProvider(_event())
+    registry = ProviderRegistry(
+        (
+            ProviderRegistration(
+                "Synthetic worldwide floods with situation evidence",
+                provider,
+                ProviderCapabilities(
+                    roles=frozenset(
+                        {
+                            ProviderRole.EVENT_DISCOVERY,
+                            ProviderRole.SITUATION_EVIDENCE,
+                        }
+                    ),
+                    hazards=frozenset({Hazard.FLOOD}),
+                    country_codes=None,
+                    geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                    event_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                    situation_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                ),
+                source_id="synthetic-floods",
+                allowed_hosts=frozenset({"floods.example"}),
+                worldwide_provider=provider,
+                worldwide_situation_provider=provider,
+            ),
+        )
+    )
+    report = await WorldwideDisasterReportService(registry, clock=lambda: NOW).execute(
+        WorldwideDisasterQuery(Hazard.FLOOD)
+    )
+
+    assert not report.partial
+    assert report.capability_gaps == ()
+    assert report.termination_reason == "completed_worldwide_evidence"
 
 
 def test_country_codes_none_does_not_authorize_worldwide_queries() -> None:

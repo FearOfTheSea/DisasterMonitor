@@ -14,6 +14,7 @@ from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
     WorldwideDisasterProvider,
+    WorldwideSituationProvider,
 )
 from disaster_monitor.domain.disaster import DisasterEvent, Hazard
 
@@ -41,15 +42,22 @@ class ProviderCapabilities:
     country_codes: frozenset[str] | None
     requires_configuration: bool = False
     geographic_scopes: frozenset[GeographicScope] = frozenset({GeographicScope.COUNTRY})
+    event_scopes: frozenset[GeographicScope] = frozenset({GeographicScope.COUNTRY})
+    situation_scopes: frozenset[GeographicScope] = frozenset({GeographicScope.COUNTRY})
 
     def supports(
         self, query: DisasterQuery | WorldwideDisasterQuery, role: ProviderRole
     ) -> bool:
         if role not in self.roles or query.hazard not in self.hazards:
             return False
+        scopes = (
+            self.event_scopes
+            if role is ProviderRole.EVENT_DISCOVERY
+            else self.situation_scopes
+        )
         if isinstance(query, WorldwideDisasterQuery):
-            return GeographicScope.WORLDWIDE in self.geographic_scopes
-        return GeographicScope.COUNTRY in self.geographic_scopes and (
+            return GeographicScope.WORLDWIDE in scopes
+        return GeographicScope.COUNTRY in scopes and (
             self.country_codes is None
             or query.country.alpha3_code in self.country_codes
         )
@@ -69,28 +77,45 @@ class ProviderRegistration:
     event_provider: DisasterEventProvider | None = None
     situation_provider: SituationReportProvider | None = None
     worldwide_provider: WorldwideDisasterProvider | None = None
+    worldwide_situation_provider: WorldwideSituationProvider | None = None
 
     def __post_init__(self) -> None:
         roles = self.capabilities.roles
-        scopes = self.capabilities.geographic_scopes
-        if ProviderRole.EVENT_DISCOVERY in roles and self.event_provider is None:
+        if (
+            ProviderRole.EVENT_DISCOVERY in roles
+            and GeographicScope.COUNTRY in self.capabilities.event_scopes
+            and self.event_provider is None
+        ):
             raise ValueError(
                 f"Provider {self.name} advertises event discovery "
                 "without an event port."
             )
-        if ProviderRole.SITUATION_EVIDENCE in roles and self.situation_provider is None:
+        if (
+            ProviderRole.SITUATION_EVIDENCE in roles
+            and GeographicScope.COUNTRY in self.capabilities.situation_scopes
+            and self.situation_provider is None
+        ):
             raise ValueError(
                 f"Provider {self.name} advertises situation evidence "
                 "without a situation port."
             )
         if (
             ProviderRole.EVENT_DISCOVERY in roles
-            and GeographicScope.WORLDWIDE in scopes
+            and GeographicScope.WORLDWIDE in self.capabilities.event_scopes
             and self.worldwide_provider is None
         ):
             raise ValueError(
                 f"Provider {self.name} advertises worldwide event discovery "
                 "without a worldwide port."
+            )
+        if (
+            ProviderRole.SITUATION_EVIDENCE in roles
+            and GeographicScope.WORLDWIDE in self.capabilities.situation_scopes
+            and self.worldwide_situation_provider is None
+        ):
+            raise ValueError(
+                f"Provider {self.name} advertises worldwide situation evidence "
+                "without a worldwide situation port."
             )
 
 

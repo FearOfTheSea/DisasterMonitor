@@ -19,6 +19,10 @@ from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
+from disaster_monitor.application.services.worldwide_disaster_policy import (
+    WorldwideDisasterPolicyRegistry,
+    default_worldwide_disaster_policy_registry,
+)
 from disaster_monitor.domain.disaster import Hazard
 
 _HAZARDS: dict[Hazard, tuple[str, ...]] = {
@@ -124,6 +128,8 @@ _WORLDWIDE_MARKERS = re.compile(
 
 def worldwide_disaster_query(
     question: str,
+    *,
+    policies: WorldwideDisasterPolicyRegistry | None = None,
 ) -> WorldwideDisasterQuery | None:
     """Admit explicit current worldwide requests for any admitted hazard."""
     hazards = _hazard_mentions(question)
@@ -133,7 +139,12 @@ def worldwide_disaster_query(
         or not _WORLDWIDE_MARKERS.search(question)
     ):
         return None
-    return WorldwideDisasterQuery(hazard=hazards[0])
+    policy = (policies or default_worldwide_disaster_policy_registry()).for_hazard(
+        hazards[0]
+    )
+    return WorldwideDisasterQuery(
+        hazard=hazards[0], selection_intent=policy.selection_for(question)
+    )
 
 
 def disaster_safety_gate(question: str) -> bool:

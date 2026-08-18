@@ -92,7 +92,8 @@ def test_worldwide_earthquake_scope_is_explicit_and_current_only() -> None:
     )
 
     assert latest is not None and latest.hazard is Hazard.EARTHQUAKE
-    assert strongest == latest
+    assert strongest is not None
+    assert strongest.selection_intent.value == "strongest"
     assert worldwide_disaster_query("Latest earthquake anywhere?") is not None
     assert worldwide_disaster_query("What causes earthquakes globally?") is None
     assert worldwide_disaster_query("Any flood news worldwide?") is not None

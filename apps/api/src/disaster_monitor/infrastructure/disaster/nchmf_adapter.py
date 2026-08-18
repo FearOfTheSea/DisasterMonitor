@@ -19,7 +19,6 @@ from disaster_monitor.application.services.operational_ingestion import (
     canonical_request_identity,
 )
 from disaster_monitor.domain.disaster import (
-    CorrelationStatus,
     DisasterEvent,
     FactStatus,
     Hazard,
@@ -116,7 +115,6 @@ class NchmfWarningAdapter:
                     ),
                     facts=(fact,),
                     event_id=candidate.event_id,
-                    correlation=CorrelationStatus.MATCHED,
                     reported_event_time=item.published_at,
                     locations=(candidate.location,),
                     countries=(query.country.canonical_name,),

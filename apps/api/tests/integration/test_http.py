@@ -60,6 +60,23 @@ CURRENT_PROMPT = (
     "information about the damages in Japan."
 )
 NOW = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
+
+
+def _injected_capabilities() -> tuple[ProviderCapabilities, ProviderCapabilities]:
+    return (
+        ProviderCapabilities(
+            frozenset({ProviderRole.EVENT_DISCOVERY}),
+            frozenset({Hazard.EARTHQUAKE}),
+            None,
+        ),
+        ProviderCapabilities(
+            frozenset({ProviderRole.SITUATION_EVIDENCE}),
+            frozenset({Hazard.EARTHQUAKE}),
+            None,
+        ),
+    )
+
+
 AUGUST_2026_PROMPT = (
     "Please give me the latest information about the earthquake in Japan on "
     "August 5, 2026."
@@ -140,7 +157,10 @@ def build_current_service(
             )
 
     return CurrentDisasterReportService(
-        EventProvider(), SituationProvider(), clock=lambda: NOW
+        EventProvider(),
+        SituationProvider(),
+        provider_capabilities=_injected_capabilities(),
+        clock=lambda: NOW,
     )
 
 
@@ -386,7 +406,10 @@ async def test_earthquake_news_never_falls_through_to_general_model(
 
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
     service = CurrentDisasterReportService(
-        CountryEventProvider(), EmptySituationProvider(), clock=lambda: NOW
+        CountryEventProvider(),
+        EmptySituationProvider(),
+        provider_capabilities=_injected_capabilities(),
+        clock=lambda: NOW,
     )
     app = create_app(model=model, current_disaster_report=service)
 
@@ -447,6 +470,7 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
                         hazards=frozenset({Hazard.EARTHQUAKE}),
                         country_codes=None,
                         geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                        event_scopes=frozenset({GeographicScope.WORLDWIDE}),
                     ),
                     source_id="usgs-earthquakes",
                     allowed_hosts=frozenset({"earthquake.usgs.gov"}),
@@ -708,6 +732,7 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
     service = CurrentDisasterReportService(
         RecordingEventProvider(),
         RecordingSituationProvider(),
+        provider_capabilities=_injected_capabilities(),
         clock=lambda: retrieval_time,
     )
     app = create_app(model=model, current_disaster_report=service)
@@ -779,7 +804,10 @@ async def test_current_disaster_is_honest_when_event_source_has_no_match() -> No
     app = create_app(
         model=FakeLanguageModel(error=ConnectionError("model is not needed")),
         current_disaster_report=CurrentDisasterReportService(
-            EmptyEventProvider(), EmptySituationProvider(), clock=lambda: NOW
+            EmptyEventProvider(),
+            EmptySituationProvider(),
+            provider_capabilities=_injected_capabilities(),
+            clock=lambda: NOW,
         ),
     )
     async with httpx.AsyncClient(

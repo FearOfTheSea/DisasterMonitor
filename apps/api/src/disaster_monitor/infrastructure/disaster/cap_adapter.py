@@ -20,7 +20,6 @@ from disaster_monitor.application.services.operational_ingestion import (
     canonical_request_identity,
 )
 from disaster_monitor.domain.disaster import (
-    CorrelationStatus,
     DisasterEvent,
     FactStatus,
     Hazard,
@@ -147,7 +146,6 @@ class CapAlertAdapter:
                     narrative=narrative[:4_000],
                     facts=facts,
                     event_id=candidate.event_id,
-                    correlation=CorrelationStatus.MATCHED,
                     reported_event_time=record.sent,
                     locations=(candidate.location,),
                     countries=(query.country.canonical_name,),

@@ -92,7 +92,6 @@ class DisasterAgentRuntime:
             try:
                 state.workspace.report = await self._worldwide_report.execute(
                     task.worldwide_query,
-                    question=task.question,
                 )
             except Exception:
                 state.final_status = AgentStatus.FAILED
