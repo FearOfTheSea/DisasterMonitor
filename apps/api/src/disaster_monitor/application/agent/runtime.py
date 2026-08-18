@@ -3,6 +3,7 @@
 from disaster_monitor.application.agent.models import (
     AgentExecutionState,
     AgentStatus,
+    InvestigationAction,
     InvestigationPlan,
     PlanStatus,
     ReviewDecision,
@@ -18,10 +19,18 @@ from disaster_monitor.application.agent.task_normalization import (
     validate_disaster_task,
 )
 from disaster_monitor.application.agent.tooling import ToolRegistry, execute_plan
+from disaster_monitor.application.disaster import GeographicScope
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
+)
+from disaster_monitor.application.services.worldwide_disaster import (
+    WorldwideDisasterReportService,
+)
+from disaster_monitor.application.services.worldwide_disaster_policy import (
+    WorldwideDisasterPolicyRegistry,
+    default_worldwide_disaster_policy_registry,
 )
 from disaster_monitor.domain.multimodal import MultimodalAsset
 
@@ -37,11 +46,17 @@ class DisasterAgentRuntime:
         query_parser: DisasterQueryParser,
         tool_registry: ToolRegistry,
         agent_model: AgentModel | None = None,
+        worldwide_report: WorldwideDisasterReportService | None = None,
+        worldwide_policies: WorldwideDisasterPolicyRegistry | None = None,
     ) -> None:
         self._country_catalog = country_catalog
         self._query_parser = query_parser
         self._tools = tool_registry
         self._agent_model = agent_model
+        self._worldwide_report = worldwide_report
+        self._worldwide_policies = (
+            worldwide_policies or default_worldwide_disaster_policy_registry()
+        )
 
     async def run(
         self, question: str, *, multimodal_assets: tuple[MultimodalAsset, ...] = ()
@@ -53,6 +68,7 @@ class DisasterAgentRuntime:
             draft,
             country_catalog=self._country_catalog,
             query_parser=self._query_parser,
+            worldwide_policies=self._worldwide_policies,
         )
         empty_plan = InvestigationPlan(
             "no-plan", task.question, (), status=PlanStatus.COMPLETED
@@ -71,6 +87,55 @@ class DisasterAgentRuntime:
             state.capability_gaps.append(
                 task.detail or "Task validation is incomplete."
             )
+            return state
+
+        if task.geographic_scope is GeographicScope.WORLDWIDE:
+            state = AgentExecutionState(task, empty_plan, model_call_count=model_calls)
+            if self._worldwide_report is None or task.worldwide_query is None:
+                state.final_status = AgentStatus.COVERAGE_UNAVAILABLE
+                state.termination_reason = "coverage_unavailable"
+                state.capability_gaps.append(
+                    "No worldwide event-reporting capability is configured."
+                )
+                return state
+            try:
+                state.workspace.report = await self._worldwide_report.execute(
+                    task.worldwide_query
+                )
+            except Exception:
+                state.final_status = AgentStatus.FAILED
+                state.termination_reason = "worldwide_execution_failed"
+                state.warnings.append(
+                    "The bounded worldwide investigation stopped safely."
+                )
+                return state
+            state.actions.append(
+                InvestigationAction(
+                    "worldwide-event-discovery",
+                    "Queried the registry-approved worldwide event source.",
+                )
+            )
+            state.capability_gaps.append(
+                "Worldwide casualty, damage, warning, and response coverage is not "
+                "complete."
+            )
+            if state.workspace.report.selected_event is not None:
+                state.actions.append(
+                    InvestigationAction(
+                        "worldwide-event-selection",
+                        "Selected and rendered one source-backed worldwide event.",
+                    )
+                )
+            state.workspace.source_ids.extend(
+                source.source_id for source in state.workspace.report.sources
+            )
+            if state.workspace.report.selected_event is None:
+                state.final_status = AgentStatus.COVERAGE_UNAVAILABLE
+                state.termination_reason = "coverage_unavailable"
+            else:
+                state.final_status = AgentStatus.PARTIAL
+                state.termination_reason = "partial_global_event_evidence"
+            state.warnings.extend(state.workspace.report.warnings)
             return state
 
         plan = default_investigation_plan(

@@ -4,7 +4,11 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 
-from disaster_monitor.application.disaster import DisasterQuery
+from disaster_monitor.application.disaster import (
+    DisasterQuery,
+    GeographicScope,
+    WorldwideDisasterQuery,
+)
 from disaster_monitor.domain.disaster import DisasterEvent, Hazard
 
 
@@ -23,15 +27,18 @@ class ProviderCapabilities:
     hazards: frozenset[Hazard]
     country_codes: frozenset[str] | None
     requires_configuration: bool = False
+    geographic_scopes: frozenset[GeographicScope] = frozenset({GeographicScope.COUNTRY})
 
-    def supports(self, query: DisasterQuery, role: ProviderRole) -> bool:
-        return (
-            role in self.roles
-            and query.hazard in self.hazards
-            and (
-                self.country_codes is None
-                or query.country.alpha3_code in self.country_codes
-            )
+    def supports(
+        self, query: DisasterQuery | WorldwideDisasterQuery, role: ProviderRole
+    ) -> bool:
+        if role not in self.roles or query.hazard not in self.hazards:
+            return False
+        if isinstance(query, WorldwideDisasterQuery):
+            return GeographicScope.WORLDWIDE in self.geographic_scopes
+        return GeographicScope.COUNTRY in self.geographic_scopes and (
+            self.country_codes is None
+            or query.country.alpha3_code in self.country_codes
         )
 
 
@@ -68,7 +75,7 @@ class ProviderRegistry:
 
     def select(
         self,
-        query: DisasterQuery,
+        query: DisasterQuery | WorldwideDisasterQuery,
         role: ProviderRole,
         *,
         event: DisasterEvent | None = None,

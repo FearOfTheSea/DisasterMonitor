@@ -35,11 +35,35 @@ class QueryParseStatus(StrEnum):
     DATE_TIMEZONE_UNAVAILABLE = "date_timezone_unavailable"
 
 
+class GeographicScope(StrEnum):
+    """Explicit geographic authority requested by a normalized task."""
+
+    COUNTRY = "country"
+    WORLDWIDE = "worldwide"
+
+
 class GlobalEventSelection(StrEnum):
     """Deterministic ranking requested for an explicitly worldwide lookup."""
 
     LATEST = "latest"
     STRONGEST = "strongest"
+
+
+class WorldwideSelection(StrEnum):
+    """Shared worldwide selection semantics understood by the generic path."""
+
+    LATEST = "latest"
+
+
+@dataclass(frozen=True, slots=True)
+class WorldwideDisasterQuery:
+    """Bounded worldwide lookup with no invented country identity."""
+
+    hazard: Hazard
+    selection: str = WorldwideSelection.LATEST.value
+    time_window_days: int = 30
+    minimum_magnitude: float | None = None
+    limit: int = 50
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +106,7 @@ class GlobalEarthquakeQuery:
 
 
 @dataclass(frozen=True, slots=True)
-class GlobalDisasterEvent:
+class WorldwideDisasterEvent:
     """Source-backed event discovered without assigning it to a country."""
 
     event_id: str
@@ -98,6 +122,11 @@ class GlobalDisasterEvent:
     depth_km: float | None = None
     significance: float | None = None
     provider_ids: tuple[str, ...] = ()
+
+
+# Kept as a data-compatibility alias for provider fixtures while application
+# contracts use the hazard-neutral name above.
+GlobalDisasterEvent = WorldwideDisasterEvent
 
 
 @dataclass(frozen=True, slots=True)

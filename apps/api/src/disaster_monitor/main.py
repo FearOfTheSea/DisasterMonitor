@@ -37,9 +37,6 @@ from disaster_monitor.application.services.current_disaster_report import (
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
-from disaster_monitor.application.services.global_earthquake_report import (
-    GlobalEarthquakeReportService,
-)
 from disaster_monitor.application.services.map_navigation import MapNavigationService
 from disaster_monitor.application.services.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
@@ -48,6 +45,12 @@ from disaster_monitor.application.services.multimodal_association import (
     MultimodalEventAssociator,
 )
 from disaster_monitor.application.services.visual_analysis import VisualAnalysisService
+from disaster_monitor.application.services.worldwide_disaster import (
+    WorldwideDisasterReportService,
+)
+from disaster_monitor.application.services.worldwide_disaster_policy import (
+    default_worldwide_disaster_policy_registry,
+)
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.infrastructure.composition import (
@@ -82,7 +85,7 @@ def create_app(
     visual_analyzer: VisualAnalyzer | None = None,
     operational_repository: OperationalRepository | None = None,
     country_catalog_automation: CountryCatalogUpdateAutomation | None = None,
-    global_earthquake_report: GlobalEarthquakeReportService | None = None,
+    worldwide_disaster_report: WorldwideDisasterReportService | None = None,
     event_media: EventMediaDiscovery | None = None,
     media_asset_store: MediaAssetStore | None = None,
 ) -> FastAPI:
@@ -100,11 +103,10 @@ def create_app(
         snapshot_recorder=operational.snapshots.persist,
         operational_evidence=operational.evidence,
     )
-    worldwide_earthquakes = (
-        global_earthquake_report
-        or GlobalEarthquakeReportService.from_registry(
-            disaster_report.provider_registry
-        )
+    worldwide_policies = default_worldwide_disaster_policy_registry()
+    worldwide_report = worldwide_disaster_report or WorldwideDisasterReportService(
+        disaster_report.provider_registry,
+        policies=worldwide_policies,
     )
     query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
     source_catalog = build_source_catalog(app_settings)
@@ -145,13 +147,14 @@ def create_app(
             source_catalog, multimodal_tools
         ),
         agent_model=configured_agent_model,
+        worldwide_report=worldwide_report,
+        worldwide_policies=worldwide_policies,
     )
     disaster_agent = RunDisasterAgent(
         agent_runtime,
         language_model,
         asset_admission,
         MapNavigationService(country_catalog),
-        worldwide_earthquakes,
         country_catalog,
         media_services.discovery,
     )
@@ -220,7 +223,7 @@ def create_app(
     )
     app.state.language_model = language_model
     app.state.current_disaster_report = disaster_report
-    app.state.global_earthquake_report = worldwide_earthquakes
+    app.state.worldwide_disaster_report = worldwide_report
     app.state.agent_model = configured_agent_model
     app.state.visual_analyzer = configured_visual_analyzer
     app.state.event_media = media_services.discovery

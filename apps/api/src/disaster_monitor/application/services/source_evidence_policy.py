@@ -4,7 +4,11 @@ from datetime import datetime
 from math import isfinite
 from urllib.parse import urlsplit
 
-from disaster_monitor.application.disaster import DisasterQuery, GlobalDisasterEvent
+from disaster_monitor.application.disaster import (
+    DisasterQuery,
+    WorldwideDisasterEvent,
+    WorldwideDisasterQuery,
+)
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
@@ -68,21 +72,22 @@ def validate_event_evidence(
     return record
 
 
-def validate_global_event_evidence(
+def validate_worldwide_event_evidence(
     record: object,
+    query: WorldwideDisasterQuery,
     *,
     source_id: str,
     allowed_hosts: frozenset[str],
-) -> GlobalDisasterEvent:
+) -> WorldwideDisasterEvent:
     """Validate an event whose admitted query scope is explicitly worldwide."""
-    if not isinstance(record, GlobalDisasterEvent):
+    if not isinstance(record, WorldwideDisasterEvent):
         raise SourceEvidencePolicyError(
-            "The global event provider returned a wrong record type."
+            "The worldwide event provider returned a wrong record type."
         )
     _validate_source(record.source, source_id=source_id, allowed_hosts=allowed_hosts)
-    if record.hazard != Hazard.EARTHQUAKE:
+    if record.hazard != query.hazard:
         raise SourceEvidencePolicyError(
-            "The global event hazard is outside the selected scope."
+            "The worldwide event hazard is outside the selected scope."
         )
     if (
         not isinstance(record.event_id, str)
@@ -91,22 +96,39 @@ def validate_global_event_evidence(
         or not record.location.strip()
         or not _aware(record.event_time)
     ):
-        raise SourceEvidencePolicyError("The global event identity or time is invalid.")
+        raise SourceEvidencePolicyError(
+            "The worldwide event identity or time is invalid."
+        )
     if record.latitude is None or (
         not _finite_number(record.latitude) or not -90 <= record.latitude <= 90
     ):
-        raise SourceEvidencePolicyError("The global event latitude is invalid.")
+        raise SourceEvidencePolicyError("The worldwide event latitude is invalid.")
     if record.longitude is None or (
         not _finite_number(record.longitude) or not -180 <= record.longitude <= 180
     ):
-        raise SourceEvidencePolicyError("The global event longitude is invalid.")
+        raise SourceEvidencePolicyError("The worldwide event longitude is invalid.")
     if record.magnitude is not None and not _finite_number(record.magnitude):
-        raise SourceEvidencePolicyError("The global event magnitude is invalid.")
+        raise SourceEvidencePolicyError("The worldwide event magnitude is invalid.")
     if record.depth_km is not None and (
         not _finite_number(record.depth_km) or record.depth_km < 0
     ):
-        raise SourceEvidencePolicyError("The global event depth is invalid.")
+        raise SourceEvidencePolicyError("The worldwide event depth is invalid.")
     return record
+
+
+def validate_global_event_evidence(
+    record: object,
+    *,
+    source_id: str,
+    allowed_hosts: frozenset[str],
+) -> WorldwideDisasterEvent:
+    """Compatibility wrapper for the pre-neutral worldwide adapter tests."""
+    return validate_worldwide_event_evidence(
+        record,
+        WorldwideDisasterQuery(Hazard.EARTHQUAKE),
+        source_id=source_id,
+        allowed_hosts=allowed_hosts,
+    )
 
 
 def validate_situation_evidence(

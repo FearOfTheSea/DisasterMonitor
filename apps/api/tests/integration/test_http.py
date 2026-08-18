@@ -7,6 +7,7 @@ import pytest
 from conftest import FakeLanguageModel
 
 from disaster_monitor.application.disaster import (
+    GeographicScope,
     GlobalDisasterEvent,
     ProviderBatch,
 )
@@ -27,13 +28,14 @@ from disaster_monitor.application.multimodal import (
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
-from disaster_monitor.application.services.global_earthquake_report import (
-    GlobalEarthquakeReportService,
-)
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
+    ProviderRegistry,
     ProviderRole,
+)
+from disaster_monitor.application.services.worldwide_disaster import (
+    WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
@@ -416,7 +418,7 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
     )
 
     class GlobalProvider:
-        async def find_global_earthquakes(self, query, *, now):
+        async def find_worldwide_events(self, query, *, now):
             return ProviderBatch(
                 (
                     GlobalDisasterEvent(
@@ -434,17 +436,22 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
                 )
             )
 
-    global_report = GlobalEarthquakeReportService(
-        ProviderRegistration(
-            "USGS",
-            GlobalProvider(),
-            ProviderCapabilities(
-                roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                hazards=frozenset({Hazard.EARTHQUAKE}),
-                country_codes=None,
-            ),
-            source_id="usgs-earthquakes",
-            allowed_hosts=frozenset({"earthquake.usgs.gov"}),
+    worldwide_report = WorldwideDisasterReportService(
+        ProviderRegistry(
+            (
+                ProviderRegistration(
+                    "USGS",
+                    GlobalProvider(),
+                    ProviderCapabilities(
+                        roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                        hazards=frozenset({Hazard.EARTHQUAKE}),
+                        country_codes=None,
+                        geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                    ),
+                    source_id="usgs-earthquakes",
+                    allowed_hosts=frozenset({"earthquake.usgs.gov"}),
+                ),
+            )
         ),
         clock=lambda: NOW,
     )
@@ -469,7 +476,7 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
     app = create_app(
         model=model,
         current_disaster_report=build_current_service(),
-        global_earthquake_report=global_report,
+        worldwide_disaster_report=worldwide_report,
         event_media=media_discovery,
         media_asset_store=EmptyMediaStore(),
     )

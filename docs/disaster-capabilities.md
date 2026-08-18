@@ -1,7 +1,8 @@
 # Disaster source capabilities
 
 Disaster Monitor parses a recognized current-disaster request into one typed hazard
-and one canonical country, then selects providers by declared capability. Event
+and an explicit geographic scope (one canonical country or worldwide), then selects
+providers by declared capability. Event
 verification and situation evidence are separate roles: an event can be verified even
 when no impact source supports it. If no event provider supports the combination, the
 API returns `current_disaster_coverage_unavailable` and makes no live factual claim.
@@ -28,6 +29,8 @@ never dynamically imports or constructs providers.
 
 USGS earthquake verification applies to every country admitted by the active catalog;
 this is global named-country coverage, with one explicitly named country per request.
+Here, `country_codes=None` means all admitted named countries only; it does not grant
+countryless worldwide authority. Worldwide authority is an explicit provider scope.
 “News” requests are deterministically routed to that evidence path. Country names are
 case-insensitive, while short ISO codes are uppercase-only to avoid collisions with
 ordinary language in the global alias set.
@@ -38,10 +41,12 @@ situation providers. Other hazards depend on the executable registrations shown 
 ReliefWeb alone cannot verify an event and is never treated as an official national
 total.
 
-Explicit worldwide, global, or across-the-world earthquake requests use a separate
-bounded USGS query and select the latest event by default or the strongest event when
-requested. They do not invent a country for offshore events. Worldwide scope currently
-provides scientific event discovery only; it does not provide globally complete
+Explicit worldwide, global, or across-the-world requests use a bounded worldwide
+provider query and the selected hazard policy. Earthquake policy selects the latest
+event by default or the strongest event when requested; other hazards use the shared
+latest policy unless they register another policy. Worldwide requests do not invent a
+country for offshore events. Worldwide scope currently provides scientific event
+discovery only; it does not provide globally complete
 casualty, damage, warning, or response evidence, and every response states that gap.
 
 The API accepts bounded operator-supplied PNG/JPEG bytes with explicit provenance and

@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from disaster_monitor.application.disaster import GeographicScope
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.event_media import (
     EventMediaDiscovery,
@@ -356,6 +357,9 @@ def build_current_disaster_report(
                     roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
                     hazards=frozenset({Hazard.EARTHQUAKE}),
                     country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
                 ),
                 source_id="usgs-earthquakes",
                 allowed_hosts=usgs.allowed_hosts,

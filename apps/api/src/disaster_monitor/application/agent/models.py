@@ -8,7 +8,9 @@ from disaster_monitor.application.disaster import (
     DisasterQuery,
     DisasterReport,
     EvidencePacket,
+    GeographicScope,
     ProviderBatch,
+    WorldwideDisasterQuery,
 )
 from disaster_monitor.domain.coordination import (
     CollaborativeInvestigation,
@@ -137,6 +139,7 @@ class ValidatedDisasterTask:
     requires_evidence: bool
     hazard: Hazard | None = None
     country: Country | None = None
+    geographic_scope: GeographicScope = GeographicScope.COUNTRY
     unresolved_place: str | None = None
     date_from: datetime | None = None
     date_to: datetime | None = None
@@ -146,6 +149,7 @@ class ValidatedDisasterTask:
     validation_status: ValidationStatus = ValidationStatus.VALID
     detail: str | None = None
     query: DisasterQuery | None = None
+    worldwide_query: WorldwideDisasterQuery | None = None
 
 
 @dataclass(frozen=True, slots=True)

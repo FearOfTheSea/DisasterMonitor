@@ -6,8 +6,8 @@ and [capability-status.md](capability-status.md) for release evidence.
 
 ## Flow
 
-1. Normalize one hazard, country, information need, output mode, and optional event
-   discriminators.
+1. Normalize one hazard, explicit geographic scope (country or worldwide), information
+   need, output mode, and optional event discriminators.
 2. Select registry-approved providers. Unsupported combinations return
    `current_disaster_coverage_unavailable` without a factual model response.
 3. Discover and select a physical event using deterministic, hazard- and country-safe
@@ -29,8 +29,10 @@ compose_disaster_answer
 ```
 
 The parser routes recognized current-event questions, including “news” requests, to
-this path. Worldwide earthquake requests use bounded USGS discovery without inventing
-a country; the result is limited to event discovery, not global impact coverage.
+this path. Explicit worldwide requests use the same normalized-task and capability
+selection path as named-country requests, without inventing a country. Worldwide
+ranking and wording are supplied by the selected hazard policy; the result is limited
+to event discovery, not global impact coverage.
 
 ## Evidence and authority
 
