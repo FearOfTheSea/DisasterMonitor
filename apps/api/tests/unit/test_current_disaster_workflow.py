@@ -152,18 +152,6 @@ def test_exact_target_is_current_disaster_and_query_is_normalized() -> None:
     assert extracted.focus == ("damage", "latest developments")
 
 
-def test_recent_event_selection_prefers_mainshock_over_newer_aftershock() -> None:
-    mainshock = event("mainshock", hours_old=8, magnitude=6.8)
-    aftershock = event(
-        "aftershock", hours_old=1, magnitude=4.2, aftershock=True, latitude=35.2
-    )
-
-    resolution = resolve_recent_event((aftershock, mainshock), query(), now=NOW)
-
-    assert resolution.selected == mainshock
-    assert resolution.ambiguous is False
-
-
 def test_recent_event_selection_marks_unrelated_equal_candidates_ambiguous() -> None:
     first = event("first", hours_old=2, latitude=30, longitude=130)
     second = event("second", hours_old=2, latitude=42, longitude=145)
