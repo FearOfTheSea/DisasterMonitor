@@ -1,3 +1,5 @@
+import pytest
+
 from disaster_monitor.application.agent.models import (
     DisasterTaskDraft,
     InformationNeed,
@@ -49,6 +51,27 @@ def test_safety_gate_keeps_factual_disaster_requests_out_of_general_model() -> N
     assert all(disaster_safety_gate(question) for question in guarded)
     assert not disaster_safety_gate("What causes earthquakes?")
     assert not disaster_safety_gate("What is this map for?")
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "Latest cyclone information in Japan.",
+        "Latest cyclones in Vietnam.",
+        "Latest tropical cyclone in South Korea.",
+        "Latest tropical cyclones in the Philippines.",
+        "Latest typhoon in Japan.",
+        "Latest typhoons in Vietnam.",
+        "Latest hurricane in South Korea.",
+        "Latest hurricanes in the Philippines.",
+    ),
+)
+def test_deterministic_normalization_recognizes_all_cyclone_alias_forms(
+    question: str,
+) -> None:
+    draft = deterministic_task_draft(question)
+
+    assert draft.hazard_mentions == (Hazard.TROPICAL_CYCLONE.value,)
 
 
 def test_news_request_uses_trusted_path_for_any_admitted_country() -> None:

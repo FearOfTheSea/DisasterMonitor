@@ -28,8 +28,10 @@ from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
+    Country,
     EventGeographyStatus,
     EventMeasurement,
+    GeographicArea,
     Hazard,
     MeasurementKind,
     SourceAuthority,
@@ -79,18 +81,23 @@ def test_composition_registers_only_gdacs_for_worldwide_tropical_cyclones() -> N
     assert registration.capabilities.hazards == frozenset({Hazard.TROPICAL_CYCLONE})
     assert registration.capabilities.country_codes is None
     assert registration.capabilities.geographic_scopes == frozenset(
-        {GeographicScope.WORLDWIDE}
+        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
     )
     assert registration.capabilities.event_scopes == frozenset(
-        {GeographicScope.WORLDWIDE}
+        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
     )
-    assert registration.event_provider is None
+    assert registration.event_provider is not None
     assert registration.situation_provider is None
     assert registration.worldwide_situation_provider is None
     descriptor = service.source_catalog.get("gdacs-tropical-cyclones")
     assert descriptor is not None
     assert descriptor.authority_level == "secondary"
     assert descriptor.information_roles == (SourceInformationRole.EVENT_DISCOVERY,)
+    assert descriptor.geographic_scopes == (
+        GeographicScope.COUNTRY,
+        GeographicScope.WORLDWIDE,
+    )
+    assert any("national warning" in item for item in descriptor.limitations)
 
 
 def test_country_tropical_cyclone_queries_do_not_select_worldwide_gdacs() -> None:
@@ -109,8 +116,43 @@ def test_country_tropical_cyclone_queries_do_not_select_worldwide_gdacs() -> Non
     )
 
     assert [registration.name for registration in selection.registrations] == [
-        "NCHMF Vietnam warnings"
+        "GDACS tropical cyclones",
+        "NCHMF Vietnam warnings",
     ]
+
+
+def test_country_tropical_cyclone_selection_includes_gdacs_for_japan_and_korea() -> (
+    None
+):
+    service = build_current_disaster_report(Settings())
+    catalog = StaticCountryCatalog()
+    japan = catalog.get_by_alpha3("JPN")
+    assert japan is not None
+    korea = Country(
+        "KOR",
+        "South Korea",
+        ("Korea",),
+        GeographicArea(33.0, 39.0, 124.0, 130.0),
+        "UTC+09:00",
+    )
+
+    for country in (japan, korea):
+        query = DisasterQuery(Hazard.TROPICAL_CYCLONE, country, "recent", ("latest",))
+        selection = service.provider_registry.select(
+            query, ProviderRole.EVENT_DISCOVERY
+        )
+        assert [registration.name for registration in selection.registrations] == [
+            "GDACS tropical cyclones"
+        ]
+
+
+@pytest.mark.asyncio
+async def test_worldwide_missing_event_capability_names_discovery_role() -> None:
+    report = await WorldwideDisasterReportService(
+        ProviderRegistry(()), clock=lambda: NOW
+    ).execute(WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE))
+
+    assert report.capability_gaps == ("Worldwide event discovery is unavailable.",)
 
 
 class GdacsFixtureProvider:

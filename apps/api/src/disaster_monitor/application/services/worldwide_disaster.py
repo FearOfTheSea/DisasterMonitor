@@ -236,7 +236,7 @@ def _failed_report(detail: str, now: datetime, warnings: list[str]) -> DisasterR
         warnings=tuple(dict.fromkeys(warnings)),
         sections=(section,),
         partial=True,
-        capability_gaps=("Worldwide event verification is unavailable.",),
+        capability_gaps=("Worldwide event discovery is unavailable.",),
         investigation_actions=("Attempted the configured worldwide event lookup.",),
         termination_reason="worldwide_event_verification_failed",
     )

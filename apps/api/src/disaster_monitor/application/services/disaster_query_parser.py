@@ -11,6 +11,7 @@ from disaster_monitor.application.disaster import (
     RequestClassification,
     RequestType,
 )
+from disaster_monitor.application.hazard_aliases import aliases_for
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.hazard_query_policy import (
     HazardQueryPolicyRegistry,
@@ -185,7 +186,10 @@ class DisasterQueryParser:
         hazards = tuple(
             hazard
             for hazard, aliases in _HAZARD_ALIASES.items()
-            if any(_matches_alias(normalized, alias) for alias in aliases)
+            if any(
+                _matches_alias(normalized, alias)
+                for alias in (aliases_for(hazard) or aliases)
+            )
         )
         if not hazards:
             return DisasterQueryParseResult(QueryParseStatus.NO_HAZARD)

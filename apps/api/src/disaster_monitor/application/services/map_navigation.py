@@ -1,5 +1,7 @@
 """Bounded map tools whose effects are validated and application-owned."""
 
+import re
+
 from disaster_monitor.application.disaster import SelectedEventSummary
 from disaster_monitor.application.dto import ModelTool, ModelToolCall
 from disaster_monitor.application.ports.geography import CountryCatalog
@@ -14,6 +16,11 @@ from disaster_monitor.domain.multimodal import (
 )
 
 FIT_COUNTRY_TOOL = "fit_country"
+_EXPLICIT_MAP_NAVIGATION = re.compile(
+    r"(?:\b(?:navigate|locate|center|centre|pan|zoom|fit)\b|"
+    r"\bshow\b(?=[^?.!]{0,60}\bmap\b))",
+    re.IGNORECASE,
+)
 
 
 class MapNavigationService:
@@ -67,7 +74,8 @@ class MapNavigationService:
         country = self._countries.get_by_alpha3(code)
         admitted_countries = self._countries.find_mentions(admitted_text)
         if (
-            country is None
+            not _EXPLICIT_MAP_NAVIGATION.search(admitted_text)
+            or country is None
             or len(admitted_countries) != 1
             or admitted_countries[0].alpha3_code != country.alpha3_code
         ):

@@ -244,7 +244,7 @@ class ListSourcesForTaskTool(_BaseTool):
             task.query, ProviderRole.EVENT_DISCOVERY
         )
         if not event_selection.registrations:
-            gaps.append("No event-verification source is executable for this task.")
+            gaps.append("No event-discovery source is executable for this task.")
         for role in unsupported:
             gaps.append(f"No maintained executable source supports role {role}.")
         state.workspace.source_selection = SourceSelectionSummary(
@@ -311,7 +311,7 @@ class FindDisasterEventTool(_BaseTool):
         state.workspace.selected_event = resolution.selected
         state.workspace.alternatives = resolution.alternatives
         if resolution.selected is None:
-            return "No matching event could be verified from the selected sources."
+            return "No matching event was discovered from the selected sources."
         return f"Selected the source-backed event {resolution.selected.event_id}."
 
 
@@ -540,7 +540,10 @@ async def execute_plan(state: AgentExecutionState, registry: ToolRegistry) -> No
             "analyze_multimodal_assets",
             "build_common_operational_picture",
         }:
-            action = "Skipped because no selected event was available."
+            action = (
+                f"Skipped step {step.step_id} ({step.purpose}): no selected event "
+                "was available."
+            )
         else:
             action = await tool.execute(state)
         state.tool_call_count += 1

@@ -15,6 +15,7 @@ from disaster_monitor.application.disaster import (
     QueryParseStatus,
     WorldwideDisasterQuery,
 )
+from disaster_monitor.application.hazard_aliases import aliases_for
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
@@ -314,7 +315,9 @@ def _hazard_mentions(text: str) -> tuple[Hazard, ...]:
     return tuple(
         hazard
         for hazard, aliases in _HAZARDS.items()
-        if any(_matches_alias(text, alias) for alias in aliases)
+        if any(
+            _matches_alias(text, alias) for alias in (aliases_for(hazard) or aliases)
+        )
     )
 
 

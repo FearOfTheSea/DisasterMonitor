@@ -60,13 +60,25 @@
       "country": "VNM",
       "hazard": "tropical_cyclone",
       "role": "event_discovery",
-      "source_ids": ["nchmf-vietnam-warnings"]
+      "source_ids": ["gdacs-tropical-cyclones", "nchmf-vietnam-warnings"]
     },
     {
       "country": "VNM",
       "hazard": "tropical_cyclone",
       "role": "situation_evidence",
       "source_ids": ["nchmf-vietnam-warnings"]
+    },
+    {
+      "country": "JPN",
+      "hazard": "tropical_cyclone",
+      "role": "event_discovery",
+      "source_ids": ["gdacs-tropical-cyclones"]
+    },
+    {
+      "country": "VEN",
+      "hazard": "tropical_cyclone",
+      "role": "event_discovery",
+      "source_ids": ["gdacs-tropical-cyclones"]
     },
     {
       "country": "VEN",

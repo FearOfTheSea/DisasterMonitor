@@ -79,6 +79,14 @@ class DummyTool:
         return "ran dummy"
 
 
+class NamedTool:
+    def __init__(self, name: str) -> None:
+        self.description = ToolDescription(name, "test tool", (), (), (), (), False)
+
+    async def execute(self, state: AgentExecutionState) -> str:
+        return "ran named tool"
+
+
 def test_tool_registry_rejects_duplicate_and_unknown_names() -> None:
     with pytest.raises(ValueError, match="Duplicate"):
         ToolRegistry((DummyTool(), DummyTool()))
@@ -132,6 +140,50 @@ async def test_tool_execution_enforces_call_budget() -> None:
         await execute_plan(state, ToolRegistry((DummyTool(),)))
 
     assert state.tool_call_count == 12
+
+
+@pytest.mark.asyncio
+async def test_skipped_plan_steps_keep_distinct_purpose_in_actions() -> None:
+    country = Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1), "UTC")
+    query = DisasterQuery(Hazard.FLOOD, country, "recent", ("latest",))
+    task = ValidatedDisasterTask(
+        "Latest flood in Testland",
+        TaskKind.INVESTIGATION,
+        True,
+        Hazard.FLOOD,
+        country,
+        query=query,
+    )
+    plan = InvestigationPlan(
+        "skipped",
+        task.question,
+        (
+            PlanStep("retrieve", "retrieve_situation_evidence", (), "retrieve impacts"),
+            PlanStep(
+                "reconcile",
+                "reconcile_disaster_evidence",
+                (),
+                "reconcile impacts",
+                ("retrieve",),
+            ),
+        ),
+    )
+    state = AgentExecutionState(task, plan)
+
+    await execute_plan(
+        state,
+        ToolRegistry(
+            (
+                NamedTool("retrieve_situation_evidence"),
+                NamedTool("reconcile_disaster_evidence"),
+            )
+        ),
+    )
+
+    assert [action.description for action in state.actions] == [
+        "Skipped step retrieve (retrieve impacts): no selected event was available.",
+        "Skipped step reconcile (reconcile impacts): no selected event was available.",
+    ]
 
 
 @dataclass

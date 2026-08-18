@@ -6,15 +6,19 @@ from urllib.parse import urlencode
 import httpx
 
 from disaster_monitor.application.disaster import (
+    DisasterQuery,
     ProviderBatch,
     ProviderIssue,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
 )
+from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.evidence_reconciliation import (
     normalize_timestamp,
 )
 from disaster_monitor.domain.disaster import (
+    DisasterEvent,
+    EventGeographyStatus,
     EventGeometry,
     EventMeasurement,
     Hazard,
@@ -75,6 +79,7 @@ class GdacsTropicalCycloneAdapter:
     def __init__(
         self,
         *,
+        geography: CountryCatalog | None = None,
         client: httpx.AsyncClient | None = None,
         snapshot_recorder: SourcePayloadRecorder | None = None,
         timeout_seconds: float = 10.0,
@@ -82,6 +87,7 @@ class GdacsTropicalCycloneAdapter:
     ) -> None:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
+        self._geography = geography
         self._max_response_bytes = max_response_bytes
         self._snapshot_recorder = snapshot_recorder
 
@@ -92,7 +98,10 @@ class GdacsTropicalCycloneAdapter:
         now: datetime,
         index: int,
         snapshot_id: str | None,
-    ) -> tuple[WorldwideDisasterEvent | None, tuple[ProviderIssue, ...]]:
+        country_query: DisasterQuery | None = None,
+    ) -> tuple[
+        WorldwideDisasterEvent | DisasterEvent | None, tuple[ProviderIssue, ...]
+    ]:
         try:
             if not isinstance(raw_feature, dict):
                 raise ValueError("feature is not an object")
@@ -103,6 +112,10 @@ class GdacsTropicalCycloneAdapter:
                 raise ValueError("properties are missing")
             if _text(properties.get("eventtype")) != _GDACS_EVENT_TYPE:
                 raise ValueError("event type is not tropical cyclone")
+            if country_query is not None and properties.get("iso3") != (
+                country_query.country.alpha3_code
+            ):
+                return None, (_country_mismatch(index),)
             raw_event_id = _identifier(properties.get("eventid"))
             event_time = normalize_timestamp(properties.get("fromdate"))
             end_time = normalize_timestamp(properties.get("todate"))
@@ -150,16 +163,58 @@ class GdacsTropicalCycloneAdapter:
             if severity
             else ()
         )
-        event = WorldwideDisasterEvent(
-            event_id=event_id,
-            hazard=Hazard.TROPICAL_CYCLONE,
-            location=location,
-            event_time=event_time,
-            source=source,
-            geometry=geometry,
-            measurements=measurements,
-            provider_ids=provider_ids,
-        )
+        if country_query is None:
+            event: WorldwideDisasterEvent | DisasterEvent = WorldwideDisasterEvent(
+                event_id=event_id,
+                hazard=Hazard.TROPICAL_CYCLONE,
+                location=location,
+                event_time=event_time,
+                source=source,
+                geometry=geometry,
+                measurements=measurements,
+                provider_ids=provider_ids,
+            )
+        else:
+            projected_country = (
+                self._geography.get_by_alpha3(country_query.country.alpha3_code)
+                if self._geography is not None
+                else None
+            )
+            if (
+                projected_country is None
+                or geometry is None
+                or len(geometry.coordinates) != 1
+            ):
+                return None, (
+                    geometry_issue,
+                    _country_projection_unusable(index),
+                ) if geometry_issue is not None else (
+                    _country_projection_unusable(index),
+                )
+            point = geometry.coordinates[0]
+            try:
+                geography_status = (
+                    EventGeographyStatus.IN_COUNTRY
+                    if self._geography is not None
+                    and self._geography.contains(
+                        projected_country, point.latitude, point.longitude
+                    )
+                    else EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
+                )
+            except (AttributeError, TypeError, ValueError):
+                return None, (_country_projection_unusable(index),)
+            event = DisasterEvent(
+                event_id=event_id,
+                hazard=Hazard.TROPICAL_CYCLONE,
+                location=location,
+                country=country_query.country,
+                event_time=event_time,
+                source=source,
+                geometry=geometry,
+                measurements=measurements,
+                provider_ids=provider_ids,
+                geography_status=geography_status,
+            )
         return event, (geometry_issue,) if geometry_issue is not None else ()
 
     def _event_url(self, properties: dict[object, object], event_id: str) -> str:
@@ -201,14 +256,13 @@ class GdacsTropicalCycloneAdapter:
                 detail=f"feature[{index}]: {error}",
             )
 
-    async def find_worldwide_events(
-        self, query: WorldwideDisasterQuery, *, now: datetime
-    ) -> ProviderBatch[WorldwideDisasterEvent]:
-        if not isinstance(query, WorldwideDisasterQuery):
-            return ProviderBatch()
-        if query.hazard is not Hazard.TROPICAL_CYCLONE or query.limit <= 0:
-            return ProviderBatch()
-
+    async def _fetch_events(
+        self,
+        query: WorldwideDisasterQuery,
+        *,
+        now: datetime,
+        country_query: DisasterQuery | None = None,
+    ) -> ProviderBatch[WorldwideDisasterEvent | DisasterEvent]:
         params = build_gdacs_params(query, now=now)
         capture = build_snapshot_capture(
             self._snapshot_recorder,
@@ -243,7 +297,7 @@ class GdacsTropicalCycloneAdapter:
                 reason_code="invalid_schema",
             )
 
-        events: list[WorldwideDisasterEvent] = []
+        events: list[WorldwideDisasterEvent | DisasterEvent] = []
         issues: list[ProviderIssue] = []
         snapshot_id = (
             capture.snapshot.snapshot_id if capture and capture.snapshot else None
@@ -254,6 +308,7 @@ class GdacsTropicalCycloneAdapter:
                 now=now,
                 index=index,
                 snapshot_id=snapshot_id,
+                country_query=country_query,
             )
             if event is not None:
                 events.append(event)
@@ -268,6 +323,47 @@ class GdacsTropicalCycloneAdapter:
             )
         return ProviderBatch(records=tuple(events), issues=tuple(issues))
 
+    async def find_worldwide_events(
+        self, query: WorldwideDisasterQuery, *, now: datetime
+    ) -> ProviderBatch[WorldwideDisasterEvent]:
+        if not isinstance(query, WorldwideDisasterQuery):
+            return ProviderBatch()
+        if query.hazard is not Hazard.TROPICAL_CYCLONE or query.limit <= 0:
+            return ProviderBatch()
+        result = await self._fetch_events(query, now=now)
+        return ProviderBatch(
+            records=tuple(
+                event
+                for event in result.records
+                if isinstance(event, WorldwideDisasterEvent)
+            ),
+            issues=result.issues,
+        )
+
+    async def find_recent_events(
+        self, query: DisasterQuery, *, now: datetime
+    ) -> ProviderBatch[DisasterEvent]:
+        if not isinstance(query, DisasterQuery):
+            return ProviderBatch()
+        if query.hazard is not Hazard.TROPICAL_CYCLONE:
+            return ProviderBatch()
+        if (
+            self._geography is None
+            or self._geography.get_by_alpha3(query.country.alpha3_code) is None
+        ):
+            return ProviderBatch(issues=(_country_projection_unusable(-1),))
+        worldwide_query = WorldwideDisasterQuery(
+            hazard=query.hazard,
+            time_window_days=query.time_window_days,
+        )
+        result = await self._fetch_events(worldwide_query, now=now, country_query=query)
+        return ProviderBatch(
+            records=tuple(
+                event for event in result.records if isinstance(event, DisasterEvent)
+            ),
+            issues=result.issues,
+        )
+
     async def aclose(self) -> None:
         if self._owns_client:
             await self._client.aclose()
@@ -279,4 +375,28 @@ def _invalid_record(index: int, error: Exception) -> ProviderIssue:
         "GDACS tropical cyclones: A malformed event record was skipped.",
         reason_code="invalid_record",
         detail=f"feature[{index}]: {error}",
+    )
+
+
+def _country_mismatch(index: int) -> ProviderIssue:
+    return ProviderIssue(
+        GdacsTropicalCycloneAdapter.provider_name,
+        "GDACS tropical cyclones: A record without an exact requested ISO-3 "
+        "association was excluded.",
+        reason_code="country_mismatch",
+        detail=f"feature[{index}] properties.iso3 did not match the requested country",
+    )
+
+
+def _country_projection_unusable(index: int) -> ProviderIssue:
+    return ProviderIssue(
+        GdacsTropicalCycloneAdapter.provider_name,
+        "GDACS tropical cyclones: A country-associated event lacked usable "
+        "country projection and was excluded.",
+        reason_code="country_projection_unusable",
+        detail=(
+            "country catalog projection unavailable"
+            if index < 0
+            else f"feature[{index}] has no usable country projection"
+        ),
     )

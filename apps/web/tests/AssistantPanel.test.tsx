@@ -1,11 +1,57 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AssistantPanel } from '@/features/assistant/ui/AssistantPanel';
 import { commonOperationalPicture, multimodalState } from './fixtures/multimodal';
 
+afterEach(cleanup);
+
 describe('AssistantPanel', () => {
+  it('renders duplicate action text without duplicate React keys', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <AssistantPanel
+        messages={[
+          {
+            id: 'duplicate-actions',
+            role: 'assistant',
+            content: 'Partial investigation.',
+            report: {
+              responseType: 'current_disaster',
+              partial: true,
+              warnings: [],
+              sections: [],
+              sources: [],
+              investigation: {
+                status: 'partial',
+                task_summary: 'Latest cyclone in Japan',
+                information_needs: ['event_overview'],
+                output_modalities: ['text'],
+                actions: ['Skipped retrieve step.', 'Skipped retrieve step.'],
+                source_ids: [],
+                evidence_count: 0,
+                capability_gaps: [],
+                termination_reason: 'partial_evidence',
+              },
+            },
+          },
+        ]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText('Skipped retrieve step.')).toHaveLength(2);
+    expect(
+      consoleError.mock.calls.some(([message]) => String(message).includes('same key')),
+    ).toBe(false);
+    consoleError.mockRestore();
+  });
+
   it('submits a question and renders the conversation', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);

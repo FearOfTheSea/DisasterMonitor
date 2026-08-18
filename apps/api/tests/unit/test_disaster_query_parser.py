@@ -28,8 +28,13 @@ PARSER = DisasterQueryParser(StaticCountryCatalog())
         ("Latest tsunami in Venezuela", Hazard.TSUNAMI, "VEN"),
         ("Latest landslides in VE", Hazard.LANDSLIDE, "VEN"),
         ("Latest typhoon in Vietnam", Hazard.TROPICAL_CYCLONE, "VNM"),
+        ("Latest typhoons in Vietnam", Hazard.TROPICAL_CYCLONE, "VNM"),
         ("Latest hurricane in VEN", Hazard.TROPICAL_CYCLONE, "VEN"),
+        ("Latest hurricanes in VEN", Hazard.TROPICAL_CYCLONE, "VEN"),
+        ("Latest cyclone in Japan", Hazard.TROPICAL_CYCLONE, "JPN"),
+        ("Latest cyclones in Japan", Hazard.TROPICAL_CYCLONE, "JPN"),
         ("Latest tropical cyclone in Vietnam", Hazard.TROPICAL_CYCLONE, "VNM"),
+        ("Latest tropical cyclones in Vietnam", Hazard.TROPICAL_CYCLONE, "VNM"),
     ],
 )
 def test_parser_normalizes_hazard_and_country_aliases(

@@ -285,6 +285,7 @@ def build_current_disaster_report(
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
     gdacs = GdacsTropicalCycloneAdapter(
+        geography=geography,
         snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
@@ -387,11 +388,16 @@ def build_current_disaster_report(
                     roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
                     hazards=frozenset({Hazard.TROPICAL_CYCLONE}),
                     country_codes=None,
-                    geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
-                    event_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
                 ),
                 source_id="gdacs-tropical-cyclones",
                 allowed_hosts=gdacs.allowed_hosts,
+                event_provider=gdacs,
                 worldwide_provider=gdacs,
             ),
             ProviderRegistration(

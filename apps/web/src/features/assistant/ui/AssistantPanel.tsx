@@ -198,8 +198,8 @@ function SourceMediaGallery({ gallery }: { gallery: DisasterMediaGallery }) {
           {gallery.items.length} shown · {gallery.rejected_count} rejected
         </small>
       </div>
-      {gallery.warnings.map((warning) => (
-        <p className="source-media-warning" key={warning}>
+      {gallery.warnings.map((warning, index) => (
+        <p className="source-media-warning" key={`media-warning-${index}`}>
           {warning}
         </p>
       ))}
@@ -266,8 +266,8 @@ function DisasterReportView({
             : [
                 'This report is partial because reliable event-specific evidence was not available.',
               ]
-          ).map((warning) => (
-            <p key={warning}>{warning}</p>
+          ).map((warning, index) => (
+            <p key={`report-warning-${index}`}>{warning}</p>
           ))}
         </div>
       )}
@@ -293,8 +293,8 @@ function DisasterReportView({
         </div>
       )}
       <div className="report-sections">
-        {report.sections.map((section) => (
-          <section key={section.title}>
+        {report.sections.map((section, index) => (
+          <section key={`report-section-${index}`}>
             <h3>{section.title}</h3>
             <p>{section.content}</p>
           </section>
@@ -311,9 +311,9 @@ function DisasterReportView({
       {report.sources.length > 0 && (
         <div className="report-sources">
           <h3>Source timestamps</h3>
-          {report.sources.map((source) => (
+          {report.sources.map((source, index) => (
             <a
-              key={source.canonical_url}
+              key={`report-source-${index}`}
               href={source.canonical_url}
               target="_blank"
               rel="noreferrer"
@@ -419,8 +419,8 @@ function DisasterReportView({
             <>
               <h3>Completed actions</h3>
               <ul>
-                {report.investigation.actions.map((action) => (
-                  <li key={action}>{action}</li>
+                {report.investigation.actions.map((action, index) => (
+                  <li key={`action-${index}`}>{action}</li>
                 ))}
               </ul>
             </>
@@ -429,8 +429,8 @@ function DisasterReportView({
             <>
               <h3>Capability gaps</h3>
               <ul>
-                {report.investigation.capability_gaps.map((gap) => (
-                  <li key={gap}>{gap}</li>
+                {report.investigation.capability_gaps.map((gap, index) => (
+                  <li key={`capability-gap-${index}`}>{gap}</li>
                 ))}
               </ul>
             </>

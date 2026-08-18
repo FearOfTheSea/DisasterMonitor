@@ -6,11 +6,13 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from disaster_monitor.application.disaster import WorldwideDisasterQuery
+from disaster_monitor.application.disaster import DisasterQuery, WorldwideDisasterQuery
 from disaster_monitor.application.services.worldwide_disaster_policy import (
     DefaultWorldwideDisasterPolicy,
 )
 from disaster_monitor.domain.disaster import (
+    DisasterEvent,
+    EventGeographyStatus,
     Hazard,
     MeasurementKind,
     SourceAuthority,
@@ -20,6 +22,9 @@ from disaster_monitor.infrastructure.disaster.errors import (
 )
 from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
     GdacsTropicalCycloneAdapter,
+)
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
 )
 
 NOW = datetime(2026, 8, 18, 12, tzinfo=UTC)
@@ -52,6 +57,29 @@ def client_for(
         )
 
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def country_query(country_code: str) -> DisasterQuery:
+    country = StaticCountryCatalog().get_by_alpha3(country_code)
+    assert country is not None
+    return DisasterQuery(Hazard.TROPICAL_CYCLONE, country, "recent", ("latest",))
+
+
+def country_payload(*, iso3: object, coordinates: list[float]) -> dict[str, object]:
+    payload = gdacs_payload()
+    features = payload["features"]
+    assert isinstance(features, list)
+    feature = features[0]
+    assert isinstance(feature, dict)
+    properties = feature["properties"]
+    assert isinstance(properties, dict)
+    properties["iso3"] = iso3
+    properties["country"] = "Japan"
+    geometry = feature["geometry"]
+    assert isinstance(geometry, dict)
+    geometry["coordinates"] = coordinates
+    payload["features"] = [feature]
+    return payload
 
 
 @pytest.mark.asyncio
@@ -136,6 +164,83 @@ async def test_gdacs_query_is_tropical_cyclone_only_and_bounded() -> None:
     )
     assert wrong_hazard.records == ()
     assert len(requests) == 1
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_country_query_requires_exact_iso3_and_projects_japan_event() -> (
+    None
+):
+    requests: list[httpx.Request] = []
+    client = client_for(
+        country_payload(iso3="JPN", coordinates=[139.0, 35.0]), requests
+    )
+    catalog = StaticCountryCatalog()
+    adapter = GdacsTropicalCycloneAdapter(client=client, geography=catalog)
+
+    result = await adapter.find_recent_events(country_query("JPN"), now=NOW)
+
+    assert len(result.records) == 1
+    event = result.records[0]
+    assert isinstance(event, DisasterEvent)
+    assert event.country.alpha3_code == "JPN"
+    assert event.geography_status is EventGeographyStatus.IN_COUNTRY
+    assert event.geometry is not None
+    assert len(requests) == 1
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("iso3", ["KOR", ""])
+async def test_gdacs_country_query_excludes_mismatched_or_blank_iso3(
+    iso3: str,
+) -> None:
+    requests: list[httpx.Request] = []
+    client = client_for(country_payload(iso3=iso3, coordinates=[139.0, 35.0]), requests)
+    adapter = GdacsTropicalCycloneAdapter(
+        client=client, geography=StaticCountryCatalog()
+    )
+
+    result = await adapter.find_recent_events(country_query("JPN"), now=NOW)
+
+    assert result.records == ()
+    assert result.issues[0].reason_code == "country_mismatch"
+    assert len(requests) == 1
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_country_query_marks_explicit_japan_offshore_association() -> None:
+    requests: list[httpx.Request] = []
+    client = client_for(
+        country_payload(iso3="JPN", coordinates=[160.0, 20.0]), requests
+    )
+    adapter = GdacsTropicalCycloneAdapter(
+        client=client, geography=StaticCountryCatalog()
+    )
+
+    result = await adapter.find_recent_events(country_query("JPN"), now=NOW)
+
+    assert len(result.records) == 1
+    assert result.records[0].geography_status is (
+        EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
+    )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_country_query_fails_closed_without_country_projection() -> None:
+    requests: list[httpx.Request] = []
+    client = client_for(
+        country_payload(iso3="JPN", coordinates=[139.0, 35.0]), requests
+    )
+    adapter = GdacsTropicalCycloneAdapter(client=client)
+
+    result = await adapter.find_recent_events(country_query("JPN"), now=NOW)
+
+    assert result.records == ()
+    assert result.issues[0].reason_code == "country_projection_unusable"
+    assert requests == []
     await client.aclose()
 
 

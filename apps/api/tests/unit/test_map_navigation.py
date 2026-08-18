@@ -72,3 +72,15 @@ def test_country_tool_fails_closed_for_unallowlisted_or_ambiguous_calls() -> Non
         )
         is None
     )
+
+
+def test_country_tool_does_not_navigate_for_a_disaster_question() -> None:
+    service = MapNavigationService(StaticCountryCatalog())
+
+    assert (
+        service.execute_model_calls(
+            (ModelToolCall(FIT_COUNTRY_TOOL, {"country_code": "JPN"}),),
+            admitted_text="Latest news about cyclone in Japan.",
+        )
+        is None
+    )
