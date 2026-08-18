@@ -42,6 +42,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -115,9 +116,9 @@ def build_current_service(
         source=event_source,
         geometry=point_event_geometry(37.0, 137.0, event_source),
         measurements=(
-            EventMeasurement("magnitude", 6.1),
-            EventMeasurement("intensity", "JMA 6-"),
-            EventMeasurement("depth", 12, "km"),
+            EventMeasurement(MeasurementKind.MAGNITUDE, 6.1, source=event_source),
+            EventMeasurement(MeasurementKind.INTENSITY, "JMA 6-", source=event_source),
+            EventMeasurement(MeasurementKind.DEPTH, 12, "km", source=event_source),
         ),
     )
 
@@ -355,9 +356,24 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
         "source_id": "fixture-events",
     }
     assert body["selected_event"]["measurements"] == [
-        {"name": "magnitude", "value": 6.1, "unit": None},
-        {"name": "intensity", "value": "JMA 6-", "unit": None},
-        {"name": "depth", "value": 12.0, "unit": "km"},
+        {
+            "kind": "magnitude",
+            "value": 6.1,
+            "unit": None,
+            "source_id": "fixture-events",
+        },
+        {
+            "kind": "intensity",
+            "value": "JMA 6-",
+            "unit": None,
+            "source_id": "fixture-events",
+        },
+        {
+            "kind": "depth",
+            "value": 12.0,
+            "unit": "km",
+            "source_id": "fixture-events",
+        },
     ]
     assert body["map_action"] == {
         "type": "fit_bounds",
@@ -407,7 +423,11 @@ async def test_earthquake_news_never_falls_through_to_general_model(
                         country=query.country,
                         event_time=now,
                         source=source,
-                        measurements=(EventMeasurement("magnitude", 5.0),),
+                        measurements=(
+                            EventMeasurement(
+                                MeasurementKind.MAGNITUDE, 5.0, source=source
+                            ),
+                        ),
                     ),
                 )
             )
@@ -464,8 +484,15 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
                         source=source,
                         geometry=point_event_geometry(-20.0, -170.0, source),
                         measurements=(
-                            EventMeasurement("magnitude", 6.4),
-                            EventMeasurement("depth", 18.0, "km"),
+                            EventMeasurement(
+                                MeasurementKind.MAGNITUDE, 6.4, source=source
+                            ),
+                            EventMeasurement(
+                                MeasurementKind.DEPTH,
+                                18.0,
+                                "km",
+                                source=source,
+                            ),
                         ),
                         provider_ids=("usgs:global",),
                     ),
@@ -665,8 +692,8 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
         source=target_source,
         geometry=point_event_geometry(37.0, 137.0, target_source),
         measurements=(
-            EventMeasurement("magnitude", 6.1),
-            EventMeasurement("intensity", "JMA 6-"),
+            EventMeasurement(MeasurementKind.MAGNITUDE, 6.1, source=target_source),
+            EventMeasurement(MeasurementKind.INTENSITY, "JMA 6-", source=target_source),
         ),
         provider_ids=("jma:202608051430", "usgs:fixture-ishikawa"),
     )
@@ -684,8 +711,14 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
                         event_time=datetime(2026, 8, 5, 18, 0, tzinfo=UTC),
                         source=target_source,
                         measurements=(
-                            EventMeasurement("magnitude", 9.8),
-                            EventMeasurement("provider_significance", 6_000),
+                            EventMeasurement(
+                                MeasurementKind.MAGNITUDE, 9.8, source=target_source
+                            ),
+                            EventMeasurement(
+                                MeasurementKind.PROVIDER_SIGNIFICANCE,
+                                6_000,
+                                source=target_source,
+                            ),
                         ),
                     ),
                     DisasterEvent(
@@ -696,8 +729,14 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
                         event_time=datetime(2026, 8, 6, 1, 0, tzinfo=UTC),
                         source=target_source,
                         measurements=(
-                            EventMeasurement("magnitude", 9.5),
-                            EventMeasurement("provider_significance", 5_000),
+                            EventMeasurement(
+                                MeasurementKind.MAGNITUDE, 9.5, source=target_source
+                            ),
+                            EventMeasurement(
+                                MeasurementKind.PROVIDER_SIGNIFICANCE,
+                                5_000,
+                                source=target_source,
+                            ),
                         ),
                     ),
                     target_event,

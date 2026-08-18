@@ -22,6 +22,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -141,7 +142,7 @@ class FirmsActiveFireAdapter:
                 (
                     measurement.value
                     for measurement in candidate.measurements
-                    if measurement.name == "confidence"
+                    if measurement.kind is MeasurementKind.CONFIDENCE
                 ),
                 "reported confidence unavailable",
             )
@@ -281,10 +282,18 @@ class FirmsActiveFireAdapter:
                     measurements=tuple(
                         measurement
                         for measurement in (
-                            EventMeasurement("confidence", f"FIRMS {confidence}")
+                            EventMeasurement(
+                                MeasurementKind.CONFIDENCE,
+                                f"FIRMS {confidence}",
+                                source=source,
+                            )
                             if confidence
                             else None,
-                            EventMeasurement("fire_radiative_power", frp)
+                            EventMeasurement(
+                                MeasurementKind.FIRE_RADIATIVE_POWER,
+                                frp,
+                                source=source,
+                            )
                             if frp is not None
                             else None,
                         )

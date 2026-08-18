@@ -105,10 +105,20 @@ export type AssistantSource = {
   snapshot_id?: string | null;
 };
 
+export type MeasurementKind =
+  | 'magnitude'
+  | 'intensity'
+  | 'depth'
+  | 'provider_significance'
+  | 'confidence'
+  | 'fire_radiative_power'
+  | 'severity';
+
 export type EventMeasurement = {
-  name: string;
+  kind: MeasurementKind;
   value: number | string;
   unit?: string | null;
+  source_id: string;
 };
 
 export type EventCoordinate = {

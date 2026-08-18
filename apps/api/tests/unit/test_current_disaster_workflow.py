@@ -30,6 +30,7 @@ from disaster_monitor.domain.disaster import (
     EvidenceDisposition,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceReference,
@@ -114,10 +115,18 @@ def event(
         source=source_reference,
         geometry=point_event_geometry(latitude, longitude, source_reference),
         measurements=(
-            EventMeasurement("magnitude", magnitude),
-            EventMeasurement("intensity", "JMA 5+"),
-            EventMeasurement("depth", 18, "km"),
-            EventMeasurement("provider_significance", magnitude * 100),
+            EventMeasurement(
+                MeasurementKind.MAGNITUDE, magnitude, source=source_reference
+            ),
+            EventMeasurement(
+                MeasurementKind.INTENSITY, "JMA 5+", source=source_reference
+            ),
+            EventMeasurement(MeasurementKind.DEPTH, 18, "km", source=source_reference),
+            EventMeasurement(
+                MeasurementKind.PROVIDER_SIGNIFICANCE,
+                magnitude * 100,
+                source=source_reference,
+            ),
         ),
         is_aftershock=aftershock,
         parent_event_id="mainshock" if aftershock else None,

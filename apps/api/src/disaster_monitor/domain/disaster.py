@@ -1,6 +1,6 @@
 """Stable source-backed disaster concepts."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from math import isfinite
@@ -283,17 +283,32 @@ class SourceReference:
         return self.updated_at or self.published_at or self.retrieved_at
 
 
+class MeasurementKind(StrEnum):
+    """Known source-reported measurements shared by hazard policies."""
+
+    MAGNITUDE = "magnitude"
+    INTENSITY = "intensity"
+    DEPTH = "depth"
+    PROVIDER_SIGNIFICANCE = "provider_significance"
+    CONFIDENCE = "confidence"
+    FIRE_RADIATIVE_POWER = "fire_radiative_power"
+    SEVERITY = "severity"
+
+
 @dataclass(frozen=True, slots=True)
 class EventMeasurement:
     """One typed, source-backed measurement attached to an event."""
 
-    name: str
+    kind: MeasurementKind
     value: float | str
     unit: str | None = None
+    source: SourceReference = field(kw_only=True)
 
     def __post_init__(self) -> None:
-        if not self.name.strip():
-            raise ValueError("An event measurement requires a name.")
+        if not isinstance(self.kind, MeasurementKind):
+            raise TypeError("An event measurement requires a typed measurement kind.")
+        if not isinstance(self.source, SourceReference):
+            raise TypeError("An event measurement requires source provenance.")
         if isinstance(self.value, bool) or (
             isinstance(self.value, float) and not isfinite(self.value)
         ):
@@ -392,6 +407,23 @@ class DisasterEvent:
     provider_ids: tuple[str, ...] = ()
     geography_status: EventGeographyStatus = EventGeographyStatus.IN_COUNTRY
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.measurements, tuple) or any(
+            not isinstance(item, EventMeasurement) for item in self.measurements
+        ):
+            raise TypeError("A disaster event requires typed measurements.")
+
+    def measurement(self, kind: MeasurementKind) -> EventMeasurement | None:
+        """Return the first retained measurement of a typed kind."""
+        for measurement in self.measurements:
+            if measurement.kind is kind:
+                return measurement
+        return None
+
+    def measurements_of(self, kind: MeasurementKind) -> tuple[EventMeasurement, ...]:
+        """Return all retained observations of a typed measurement kind."""
+        return tuple(item for item in self.measurements if item.kind is kind)
+
     def has_provider_id(self, value: str) -> bool:
         """Return whether a provider-specific identifier belongs to this event."""
         normalized = value.strip().lower()
@@ -416,6 +448,10 @@ class EarthquakeEvent(DisasterEvent):
     parent_event_id: str | None = None
     sequence_id: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.hazard is not Hazard.EARTHQUAKE:
+            raise ValueError("EarthquakeEvent requires the earthquake hazard.")
+
 
 @dataclass(frozen=True, slots=True)
 class EventObservationAssignment:
@@ -436,6 +472,23 @@ class PhysicalEventIdentity:
     event: DisasterEvent
     observations: tuple[DisasterEvent, ...]
     assignments: tuple[EventObservationAssignment, ...]
+
+    def __post_init__(self) -> None:
+        if not self.observations:
+            raise ValueError("A physical event requires at least one observation.")
+        if self.event.source not in {item.source for item in self.observations}:
+            raise ValueError("A physical event must retain an observed event source.")
+        if self.event.geometry is not None and not any(
+            item.geometry == self.event.geometry for item in self.observations
+        ):
+            raise ValueError(
+                "A physical event geometry must retain an observed geometry source."
+            )
+        for measurement in self.event.measurements:
+            if not any(measurement in item.measurements for item in self.observations):
+                raise ValueError(
+                    "A physical event measurement must retain its observation source."
+                )
 
 
 @dataclass(frozen=True, slots=True)

@@ -20,6 +20,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -373,7 +374,13 @@ class ReliefWebSituationAdapter:
                 countries=countries,
                 hazard=query.hazard,
                 measurements=(
-                    (EventMeasurement("magnitude", magnitude),)
+                    (
+                        EventMeasurement(
+                            MeasurementKind.MAGNITUDE,
+                            magnitude,
+                            source=source,
+                        ),
+                    )
                     if magnitude is not None
                     else ()
                 ),

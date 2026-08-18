@@ -17,6 +17,7 @@ from disaster_monitor.domain.disaster import (
     EventGeometryKind,
     EventObservationAssignment,
     Hazard,
+    MeasurementKind,
     PhysicalEventIdentity,
     PhysicalEventIdentityResult,
 )
@@ -109,11 +110,9 @@ def _event_point(event: DisasterEvent) -> EventCoordinate | None:
     return geometry.coordinates[0]
 
 
-def _measurement(event: DisasterEvent, name: str) -> float | str | None:
-    for measurement in event.measurements:
-        if measurement.name == name:
-            return measurement.value
-    return None
+def _measurement(event: DisasterEvent, kind: MeasurementKind) -> float | str | None:
+    measurement = event.measurement(kind)
+    return measurement.value if measurement is not None else None
 
 
 def _is_aftershock(event: DisasterEvent) -> bool:
@@ -200,7 +199,6 @@ def _preferred_event(events: list[DisasterEvent]) -> DisasterEvent:
     return max(
         events,
         key=lambda event: (
-            event.geometry is not None,
             event.source.effective_at,
             event_observation_key(event),
         ),
@@ -215,7 +213,13 @@ def _merge_event(events: list[DisasterEvent]) -> DisasterEvent:
     measurements = tuple(
         sorted(
             set(measurement for event in events for measurement in event.measurements),
-            key=lambda item: (item.name, item.unit or "", str(item.value)),
+            key=lambda item: (
+                item.kind.value,
+                item.unit or "",
+                str(item.value),
+                item.source.source_id,
+                item.source.canonical_url,
+            ),
         )
     )
     geometry = preferred.geometry or next(
@@ -267,7 +271,13 @@ class BaseEventPolicy:
             or first.country.alpha3_code != second.country.alpha3_code
         ):
             return False
-        return False
+        shared_identifiers = _provider_identifiers(first) & _provider_identifiers(
+            second
+        )
+        return bool(
+            shared_identifiers
+            and abs((first.event_time - second.event_time).total_seconds()) <= 24 * 3600
+        )
 
     def cluster(self, events: tuple[DisasterEvent, ...]) -> tuple[DisasterEvent, ...]:
         """Compatibility projection of the explicit physical-event partition."""
@@ -509,16 +519,16 @@ class EarthquakeEventPolicy(BaseEventPolicy):
             if distance is not None:
                 discriminator_bonus += max(0.0, 8.0 - distance / 25.0)
         query_magnitude = query.discriminator("magnitude")
-        magnitude = _measurement(event, "magnitude")
+        magnitude = _measurement(event, MeasurementKind.MAGNITUDE)
         if query_magnitude is not None and isinstance(magnitude, (int, float)):
             discriminator_bonus += max(
                 0.0, 4.0 - abs(magnitude - float(query_magnitude)) * 8
             )
-        significance = _measurement(event, "provider_significance")
+        significance = _measurement(event, MeasurementKind.PROVIDER_SIGNIFICANCE)
         return (
             recency * 0.6
             + (magnitude if isinstance(magnitude, (int, float)) else 0.0) * 2.0
-            + _intensity_score(_measurement(event, "intensity")) * 1.5
+            + _intensity_score(_measurement(event, MeasurementKind.INTENSITY)) * 1.5
             + (significance if isinstance(significance, (int, float)) else 0.0) / 500
             + discriminator_bonus
             - (3.0 if _is_aftershock(event) else 0.0)
@@ -542,8 +552,8 @@ class EarthquakeEventPolicy(BaseEventPolicy):
         distance = _distance_km(first, second)
         if distance is None or distance > 30:
             return False
-        first_magnitude = _measurement(first, "magnitude")
-        second_magnitude = _measurement(second, "magnitude")
+        first_magnitude = _measurement(first, MeasurementKind.MAGNITUDE)
+        second_magnitude = _measurement(second, MeasurementKind.MAGNITUDE)
         return not (
             isinstance(first_magnitude, (int, float))
             and isinstance(second_magnitude, (int, float))
@@ -594,7 +604,8 @@ class EarthquakeEventPolicy(BaseEventPolicy):
                 event
                 for event in filtered
                 if isinstance(
-                    magnitude := _measurement(event, "magnitude"), (int, float)
+                    magnitude := _measurement(event, MeasurementKind.MAGNITUDE),
+                    (int, float),
                 )
                 and abs(magnitude - float(query_magnitude)) <= 0.25
             ]

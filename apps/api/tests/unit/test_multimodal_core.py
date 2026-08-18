@@ -35,6 +35,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     GeographicArea,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SourceReference,
     point_event_geometry,
@@ -119,7 +120,7 @@ def _physical_event(*, event_time: datetime = NOW):
         event_time,
         source,
         geometry=point_event_geometry(35.0, 137.0, source),
-        measurements=(EventMeasurement("magnitude", 6.8),),
+        measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 6.8, source=source),),
         provider_ids=("provider:event-1",),
     )
     return (

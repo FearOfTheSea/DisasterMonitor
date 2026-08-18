@@ -37,6 +37,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceReference,
@@ -86,8 +87,12 @@ def _event(
         source=source,
         geometry=point_event_geometry(latitude, longitude, source),
         measurements=(
-            EventMeasurement("magnitude", magnitude),
-            EventMeasurement("provider_significance", magnitude * 100),
+            EventMeasurement(MeasurementKind.MAGNITUDE, magnitude, source=source),
+            EventMeasurement(
+                MeasurementKind.PROVIDER_SIGNIFICANCE,
+                magnitude * 100,
+                source=source,
+            ),
         ),
         is_aftershock=aftershock,
         parent_event_id=parent_event_id,
@@ -295,7 +300,7 @@ def test_generic_correlation_does_not_match_equal_magnitude_without_neutral_clue
         source=source,
         narrative="A report with magnitude 6.0 but no matching location or date.",
         countries=(JAPAN.canonical_name,),
-        measurements=(EventMeasurement("magnitude", 6.0),),
+        measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 6.0, source=source),),
     )
 
     assert correlate_situation_report(report, event) == CorrelationStatus.UNMATCHED
@@ -308,7 +313,7 @@ def test_earthquake_magnitude_correlation_is_owned_by_its_policy() -> None:
         source=source,
         narrative="Ishikawa earthquake report with magnitude 6.0.",
         locations=("Ishikawa",),
-        measurements=(EventMeasurement("magnitude", 6.0),),
+        measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 6.0, source=source),),
     )
 
     assert (

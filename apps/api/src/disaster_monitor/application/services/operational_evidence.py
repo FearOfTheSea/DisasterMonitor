@@ -147,7 +147,12 @@ def _event_observation_record(
         "event_time": _time(event.event_time),
         "geometry": _geometry_document(event.geometry),
         "measurements": [
-            {"name": item.name, "value": item.value, "unit": item.unit}
+            {
+                "kind": item.kind.value,
+                "value": item.value,
+                "unit": item.unit,
+                "source_id": item.source.source_id,
+            }
             for item in event.measurements
         ],
         "source": {

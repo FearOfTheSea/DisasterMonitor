@@ -25,10 +25,15 @@ from system_test_backend import (  # noqa: E402
 from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
     CurrentDisasterReportService,
 )
+from disaster_monitor.application.services.provider_registry import (  # noqa: E402
+    ProviderCapabilities,
+    ProviderRole,
+)
 from disaster_monitor.infrastructure.configuration import Settings  # noqa: E402
 from disaster_monitor.infrastructure.disaster.composite import (  # noqa: E402
     CompositeDisasterEventProvider,
 )
+from disaster_monitor.domain.disaster import Hazard  # noqa: E402
 from disaster_monitor.main import create_app  # noqa: E402
 
 
@@ -48,6 +53,18 @@ def main() -> int:
                 current_disaster_report=CurrentDisasterReportService(
                     CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
                     FakeSystemSituationProvider(),
+                    provider_capabilities=(
+                        ProviderCapabilities(
+                            frozenset({ProviderRole.EVENT_DISCOVERY}),
+                            frozenset({Hazard.EARTHQUAKE}),
+                            None,
+                        ),
+                        ProviderCapabilities(
+                            frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                            frozenset({Hazard.EARTHQUAKE}),
+                            None,
+                        ),
+                    ),
                     clock=lambda: NOW,
                 ),
             ),

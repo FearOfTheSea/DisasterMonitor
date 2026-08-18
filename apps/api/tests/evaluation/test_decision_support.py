@@ -48,6 +48,7 @@ from disaster_monitor.domain.disaster import (
     EvidenceDisposition,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -92,7 +93,13 @@ def _state(item: dict[str, object]):
         measurements=(
             ()
             if item.get("magnitude") is None
-            else (EventMeasurement("magnitude", float(item["magnitude"])),)
+            else (
+                EventMeasurement(
+                    MeasurementKind.MAGNITUDE,
+                    float(item["magnitude"]),
+                    source=event_source,
+                ),
+            )
         ),
     )
     physical_event = (

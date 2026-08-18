@@ -14,6 +14,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -51,20 +52,19 @@ def _source(
 
 
 def _event(hazard: Hazard = Hazard.EARTHQUAKE) -> DisasterEvent:
+    source = _source("USGS", SourceAuthority.SCIENTIFIC_AUTHORITY)
     return DisasterEvent(
         "usgs:target",
         hazard,
         "Sucre, Venezuela",
         VENEZUELA,
         NOW - timedelta(hours=2),
-        _source("USGS", SourceAuthority.SCIENTIFIC_AUTHORITY),
-        geometry=point_event_geometry(
-            10.4,
-            -63.5,
-            _source("USGS", SourceAuthority.SCIENTIFIC_AUTHORITY),
-        ),
+        source,
+        geometry=point_event_geometry(10.4, -63.5, source),
         measurements=(
-            (EventMeasurement("magnitude", 6.2),) if hazard == Hazard.EARTHQUAKE else ()
+            (EventMeasurement(MeasurementKind.MAGNITUDE, 6.2, source=source),)
+            if hazard == Hazard.EARTHQUAKE
+            else ()
         ),
     )
 

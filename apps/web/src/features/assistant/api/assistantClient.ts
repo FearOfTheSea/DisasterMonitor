@@ -259,9 +259,19 @@ export class AssistantClient {
         }
         const item = measurement as Record<string, unknown>;
         return (
-          typeof item.name === 'string' &&
+          typeof item.kind === 'string' &&
+          [
+            'magnitude',
+            'intensity',
+            'depth',
+            'provider_significance',
+            'confidence',
+            'fire_radiative_power',
+            'severity',
+          ].includes(item.kind) &&
           (typeof item.value === 'number' || typeof item.value === 'string') &&
-          (item.unit == null || typeof item.unit === 'string')
+          (item.unit == null || typeof item.unit === 'string') &&
+          typeof item.source_id === 'string'
         );
       })
     );

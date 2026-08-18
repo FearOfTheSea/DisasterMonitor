@@ -36,6 +36,7 @@ from disaster_monitor.domain.disaster import (
     Hazard,
     HypothesisArtifact,
     HypothesisTruthStatus,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -105,7 +106,13 @@ def _event(item: dict[str, object]) -> DisasterEvent:
         source=source,
         geometry=geometry,
         measurements=(
-            (EventMeasurement("magnitude", cast(float, item["magnitude"])),)
+            (
+                EventMeasurement(
+                    MeasurementKind.MAGNITUDE,
+                    cast(float, item["magnitude"]),
+                    source=source,
+                ),
+            )
             if item.get("magnitude") is not None
             else ()
         ),
@@ -296,7 +303,7 @@ def _temporal_event() -> DisasterEvent:
         NOW - timedelta(hours=3),
         source,
         geometry=point_event_geometry(35.0, 135.0, source),
-        measurements=(EventMeasurement("magnitude", 6.0),),
+        measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 6.0, source=source),),
     )
 
 

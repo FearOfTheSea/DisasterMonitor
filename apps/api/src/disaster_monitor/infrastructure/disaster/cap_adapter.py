@@ -27,6 +27,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -288,7 +289,13 @@ class CapAlertAdapter:
                 )
             ),
             measurements=(
-                (EventMeasurement("severity", record.severity),)
+                (
+                    EventMeasurement(
+                        MeasurementKind.SEVERITY,
+                        record.severity,
+                        source=source,
+                    ),
+                )
                 if record.severity
                 else ()
             ),

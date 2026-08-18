@@ -22,6 +22,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -206,17 +207,30 @@ class JmaEarthquakeAdapter:
                     measurements=tuple(
                         measurement
                         for measurement in (
-                            EventMeasurement("magnitude", magnitude)
+                            EventMeasurement(
+                                MeasurementKind.MAGNITUDE, magnitude, source=source
+                            )
                             if magnitude is not None
                             else None,
-                            EventMeasurement("intensity", f"JMA {intensity}")
+                            EventMeasurement(
+                                MeasurementKind.INTENSITY,
+                                f"JMA {intensity}",
+                                source=source,
+                            )
                             if intensity
                             else None,
-                            EventMeasurement("depth", depth_km, "km")
+                            EventMeasurement(
+                                MeasurementKind.DEPTH,
+                                depth_km,
+                                "km",
+                                source=source,
+                            )
                             if depth_km is not None
                             else None,
                             EventMeasurement(
-                                "provider_significance", (magnitude or 0) * 100
+                                MeasurementKind.PROVIDER_SIGNIFICANCE,
+                                (magnitude or 0) * 100,
+                                source=source,
                             ),
                         )
                         if measurement is not None
@@ -572,18 +586,28 @@ class JmaSignificantEarthquakeAdapter:
                     measurements=tuple(
                         measurement
                         for measurement in (
-                            EventMeasurement("magnitude", magnitude),
                             EventMeasurement(
-                                "intensity", cast(str, _history_intensity(cells[3]))
+                                MeasurementKind.MAGNITUDE, magnitude, source=source
+                            ),
+                            EventMeasurement(
+                                MeasurementKind.INTENSITY,
+                                cast(str, _history_intensity(cells[3])),
+                                source=source,
                             )
                             if _history_intensity(cells[3])
                             else None,
-                            EventMeasurement("depth", depth_km, "km")
+                            EventMeasurement(
+                                MeasurementKind.DEPTH,
+                                depth_km,
+                                "km",
+                                source=source,
+                            )
                             if depth_km is not None
                             else None,
                             EventMeasurement(
-                                "provider_significance",
+                                MeasurementKind.PROVIDER_SIGNIFICANCE,
                                 magnitude * 100 + _intensity_score(cells[3]) * 100,
+                                source=source,
                             ),
                         )
                         if measurement is not None

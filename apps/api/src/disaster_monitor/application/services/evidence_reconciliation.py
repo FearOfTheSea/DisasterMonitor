@@ -16,6 +16,9 @@ from disaster_monitor.application.services.evidence_state import (
     build_evidence_world_state,
     source_is_stale,
 )
+from disaster_monitor.application.services.source_evidence_policy import (
+    validate_physical_event_evidence,
+)
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     DisasterEvent,
@@ -152,6 +155,8 @@ def build_evidence_packet(
     ] = correlate_situation_report,
 ) -> EvidencePacket:
     """Reconcile duplicate, newer, missing, and conflicting provider facts."""
+    if physical_event is not None:
+        validate_physical_event_evidence(event, physical_event, query)
     correlated_reports: list[SituationReport] = []
     correlation_warning_counts: dict[tuple[CorrelationStatus, str], int] = {}
     for report in reports:
@@ -251,6 +256,12 @@ def build_evidence_packet(
     projection_reports = _deduplicate_reports(reports)
 
     sources: list[SourceReference] = [event.source]
+    if physical_event is not None:
+        for observation in physical_event.observations:
+            if _source_key(observation.source) not in {
+                _source_key(item) for item in sources
+            }:
+                sources.append(observation.source)
     for report in projection_reports:
         if _source_key(report.source) not in {_source_key(item) for item in sources}:
             sources.append(report.source)

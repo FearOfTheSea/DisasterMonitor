@@ -21,11 +21,14 @@ from disaster_monitor.application.services.current_disaster_report import (  # n
 )
 from disaster_monitor.domain.disaster import (  # noqa: E402
     DisasterEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (  # noqa: E402
     StaticCountryCatalog,
@@ -104,12 +107,25 @@ class FakeSystemEventProvider:
                     country=JAPAN,
                     event_time=TARGET_TIME,
                     source=jma_source,
-                    latitude=37.0,
-                    longitude=137.0,
-                    magnitude=6.0,
-                    intensity="JMA 6-",
-                    depth_km=12,
-                    significance=400,
+                    geometry=point_event_geometry(37.0, 137.0, jma_source),
+                    measurements=(
+                        EventMeasurement(
+                            MeasurementKind.MAGNITUDE, 6.0, source=jma_source
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.INTENSITY,
+                            "JMA 6-",
+                            source=jma_source,
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.DEPTH, 12, "km", source=jma_source
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.PROVIDER_SIGNIFICANCE,
+                            400,
+                            source=jma_source,
+                        ),
+                    ),
                     provider_ids=("jma:system-fixture",),
                 ),
                 DisasterEvent(
@@ -119,11 +135,20 @@ class FakeSystemEventProvider:
                     country=JAPAN,
                     event_time=TARGET_TIME + timedelta(seconds=20),
                     source=usgs_source,
-                    latitude=37.02,
-                    longitude=137.01,
-                    magnitude=6.1,
-                    depth_km=11,
-                    significance=600,
+                    geometry=point_event_geometry(37.02, 137.01, usgs_source),
+                    measurements=(
+                        EventMeasurement(
+                            MeasurementKind.MAGNITUDE, 6.1, source=usgs_source
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.DEPTH, 11, "km", source=usgs_source
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.PROVIDER_SIGNIFICANCE,
+                            600,
+                            source=usgs_source,
+                        ),
+                    ),
                     provider_ids=("usgs:system-fixture",),
                 ),
                 DisasterEvent(
@@ -133,10 +158,17 @@ class FakeSystemEventProvider:
                     country=JAPAN,
                     event_time=datetime(2026, 8, 5, 23, 15, tzinfo=UTC),
                     source=unrelated_source,
-                    latitude=35.7,
-                    longitude=139.7,
-                    magnitude=9.5,
-                    significance=5_000,
+                    geometry=point_event_geometry(35.7, 139.7, unrelated_source),
+                    measurements=(
+                        EventMeasurement(
+                            MeasurementKind.MAGNITUDE, 9.5, source=unrelated_source
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.PROVIDER_SIGNIFICANCE,
+                            5_000,
+                            source=unrelated_source,
+                        ),
+                    ),
                     provider_ids=("usgs:unrelated",),
                 ),
                 DisasterEvent(
@@ -146,10 +178,17 @@ class FakeSystemEventProvider:
                     country=VENEZUELA,
                     event_time=datetime(2026, 8, 6, 1, 45, tzinfo=UTC),
                     source=foreign_source,
-                    latitude=10.4,
-                    longitude=-63.5,
-                    magnitude=9.8,
-                    significance=6_000,
+                    geometry=point_event_geometry(10.4, -63.5, foreign_source),
+                    measurements=(
+                        EventMeasurement(
+                            MeasurementKind.MAGNITUDE, 9.8, source=foreign_source
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.PROVIDER_SIGNIFICANCE,
+                            6_000,
+                            source=foreign_source,
+                        ),
+                    ),
                     provider_ids=("usgs:venezuela-decoy",),
                 ),
             )

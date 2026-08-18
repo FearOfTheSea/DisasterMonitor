@@ -16,6 +16,7 @@ from disaster_monitor.domain.disaster import (
     IncidentPriority,
     IncidentPriorityAssessment,
     IncidentPrioritySignal,
+    MeasurementKind,
 )
 
 _NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
@@ -35,15 +36,15 @@ _CLAUSE_BOUNDARY = re.compile(
 )
 
 
-def _measurement_value(event: DisasterEvent, name: str) -> float | str | None:
-    for measurement in event.measurements:
-        if measurement.name == name:
-            return measurement.value
-    return None
+def _measurement_value(
+    event: DisasterEvent, kind: MeasurementKind
+) -> float | str | None:
+    measurement = event.measurement(kind)
+    return measurement.value if measurement is not None else None
 
 
-def _numeric_measurement(event: DisasterEvent, name: str) -> float | None:
-    value = _measurement_value(event, name)
+def _numeric_measurement(event: DisasterEvent, kind: MeasurementKind) -> float | None:
+    value = _measurement_value(event, kind)
     return float(value) if isinstance(value, (int, float)) else None
 
 
@@ -135,7 +136,7 @@ class IncidentPriorityRanker:
             )
             floor = _max_priority(floor, priority_floor)
 
-        magnitude = _numeric_measurement(event, "magnitude")
+        magnitude = _numeric_measurement(event, MeasurementKind.MAGNITUDE)
         if event.hazard == Hazard.EARTHQUAKE and magnitude is not None:
             if magnitude >= 7:
                 add(
@@ -165,7 +166,9 @@ class IncidentPriorityRanker:
                     10,
                 )
 
-        intensity = _intensity_level(_measurement_value(event, "intensity"))
+        intensity = _intensity_level(
+            _measurement_value(event, MeasurementKind.INTENSITY)
+        )
         if intensity is not None and intensity >= 7:
             add(
                 "tr.priority.intensity_critical",
@@ -181,7 +184,9 @@ class IncidentPriorityRanker:
                 priority_floor=IncidentPriority.HIGH,
             )
 
-        significance = _numeric_measurement(event, "provider_significance")
+        significance = _numeric_measurement(
+            event, MeasurementKind.PROVIDER_SIGNIFICANCE
+        )
         if significance is not None:
             if significance >= 1_000:
                 add(

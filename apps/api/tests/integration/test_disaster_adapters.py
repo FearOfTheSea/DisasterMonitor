@@ -25,6 +25,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     GeographicArea,
     Hazard,
+    MeasurementKind,
     SourceReference,
 )
 from disaster_monitor.infrastructure.disaster.composite import (
@@ -148,11 +149,14 @@ async def test_usgs_adapter_translates_valid_geojson_and_missing_optional_fields
         next(
             item.value
             for item in result.records[0].measurements
-            if item.name == "magnitude"
+            if item.kind is MeasurementKind.MAGNITUDE
         )
         == 5.8
     )
-    assert not any(item.name == "intensity" for item in result.records[0].measurements)
+    assert not any(
+        item.kind is MeasurementKind.INTENSITY
+        for item in result.records[0].measurements
+    )
     await client.aclose()
 
 
@@ -230,7 +234,7 @@ async def test_jma_adapter_translates_official_json() -> None:
         next(
             item.value
             for item in result.records[0].measurements
-            if item.name == "depth"
+            if item.kind is MeasurementKind.DEPTH
         )
         == 20
     )
@@ -471,7 +475,7 @@ async def test_reliefweb_matches_narrative_event_clues() -> None:
         INDONESIA,
         datetime(2026, 8, 14, 21, 58, tzinfo=UTC),
         source,
-        measurements=(EventMeasurement("magnitude", 7.7),),
+        measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 7.7, source=source),),
     )
     query = DisasterQuery(
         Hazard.EARTHQUAKE,
@@ -488,7 +492,7 @@ async def test_reliefweb_matches_narrative_event_clues() -> None:
         next(
             item.value
             for item in result.records[0].measurements
-            if item.name == "magnitude"
+            if item.kind is MeasurementKind.MAGNITUDE
         )
         == 7.7
     )
@@ -959,7 +963,7 @@ async def test_durable_jma_history_survives_rolling_list_limit_and_clusters_usgs
         next(
             item.value
             for item in resolution.selected.measurements
-            if item.name == "magnitude"
+            if item.kind is MeasurementKind.MAGNITUDE
         )
         == 7.1
     )
@@ -1027,7 +1031,7 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
         country=JAPAN,
         event_time=datetime(2026, 7, 28, 7, 27, tzinfo=UTC),
         source=source,
-        measurements=(EventMeasurement("magnitude", 7.1),),
+        measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 7.1, source=source),),
         provider_ids=("usgs:kumamoto",),
     )
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))

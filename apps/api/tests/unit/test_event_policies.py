@@ -1,15 +1,19 @@
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.application.services.event_resolution import (
     DefaultEventPolicy,
     EarthquakeEventPolicy,
 )
 from disaster_monitor.domain.disaster import (
+    DisasterEvent,
     EarthquakeEvent,
     EventMeasurement,
     Hazard,
+    MeasurementKind,
     SourceReference,
     point_event_geometry,
 )
@@ -45,10 +49,29 @@ def _event(event_id: str, **changes: object) -> EarthquakeEvent:
         NOW - timedelta(hours=2),
         SOURCE,
         geometry=point_event_geometry(latitude, longitude, SOURCE),
-        measurements=(EventMeasurement("magnitude", magnitude),),
+        measurements=(
+            EventMeasurement(MeasurementKind.MAGNITUDE, magnitude, source=SOURCE),
+        ),
         provider_ids=(event_id,),
     )
     return replace(event, **changes)
+
+
+def _generic_event(event_id: str, **changes: object) -> DisasterEvent:
+    hazard = changes.pop("hazard", Hazard.FLOOD)
+    country = changes.pop("country", JAPAN)
+    event_time = changes.pop("event_time", NOW - timedelta(hours=2))
+    return DisasterEvent(
+        event_id=event_id,
+        hazard=hazard,
+        location="Ishikawa, Japan",
+        country=country,
+        event_time=event_time,
+        source=SOURCE,
+        geometry=point_event_geometry(37.0, 137.0, SOURCE),
+        measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 6.1, source=SOURCE),),
+        provider_ids=(event_id,),
+    )
 
 
 def test_earthquake_policy_clusters_cross_provider_observations() -> None:
@@ -79,7 +102,7 @@ def test_earthquake_policy_never_clusters_across_country_or_hazard() -> None:
         (
             _event("japan"),
             _event("foreign", country=VENEZUELA),
-            _event("flood", hazard=Hazard.FLOOD),
+            _generic_event("flood"),
         )
     )
 
@@ -98,8 +121,8 @@ def test_nearby_independent_earthquakes_are_not_merged() -> None:
 def test_default_policy_marks_similarly_recent_independent_events_ambiguous() -> None:
     policy = DefaultEventPolicy()
     query = DisasterQuery(Hazard.FLOOD, JAPAN, "recent", ("latest",))
-    first = _event("first", hazard=Hazard.FLOOD)
-    second = _event(
+    first = _generic_event("first")
+    second = _generic_event(
         "second", hazard=Hazard.FLOOD, event_time=first.event_time - timedelta(hours=1)
     )
 
@@ -111,9 +134,9 @@ def test_default_policy_marks_similarly_recent_independent_events_ambiguous() ->
 
 def test_default_policy_never_merges_shared_ids_across_scope() -> None:
     policy = DefaultEventPolicy()
-    flood = _event("shared:event", hazard=Hazard.FLOOD)
-    foreign = _event("shared:event", hazard=Hazard.FLOOD, country=VENEZUELA)
-    earthquake = _event("shared:event", hazard=Hazard.EARTHQUAKE)
+    flood = _generic_event("shared:event")
+    foreign = _generic_event("shared:event", hazard=Hazard.FLOOD, country=VENEZUELA)
+    earthquake = _event("shared:event")
 
     identity = policy.identify((flood, foreign, earthquake))
 
@@ -123,14 +146,11 @@ def test_default_policy_never_merges_shared_ids_across_scope() -> None:
 def test_generic_policy_ignores_earthquake_measurements_when_ranking_floods() -> None:
     policy = DefaultEventPolicy()
     older = replace(
-        _event("older", magnitude=9.0),
-        hazard=Hazard.FLOOD,
+        _generic_event("older"),
         event_time=NOW - timedelta(hours=2),
     )
     newer = replace(
-        _event("newer", magnitude=1.0),
-        hazard=Hazard.FLOOD,
-        event_time=NOW - timedelta(hours=1),
+        _generic_event("newer", event_time=NOW - timedelta(hours=1)),
     )
 
     resolution = policy.resolve(
@@ -140,3 +160,23 @@ def test_generic_policy_ignores_earthquake_measurements_when_ranking_floods() ->
     )
 
     assert resolution.selected == newer
+
+
+def test_earthquake_sequence_and_aftershock_policy_remains_hazard_specific() -> None:
+    policy = EarthquakeEventPolicy()
+    mainshock = _event("mainshock")
+    aftershock = _event(
+        "aftershock",
+        event_time=mainshock.event_time + timedelta(hours=2),
+        latitude=37.2,
+        is_aftershock=True,
+        parent_event_id="mainshock",
+    )
+
+    assert policy.same_sequence(mainshock, aftershock)
+    assert policy.same_physical_event(mainshock, aftershock) is False
+
+
+def test_earthquake_subtype_rejects_non_earthquake_hazard() -> None:
+    with pytest.raises(ValueError, match="requires the earthquake hazard"):
+        replace(_event("earthquake"), hazard=Hazard.FLOOD)

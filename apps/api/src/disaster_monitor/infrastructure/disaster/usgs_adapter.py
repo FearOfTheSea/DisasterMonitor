@@ -26,6 +26,7 @@ from disaster_monitor.domain.disaster import (
     EventGeographyStatus,
     EventMeasurement,
     Hazard,
+    MeasurementKind,
     SourceAuthority,
     SourceReference,
     point_event_geometry,
@@ -234,17 +235,26 @@ class UsgsEarthquakeAdapter:
                     measurement
                     for measurement in (
                         EventMeasurement(
-                            "magnitude", cast(float, _number(properties.get("mag")))
+                            MeasurementKind.MAGNITUDE,
+                            cast(float, _number(properties.get("mag"))),
+                            source=source,
                         )
                         if _number(properties.get("mag")) is not None
                         else None,
-                        EventMeasurement("intensity", f"MMI {properties['mmi']}")
+                        EventMeasurement(
+                            MeasurementKind.INTENSITY,
+                            f"MMI {properties['mmi']}",
+                            source=source,
+                        )
                         if isinstance(properties.get("mmi"), (int, float))
                         else None,
-                        EventMeasurement("depth", depth_km, "km"),
                         EventMeasurement(
-                            "provider_significance",
+                            MeasurementKind.DEPTH, depth_km, "km", source=source
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.PROVIDER_SIGNIFICANCE,
                             cast(float, _number(properties.get("sig"))),
+                            source=source,
                         )
                         if _number(properties.get("sig")) is not None
                         else None,
@@ -324,17 +334,26 @@ class UsgsEarthquakeAdapter:
                     measurement
                     for measurement in (
                         EventMeasurement(
-                            "magnitude", cast(float, _number(properties.get("mag")))
+                            MeasurementKind.MAGNITUDE,
+                            cast(float, _number(properties.get("mag"))),
+                            source=source,
                         )
                         if _number(properties.get("mag")) is not None
                         else None,
-                        EventMeasurement("intensity", f"MMI {properties['mmi']}")
+                        EventMeasurement(
+                            MeasurementKind.INTENSITY,
+                            f"MMI {properties['mmi']}",
+                            source=source,
+                        )
                         if isinstance(properties.get("mmi"), (int, float))
                         else None,
-                        EventMeasurement("depth", depth_km, "km"),
                         EventMeasurement(
-                            "provider_significance",
+                            MeasurementKind.DEPTH, depth_km, "km", source=source
+                        ),
+                        EventMeasurement(
+                            MeasurementKind.PROVIDER_SIGNIFICANCE,
                             cast(float, _number(properties.get("sig"))),
+                            source=source,
                         )
                         if _number(properties.get("sig")) is not None
                         else None,

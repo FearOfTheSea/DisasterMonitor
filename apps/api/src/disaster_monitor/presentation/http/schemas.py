@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from disaster_monitor.domain.disaster import MeasurementKind
 from disaster_monitor.domain.operations import OperatorDecision
 from disaster_monitor.presentation.http.multimodal_schemas import (
     CommonOperationalPictureResponse,
@@ -218,9 +219,10 @@ class EventGeometryResponse(BaseModel):
 class EventMeasurementResponse(BaseModel):
     """Hazard-neutral event measurement."""
 
-    name: str
+    kind: MeasurementKind
     value: float | str
     unit: str | None = None
+    source_id: str
 
 
 class SelectedEventResponse(BaseModel):

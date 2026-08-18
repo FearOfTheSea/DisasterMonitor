@@ -57,7 +57,8 @@ class DecisionOptionGenerator:
         )
         if event.measurements:
             measurements = ", ".join(
-                f"{item.name} {item.value}" + (f" {item.unit}" if item.unit else "")
+                f"{item.kind.value} {item.value}"
+                + (f" {item.unit}" if item.unit else "")
                 for item in event.measurements
             )
             event_detail = f"{event_detail[:-1]} with {measurements}."

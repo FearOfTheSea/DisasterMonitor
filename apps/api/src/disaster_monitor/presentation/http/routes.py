@@ -510,9 +510,10 @@ async def assistant(
                 geometry=_event_geometry_response(selected_event.geometry),
                 measurements=[
                     EventMeasurementResponse(
-                        name=item.name,
+                        kind=item.kind,
                         value=item.value,
                         unit=item.unit,
+                        source_id=item.source.source_id,
                     )
                     for item in selected_event.measurements
                 ],

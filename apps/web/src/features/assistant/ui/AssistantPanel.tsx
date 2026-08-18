@@ -280,9 +280,9 @@ function DisasterReportView({
               ? ` · ${report.selectedEvent.measurements
                   .map(
                     (measurement) =>
-                      `${measurement.name} ${measurement.value}${
+                      `${measurement.kind} ${measurement.value}${
                         measurement.unit ? ` ${measurement.unit}` : ''
-                      }`,
+                      } · Source: ${measurement.source_id}`,
                   )
                   .join(', ')}`
               : ''}

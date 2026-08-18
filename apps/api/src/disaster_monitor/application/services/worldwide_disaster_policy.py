@@ -9,12 +9,14 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterQuery,
     WorldwideSelectionIntent,
 )
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Hazard, MeasurementKind
 
 
-def _measurement(event: WorldwideDisasterEvent, name: str) -> float | str | None:
+def _measurement(
+    event: WorldwideDisasterEvent, kind: MeasurementKind
+) -> float | str | None:
     for measurement in event.measurements:
-        if measurement.name == name:
+        if measurement.kind is kind:
             return measurement.value
     return None
 
@@ -91,12 +93,15 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
             return max(
                 events,
                 key=lambda event: (
-                    _measurement(event, "magnitude")
-                    if isinstance(_measurement(event, "magnitude"), (int, float))
-                    else float("-inf"),
-                    _measurement(event, "provider_significance")
+                    _measurement(event, MeasurementKind.MAGNITUDE)
                     if isinstance(
-                        _measurement(event, "provider_significance"), (int, float)
+                        _measurement(event, MeasurementKind.MAGNITUDE), (int, float)
+                    )
+                    else float("-inf"),
+                    _measurement(event, MeasurementKind.PROVIDER_SIGNIFICANCE)
+                    if isinstance(
+                        _measurement(event, MeasurementKind.PROVIDER_SIGNIFICANCE),
+                        (int, float),
                     )
                     else float("-inf"),
                     event.event_time,
@@ -107,8 +112,10 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
             events,
             key=lambda event: (
                 event.event_time,
-                _measurement(event, "magnitude")
-                if isinstance(_measurement(event, "magnitude"), (int, float))
+                _measurement(event, MeasurementKind.MAGNITUDE)
+                if isinstance(
+                    _measurement(event, MeasurementKind.MAGNITUDE), (int, float)
+                )
                 else float("-inf"),
                 event.event_id,
             ),
@@ -124,7 +131,7 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
             if query.selection_intent is WorldwideSelectionIntent.STRONGEST
             else "latest"
         )
-        magnitude_value = _measurement(event, "magnitude")
+        magnitude_value = _measurement(event, MeasurementKind.MAGNITUDE)
         magnitude = (
             f" magnitude {magnitude_value:g}"
             if isinstance(magnitude_value, (int, float))

@@ -45,7 +45,7 @@ def _event_summary(packet: EvidencePacket) -> str:
     )
     details = [location, f"event time {_format_timestamp(event.event_time)}"]
     details.extend(
-        f"{measurement.name} {measurement.value}"
+        f"{measurement.kind.value} {measurement.value}"
         + (f" {measurement.unit}" if measurement.unit else "")
         for measurement in event.measurements
     )

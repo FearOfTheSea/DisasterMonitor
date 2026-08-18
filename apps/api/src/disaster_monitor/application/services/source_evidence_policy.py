@@ -17,6 +17,8 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
+    PhysicalEventIdentity,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -59,7 +61,7 @@ def validate_event_evidence(
     ):
         raise SourceEvidencePolicyError("The event identity or time is invalid.")
     _validate_geometry(record.geometry, record.source)
-    _validate_measurements(record.measurements)
+    _validate_measurements(record.measurements, record.source)
     return record
 
 
@@ -91,7 +93,7 @@ def validate_worldwide_event_evidence(
             "The worldwide event identity or time is invalid."
         )
     _validate_geometry(record.geometry, record.source)
-    _validate_measurements(record.measurements)
+    _validate_measurements(record.measurements, record.source)
     return record
 
 
@@ -111,7 +113,7 @@ def validate_situation_evidence(
         raise SourceEvidencePolicyError("The situation narrative is invalid.")
     if not isinstance(record.facts, tuple):
         raise SourceEvidencePolicyError("The situation fact collection is invalid.")
-    _validate_measurements(record.measurements)
+    _validate_measurements(record.measurements, record.source)
     if record.hazard is not None and (
         not isinstance(record.hazard, Hazard) or record.hazard != query.hazard
     ):
@@ -163,7 +165,7 @@ def validate_worldwide_situation_evidence(
     _validate_source(record.source, source_id=source_id, allowed_hosts=allowed_hosts)
     if not isinstance(record.narrative, str):
         raise SourceEvidencePolicyError("The worldwide situation narrative is invalid.")
-    _validate_measurements(record.measurements)
+    _validate_measurements(record.measurements, record.source)
     if record.hazard is not None and record.hazard != query.hazard:
         raise SourceEvidencePolicyError(
             "The worldwide situation hazard is outside the selected scope."
@@ -231,12 +233,19 @@ def _finite_number(value: object) -> bool:
     )
 
 
-def _validate_geometry(geometry: object, source: SourceReference) -> None:
+def _validate_geometry(
+    geometry: object,
+    source: SourceReference,
+    *,
+    approved_sources: frozenset[SourceReference] | None = None,
+) -> None:
     if geometry is None:
         return
     if not isinstance(geometry, EventGeometry):
         raise SourceEvidencePolicyError("The event geometry is invalid.")
-    if geometry.source != source:
+    if approved_sources is None and geometry.source != source:
+        raise SourceEvidencePolicyError("The event geometry provenance is invalid.")
+    if approved_sources is not None and geometry.source not in approved_sources:
         raise SourceEvidencePolicyError("The event geometry provenance is invalid.")
     if not isinstance(geometry.kind, EventGeometryKind):
         raise SourceEvidencePolicyError("The event geometry kind is invalid.")
@@ -263,12 +272,71 @@ def _validate_geometry(geometry: object, source: SourceReference) -> None:
             raise SourceEvidencePolicyError("The event geometry coordinate is invalid.")
 
 
-def _validate_measurements(measurements: object) -> None:
+def validate_physical_event_evidence(
+    record: object,
+    physical_event: PhysicalEventIdentity,
+    query: DisasterQuery,
+) -> DisasterEvent:
+    """Validate an aggregate without erasing observation-level provenance."""
+    if not isinstance(record, DisasterEvent):
+        raise SourceEvidencePolicyError("The merged event has an invalid type.")
+    if record.hazard != query.hazard or record.country.alpha3_code != (
+        query.country.alpha3_code
+    ):
+        raise SourceEvidencePolicyError("The merged event is outside query scope.")
+    if (
+        not record.event_id.strip()
+        or not record.location.strip()
+        or not _aware(record.event_time)
+    ):
+        raise SourceEvidencePolicyError("The merged event identity or time is invalid.")
+    observation_sources = {item.source for item in physical_event.observations}
+    if record.source not in observation_sources:
+        raise SourceEvidencePolicyError(
+            "The merged event source is not one of its observations."
+        )
+    _validate_geometry(
+        record.geometry,
+        record.source,
+        approved_sources=frozenset(observation_sources),
+    )
+    if record.geometry is not None and not any(
+        item.geometry == record.geometry for item in physical_event.observations
+    ):
+        raise SourceEvidencePolicyError(
+            "The merged event geometry is not an observed source geometry."
+        )
+    _validate_measurements(record.measurements, frozenset(observation_sources))
+    for measurement in record.measurements:
+        measurement_source = getattr(measurement, "source", None)
+        if measurement_source not in observation_sources or not any(
+            measurement in item.measurements for item in physical_event.observations
+        ):
+            raise SourceEvidencePolicyError(
+                "The merged event measurement provenance is invalid."
+            )
+    return record
+
+
+def _validate_measurements(
+    measurements: object, source: SourceReference | frozenset[SourceReference]
+) -> None:
     if not isinstance(measurements, tuple) or any(
         not isinstance(measurement, EventMeasurement) for measurement in measurements
     ):
         raise SourceEvidencePolicyError("The event measurements are invalid.")
     for measurement in measurements:
+        if not isinstance(getattr(measurement, "kind", None), MeasurementKind):
+            raise SourceEvidencePolicyError("The event measurement kind is invalid.")
+        measurement_source = getattr(measurement, "source", None)
+        if (
+            measurement_source != source
+            if isinstance(source, SourceReference)
+            else measurement_source not in source
+        ):
+            raise SourceEvidencePolicyError(
+                "The event measurement provenance is invalid."
+            )
         if isinstance(measurement.value, float) and not _finite_number(
             measurement.value
         ):

@@ -7,7 +7,12 @@ from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.application.services.operational_ingestion import (
     SnapshotPersistenceService,
 )
-from disaster_monitor.domain.disaster import FactStatus, Hazard, SourceAuthority
+from disaster_monitor.domain.disaster import (
+    FactStatus,
+    Hazard,
+    MeasurementKind,
+    SourceAuthority,
+)
 from disaster_monitor.infrastructure.disaster.cap_adapter import CapAlertAdapter
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
@@ -115,7 +120,7 @@ async def test_firms_detection_remains_satellite_observation_not_incident_claim(
         next(
             item.value
             for item in batch.records[0].measurements
-            if item.name == "fire_radiative_power"
+            if item.kind is MeasurementKind.FIRE_RADIATIVE_POWER
         )
         == 12.5
     )
@@ -205,7 +210,7 @@ async def test_cap_adapter_accepts_only_public_actual_hazard_matched_alerts() ->
         next(
             item.value
             for item in batch.records[0].measurements
-            if item.name == "severity"
+            if item.kind is MeasurementKind.SEVERITY
         )
         == "Severe"
     )

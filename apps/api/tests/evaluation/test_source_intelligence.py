@@ -32,6 +32,7 @@ from disaster_monitor.domain.disaster import (
     EventMeasurement,
     FactStatus,
     Hazard,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -135,7 +136,7 @@ def _event(
         NOW - timedelta(minutes=5),
         source,
         geometry=point_event_geometry(35.0, 135.0, source),
-        measurements=(EventMeasurement("magnitude", 6.0),),
+        measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 6.0, source=source),),
         provider_ids=provider_ids,
     )
 
@@ -288,7 +289,7 @@ def _run_schema_mutations() -> tuple[int, int]:
         authority=cast(SourceAuthority, "national_authority"),
     )
     invalid_measurement = object.__new__(type(valid.measurements[0]))
-    object.__setattr__(invalid_measurement, "name", "magnitude")
+    object.__setattr__(invalid_measurement, "kind", MeasurementKind.MAGNITUDE)
     object.__setattr__(invalid_measurement, "value", float("nan"))
     object.__setattr__(invalid_measurement, "unit", None)
     event_mutations: tuple[object, ...] = (

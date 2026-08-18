@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -21,6 +22,7 @@ from disaster_monitor.application.services.worldwide_disaster import (
 from disaster_monitor.domain.disaster import (
     EventMeasurement,
     Hazard,
+    MeasurementKind,
     SourceAuthority,
     SourceReference,
     point_event_geometry,
@@ -50,9 +52,13 @@ def _event(
         source=source,
         geometry=point_event_geometry(10.0, 20.0, source),
         measurements=(
-            EventMeasurement("magnitude", magnitude),
-            EventMeasurement("depth", 12.0, "km"),
-            EventMeasurement("provider_significance", magnitude * 100),
+            EventMeasurement(MeasurementKind.MAGNITUDE, magnitude, source=source),
+            EventMeasurement(MeasurementKind.DEPTH, 12.0, "km", source=source),
+            EventMeasurement(
+                MeasurementKind.PROVIDER_SIGNIFICANCE,
+                magnitude * 100,
+                source=source,
+            ),
         ),
         provider_ids=(f"usgs:{event_id}",),
     )
@@ -95,7 +101,7 @@ def _service(
                     provider,
                     ProviderCapabilities(
                         roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                        hazards=frozenset({Hazard.EARTHQUAKE}),
+                        hazards=frozenset({records[0].hazard}),
                         country_codes=None,
                         geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
                         event_scopes=frozenset({GeographicScope.WORLDWIDE}),
@@ -201,3 +207,22 @@ async def test_worldwide_report_fails_closed_for_unapproved_source_host() -> Non
     assert report.response_type == "current_disaster_worldwide_verification_failed"
     assert report.selected_event is None
     assert any("source policy" in warning for warning in report.warnings)
+
+
+@pytest.mark.asyncio
+async def test_worldwide_non_earthquake_event_needs_no_earthquake_measurements() -> (
+    None
+):
+    flood = replace(
+        _event("flood", event_time=NOW, magnitude=5.0),
+        hazard=Hazard.FLOOD,
+        geometry=None,
+        measurements=(),
+    )
+
+    report = await _service((flood,)).execute(WorldwideDisasterQuery(Hazard.FLOOD))
+
+    assert report.response_type == "current_disaster_worldwide"
+    assert report.selected_event is not None
+    assert report.selected_event.event_id == flood.event_id
+    assert report.selected_event.hazard is Hazard.FLOOD

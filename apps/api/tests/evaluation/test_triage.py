@@ -32,6 +32,7 @@ from disaster_monitor.domain.disaster import (
     Hazard,
     IncidentPriority,
     InternalTriageAction,
+    MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceAuthority,
@@ -152,13 +153,25 @@ def _priority_state(item: dict[str, object]):
         measurements=tuple(
             measurement
             for measurement in (
-                EventMeasurement("magnitude", float(item["magnitude"]))
+                EventMeasurement(
+                    MeasurementKind.MAGNITUDE,
+                    float(item["magnitude"]),
+                    source=event_source,
+                )
                 if item.get("magnitude") is not None
                 else None,
-                EventMeasurement("intensity", str(item["intensity"]))
+                EventMeasurement(
+                    MeasurementKind.INTENSITY,
+                    str(item["intensity"]),
+                    source=event_source,
+                )
                 if item.get("intensity") is not None
                 else None,
-                EventMeasurement("provider_significance", float(item["significance"]))
+                EventMeasurement(
+                    MeasurementKind.PROVIDER_SIGNIFICANCE,
+                    float(item["significance"]),
+                    source=event_source,
+                )
                 if item.get("significance") is not None
                 else None,
             )

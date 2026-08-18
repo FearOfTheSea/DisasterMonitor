@@ -8,6 +8,7 @@ from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     DisasterEvent,
     Hazard,
+    MeasurementKind,
     SituationReport,
 )
 
@@ -122,23 +123,26 @@ class EarthquakeEvidenceCorrelationPolicy(DefaultEvidenceCorrelationPolicy):
         ):
             return neutral
         signals = correlation_signals(report, event)
-        magnitude = next(
+        event_measurement = event.measurement(MeasurementKind.MAGNITUDE)
+        report_measurement = next(
             (
-                measurement.value
-                for measurement in event.measurements
-                if measurement.name == "magnitude"
-                and isinstance(measurement.value, (int, float))
+                measurement
+                for measurement in report.measurements
+                if measurement.kind is MeasurementKind.MAGNITUDE
             ),
             None,
         )
-        report_magnitude = next(
-            (
-                measurement.value
-                for measurement in report.measurements
-                if measurement.name == "magnitude"
-                and isinstance(measurement.value, (int, float))
-            ),
-            None,
+        magnitude = (
+            event_measurement.value
+            if event_measurement is not None
+            and isinstance(event_measurement.value, (int, float))
+            else None
+        )
+        report_magnitude = (
+            report_measurement.value
+            if report_measurement is not None
+            and isinstance(report_measurement.value, (int, float))
+            else None
         )
         magnitude_matches = (
             report_magnitude is not None
