@@ -1,0 +1,70 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-166.1, 20.4]
+      },
+      "properties": {
+        "eventtype": "TC",
+        "eventid": 1001303,
+        "episodeid": 24,
+        "eventname": "ONE-C-26",
+        "name": "Tropical Cyclone ONE-C-26",
+        "description": "Tropical Cyclone ONE-C-26",
+        "alertlevel": "Green",
+        "alertscore": 1,
+        "episodealertlevel": "Green",
+        "country": "United States",
+        "fromdate": "2026-08-12T15:00:00",
+        "todate": "2026-08-18T09:00:00",
+        "datemodified": "2026-08-18T11:37:09",
+        "iso3": "USA",
+        "source": "NOAA",
+        "severitydata": {
+          "severity": 157.4064,
+          "severitytext": "Hurricane/Typhoon > 74 mph",
+          "severityunit": "km/h"
+        },
+        "url": {
+          "details": "https://www.gdacs.org/gdacsapi/api/events/geteventdata?eventtype=TC&eventid=1001303",
+          "report": "https://www.gdacs.org/report.aspx?eventid=1001303&episodeid=24&eventtype=TC"
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-135.9, 15.8]
+      },
+      "properties": {
+        "eventtype": "TC",
+        "eventid": 1001304,
+        "episodeid": 12,
+        "eventname": "HERNAN-26",
+        "name": "Tropical Cyclone HERNAN-26",
+        "description": "Tropical Cyclone HERNAN-26",
+        "alertlevel": "Orange",
+        "episodealertlevel": "Orange",
+        "country": "",
+        "fromdate": "2026-08-13T03:00:00",
+        "todate": "2026-08-15T21:00:00",
+        "datemodified": "2026-08-16T17:36:17",
+        "iso3": "",
+        "source": "NOAA",
+        "severitydata": {
+          "severity": 74.0736,
+          "severitytext": "Tropical Depression",
+          "severityunit": "km/h"
+        },
+        "url": {
+          "details": "https://www.gdacs.org/gdacsapi/api/events/geteventdata?eventtype=TC&eventid=1001304",
+          "report": "https://www.gdacs.org/report.aspx?eventid=1001304&episodeid=12&eventtype=TC"
+        }
+      }
+    }
+  ]
+}

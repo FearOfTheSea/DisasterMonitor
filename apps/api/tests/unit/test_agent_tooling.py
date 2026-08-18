@@ -367,6 +367,7 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
     catalog = StaticSourceCatalog()
 
     assert {item.source_id for item in catalog.sources()} == {
+        "gdacs-tropical-cyclones",
         "jma-rolling-earthquakes",
         "jma-significant-earthquakes",
         "usgs-earthquakes",

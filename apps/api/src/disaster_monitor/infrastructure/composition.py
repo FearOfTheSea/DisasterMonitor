@@ -56,6 +56,9 @@ from disaster_monitor.infrastructure.disaster.fdma_adapter import (
 from disaster_monitor.infrastructure.disaster.firms_adapter import (
     FirmsActiveFireAdapter,
 )
+from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
+    GdacsTropicalCycloneAdapter,
+)
 from disaster_monitor.infrastructure.disaster.gfm_adapter import (
     GfmFloodNotificationAdapter,
 )
@@ -281,6 +284,11 @@ def build_current_disaster_report(
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
+    gdacs = GdacsTropicalCycloneAdapter(
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
     fdma = FdmaSituationReportAdapter(
         snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
@@ -371,6 +379,20 @@ def build_current_disaster_report(
                 allowed_hosts=usgs.allowed_hosts,
                 event_provider=usgs,
                 worldwide_provider=usgs,
+            ),
+            ProviderRegistration(
+                "GDACS tropical cyclones",
+                gdacs,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    hazards=frozenset({Hazard.TROPICAL_CYCLONE}),
+                    country_codes=None,
+                    geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                    event_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                ),
+                source_id="gdacs-tropical-cyclones",
+                allowed_hosts=gdacs.allowed_hosts,
+                worldwide_provider=gdacs,
             ),
             ProviderRegistration(
                 "FDMA",
