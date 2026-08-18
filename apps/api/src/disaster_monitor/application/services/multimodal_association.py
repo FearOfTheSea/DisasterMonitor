@@ -7,7 +7,7 @@ from hashlib import sha256
 from disaster_monitor.application.services.multimodal_geometry import (
     MultimodalGeometryPolicy,
 )
-from disaster_monitor.domain.disaster import PhysicalEventIdentity
+from disaster_monitor.domain.disaster import EventGeometryKind, PhysicalEventIdentity
 from disaster_monitor.domain.multimodal import (
     AssetEligibility,
     AssetEventAssociation,
@@ -75,7 +75,7 @@ class MultimodalEventAssociator:
                 rules=("mm.association.required_metadata_missing",),
                 detail="Capture time and georeference are required.",
             )
-        if event.latitude is None or event.longitude is None:
+        if event.geometry is None or event.geometry.kind is not EventGeometryKind.POINT:
             return self._result(
                 asset,
                 physical_event,
@@ -107,7 +107,8 @@ class MultimodalEventAssociator:
         if asset.event_id_hint is not None:
             rules.append("mm.association.event_identifier_exact")
 
-        event_point = GeoPoint(event.longitude, event.latitude)
+        event_coordinate = event.geometry.coordinates[0]
+        event_point = GeoPoint(event_coordinate.longitude, event_coordinate.latitude)
         distance = self._geometry.distance_to_polygon_km(asset.footprint, event_point)
         geography_match = distance == 0
         near_boundary = 0 < distance <= self.policy.boundary_tolerance_km

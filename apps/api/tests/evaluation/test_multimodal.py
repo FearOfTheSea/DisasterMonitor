@@ -22,6 +22,7 @@ from disaster_monitor.domain.disaster import (
     GeographicArea,
     Hazard,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.domain.multimodal import CaptureRole
 from disaster_monitor.evaluation.multimodal_metrics import (
@@ -90,8 +91,7 @@ def _event(fixture: dict):
         country,
         event_time,
         source,
-        latitude=item["latitude"],
-        longitude=item["longitude"],
+        geometry=point_event_geometry(item["latitude"], item["longitude"], source),
         provider_ids=tuple(item["provider_ids"]),
     )
     return (

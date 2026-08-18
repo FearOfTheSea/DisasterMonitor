@@ -33,12 +33,14 @@ from disaster_monitor.application.services.provider_registry import (
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
-    DisasterEvent,
+    EarthquakeEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
     SituationReport,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -73,18 +75,20 @@ def _event(
     magnitude: float = 6.0,
     aftershock: bool = False,
     parent_event_id: str | None = None,
-) -> DisasterEvent:
-    return DisasterEvent(
+) -> EarthquakeEvent:
+    source = _source("USGS", event_id)
+    return EarthquakeEvent(
         event_id=event_id,
         hazard=Hazard.EARTHQUAKE,
         location=location,
         country=JAPAN,
         event_time=NOW - timedelta(hours=hours_old),
-        source=_source("USGS", event_id),
-        latitude=latitude,
-        longitude=longitude,
-        magnitude=magnitude,
-        significance=magnitude * 100,
+        source=source,
+        geometry=point_event_geometry(latitude, longitude, source),
+        measurements=(
+            EventMeasurement("magnitude", magnitude),
+            EventMeasurement("provider_significance", magnitude * 100),
+        ),
         is_aftershock=aftershock,
         parent_event_id=parent_event_id,
         provider_ids=(event_id,),
@@ -291,7 +295,7 @@ def test_generic_correlation_does_not_match_equal_magnitude_without_neutral_clue
         source=source,
         narrative="A report with magnitude 6.0 but no matching location or date.",
         countries=(JAPAN.canonical_name,),
-        magnitude=6.0,
+        measurements=(EventMeasurement("magnitude", 6.0),),
     )
 
     assert correlate_situation_report(report, event) == CorrelationStatus.UNMATCHED
@@ -304,7 +308,7 @@ def test_earthquake_magnitude_correlation_is_owned_by_its_policy() -> None:
         source=source,
         narrative="Ishikawa earthquake report with magnitude 6.0.",
         locations=("Ishikawa",),
-        magnitude=6.0,
+        measurements=(EventMeasurement("magnitude", 6.0),),
     )
 
     assert (

@@ -35,6 +35,7 @@ from disaster_monitor.domain.disaster import (
     Hazard,
     PhysicalEventIdentity,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.domain.multimodal import (
     AnalyticalMapLayer,
@@ -567,8 +568,9 @@ def _physical_event(sample: dict[str, Any], now: datetime) -> PhysicalEventIdent
         country=country,
         event_time=event_time,
         source=source,
-        latitude=float(event_item["latitude"]),
-        longitude=float(event_item["longitude"]),
+        geometry=point_event_geometry(
+            float(event_item["latitude"]), float(event_item["longitude"]), source
+        ),
         provider_ids=tuple(str(item) for item in event_item.get("provider_ids", [])),
     )
     return (

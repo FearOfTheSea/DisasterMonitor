@@ -26,16 +26,23 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRegistry,
     ProviderRole,
 )
+from disaster_monitor.application.services.source_evidence_policy import (
+    validate_worldwide_event_evidence,
+)
 from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.domain.disaster import (
     Country,
+    EventCoordinate,
+    EventGeometry,
+    EventGeometryKind,
     GeographicArea,
     Hazard,
     SituationReport,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -92,8 +99,7 @@ def _event() -> WorldwideDisasterEvent:
         location="Pacific basin",
         event_time=NOW,
         source=source,
-        latitude=1.0,
-        longitude=2.0,
+        geometry=point_event_geometry(1.0, 2.0, source),
     )
 
 
@@ -139,6 +145,7 @@ async def test_synthetic_worldwide_hazard_uses_the_neutral_agent_path() -> None:
     assert provider.queries == [WorldwideDisasterQuery(Hazard.FLOOD)]
     assert answer.selected_event is not None
     assert answer.selected_event.hazard is Hazard.FLOOD
+    assert answer.selected_event.geography_status.value == "worldwide"
     assert answer.investigation is not None
     assert answer.investigation.geographic_scope == "worldwide"
     assert answer.investigation.hazard == "flood"
@@ -234,6 +241,30 @@ def test_country_codes_none_does_not_authorize_worldwide_queries() -> None:
     assert not capabilities.supports(
         WorldwideDisasterQuery(Hazard.FLOOD), ProviderRole.EVENT_DISCOVERY
     )
+
+
+def test_worldwide_area_geometry_is_accepted_without_a_fabricated_point() -> None:
+    point = _event()
+    geometry = EventGeometry(
+        kind=EventGeometryKind.AREA,
+        source=point.source,
+        coordinates=(
+            EventCoordinate(10.0, 20.0),
+            EventCoordinate(11.0, 21.0),
+            EventCoordinate(10.5, 22.0),
+        ),
+    )
+    area_event = replace(point, geometry=geometry)
+
+    accepted = validate_worldwide_event_evidence(
+        area_event,
+        WorldwideDisasterQuery(Hazard.FLOOD),
+        source_id="synthetic-floods",
+        allowed_hosts=frozenset({"floods.example"}),
+    )
+
+    assert accepted.geometry is geometry
+    assert accepted.geometry.coordinates == geometry.coordinates
 
 
 def test_worldwide_task_scope_is_explicit_before_provider_selection() -> None:

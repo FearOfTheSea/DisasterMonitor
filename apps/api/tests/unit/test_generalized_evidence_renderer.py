@@ -11,12 +11,14 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     DisasterEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
     SituationReport,
     SourceAuthority,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -56,9 +58,14 @@ def _event(hazard: Hazard = Hazard.EARTHQUAKE) -> DisasterEvent:
         VENEZUELA,
         NOW - timedelta(hours=2),
         _source("USGS", SourceAuthority.SCIENTIFIC_AUTHORITY),
-        latitude=10.4,
-        longitude=-63.5,
-        magnitude=6.2 if hazard == Hazard.EARTHQUAKE else None,
+        geometry=point_event_geometry(
+            10.4,
+            -63.5,
+            _source("USGS", SourceAuthority.SCIENTIFIC_AUTHORITY),
+        ),
+        measurements=(
+            (EventMeasurement("magnitude", 6.2),) if hazard == Hazard.EARTHQUAKE else ()
+        ),
     )
 
 

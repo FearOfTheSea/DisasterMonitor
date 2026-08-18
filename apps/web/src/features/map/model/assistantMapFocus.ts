@@ -42,9 +42,13 @@ export function assistantMapAreaOfInterest(
   }
 
   const selectedEvent = latestMessage.report.selectedEvent;
-  const selectedEventPoint = selectedEvent
-    ? wgs84Point(selectedEvent.longitude, selectedEvent.latitude)
-    : undefined;
+  const selectedEventPoint =
+    selectedEvent?.geometry?.kind === 'point'
+      ? wgs84Point(
+          selectedEvent.geometry.coordinates[0]?.longitude,
+          selectedEvent.geometry.coordinates[0]?.latitude,
+        )
+      : undefined;
   if (selectedEvent && selectedEventPoint) {
     const [longitude, latitude] = selectedEventPoint;
     return {

@@ -11,7 +11,10 @@ from typing import Protocol
 from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
+    EarthquakeEvent,
     EventAssignmentStatus,
+    EventCoordinate,
+    EventGeometryKind,
     EventObservationAssignment,
     Hazard,
     PhysicalEventIdentity,
@@ -45,8 +48,6 @@ class EventPolicy(Protocol):
         self, first: DisasterEvent, second: DisasterEvent
     ) -> bool: ...
 
-    def same_sequence(self, first: DisasterEvent, second: DisasterEvent) -> bool: ...
-
     def describe_selection(self, query: DisasterQuery, ambiguous: bool) -> str: ...
 
     def cluster(
@@ -67,12 +68,14 @@ class EventPolicy(Protocol):
 
 
 def _distance_km(first: DisasterEvent, second: DisasterEvent) -> float | None:
-    if None in (first.latitude, first.longitude, second.latitude, second.longitude):
+    first_point = _event_point(first)
+    second_point = _event_point(second)
+    if first_point is None or second_point is None:
         return None
-    first_lat = radians(first.latitude or 0)
-    second_lat = radians(second.latitude or 0)
-    delta_lat = radians((second.latitude or 0) - (first.latitude or 0))
-    delta_lon = radians((second.longitude or 0) - (first.longitude or 0))
+    first_lat = radians(first_point.latitude)
+    second_lat = radians(second_point.latitude)
+    delta_lat = radians(second_point.latitude - first_point.latitude)
+    delta_lon = radians(second_point.longitude - first_point.longitude)
     value = (
         sin(delta_lat / 2) ** 2
         + cos(first_lat) * cos(second_lat) * sin(delta_lon / 2) ** 2
@@ -83,10 +86,38 @@ def _distance_km(first: DisasterEvent, second: DisasterEvent) -> float | None:
 def _distance_to_coordinates(
     event: DisasterEvent, latitude: float, longitude: float
 ) -> float | None:
-    if event.latitude is None or event.longitude is None:
+    point = _event_point(event)
+    if point is None:
         return None
-    target = replace(event, latitude=latitude, longitude=longitude)
+    geometry = event.geometry
+    if geometry is None:
+        return None
+    target = replace(
+        event,
+        geometry=replace(
+            geometry,
+            coordinates=(replace(point, latitude=latitude, longitude=longitude),),
+        ),
+    )
     return _distance_km(event, target)
+
+
+def _event_point(event: DisasterEvent) -> EventCoordinate | None:
+    geometry = event.geometry
+    if geometry is None or geometry.kind is not EventGeometryKind.POINT:
+        return None
+    return geometry.coordinates[0]
+
+
+def _measurement(event: DisasterEvent, name: str) -> float | str | None:
+    for measurement in event.measurements:
+        if measurement.name == name:
+            return measurement.value
+    return None
+
+
+def _is_aftershock(event: DisasterEvent) -> bool:
+    return isinstance(event, EarthquakeEvent) and event.is_aftershock
 
 
 def _location_matches(event: DisasterEvent, value: str) -> bool:
@@ -95,9 +126,11 @@ def _location_matches(event: DisasterEvent, value: str) -> bool:
     return bool(wanted) and all(token in actual for token in wanted)
 
 
-def _intensity_score(value: str | None) -> float:
+def _intensity_score(value: float | str | None) -> float:
     if not value:
         return 0.0
+    if not isinstance(value, str):
+        return float(value)
     normalized = (
         value.lower()
         .replace("jma", "")
@@ -146,8 +179,7 @@ def event_observation_key(event: DisasterEvent) -> str:
             event.country.alpha3_code.lower(),
             timestamp,
             event.location.casefold(),
-            str(event.latitude),
-            str(event.longitude),
+            str(event.geometry),
             event.source.canonical_url.lower(),
         )
     )
@@ -168,10 +200,8 @@ def _preferred_event(events: list[DisasterEvent]) -> DisasterEvent:
     return max(
         events,
         key=lambda event: (
-            event.magnitude is not None,
-            event.latitude is not None and event.longitude is not None,
-            event.significance or 0,
-            "usgs:" in event.event_id.lower(),
+            event.geometry is not None,
+            event.source.effective_at,
             event_observation_key(event),
         ),
     )
@@ -182,24 +212,19 @@ def _merge_event(events: list[DisasterEvent]) -> DisasterEvent:
     if len(events) == 1:
         return events[0]
     preferred = _preferred_event(events)
-    richest = max(
-        events,
-        key=lambda event: (
-            event.intensity is not None,
-            event.depth_km is not None,
-            event.latitude is not None and event.longitude is not None,
-        ),
+    measurements = tuple(
+        sorted(
+            set(measurement for event in events for measurement in event.measurements),
+            key=lambda item: (item.name, item.unit or "", str(item.value)),
+        )
+    )
+    geometry = preferred.geometry or next(
+        (event.geometry for event in events if event.geometry is not None), None
     )
     return replace(
         preferred,
-        intensity=preferred.intensity or richest.intensity,
-        depth_km=preferred.depth_km
-        if preferred.depth_km is not None
-        else richest.depth_km,
-        significance=max((event.significance or 0) for event in events),
-        is_aftershock=any(event.is_aftershock for event in events),
-        parent_event_id=preferred.parent_event_id or richest.parent_event_id,
-        sequence_id=preferred.sequence_id or richest.sequence_id,
+        geometry=geometry,
+        measurements=measurements,
         provider_ids=tuple(
             sorted(
                 set(
@@ -233,19 +258,16 @@ class BaseEventPolicy:
     def describe_selection(self, query: DisasterQuery, ambiguous: bool) -> str:
         raise NotImplementedError
 
+    def _merge_event(self, events: list[DisasterEvent]) -> DisasterEvent:
+        return _merge_event(events)
+
     def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
         if (
             first.hazard != second.hazard
             or first.country.alpha3_code != second.country.alpha3_code
         ):
             return False
-        return bool(
-            _provider_identifiers(first) & _provider_identifiers(second)
-            and abs((first.event_time - second.event_time).total_seconds()) <= 24 * 3600
-        )
-
-    def same_sequence(self, first: DisasterEvent, second: DisasterEvent) -> bool:
-        return self.same_physical_event(first, second)
+        return False
 
     def cluster(self, events: tuple[DisasterEvent, ...]) -> tuple[DisasterEvent, ...]:
         """Compatibility projection of the explicit physical-event partition."""
@@ -335,7 +357,7 @@ class BaseEventPolicy:
                 identities.append(
                     PhysicalEventIdentity(
                         physical_event_id=physical_event_id,
-                        event=_merge_event(list(observations)),
+                        event=self._merge_event(list(observations)),
                         observations=observations,
                         assignments=tuple(assignments),
                     )
@@ -435,10 +457,7 @@ class BaseEventPolicy:
         if len(ranked) > 1:
             second = ranked[1]
             score_gap = self.rank(selected, query, now) - self.rank(second, query, now)
-            ambiguous = ambiguous or (
-                not self.same_sequence(selected, second)
-                and score_gap < self.ambiguity_threshold
-            )
+            ambiguous = ambiguous or (score_gap < self.ambiguity_threshold)
         return EventResolution(
             selected,
             alternatives,
@@ -453,6 +472,30 @@ class BaseEventPolicy:
 class EarthquakeEventPolicy(BaseEventPolicy):
     """Earthquake mainshock, equivalence, ranking, and ambiguity policy."""
 
+    def _merge_event(self, events: list[DisasterEvent]) -> DisasterEvent:
+        merged = super()._merge_event(events)
+        earthquake_events = [
+            event for event in events if isinstance(event, EarthquakeEvent)
+        ]
+        if not earthquake_events or not isinstance(merged, EarthquakeEvent):
+            return merged
+        return replace(
+            merged,
+            is_aftershock=any(event.is_aftershock for event in earthquake_events),
+            parent_event_id=next(
+                (
+                    event.parent_event_id
+                    for event in earthquake_events
+                    if event.parent_event_id
+                ),
+                None,
+            ),
+            sequence_id=next(
+                (event.sequence_id for event in earthquake_events if event.sequence_id),
+                None,
+            ),
+        )
+
     def rank(self, event: DisasterEvent, query: DisasterQuery, now: datetime) -> float:
         age_hours = max(0.0, (now - event.event_time).total_seconds() / 3600)
         recency = max(0.0, 1.0 - age_hours / (30 * 24))
@@ -466,17 +509,19 @@ class EarthquakeEventPolicy(BaseEventPolicy):
             if distance is not None:
                 discriminator_bonus += max(0.0, 8.0 - distance / 25.0)
         query_magnitude = query.discriminator("magnitude")
-        if query_magnitude is not None and event.magnitude is not None:
+        magnitude = _measurement(event, "magnitude")
+        if query_magnitude is not None and isinstance(magnitude, (int, float)):
             discriminator_bonus += max(
-                0.0, 4.0 - abs(event.magnitude - float(query_magnitude)) * 8
+                0.0, 4.0 - abs(magnitude - float(query_magnitude)) * 8
             )
+        significance = _measurement(event, "provider_significance")
         return (
             recency * 0.6
-            + (event.magnitude or 0.0) * 2.0
-            + _intensity_score(event.intensity) * 1.5
-            + (event.significance or 0.0) / 500
+            + (magnitude if isinstance(magnitude, (int, float)) else 0.0) * 2.0
+            + _intensity_score(_measurement(event, "intensity")) * 1.5
+            + (significance if isinstance(significance, (int, float)) else 0.0) / 500
             + discriminator_bonus
-            - (3.0 if event.is_aftershock else 0.0)
+            - (3.0 if _is_aftershock(event) else 0.0)
         )
 
     def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
@@ -485,6 +530,11 @@ class EarthquakeEventPolicy(BaseEventPolicy):
             or first.country.alpha3_code != second.country.alpha3_code
         ):
             return False
+        if (
+            _provider_identifiers(first) & _provider_identifiers(second)
+            and abs((first.event_time - second.event_time).total_seconds()) <= 24 * 3600
+        ):
+            return True
         if super().same_physical_event(first, second):
             return True
         if abs((first.event_time - second.event_time).total_seconds()) > 90:
@@ -492,22 +542,37 @@ class EarthquakeEventPolicy(BaseEventPolicy):
         distance = _distance_km(first, second)
         if distance is None or distance > 30:
             return False
+        first_magnitude = _measurement(first, "magnitude")
+        second_magnitude = _measurement(second, "magnitude")
         return not (
-            first.magnitude is not None
-            and second.magnitude is not None
-            and abs(first.magnitude - second.magnitude) > 0.5
+            isinstance(first_magnitude, (int, float))
+            and isinstance(second_magnitude, (int, float))
+            and abs(first_magnitude - second_magnitude) > 0.5
         )
 
     def same_sequence(self, first: DisasterEvent, second: DisasterEvent) -> bool:
         first_ids = _provider_identifiers(first)
         second_ids = _provider_identifiers(second)
-        if first.parent_event_id and first.parent_event_id.lower() in second_ids:
+        if (
+            isinstance(first, EarthquakeEvent)
+            and first.parent_event_id
+            and first.parent_event_id.lower() in second_ids
+        ):
             return True
-        if second.parent_event_id and second.parent_event_id.lower() in first_ids:
+        if (
+            isinstance(second, EarthquakeEvent)
+            and second.parent_event_id
+            and second.parent_event_id.lower() in first_ids
+        ):
             return True
-        if first.sequence_id and first.sequence_id == second.sequence_id:
+        if (
+            isinstance(first, EarthquakeEvent)
+            and isinstance(second, EarthquakeEvent)
+            and first.sequence_id
+            and first.sequence_id == second.sequence_id
+        ):
             return True
-        if not (first.is_aftershock or second.is_aftershock):
+        if not (_is_aftershock(first) or _is_aftershock(second)):
             return False
         distance = _distance_km(first, second)
         return bool(
@@ -528,8 +593,10 @@ class EarthquakeEventPolicy(BaseEventPolicy):
             filtered = [
                 event
                 for event in filtered
-                if event.magnitude is not None
-                and abs(event.magnitude - float(query_magnitude)) <= 0.25
+                if isinstance(
+                    magnitude := _measurement(event, "magnitude"), (int, float)
+                )
+                and abs(magnitude - float(query_magnitude)) <= 0.25
             ]
         return filtered
 
@@ -576,7 +643,7 @@ class EarthquakeEventPolicy(BaseEventPolicy):
                 self.rank(resolution.selected, query, now)
                 - self.rank(second, query, now)
                 < self.ambiguity_threshold
-                or second.is_aftershock
+                or _is_aftershock(second)
             )
         )
         return replace(
@@ -616,7 +683,6 @@ class DefaultEventPolicy(BaseEventPolicy):
         similar = resolution.ambiguous or (
             abs((resolution.selected.event_time - second.event_time).total_seconds())
             < self.ambiguity_threshold
-            and not self.same_sequence(resolution.selected, second)
         )
         return replace(
             resolution,

@@ -19,9 +19,11 @@ from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
+    EventMeasurement,
     Hazard,
     SourceAuthority,
     SourceReference,
+    point_event_geometry,
 )
 
 NOW = datetime(2026, 8, 15, 8, tzinfo=UTC)
@@ -46,11 +48,12 @@ def _event(
         location=f"Location {event_id}",
         event_time=event_time,
         source=source,
-        latitude=10.0,
-        longitude=20.0,
-        magnitude=magnitude,
-        depth_km=12.0,
-        significance=magnitude * 100,
+        geometry=point_event_geometry(10.0, 20.0, source),
+        measurements=(
+            EventMeasurement("magnitude", magnitude),
+            EventMeasurement("depth", 12.0, "km"),
+            EventMeasurement("provider_significance", magnitude * 100),
+        ),
         provider_ids=(f"usgs:{event_id}",),
     )
 

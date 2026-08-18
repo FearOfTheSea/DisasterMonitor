@@ -276,8 +276,15 @@ function DisasterReportView({
           <strong>{report.selectedEvent.location}</strong>
           <span>
             {formatTime(report.selectedEvent.event_time)}
-            {report.selectedEvent.magnitude !== undefined
-              ? ` · M${report.selectedEvent.magnitude}`
+            {report.selectedEvent.measurements.length > 0
+              ? ` · ${report.selectedEvent.measurements
+                  .map(
+                    (measurement) =>
+                      `${measurement.name} ${measurement.value}${
+                        measurement.unit ? ` ${measurement.unit}` : ''
+                      }`,
+                  )
+                  .join(', ')}`
               : ''}
           </span>
           {report.selectedEvent.geography_status === 'country_associated_offshore' && (

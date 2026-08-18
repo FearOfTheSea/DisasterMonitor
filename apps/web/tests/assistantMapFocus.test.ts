@@ -28,8 +28,13 @@ const selectedEvent = {
   hazard: 'earthquake',
   location: 'Ishikawa, Japan',
   event_time: '2026-08-05T11:00:00Z',
-  latitude: 37,
-  longitude: 137,
+  geometry: {
+    kind: 'point' as const,
+    coordinates: [{ latitude: 37, longitude: 137 }],
+    source_id: 'jma-rolling-earthquakes',
+  },
+  measurements: [],
+  geography_status: 'in_country',
   source: {
     source_id: 'jma-rolling-earthquakes',
     publisher: 'JMA',
@@ -172,7 +177,13 @@ describe('assistantMapAreaOfInterest', () => {
     const result = assistantMapAreaOfInterest([
       assistantMessage({
         ...baseReport,
-        selectedEvent: { ...selectedEvent, latitude: 91, longitude: undefined },
+        selectedEvent: {
+          ...selectedEvent,
+          geometry: {
+            ...selectedEvent.geometry,
+            coordinates: [{ latitude: 91, longitude: 137 }],
+          },
+        },
         investigation: {
           status: 'completed',
           task_summary: 'Current earthquake information in Japan',

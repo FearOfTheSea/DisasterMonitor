@@ -12,6 +12,13 @@ from disaster_monitor.application.disaster import (
 from disaster_monitor.domain.disaster import Hazard
 
 
+def _measurement(event: WorldwideDisasterEvent, name: str) -> float | str | None:
+    for measurement in event.measurements:
+        if measurement.name == name:
+            return measurement.value
+    return None
+
+
 class WorldwideDisasterPolicy(Protocol):
     """Hazard-owned worldwide query and selection semantics."""
 
@@ -84,9 +91,13 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
             return max(
                 events,
                 key=lambda event: (
-                    event.magnitude if event.magnitude is not None else float("-inf"),
-                    event.significance
-                    if event.significance is not None
+                    _measurement(event, "magnitude")
+                    if isinstance(_measurement(event, "magnitude"), (int, float))
+                    else float("-inf"),
+                    _measurement(event, "provider_significance")
+                    if isinstance(
+                        _measurement(event, "provider_significance"), (int, float)
+                    )
                     else float("-inf"),
                     event.event_time,
                     event.event_id,
@@ -96,7 +107,9 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
             events,
             key=lambda event: (
                 event.event_time,
-                event.magnitude if event.magnitude is not None else float("-inf"),
+                _measurement(event, "magnitude")
+                if isinstance(_measurement(event, "magnitude"), (int, float))
+                else float("-inf"),
                 event.event_id,
             ),
         )
@@ -111,9 +124,10 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
             if query.selection_intent is WorldwideSelectionIntent.STRONGEST
             else "latest"
         )
+        magnitude_value = _measurement(event, "magnitude")
         magnitude = (
-            f" magnitude {event.magnitude:g}"
-            if event.magnitude is not None
+            f" magnitude {magnitude_value:g}"
+            if isinstance(magnitude_value, (int, float))
             else " unknown magnitude"
         )
         return (

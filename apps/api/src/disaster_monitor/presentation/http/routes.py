@@ -27,6 +27,7 @@ from disaster_monitor.application.services.operational_ingestion import (
 )
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.domain.decision import DecisionSupportArtifact
+from disaster_monitor.domain.disaster import EventGeometry
 from disaster_monitor.domain.models import MapNavigationAction, MapView
 from disaster_monitor.domain.operations import OperatorActionRecord
 from disaster_monitor.presentation.http.metrics import OperationalMetrics
@@ -47,6 +48,9 @@ from disaster_monitor.presentation.http.schemas import (
     DecisionSupportResponse,
     DisasterMediaGalleryResponse,
     DisasterMediaItemResponse,
+    EventCoordinateResponse,
+    EventGeometryResponse,
+    EventMeasurementResponse,
     EvidenceSnapshotResponse,
     HealthResponse,
     InvestigationResponse,
@@ -71,6 +75,25 @@ def get_answer_use_case(request: Request) -> AnswerMapQuestion:
 def get_language_model(request: Request) -> LanguageModel:
     """Retrieve the provider-neutral model port built by the composition root."""
     return cast(LanguageModel, request.app.state.language_model)
+
+
+def _event_geometry_response(
+    geometry: EventGeometry | None,
+) -> EventGeometryResponse | None:
+    if geometry is None:
+        return None
+    return EventGeometryResponse(
+        kind=geometry.kind.value,
+        coordinates=[
+            EventCoordinateResponse(
+                latitude=point.latitude,
+                longitude=point.longitude,
+            )
+            for point in geometry.coordinates
+        ],
+        description=geometry.description,
+        source_id=geometry.source.source_id,
+    )
 
 
 def get_media_asset_store(request: Request) -> MediaAssetStore:
@@ -484,11 +507,15 @@ async def assistant(
                 hazard=selected_event.hazard,
                 location=selected_event.location,
                 event_time=selected_event.event_time,
-                latitude=selected_event.latitude,
-                longitude=selected_event.longitude,
-                magnitude=selected_event.magnitude,
-                intensity=selected_event.intensity,
-                depth_km=selected_event.depth_km,
+                geometry=_event_geometry_response(selected_event.geometry),
+                measurements=[
+                    EventMeasurementResponse(
+                        name=item.name,
+                        value=item.value,
+                        unit=item.unit,
+                    )
+                    for item in selected_event.measurements
+                ],
                 provider_ids=list(selected_event.provider_ids),
                 geography_status=selected_event.geography_status,
                 source=SourceResponse(

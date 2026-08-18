@@ -8,7 +8,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from disaster_monitor.application.ports.operational_state import OperationalRepository
-from disaster_monitor.domain.disaster import EvidenceObservation, EvidenceWorldState
+from disaster_monitor.domain.disaster import (
+    EventGeometry,
+    EventGeometryKind,
+    EvidenceObservation,
+    EvidenceWorldState,
+)
 from disaster_monitor.domain.operations import (
     EventObservationLinkRecord,
     NormalizedObservationRecord,
@@ -57,8 +62,18 @@ class OperationalEvidenceRecorder:
                 physical_event_id=state.physical_event.physical_event_id,
                 hazard=event.hazard.value,
                 country_code=event.country.alpha3_code,
-                latitude=event.latitude,
-                longitude=event.longitude,
+                latitude=(
+                    event.geometry.coordinates[0].latitude
+                    if event.geometry is not None
+                    and event.geometry.kind is EventGeometryKind.POINT
+                    else None
+                ),
+                longitude=(
+                    event.geometry.coordinates[0].longitude
+                    if event.geometry is not None
+                    and event.geometry.kind is EventGeometryKind.POINT
+                    else None
+                ),
                 created_at=state.evaluated_at,
             )
         )
@@ -130,10 +145,11 @@ def _event_observation_record(
         "country_code": event.country.alpha3_code,
         "location": event.location,
         "event_time": _time(event.event_time),
-        "latitude": event.latitude,
-        "longitude": event.longitude,
-        "magnitude": event.magnitude,
-        "intensity": event.intensity,
+        "geometry": _geometry_document(event.geometry),
+        "measurements": [
+            {"name": item.name, "value": item.value, "unit": item.unit}
+            for item in event.measurements
+        ],
         "source": {
             "source_id": event.source.source_id,
             "snapshot_id": snapshot_id,
@@ -152,6 +168,20 @@ def _event_observation_record(
         parser_version=PARSER_VERSION,
         canonical_json=_json(document),
     )
+
+
+def _geometry_document(geometry: EventGeometry | None) -> dict[str, Any] | None:
+    if geometry is None:
+        return None
+    return {
+        "kind": geometry.kind.value,
+        "coordinates": [
+            {"latitude": point.latitude, "longitude": point.longitude}
+            for point in geometry.coordinates
+        ],
+        "description": geometry.description,
+        "source_id": geometry.source.source_id,
+    }
 
 
 def _observation_document(item: EvidenceObservation) -> dict[str, Any]:

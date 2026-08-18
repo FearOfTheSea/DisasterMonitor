@@ -105,19 +105,34 @@ export type AssistantSource = {
   snapshot_id?: string | null;
 };
 
+export type EventMeasurement = {
+  name: string;
+  value: number | string;
+  unit?: string | null;
+};
+
+export type EventCoordinate = {
+  latitude: number;
+  longitude: number;
+};
+
+export type EventGeometry = {
+  kind: 'point' | 'area' | 'track' | 'descriptive';
+  coordinates: EventCoordinate[];
+  description?: string | null;
+  source_id: string;
+};
+
 export type SelectedEvent = {
   event_id: string;
   hazard: string;
   location: string;
   event_time: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  magnitude?: number;
-  intensity?: string;
-  depth_km?: number;
+  geometry?: EventGeometry | null;
+  measurements: EventMeasurement[];
   source: AssistantSource;
   provider_ids?: string[];
-  geography_status?: string;
+  geography_status: string;
 };
 
 export type ReportSection = {

@@ -198,22 +198,72 @@ export class AssistantClient {
       typeof item.hazard === 'string' &&
       typeof item.location === 'string' &&
       typeof item.event_time === 'string' &&
-      (item.latitude == null ||
-        (typeof item.latitude === 'number' &&
+      this.isEventGeometry(item.geometry) &&
+      this.isEventMeasurements(item.measurements) &&
+      (item.provider_ids == null || this.isStringArray(item.provider_ids)) &&
+      typeof item.geography_status === 'string' &&
+      this.isSources([item.source])
+    );
+  }
+
+  private isEventGeometry(value: unknown): boolean {
+    if (value == null) {
+      return true;
+    }
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const geometry = value as Record<string, unknown>;
+    const kind = String(geometry.kind);
+    const coordinates = geometry.coordinates;
+    const validShape =
+      (kind === 'point' && Array.isArray(coordinates) && coordinates.length === 1) ||
+      (kind === 'area' && Array.isArray(coordinates) && coordinates.length >= 3) ||
+      (kind === 'track' && Array.isArray(coordinates) && coordinates.length >= 2) ||
+      (kind === 'descriptive' &&
+        Array.isArray(coordinates) &&
+        coordinates.length === 0);
+    return (
+      validShape &&
+      Array.isArray(coordinates) &&
+      coordinates.every((coordinate) => {
+        if (!coordinate || typeof coordinate !== 'object') {
+          return false;
+        }
+        const item = coordinate as Record<string, unknown>;
+        return (
+          typeof item.latitude === 'number' &&
           Number.isFinite(item.latitude) &&
           item.latitude >= -90 &&
-          item.latitude <= 90)) &&
-      (item.longitude == null ||
-        (typeof item.longitude === 'number' &&
+          item.latitude <= 90 &&
+          typeof item.longitude === 'number' &&
           Number.isFinite(item.longitude) &&
           item.longitude >= -180 &&
-          item.longitude <= 180)) &&
-      (item.magnitude == null || typeof item.magnitude === 'number') &&
-      (item.intensity == null || typeof item.intensity === 'string') &&
-      (item.depth_km == null || typeof item.depth_km === 'number') &&
-      (item.provider_ids == null || this.isStringArray(item.provider_ids)) &&
-      (item.geography_status == null || typeof item.geography_status === 'string') &&
-      this.isSources([item.source])
+          item.longitude <= 180
+        );
+      }) &&
+      typeof geometry.source_id === 'string' &&
+      (kind !== 'descriptive'
+        ? geometry.description == null || typeof geometry.description === 'string'
+        : typeof geometry.description === 'string' &&
+          geometry.description.trim() !== '')
+    );
+  }
+
+  private isEventMeasurements(value: unknown): boolean {
+    return (
+      Array.isArray(value) &&
+      value.every((measurement) => {
+        if (!measurement || typeof measurement !== 'object') {
+          return false;
+        }
+        const item = measurement as Record<string, unknown>;
+        return (
+          typeof item.name === 'string' &&
+          (typeof item.value === 'number' || typeof item.value === 'string') &&
+          (item.unit == null || typeof item.unit === 'string')
+        );
+      })
     );
   }
 

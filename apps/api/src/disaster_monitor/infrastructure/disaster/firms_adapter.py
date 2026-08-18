@@ -19,12 +19,14 @@ from disaster_monitor.application.services.operational_ingestion import (
 )
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
     SituationReport,
     SourceAuthority,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
@@ -135,12 +137,19 @@ class FirmsActiveFireAdapter:
         for candidate in batch.records:
             if not event.has_provider_id(candidate.event_id):
                 continue
-            confidence = candidate.intensity or "reported confidence unavailable"
+            confidence = next(
+                (
+                    measurement.value
+                    for measurement in candidate.measurements
+                    if measurement.name == "confidence"
+                ),
+                "reported confidence unavailable",
+            )
             facts = (
                 ReportedFact(
                     category="satellite_observation",
                     label="NASA FIRMS active-fire detection",
-                    value=confidence,
+                    value=str(confidence),
                     status=FactStatus.CONFIRMED,
                     source=candidate.source,
                     event_id=candidate.event_id,
@@ -268,10 +277,19 @@ class FirmsActiveFireAdapter:
                     country=query.country,
                     event_time=event_time,
                     source=source,
-                    latitude=latitude,
-                    longitude=longitude,
-                    intensity=f"FIRMS confidence {confidence}" if confidence else None,
-                    significance=frp,
+                    geometry=point_event_geometry(latitude, longitude, source),
+                    measurements=tuple(
+                        measurement
+                        for measurement in (
+                            EventMeasurement("confidence", f"FIRMS {confidence}")
+                            if confidence
+                            else None,
+                            EventMeasurement("fire_radiative_power", frp)
+                            if frp is not None
+                            else None,
+                        )
+                        if measurement is not None
+                    ),
                     provider_ids=(event_id,),
                 )
             )

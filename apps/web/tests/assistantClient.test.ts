@@ -130,8 +130,14 @@ describe('AssistantClient', () => {
             hazard: 'earthquake',
             location: 'Ishikawa, Japan',
             event_time: '2026-08-05T11:00:00Z',
-            latitude: 37,
-            longitude: 137,
+            geometry: {
+              kind: 'point',
+              coordinates: [{ latitude: 37, longitude: 137 }],
+              description: null,
+              source_id: 'jma-rolling-earthquakes',
+            },
+            measurements: [],
+            geography_status: 'in_country',
             source: {
               source_id: 'jma-rolling-earthquakes',
               publisher: 'JMA',
@@ -214,7 +220,12 @@ describe('AssistantClient', () => {
     ).resolves.toMatchObject({
       response_type: 'current_disaster',
       partial: true,
-      selected_event: { latitude: 37, longitude: 137 },
+      selected_event: {
+        geometry: {
+          kind: 'point',
+          coordinates: [{ latitude: 37, longitude: 137 }],
+        },
+      },
       investigation: { status: 'partial' },
     });
   });
@@ -232,6 +243,9 @@ describe('AssistantClient', () => {
             hazard: 'earthquake',
             location: 'San José del Palmar, Colombia',
             event_time: '2026-08-10T05:54:00Z',
+            geometry: null,
+            measurements: [],
+            geography_status: 'in_country',
             source: {
               source_id: 'usgs-earthquakes',
               publisher: 'USGS',

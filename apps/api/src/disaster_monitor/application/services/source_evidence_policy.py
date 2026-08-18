@@ -12,6 +12,9 @@ from disaster_monitor.application.disaster import (
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
+    EventGeometry,
+    EventGeometryKind,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
@@ -55,20 +58,8 @@ def validate_event_evidence(
         or not _aware(record.event_time)
     ):
         raise SourceEvidencePolicyError("The event identity or time is invalid.")
-    if record.latitude is not None and (
-        not _finite_number(record.latitude) or not -90 <= record.latitude <= 90
-    ):
-        raise SourceEvidencePolicyError("The event latitude is invalid.")
-    if record.longitude is not None and (
-        not _finite_number(record.longitude) or not -180 <= record.longitude <= 180
-    ):
-        raise SourceEvidencePolicyError("The event longitude is invalid.")
-    if record.magnitude is not None and not _finite_number(record.magnitude):
-        raise SourceEvidencePolicyError("The event magnitude is invalid.")
-    if record.depth_km is not None and (
-        not _finite_number(record.depth_km) or record.depth_km < 0
-    ):
-        raise SourceEvidencePolicyError("The event depth is invalid.")
+    _validate_geometry(record.geometry, record.source)
+    _validate_measurements(record.measurements)
     return record
 
 
@@ -99,20 +90,8 @@ def validate_worldwide_event_evidence(
         raise SourceEvidencePolicyError(
             "The worldwide event identity or time is invalid."
         )
-    if record.latitude is None or (
-        not _finite_number(record.latitude) or not -90 <= record.latitude <= 90
-    ):
-        raise SourceEvidencePolicyError("The worldwide event latitude is invalid.")
-    if record.longitude is None or (
-        not _finite_number(record.longitude) or not -180 <= record.longitude <= 180
-    ):
-        raise SourceEvidencePolicyError("The worldwide event longitude is invalid.")
-    if record.magnitude is not None and not _finite_number(record.magnitude):
-        raise SourceEvidencePolicyError("The worldwide event magnitude is invalid.")
-    if record.depth_km is not None and (
-        not _finite_number(record.depth_km) or record.depth_km < 0
-    ):
-        raise SourceEvidencePolicyError("The worldwide event depth is invalid.")
+    _validate_geometry(record.geometry, record.source)
+    _validate_measurements(record.measurements)
     return record
 
 
@@ -132,6 +111,7 @@ def validate_situation_evidence(
         raise SourceEvidencePolicyError("The situation narrative is invalid.")
     if not isinstance(record.facts, tuple):
         raise SourceEvidencePolicyError("The situation fact collection is invalid.")
+    _validate_measurements(record.measurements)
     if record.hazard is not None and (
         not isinstance(record.hazard, Hazard) or record.hazard != query.hazard
     ):
@@ -183,6 +163,7 @@ def validate_worldwide_situation_evidence(
     _validate_source(record.source, source_id=source_id, allowed_hosts=allowed_hosts)
     if not isinstance(record.narrative, str):
         raise SourceEvidencePolicyError("The worldwide situation narrative is invalid.")
+    _validate_measurements(record.measurements)
     if record.hazard is not None and record.hazard != query.hazard:
         raise SourceEvidencePolicyError(
             "The worldwide situation hazard is outside the selected scope."
@@ -248,3 +229,47 @@ def _finite_number(value: object) -> bool:
         and not isinstance(value, bool)
         and isfinite(value)
     )
+
+
+def _validate_geometry(geometry: object, source: SourceReference) -> None:
+    if geometry is None:
+        return
+    if not isinstance(geometry, EventGeometry):
+        raise SourceEvidencePolicyError("The event geometry is invalid.")
+    if geometry.source != source:
+        raise SourceEvidencePolicyError("The event geometry provenance is invalid.")
+    if not isinstance(geometry.kind, EventGeometryKind):
+        raise SourceEvidencePolicyError("The event geometry kind is invalid.")
+    coordinate_count = len(geometry.coordinates)
+    if geometry.kind is EventGeometryKind.POINT and coordinate_count != 1:
+        raise SourceEvidencePolicyError("The point event geometry is invalid.")
+    if geometry.kind is EventGeometryKind.AREA and coordinate_count < 3:
+        raise SourceEvidencePolicyError("The area event geometry is invalid.")
+    if geometry.kind is EventGeometryKind.TRACK and coordinate_count < 2:
+        raise SourceEvidencePolicyError("The track event geometry is invalid.")
+    if geometry.kind is EventGeometryKind.DESCRIPTIVE and (
+        coordinate_count
+        or not isinstance(geometry.description, str)
+        or not geometry.description.strip()
+    ):
+        raise SourceEvidencePolicyError("The descriptive event geometry is invalid.")
+    for coordinate in geometry.coordinates:
+        if (
+            not _finite_number(coordinate.latitude)
+            or not _finite_number(coordinate.longitude)
+            or not -90 <= coordinate.latitude <= 90
+            or not -180 <= coordinate.longitude <= 180
+        ):
+            raise SourceEvidencePolicyError("The event geometry coordinate is invalid.")
+
+
+def _validate_measurements(measurements: object) -> None:
+    if not isinstance(measurements, tuple) or any(
+        not isinstance(measurement, EventMeasurement) for measurement in measurements
+    ):
+        raise SourceEvidencePolicyError("The event measurements are invalid.")
+    for measurement in measurements:
+        if isinstance(measurement.value, float) and not _finite_number(
+            measurement.value
+        ):
+            raise SourceEvidencePolicyError("An event measurement value is invalid.")

@@ -8,6 +8,8 @@ from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
     EventGeographyStatus,
+    EventGeometry,
+    EventMeasurement,
     EvidenceWorldState,
     Hazard,
     ReportedFact,
@@ -110,13 +112,8 @@ class WorldwideDisasterEvent:
     location: str
     event_time: datetime
     source: SourceReference
-    latitude: float | None = None
-    longitude: float | None = None
-    magnitude: float | None = None
-    magnitude_type: str | None = None
-    intensity: str | None = None
-    depth_km: float | None = None
-    significance: float | None = None
+    geometry: EventGeometry | None = None
+    measurements: tuple[EventMeasurement, ...] = ()
     provider_ids: tuple[str, ...] = ()
 
 
@@ -193,14 +190,11 @@ class SelectedEventSummary:
     hazard: Hazard
     location: str
     event_time: datetime
-    latitude: float | None
-    longitude: float | None
-    magnitude: float | None
-    intensity: str | None
-    depth_km: float | None
+    geometry: EventGeometry | None
+    measurements: tuple[EventMeasurement, ...]
     source: SourceReference
+    geography_status: EventGeographyStatus
     provider_ids: tuple[str, ...] = ()
-    geography_status: EventGeographyStatus = EventGeographyStatus.IN_COUNTRY
 
 
 @dataclass(frozen=True, slots=True)

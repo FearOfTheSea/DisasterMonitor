@@ -7,9 +7,11 @@ from disaster_monitor.application.services.event_resolution import (
     EarthquakeEventPolicy,
 )
 from disaster_monitor.domain.disaster import (
-    DisasterEvent,
+    EarthquakeEvent,
+    EventMeasurement,
     Hazard,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -31,17 +33,19 @@ SOURCE = SourceReference(
 )
 
 
-def _event(event_id: str, **changes: object) -> DisasterEvent:
-    event = DisasterEvent(
+def _event(event_id: str, **changes: object) -> EarthquakeEvent:
+    latitude = float(changes.pop("latitude", 37.0))
+    longitude = float(changes.pop("longitude", 137.0))
+    magnitude = float(changes.pop("magnitude", 6.1))
+    event = EarthquakeEvent(
         event_id,
         Hazard.EARTHQUAKE,
         "Ishikawa, Japan",
         JAPAN,
         NOW - timedelta(hours=2),
         SOURCE,
-        latitude=37.0,
-        longitude=137.0,
-        magnitude=6.1,
+        geometry=point_event_geometry(latitude, longitude, SOURCE),
+        measurements=(EventMeasurement("magnitude", magnitude),),
         provider_ids=(event_id,),
     )
     return replace(event, **changes)
@@ -114,3 +118,25 @@ def test_default_policy_never_merges_shared_ids_across_scope() -> None:
     identity = policy.identify((flood, foreign, earthquake))
 
     assert len(identity.physical_events) == 3
+
+
+def test_generic_policy_ignores_earthquake_measurements_when_ranking_floods() -> None:
+    policy = DefaultEventPolicy()
+    older = replace(
+        _event("older", magnitude=9.0),
+        hazard=Hazard.FLOOD,
+        event_time=NOW - timedelta(hours=2),
+    )
+    newer = replace(
+        _event("newer", magnitude=1.0),
+        hazard=Hazard.FLOOD,
+        event_time=NOW - timedelta(hours=1),
+    )
+
+    resolution = policy.resolve(
+        (older, newer),
+        DisasterQuery(Hazard.FLOOD, JAPAN, "recent", ("latest",)),
+        now=NOW,
+    )
+
+    assert resolution.selected == newer

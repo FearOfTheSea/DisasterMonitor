@@ -122,10 +122,28 @@ class EarthquakeEvidenceCorrelationPolicy(DefaultEvidenceCorrelationPolicy):
         ):
             return neutral
         signals = correlation_signals(report, event)
+        magnitude = next(
+            (
+                measurement.value
+                for measurement in event.measurements
+                if measurement.name == "magnitude"
+                and isinstance(measurement.value, (int, float))
+            ),
+            None,
+        )
+        report_magnitude = next(
+            (
+                measurement.value
+                for measurement in report.measurements
+                if measurement.name == "magnitude"
+                and isinstance(measurement.value, (int, float))
+            ),
+            None,
+        )
         magnitude_matches = (
-            report.magnitude is not None
-            and event.magnitude is not None
-            and abs(report.magnitude - event.magnitude) <= 0.3
+            report_magnitude is not None
+            and magnitude is not None
+            and abs(report_magnitude - magnitude) <= 0.3
         )
         if magnitude_matches and signals.location_matches:
             return CorrelationStatus.MATCHED

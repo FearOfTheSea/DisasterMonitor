@@ -93,7 +93,7 @@ def _has_correlation_metadata(report: SituationReport) -> bool:
         or report.countries
         or report.country_codes
         or report.hazard is not None
-        or report.magnitude is not None
+        or report.measurements
     )
 
 

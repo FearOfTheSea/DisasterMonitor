@@ -111,7 +111,14 @@ async def test_firms_detection_remains_satellite_observation_not_incident_claim(
 
     assert len(batch.records) == 1
     assert batch.records[0].source.authority == SourceAuthority.SCIENTIFIC_AUTHORITY
-    assert batch.records[0].significance == 12.5
+    assert (
+        next(
+            item.value
+            for item in batch.records[0].measurements
+            if item.name == "fire_radiative_power"
+        )
+        == 12.5
+    )
     assert reports.records[0].facts[0].label == "NASA FIRMS active-fire detection"
     assert "not an official wildfire incident declaration" in (
         reports.records[0].narrative
@@ -194,7 +201,14 @@ async def test_cap_adapter_accepts_only_public_actual_hazard_matched_alerts() ->
     reports = await adapter.get_situation_reports(batch.records[0], query, now=NOW)
 
     assert len(batch.records) == 1
-    assert batch.records[0].intensity == "Severe"
+    assert (
+        next(
+            item.value
+            for item in batch.records[0].measurements
+            if item.name == "severity"
+        )
+        == "Severe"
+    )
     assert reports.records[0].facts[0].category == "official_warning"
     assert "not a DisasterMonitor directive" in reports.records[0].narrative
 

@@ -22,6 +22,7 @@ from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
     EventGeographyStatus,
+    EventMeasurement,
     GeographicArea,
     Hazard,
     SourceReference,
@@ -143,8 +144,15 @@ async def test_usgs_adapter_translates_valid_geojson_and_missing_optional_fields
 
     assert len(result.records) == 1
     assert result.records[0].event_id == "usgs:us7000fixture"
-    assert result.records[0].magnitude == 5.8
-    assert result.records[0].intensity is None
+    assert (
+        next(
+            item.value
+            for item in result.records[0].measurements
+            if item.name == "magnitude"
+        )
+        == 5.8
+    )
+    assert not any(item.name == "intensity" for item in result.records[0].measurements)
     await client.aclose()
 
 
@@ -218,7 +226,14 @@ async def test_jma_adapter_translates_official_json() -> None:
 
     assert result.records[0].event_id == "jma:20260805100000"
     assert result.records[0].location == "Sagami Bay"
-    assert result.records[0].depth_km == 20
+    assert (
+        next(
+            item.value
+            for item in result.records[0].measurements
+            if item.name == "depth"
+        )
+        == 20
+    )
     assert result.records[0].source.canonical_url.endswith("fixture.json")
     await client.aclose()
 
@@ -448,14 +463,15 @@ async def test_reliefweb_matches_narrative_event_clues() -> None:
         ]
     }
     client = client_for(payload)
+    source = _source_for_test()
     event = DisasterEvent(
         "usgs:us6000tkt2",
         Hazard.EARTHQUAKE,
         "68 km NNW of Ende, Indonesia",
         INDONESIA,
         datetime(2026, 8, 14, 21, 58, tzinfo=UTC),
-        _source_for_test(),
-        magnitude=7.7,
+        source,
+        measurements=(EventMeasurement("magnitude", 7.7),),
     )
     query = DisasterQuery(
         Hazard.EARTHQUAKE,
@@ -468,7 +484,14 @@ async def test_reliefweb_matches_narrative_event_clues() -> None:
         client=client, app_name="approved-test"
     ).get_situation_reports(event, query, now=datetime(2026, 8, 17, 12, tzinfo=UTC))
 
-    assert result.records[0].magnitude == 7.7
+    assert (
+        next(
+            item.value
+            for item in result.records[0].measurements
+            if item.name == "magnitude"
+        )
+        == 7.7
+    )
     assert result.records[0].correlation is None
     assert (
         EarthquakeEvidenceCorrelationPolicy().correlate(result.records[0], event)
@@ -932,7 +955,14 @@ async def test_durable_jma_history_survives_rolling_list_limit_and_clusters_usgs
     events = await event_provider.find_recent_events(QUERY, now=NOW)
     resolution = resolve_recent_event(events.records, QUERY, now=NOW)
     assert resolution.selected is not None
-    assert resolution.selected.magnitude == 7.1
+    assert (
+        next(
+            item.value
+            for item in resolution.selected.measurements
+            if item.name == "magnitude"
+        )
+        == 7.1
+    )
     assert (
         "Kumamoto" in resolution.selected.location
         or "熊本" in resolution.selected.location
@@ -981,22 +1011,23 @@ async def test_fdma_uses_newest_matching_revision_and_ignores_other_earthquake()
             request=request,
         )
 
+    source = SourceReference(
+        source_id="usgs-earthquakes",
+        publisher="USGS",
+        title="M 7.1 Kumamoto, Japan",
+        canonical_url="https://usgs.test/kumamoto",
+        published_at=NOW,
+        updated_at=NOW,
+        retrieved_at=NOW,
+    )
     event = DisasterEvent(
         event_id="usgs:kumamoto",
         hazard=Hazard.EARTHQUAKE,
         location="Kumamoto, Japan",
         country=JAPAN,
         event_time=datetime(2026, 7, 28, 7, 27, tzinfo=UTC),
-        source=SourceReference(
-            source_id="usgs-earthquakes",
-            publisher="USGS",
-            title="M 7.1 Kumamoto, Japan",
-            canonical_url="https://usgs.test/kumamoto",
-            published_at=NOW,
-            updated_at=NOW,
-            retrieved_at=NOW,
-        ),
-        magnitude=7.1,
+        source=source,
+        measurements=(EventMeasurement("magnitude", 7.1),),
         provider_ids=("usgs:kumamoto",),
     )
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))

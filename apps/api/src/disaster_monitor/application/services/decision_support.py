@@ -55,8 +55,12 @@ class DecisionOptionGenerator:
             f"The selected source-backed {event.hazard.value} event occurred at "
             f"{event.location} at {event.event_time.isoformat()}."
         )
-        if event.magnitude is not None:
-            event_detail = f"{event_detail[:-1]} with magnitude {event.magnitude:.1f}."
+        if event.measurements:
+            measurements = ", ".join(
+                f"{item.name} {item.value}" + (f" {item.unit}" if item.unit else "")
+                for item in event.measurements
+            )
+            event_detail = f"{event_detail[:-1]} with {measurements}."
         facts: list[DecisionFact] = [
             DecisionFact(
                 fact_id=_id("decision-fact", state.physical_event.physical_event_id),

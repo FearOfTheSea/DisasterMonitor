@@ -21,12 +21,17 @@ from disaster_monitor.application.services.operational_ingestion import (
 )
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
+    EventCoordinate,
+    EventGeometry,
+    EventGeometryKind,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
     SituationReport,
     SourceAuthority,
     SourceReference,
+    descriptive_event_geometry,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
@@ -53,8 +58,7 @@ class _CapRecord:
     urgency: str
     certainty: str
     area_description: str
-    latitude: float | None
-    longitude: float | None
+    polygon: tuple[tuple[float, float], ...]
     canonical_url: str
     snapshot_id: str | None = None
 
@@ -269,9 +273,25 @@ class CapAlertAdapter:
             country=query.country,
             event_time=record.sent,
             source=source,
-            latitude=record.latitude,
-            longitude=record.longitude,
-            intensity=record.severity or None,
+            geometry=(
+                EventGeometry(
+                    kind=EventGeometryKind.AREA,
+                    source=source,
+                    coordinates=tuple(
+                        EventCoordinate(latitude, longitude)
+                        for latitude, longitude in record.polygon
+                    ),
+                )
+                if len(record.polygon) >= 3
+                else descriptive_event_geometry(
+                    record.area_description or query.country.canonical_name, source
+                )
+            ),
+            measurements=(
+                (EventMeasurement("severity", record.severity),)
+                if record.severity
+                else ()
+            ),
             provider_ids=(f"cap:{record.sender}:{record.identifier}",),
         )
 
@@ -314,9 +334,7 @@ def _parse_cap(root: Element, canonical_url: str) -> _CapRecord | None:
             "CAP alert contained no info block.", reason_code="invalid_schema"
         )
     area = next((item for item in info if _local_name(item.tag) == "area"), None)
-    latitude, longitude = _polygon_centroid(
-        _child_text(area, "polygon") if area is not None else ""
-    )
+    polygon = _parse_polygon(_child_text(area, "polygon") if area is not None else "")
     return _CapRecord(
         identifier=identifier,
         sender=sender,
@@ -330,8 +348,7 @@ def _parse_cap(root: Element, canonical_url: str) -> _CapRecord | None:
         urgency=_child_text(info, "urgency"),
         certainty=_child_text(info, "certainty"),
         area_description=_child_text(area, "areaDesc") if area is not None else "",
-        latitude=latitude,
-        longitude=longitude,
+        polygon=polygon,
         canonical_url=canonical_url,
     )
 
@@ -360,7 +377,7 @@ def _local_name(tag: str) -> str:
     return tag.rpartition("}")[2]
 
 
-def _polygon_centroid(value: str) -> tuple[float | None, float | None]:
+def _parse_polygon(value: str) -> tuple[tuple[float, float], ...]:
     points: list[tuple[float, float]] = []
     for pair in value.split():
         latitude, separator, longitude = pair.partition(",")
@@ -369,13 +386,8 @@ def _polygon_centroid(value: str) -> tuple[float | None, float | None]:
         try:
             points.append((float(latitude), float(longitude)))
         except ValueError:
-            return None, None
-    if not points:
-        return None, None
-    return (
-        sum(item[0] for item in points) / len(points),
-        sum(item[1] for item in points) / len(points),
-    )
+            return ()
+    return tuple(points)
 
 
 def _matches_hazard(event: str, hazard: Hazard) -> bool:

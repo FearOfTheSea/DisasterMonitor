@@ -3,6 +3,7 @@
 import re
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
+from typing import cast
 from urllib.parse import urljoin
 
 import httpx
@@ -17,12 +18,15 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 )
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
+    EarthquakeEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
     SituationReport,
     SourceAuthority,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
@@ -187,20 +191,36 @@ class JmaEarthquakeAdapter:
                 pass
             intensity = _safe_string(item.get("maxi")) or None
             events.append(
-                DisasterEvent(
+                EarthquakeEvent(
                     event_id=f"jma:{event_id}",
                     hazard=Hazard.EARTHQUAKE,
                     location=location or "Japan",
                     country=query.country,
                     event_time=event_time,
                     source=source,
-                    latitude=latitude,
-                    longitude=longitude,
-                    magnitude=magnitude,
-                    magnitude_type=None,
-                    intensity=f"JMA {intensity}" if intensity else None,
-                    depth_km=depth_km,
-                    significance=(magnitude or 0) * 100,
+                    geometry=(
+                        point_event_geometry(latitude, longitude, source)
+                        if latitude is not None and longitude is not None
+                        else None
+                    ),
+                    measurements=tuple(
+                        measurement
+                        for measurement in (
+                            EventMeasurement("magnitude", magnitude)
+                            if magnitude is not None
+                            else None,
+                            EventMeasurement("intensity", f"JMA {intensity}")
+                            if intensity
+                            else None,
+                            EventMeasurement("depth", depth_km, "km")
+                            if depth_km is not None
+                            else None,
+                            EventMeasurement(
+                                "provider_significance", (magnitude or 0) * 100
+                            ),
+                        )
+                        if measurement is not None
+                    ),
                     is_aftershock="aftershock" in location.lower(),
                     provider_ids=(f"jma:{event_id}",),
                 )
@@ -537,20 +557,37 @@ class JmaSignificantEarthquakeAdapter:
                 ),
             )
             events.append(
-                DisasterEvent(
+                EarthquakeEvent(
                     event_id=f"jma:{event_id}",
                     hazard=Hazard.EARTHQUAKE,
                     location=cells[1] or "Japan",
                     country=query.country,
                     event_time=event_time,
                     source=source,
-                    latitude=latitude,
-                    longitude=longitude,
-                    magnitude=magnitude,
-                    magnitude_type="Mj",
-                    intensity=_history_intensity(cells[3]),
-                    depth_km=depth_km,
-                    significance=magnitude * 100 + _intensity_score(cells[3]) * 100,
+                    geometry=(
+                        point_event_geometry(latitude, longitude, source)
+                        if latitude is not None and longitude is not None
+                        else None
+                    ),
+                    measurements=tuple(
+                        measurement
+                        for measurement in (
+                            EventMeasurement("magnitude", magnitude),
+                            EventMeasurement(
+                                "intensity", cast(str, _history_intensity(cells[3]))
+                            )
+                            if _history_intensity(cells[3])
+                            else None,
+                            EventMeasurement("depth", depth_km, "km")
+                            if depth_km is not None
+                            else None,
+                            EventMeasurement(
+                                "provider_significance",
+                                magnitude * 100 + _intensity_score(cells[3]) * 100,
+                            ),
+                        )
+                        if measurement is not None
+                    ),
                     provider_ids=(f"jma:{event_id}",),
                 )
             )

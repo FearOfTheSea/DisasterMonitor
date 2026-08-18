@@ -32,10 +32,12 @@ from disaster_monitor.application.services.visual_analysis import VisualAnalysis
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
+    EventMeasurement,
     GeographicArea,
     Hazard,
     ReportedFact,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.domain.errors import MultimodalInputError
 from disaster_monitor.domain.multimodal import (
@@ -116,9 +118,8 @@ def _physical_event(*, event_time: datetime = NOW):
         country,
         event_time,
         source,
-        latitude=35.0,
-        longitude=137.0,
-        magnitude=6.8,
+        geometry=point_event_geometry(35.0, 137.0, source),
+        measurements=(EventMeasurement("magnitude", 6.8),),
         provider_ids=("provider:event-1",),
     )
     return (

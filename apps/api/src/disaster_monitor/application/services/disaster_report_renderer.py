@@ -44,13 +44,11 @@ def _event_summary(packet: EvidencePacket) -> str:
         else f"{event.location}, {country_name}"
     )
     details = [location, f"event time {_format_timestamp(event.event_time)}"]
-    if event.magnitude is not None:
-        magnitude_type = f" {event.magnitude_type}" if event.magnitude_type else ""
-        details.append(f"magnitude {event.magnitude:g}{magnitude_type}")
-    if event.intensity:
-        details.append(f"maximum intensity {event.intensity}")
-    if event.depth_km is not None:
-        details.append(f"depth {event.depth_km:g} km")
+    details.extend(
+        f"{measurement.name} {measurement.value}"
+        + (f" {measurement.unit}" if measurement.unit else "")
+        for measurement in event.measurements
+    )
     return "; ".join(details) + f". Source: {_citation(event.source)}"
 
 

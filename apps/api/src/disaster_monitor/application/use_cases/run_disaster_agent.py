@@ -25,7 +25,7 @@ from disaster_monitor.application.services.prompt_preparation import (
     normalize_question,
     prepare_model_request,
 )
-from disaster_monitor.domain.disaster import Country
+from disaster_monitor.domain.disaster import Country, EventGeometryKind
 from disaster_monitor.domain.errors import ModelResponseError, ModelRuntimeError
 from disaster_monitor.domain.models import MapQuestion, MapView
 
@@ -151,8 +151,18 @@ class RunDisasterAgent:
                 if country is None
                 else tuple(dict.fromkeys((country.canonical_name, *country.aliases)))
             ),
-            latitude=event.latitude,
-            longitude=event.longitude,
+            latitude=(
+                event.geometry.coordinates[0].latitude
+                if event.geometry is not None
+                and event.geometry.kind is EventGeometryKind.POINT
+                else None
+            ),
+            longitude=(
+                event.geometry.coordinates[0].longitude
+                if event.geometry is not None
+                and event.geometry.kind is EventGeometryKind.POINT
+                else None
+            ),
         )
         try:
             return await self._event_media.discover(context)

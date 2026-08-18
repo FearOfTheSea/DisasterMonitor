@@ -199,6 +199,30 @@ class SourceResponse(BaseModel):
     snapshot_id: str | None = None
 
 
+class EventCoordinateResponse(BaseModel):
+    """Source-backed WGS84 event coordinate."""
+
+    latitude: Annotated[float, Field(ge=-90, le=90)]
+    longitude: Annotated[float, Field(ge=-180, le=180)]
+
+
+class EventGeometryResponse(BaseModel):
+    """Typed event geometry without inferred representative coordinates."""
+
+    kind: Literal["point", "area", "track", "descriptive"]
+    coordinates: list[EventCoordinateResponse] = Field(default_factory=list)
+    description: str | None = None
+    source_id: str
+
+
+class EventMeasurementResponse(BaseModel):
+    """Hazard-neutral event measurement."""
+
+    name: str
+    value: float | str
+    unit: str | None = None
+
+
 class SelectedEventResponse(BaseModel):
     """The specific event covered by a current-disaster report."""
 
@@ -206,14 +230,11 @@ class SelectedEventResponse(BaseModel):
     hazard: str
     location: str
     event_time: datetime
-    latitude: Annotated[float, Field(ge=-90, le=90)] | None = None
-    longitude: Annotated[float, Field(ge=-180, le=180)] | None = None
-    magnitude: float | None = None
-    intensity: str | None = None
-    depth_km: float | None = None
+    geometry: EventGeometryResponse | None = None
+    measurements: list[EventMeasurementResponse] = Field(default_factory=list)
     source: SourceResponse
     provider_ids: list[str] = Field(default_factory=list)
-    geography_status: str = "in_country"
+    geography_status: str
 
 
 class ReportSectionResponse(BaseModel):

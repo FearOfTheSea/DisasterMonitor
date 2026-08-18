@@ -17,6 +17,7 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 )
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
@@ -371,7 +372,11 @@ class ReliefWebSituationAdapter:
                 locations=locations,
                 countries=countries,
                 hazard=query.hazard,
-                magnitude=magnitude,
+                measurements=(
+                    (EventMeasurement("magnitude", magnitude),)
+                    if magnitude is not None
+                    else ()
+                ),
                 provider_event_ids=provider_event_ids,
             )
             reports.append(report)

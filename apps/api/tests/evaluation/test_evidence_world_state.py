@@ -30,6 +30,8 @@ from disaster_monitor.application.services.hypothesis_reasoning import (
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     DisasterEvent,
+    EarthquakeEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
     HypothesisArtifact,
@@ -38,6 +40,8 @@ from disaster_monitor.domain.disaster import (
     SituationReport,
     SourceAuthority,
     SourceReference,
+    descriptive_event_geometry,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -82,18 +86,37 @@ def _event(item: dict[str, object]) -> DisasterEvent:
         if raw_event_time is not None
         else NOW + timedelta(seconds=cast(int, item["seconds"]))
     )
-    return DisasterEvent(
+    event_type = (
+        EarthquakeEvent
+        if (Hazard(cast(str, item.get("hazard", "earthquake"))) is Hazard.EARTHQUAKE)
+        else DisasterEvent
+    )
+    geometry = (
+        point_event_geometry(cast(float, item["lat"]), cast(float, item["lon"]), source)
+        if item.get("lat") is not None and item.get("lon") is not None
+        else descriptive_event_geometry(f"Fixture location {observation_id}", source)
+    )
+    return event_type(
         event_id=cast(str, item["event_id"]),
         hazard=Hazard(cast(str, item.get("hazard", "earthquake"))),
         location=f"Fixture location {observation_id}",
         country=country,
         event_time=event_time,
         source=source,
-        latitude=cast(float | None, item["lat"]),
-        longitude=cast(float | None, item["lon"]),
-        magnitude=cast(float | None, item["magnitude"]),
-        is_aftershock=cast(bool, item.get("is_aftershock", False)),
-        parent_event_id=cast(str | None, item.get("parent_event_id")),
+        geometry=geometry,
+        measurements=(
+            (EventMeasurement("magnitude", cast(float, item["magnitude"])),)
+            if item.get("magnitude") is not None
+            else ()
+        ),
+        **(
+            {
+                "is_aftershock": cast(bool, item.get("is_aftershock", False)),
+                "parent_event_id": cast(str | None, item.get("parent_event_id")),
+            }
+            if event_type is EarthquakeEvent
+            else {}
+        ),
         provider_ids=tuple(cast(list[str], item.get("provider_ids", []))),
     )
 
@@ -272,9 +295,8 @@ def _temporal_event() -> DisasterEvent:
         japan,
         NOW - timedelta(hours=3),
         source,
-        latitude=35.0,
-        longitude=135.0,
-        magnitude=6.0,
+        geometry=point_event_geometry(35.0, 135.0, source),
+        measurements=(EventMeasurement("magnitude", 6.0),),
     )
 
 

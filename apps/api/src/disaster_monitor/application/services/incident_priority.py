@@ -7,6 +7,7 @@ from typing import Protocol
 
 from disaster_monitor.domain.disaster import (
     ClaimEvidenceState,
+    DisasterEvent,
     EvidenceAvailability,
     EvidenceDisposition,
     EvidenceFreshness,
@@ -32,6 +33,20 @@ _CLAUSE_BOUNDARY = re.compile(
     r"\bdespite\b)\s*",
     re.I,
 )
+
+
+def _measurement_value(event: DisasterEvent, name: str) -> float | str | None:
+    for measurement in event.measurements:
+        if measurement.name == name:
+            return measurement.value
+    return None
+
+
+def _numeric_measurement(event: DisasterEvent, name: str) -> float | None:
+    value = _measurement_value(event, name)
+    return float(value) if isinstance(value, (int, float)) else None
+
+
 _EXPLICIT_NO_OPERATIONAL_IMPACT = re.compile(
     r"\bnone\b|\b(?:no|without)\s+"
     r"(?:reported\s+|material\s+|significant\s+)?"
@@ -120,36 +135,37 @@ class IncidentPriorityRanker:
             )
             floor = _max_priority(floor, priority_floor)
 
-        if event.hazard == Hazard.EARTHQUAKE and event.magnitude is not None:
-            if event.magnitude >= 7:
+        magnitude = _numeric_measurement(event, "magnitude")
+        if event.hazard == Hazard.EARTHQUAKE and magnitude is not None:
+            if magnitude >= 7:
                 add(
                     "tr.priority.earthquake_magnitude_critical",
                     "Verified earthquake magnitude is at least 7.0.",
                     55,
                     priority_floor=IncidentPriority.CRITICAL,
                 )
-            elif event.magnitude >= 6:
+            elif magnitude >= 6:
                 add(
                     "tr.priority.earthquake_magnitude_high",
                     "Verified earthquake magnitude is at least 6.0.",
                     38,
                     priority_floor=IncidentPriority.HIGH,
                 )
-            elif event.magnitude >= 5:
+            elif magnitude >= 5:
                 add(
                     "tr.priority.earthquake_magnitude_moderate",
                     "Verified earthquake magnitude is at least 5.0.",
                     22,
                     priority_floor=IncidentPriority.MODERATE,
                 )
-            elif event.magnitude >= 4:
+            elif magnitude >= 4:
                 add(
                     "tr.priority.earthquake_magnitude_observed",
                     "Verified earthquake magnitude is at least 4.0.",
                     10,
                 )
 
-        intensity = _intensity_level(event.intensity)
+        intensity = _intensity_level(_measurement_value(event, "intensity"))
         if intensity is not None and intensity >= 7:
             add(
                 "tr.priority.intensity_critical",
@@ -165,22 +181,23 @@ class IncidentPriorityRanker:
                 priority_floor=IncidentPriority.HIGH,
             )
 
-        if event.significance is not None:
-            if event.significance >= 1_000:
+        significance = _numeric_measurement(event, "provider_significance")
+        if significance is not None:
+            if significance >= 1_000:
                 add(
                     "tr.priority.provider_significance_critical",
                     "Verified provider significance is at least 1000.",
                     50,
                     priority_floor=IncidentPriority.CRITICAL,
                 )
-            elif event.significance >= 600:
+            elif significance >= 600:
                 add(
                     "tr.priority.provider_significance_high",
                     "Verified provider significance is at least 600.",
                     35,
                     priority_floor=IncidentPriority.HIGH,
                 )
-            elif event.significance >= 300:
+            elif significance >= 300:
                 add(
                     "tr.priority.provider_significance_moderate",
                     "Verified provider significance is at least 300.",
@@ -465,9 +482,11 @@ def _claim_number(claim: ClaimEvidenceState) -> float | None:
     return None if match is None else float(match.group())
 
 
-def _intensity_level(value: str | None) -> int | None:
+def _intensity_level(value: float | str | None) -> int | None:
     if value is None:
         return None
+    if isinstance(value, (int, float)):
+        return int(value)
     match = re.search(r"[1-7]", value)
     return None if match is None else int(match.group())
 

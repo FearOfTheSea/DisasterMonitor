@@ -521,7 +521,11 @@ class FdmaSituationReportAdapter:
             countries=(query.country.canonical_name,),
             country_codes=(query.country.alpha3_code,),
             hazard=query.hazard,
-            magnitude=event.magnitude,
+            measurements=tuple(
+                measurement
+                for measurement in event.measurements
+                if measurement.name == "magnitude"
+            ),
             provider_event_ids=event.provider_ids,
         )
         return ProviderBatch(
@@ -536,7 +540,7 @@ class FdmaSituationReportAdapter:
                     countries=report.countries,
                     country_codes=report.country_codes,
                     hazard=report.hazard,
-                    magnitude=report.magnitude,
+                    measurements=report.measurements,
                     provider_event_ids=report.provider_event_ids,
                 ),
             ),

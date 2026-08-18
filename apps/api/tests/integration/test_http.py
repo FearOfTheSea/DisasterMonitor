@@ -39,12 +39,14 @@ from disaster_monitor.application.services.worldwide_disaster import (
 )
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
     SituationReport,
     SourceAuthority,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.domain.multimodal import (
     DamageLevel,
@@ -111,11 +113,12 @@ def build_current_service(
         country=JAPAN,
         event_time=datetime(2026, 8, 5, 10, 0, tzinfo=UTC),
         source=event_source,
-        latitude=37.0,
-        longitude=137.0,
-        magnitude=6.1,
-        intensity="JMA 6-",
-        depth_km=12,
+        geometry=point_event_geometry(37.0, 137.0, event_source),
+        measurements=(
+            EventMeasurement("magnitude", 6.1),
+            EventMeasurement("intensity", "JMA 6-"),
+            EventMeasurement("depth", 12, "km"),
+        ),
     )
 
     class EventProvider:
@@ -345,8 +348,17 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     assert body["response_type"] == "current_disaster"
     assert body["selected_event"]["event_id"] == "jma:fixture-event"
     assert body["selected_event"]["geography_status"] == "in_country"
-    assert body["selected_event"]["latitude"] == 37.0
-    assert body["selected_event"]["longitude"] == 137.0
+    assert body["selected_event"]["geometry"] == {
+        "kind": "point",
+        "coordinates": [{"latitude": 37.0, "longitude": 137.0}],
+        "description": None,
+        "source_id": "fixture-events",
+    }
+    assert body["selected_event"]["measurements"] == [
+        {"name": "magnitude", "value": 6.1, "unit": None},
+        {"name": "intensity", "value": "JMA 6-", "unit": None},
+        {"name": "depth", "value": 12.0, "unit": "km"},
+    ]
     assert body["map_action"] == {
         "type": "fit_bounds",
         "bounds": [137.0, 37.0, 137.0, 37.0],
@@ -395,7 +407,7 @@ async def test_earthquake_news_never_falls_through_to_general_model(
                         country=query.country,
                         event_time=now,
                         source=source,
-                        magnitude=5.0,
+                        measurements=(EventMeasurement("magnitude", 5.0),),
                     ),
                 )
             )
@@ -450,10 +462,11 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
                         location="South Pacific Ocean",
                         event_time=now,
                         source=source,
-                        latitude=-20.0,
-                        longitude=-170.0,
-                        magnitude=6.4,
-                        depth_km=18.0,
+                        geometry=point_event_geometry(-20.0, -170.0, source),
+                        measurements=(
+                            EventMeasurement("magnitude", 6.4),
+                            EventMeasurement("depth", 18.0, "km"),
+                        ),
                         provider_ids=("usgs:global",),
                     ),
                 )
@@ -519,6 +532,7 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
     assert response.status_code == 200
     assert body["response_type"] == "current_disaster_global_earthquake"
     assert body["selected_event"]["event_id"] == "usgs:global"
+    assert body["selected_event"]["geography_status"] == "worldwide"
     assert body["map_action"]["label"] == "South Pacific Ocean"
     assert body["investigation"]["country"] is None
     assert body["investigation"]["geographic_scope"] == "worldwide"
@@ -649,10 +663,11 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
         country=JAPAN,
         event_time=target_time,
         source=target_source,
-        latitude=37.0,
-        longitude=137.0,
-        magnitude=6.1,
-        intensity="JMA 6-",
+        geometry=point_event_geometry(37.0, 137.0, target_source),
+        measurements=(
+            EventMeasurement("magnitude", 6.1),
+            EventMeasurement("intensity", "JMA 6-"),
+        ),
         provider_ids=("jma:202608051430", "usgs:fixture-ishikawa"),
     )
 
@@ -668,8 +683,10 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
                         country=VENEZUELA,
                         event_time=datetime(2026, 8, 5, 18, 0, tzinfo=UTC),
                         source=target_source,
-                        magnitude=9.8,
-                        significance=6_000,
+                        measurements=(
+                            EventMeasurement("magnitude", 9.8),
+                            EventMeasurement("provider_significance", 6_000),
+                        ),
                     ),
                     DisasterEvent(
                         event_id="usgs:tokyo-decoy",
@@ -678,8 +695,10 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
                         country=JAPAN,
                         event_time=datetime(2026, 8, 6, 1, 0, tzinfo=UTC),
                         source=target_source,
-                        magnitude=9.5,
-                        significance=5_000,
+                        measurements=(
+                            EventMeasurement("magnitude", 9.5),
+                            EventMeasurement("provider_significance", 5_000),
+                        ),
                     ),
                     target_event,
                 )

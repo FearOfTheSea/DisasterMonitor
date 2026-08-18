@@ -24,7 +24,8 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRole,
 )
 from disaster_monitor.domain.disaster import (
-    DisasterEvent,
+    EarthquakeEvent,
+    EventMeasurement,
     EvidenceAvailability,
     EvidenceDisposition,
     FactStatus,
@@ -32,6 +33,7 @@ from disaster_monitor.domain.disaster import (
     ReportedFact,
     SituationReport,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.disaster.jma_adapter import (
     _normalize_jma_timestamp,
@@ -100,22 +102,23 @@ def event(
     aftershock: bool = False,
     latitude: float = 35.0,
     longitude: float = 139.0,
-) -> DisasterEvent:
+) -> EarthquakeEvent:
     event_time = NOW - timedelta(hours=hours_old)
-    return DisasterEvent(
+    source_reference = source("JMA", f"Event {event_id}")
+    return EarthquakeEvent(
         event_id=event_id,
         hazard=Hazard.EARTHQUAKE,
         location="Honshu, Japan",
         country=JAPAN,
         event_time=event_time,
-        source=source("JMA", f"Event {event_id}"),
-        latitude=latitude,
-        longitude=longitude,
-        magnitude=magnitude,
-        magnitude_type="Mj",
-        intensity="JMA 5+",
-        depth_km=18,
-        significance=magnitude * 100,
+        source=source_reference,
+        geometry=point_event_geometry(latitude, longitude, source_reference),
+        measurements=(
+            EventMeasurement("magnitude", magnitude),
+            EventMeasurement("intensity", "JMA 5+"),
+            EventMeasurement("depth", 18, "km"),
+            EventMeasurement("provider_significance", magnitude * 100),
+        ),
         is_aftershock=aftershock,
         parent_event_id="mainshock" if aftershock else None,
     )

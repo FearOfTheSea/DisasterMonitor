@@ -24,7 +24,7 @@ from disaster_monitor.application.services.worldwide_disaster_policy import (
     WorldwideDisasterPolicyRegistry,
     default_worldwide_disaster_policy_registry,
 )
-from disaster_monitor.domain.disaster import SituationReport
+from disaster_monitor.domain.disaster import EventGeographyStatus, SituationReport
 
 
 def _now_utc() -> datetime:
@@ -115,13 +115,11 @@ class WorldwideDisasterReportService:
             hazard=selected.hazard,
             location=selected.location,
             event_time=selected.event_time,
-            latitude=selected.latitude,
-            longitude=selected.longitude,
-            magnitude=selected.magnitude,
-            intensity=selected.intensity,
-            depth_km=selected.depth_km,
+            geometry=selected.geometry,
+            measurements=selected.measurements,
             source=selected.source,
             provider_ids=selected.provider_ids,
+            geography_status=EventGeographyStatus.WORLDWIDE,
         )
         detail = policy.describe_selection(selected, query)
         situation_selection = self._provider_registry.select(

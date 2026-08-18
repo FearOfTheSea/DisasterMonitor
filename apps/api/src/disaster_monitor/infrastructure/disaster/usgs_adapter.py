@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime, timedelta
+from typing import cast
 
 import httpx
 
@@ -21,10 +22,13 @@ from disaster_monitor.domain.disaster import (
     BoundaryValidationQuality,
     Country,
     DisasterEvent,
+    EarthquakeEvent,
     EventGeographyStatus,
+    EventMeasurement,
     Hazard,
     SourceAuthority,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
@@ -218,24 +222,35 @@ class UsgsEarthquakeAdapter:
             snapshot_id=snapshot_id,
         )
         return (
-            DisasterEvent(
+            EarthquakeEvent(
                 event_id=f"usgs:{event_id}",
                 hazard=Hazard.EARTHQUAKE,
                 location=(place or query.country.canonical_name),
                 country=query.country,
                 event_time=event_time,
                 source=source,
-                latitude=latitude,
-                longitude=longitude,
-                magnitude=_number(properties.get("mag")),
-                magnitude_type=_text(properties.get("magType")) or None,
-                intensity=(
-                    f"MMI {properties['mmi']}"
-                    if isinstance(properties.get("mmi"), (int, float))
-                    else None
+                geometry=point_event_geometry(latitude, longitude, source),
+                measurements=tuple(
+                    measurement
+                    for measurement in (
+                        EventMeasurement(
+                            "magnitude", cast(float, _number(properties.get("mag")))
+                        )
+                        if _number(properties.get("mag")) is not None
+                        else None,
+                        EventMeasurement("intensity", f"MMI {properties['mmi']}")
+                        if isinstance(properties.get("mmi"), (int, float))
+                        else None,
+                        EventMeasurement("depth", depth_km, "km"),
+                        EventMeasurement(
+                            "provider_significance",
+                            cast(float, _number(properties.get("sig"))),
+                        )
+                        if _number(properties.get("sig")) is not None
+                        else None,
+                    )
+                    if measurement is not None
                 ),
-                depth_km=depth_km,
-                significance=_number(properties.get("sig")),
                 is_aftershock="aftershock" in _text(properties.get("title")).lower(),
                 provider_ids=(f"usgs:{event_id}",),
                 geography_status=geography_status,
@@ -304,17 +319,28 @@ class UsgsEarthquakeAdapter:
                 location=_text(properties.get("place")) or "Worldwide earthquake",
                 event_time=event_time,
                 source=source,
-                latitude=latitude,
-                longitude=longitude,
-                magnitude=_number(properties.get("mag")),
-                magnitude_type=_text(properties.get("magType")) or None,
-                intensity=(
-                    f"MMI {properties['mmi']}"
-                    if isinstance(properties.get("mmi"), (int, float))
-                    else None
+                geometry=point_event_geometry(latitude, longitude, source),
+                measurements=tuple(
+                    measurement
+                    for measurement in (
+                        EventMeasurement(
+                            "magnitude", cast(float, _number(properties.get("mag")))
+                        )
+                        if _number(properties.get("mag")) is not None
+                        else None,
+                        EventMeasurement("intensity", f"MMI {properties['mmi']}")
+                        if isinstance(properties.get("mmi"), (int, float))
+                        else None,
+                        EventMeasurement("depth", depth_km, "km"),
+                        EventMeasurement(
+                            "provider_significance",
+                            cast(float, _number(properties.get("sig"))),
+                        )
+                        if _number(properties.get("sig")) is not None
+                        else None,
+                    )
+                    if measurement is not None
                 ),
-                depth_km=depth_km,
-                significance=_number(properties.get("sig")),
                 provider_ids=(f"usgs:{event_id}",),
             ),
             None,

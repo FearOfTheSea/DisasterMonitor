@@ -3,7 +3,7 @@
 from disaster_monitor.application.disaster import SelectedEventSummary
 from disaster_monitor.application.dto import ModelTool, ModelToolCall
 from disaster_monitor.application.ports.geography import CountryCatalog
-from disaster_monitor.domain.disaster import Country
+from disaster_monitor.domain.disaster import Country, EventGeometryKind
 from disaster_monitor.domain.models import MapNavigationAction
 from disaster_monitor.domain.multimodal import (
     CommonOperationalPicture,
@@ -87,15 +87,16 @@ class MapNavigationService:
                 return MapNavigationAction(bounds, "Common operational picture")
         if (
             selected_event is not None
-            and selected_event.longitude is not None
-            and selected_event.latitude is not None
+            and selected_event.geometry is not None
+            and selected_event.geometry.kind is EventGeometryKind.POINT
         ):
+            point = selected_event.geometry.coordinates[0]
             return MapNavigationAction(
                 (
-                    selected_event.longitude,
-                    selected_event.latitude,
-                    selected_event.longitude,
-                    selected_event.latitude,
+                    point.longitude,
+                    point.latitude,
+                    point.longitude,
+                    point.latitude,
                 ),
                 selected_event.location,
             )

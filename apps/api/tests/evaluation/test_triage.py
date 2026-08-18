@@ -25,6 +25,7 @@ from disaster_monitor.application.services.triage_autonomy import TriageAutonomy
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
     EventAssignmentStatus,
+    EventMeasurement,
     EvidenceDisposition,
     EvidenceFreshness,
     FactStatus,
@@ -148,10 +149,20 @@ def _priority_state(item: dict[str, object]):
         country=country,
         event_time=event_time,
         source=event_source,
-        magnitude=(None if item.get("magnitude") is None else float(item["magnitude"])),
-        intensity=(None if item.get("intensity") is None else str(item["intensity"])),
-        significance=(
-            None if item.get("significance") is None else float(item["significance"])
+        measurements=tuple(
+            measurement
+            for measurement in (
+                EventMeasurement("magnitude", float(item["magnitude"]))
+                if item.get("magnitude") is not None
+                else None,
+                EventMeasurement("intensity", str(item["intensity"]))
+                if item.get("intensity") is not None
+                else None,
+                EventMeasurement("provider_significance", float(item["significance"]))
+                if item.get("significance") is not None
+                else None,
+            )
+            if measurement is not None
         ),
     )
     identity = (

@@ -29,12 +29,14 @@ from disaster_monitor.application.source_intelligence import (
 from disaster_monitor.domain.disaster import (
     Country,
     DisasterEvent,
+    EventMeasurement,
     FactStatus,
     Hazard,
     ReportedFact,
     SituationReport,
     SourceAuthority,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.composition import build_current_disaster_report
 from disaster_monitor.infrastructure.configuration import Settings
@@ -124,16 +126,16 @@ def _event(
     country: Country = JAPAN,
     provider_ids: tuple[str, ...] = (),
 ) -> DisasterEvent:
+    source = _source(source_id, host=host)
     return DisasterEvent(
         event_id,
         hazard,
         country.canonical_name,
         country,
         NOW - timedelta(minutes=5),
-        _source(source_id, host=host),
-        latitude=35.0,
-        longitude=135.0,
-        magnitude=6.0,
+        source,
+        geometry=point_event_geometry(35.0, 135.0, source),
+        measurements=(EventMeasurement("magnitude", 6.0),),
         provider_ids=provider_ids,
     )
 
@@ -285,6 +287,10 @@ def _run_schema_mutations() -> tuple[int, int]:
         _source("approved-events"),
         authority=cast(SourceAuthority, "national_authority"),
     )
+    invalid_measurement = object.__new__(type(valid.measurements[0]))
+    object.__setattr__(invalid_measurement, "name", "magnitude")
+    object.__setattr__(invalid_measurement, "value", float("nan"))
+    object.__setattr__(invalid_measurement, "unit", None)
     event_mutations: tuple[object, ...] = (
         object(),
         replace(valid, source=_source("wrong-events")),
@@ -295,9 +301,9 @@ def _run_schema_mutations() -> tuple[int, int]:
         replace(valid, country=cast(Country, object())),
         naive,
         replace(valid, event_id=""),
-        replace(valid, latitude=91.0),
-        replace(valid, longitude=181.0),
-        replace(valid, magnitude=cast(float, "6.0")),
+        replace(valid, geometry=cast(object, object())),
+        replace(valid, geometry=cast(object, object())),
+        replace(valid, measurements=(invalid_measurement,)),
         replace(valid, source=string_authority_source),
     )
     approved_report_source = _source("approved-reports")

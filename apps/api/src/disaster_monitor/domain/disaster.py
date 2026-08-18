@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from math import isfinite
 
 
 class Hazard(StrEnum):
@@ -28,6 +29,7 @@ class EventGeographyStatus(StrEnum):
 
     IN_COUNTRY = "in_country"
     COUNTRY_ASSOCIATED_OFFSHORE = "country_associated_offshore"
+    WORLDWIDE = "worldwide"
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,6 +284,100 @@ class SourceReference:
 
 
 @dataclass(frozen=True, slots=True)
+class EventMeasurement:
+    """One typed, source-backed measurement attached to an event."""
+
+    name: str
+    value: float | str
+    unit: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("An event measurement requires a name.")
+        if isinstance(self.value, bool) or (
+            isinstance(self.value, float) and not isfinite(self.value)
+        ):
+            raise ValueError("An event measurement value must be finite.")
+        if not isinstance(self.value, (int, float, str)):
+            raise TypeError("An event measurement value has an unsupported type.")
+        if self.unit is not None and not self.unit.strip():
+            raise ValueError("An event measurement unit must not be empty.")
+
+
+class EventGeometryKind(StrEnum):
+    """Authoritative geometry shape available for an event."""
+
+    POINT = "point"
+    AREA = "area"
+    TRACK = "track"
+    DESCRIPTIVE = "descriptive"
+
+
+@dataclass(frozen=True, slots=True)
+class EventCoordinate:
+    """One WGS84 coordinate preserved exactly as supplied by a source."""
+
+    latitude: float
+    longitude: float
+
+    def __post_init__(self) -> None:
+        if (
+            not isfinite(self.latitude)
+            or not isfinite(self.longitude)
+            or not -90 <= self.latitude <= 90
+            or not -180 <= self.longitude <= 180
+        ):
+            raise ValueError("An event coordinate is outside the WGS84 extent.")
+
+
+@dataclass(frozen=True, slots=True)
+class EventGeometry:
+    """A source-backed point, area, track, or descriptive-only location."""
+
+    kind: EventGeometryKind
+    source: SourceReference
+    coordinates: tuple[EventCoordinate, ...] = ()
+    description: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind is EventGeometryKind.POINT and len(self.coordinates) != 1:
+            raise ValueError("A point event geometry requires one coordinate.")
+        if self.kind is EventGeometryKind.AREA and len(self.coordinates) < 3:
+            raise ValueError("An area event geometry requires a perimeter.")
+        if self.kind is EventGeometryKind.TRACK and len(self.coordinates) < 2:
+            raise ValueError("A track event geometry requires two coordinates.")
+        if self.kind is EventGeometryKind.DESCRIPTIVE:
+            if self.coordinates or not self.description or not self.description.strip():
+                raise ValueError(
+                    "Descriptive event geometry requires only a description."
+                )
+        elif self.description is not None and not self.description.strip():
+            raise ValueError("An event geometry description must not be empty.")
+
+
+def point_event_geometry(
+    latitude: float, longitude: float, source: SourceReference
+) -> EventGeometry:
+    """Build point geometry without changing or deriving its coordinates."""
+    return EventGeometry(
+        kind=EventGeometryKind.POINT,
+        source=source,
+        coordinates=(EventCoordinate(latitude, longitude),),
+    )
+
+
+def descriptive_event_geometry(
+    description: str, source: SourceReference
+) -> EventGeometry:
+    """Build source-backed descriptive geometry when no authoritative shape exists."""
+    return EventGeometry(
+        kind=EventGeometryKind.DESCRIPTIVE,
+        source=source,
+        description=description,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class DisasterEvent:
     """A normalized source-backed disaster event."""
 
@@ -291,16 +387,8 @@ class DisasterEvent:
     country: Country
     event_time: datetime
     source: SourceReference
-    latitude: float | None = None
-    longitude: float | None = None
-    magnitude: float | None = None
-    magnitude_type: str | None = None
-    intensity: str | None = None
-    depth_km: float | None = None
-    significance: float | None = None
-    is_aftershock: bool = False
-    parent_event_id: str | None = None
-    sequence_id: str | None = None
+    geometry: EventGeometry | None = None
+    measurements: tuple[EventMeasurement, ...] = ()
     provider_ids: tuple[str, ...] = ()
     geography_status: EventGeographyStatus = EventGeographyStatus.IN_COUNTRY
 
@@ -318,6 +406,15 @@ class DisasterEvent:
             identifier.partition(":")[2] if ":" in identifier else identifier
             for identifier in identifiers
         }
+
+
+@dataclass(frozen=True, slots=True)
+class EarthquakeEvent(DisasterEvent):
+    """Earthquake-only sequence details kept out of shared event fields."""
+
+    is_aftershock: bool = False
+    parent_event_id: str | None = None
+    sequence_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,7 +474,7 @@ class SituationReport:
     countries: tuple[str, ...] = ()
     country_codes: tuple[str, ...] = ()
     hazard: Hazard | None = None
-    magnitude: float | None = None
+    measurements: tuple[EventMeasurement, ...] = ()
     provider_event_ids: tuple[str, ...] = ()
 
 
