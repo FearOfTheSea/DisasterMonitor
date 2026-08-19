@@ -290,6 +290,33 @@ def test_packaged_gfm_source_metadata_declares_the_registered_authorities() -> N
     }
 
 
+def test_packaged_smithsonian_source_metadata_declares_the_registered_authorities() -> (
+    None
+):
+    descriptor = StaticSourceCatalog().get("smithsonian-usgs-volcanic-activity")
+
+    assert descriptor is not None
+    assert descriptor.provider_registration_name == (
+        "Smithsonian / USGS Weekly Volcanic Activity Report"
+    )
+    assert descriptor.authority_level == "scientific_authority"
+    assert descriptor.supported_disasters == (Disaster.VOLCANIC_ERUPTION,)
+    assert descriptor.country_codes is None
+    assert descriptor.requires_configuration is False
+    assert descriptor.configured is True
+    assert set(descriptor.geographic_scopes) == {
+        GeographicScope.COUNTRY,
+        GeographicScope.WORLDWIDE,
+    }
+    assert set(descriptor.allowed_hosts) == {
+        "volcano.si.edu",
+        "webservices.volcano.si.edu",
+    }
+    assert descriptor.registered_tool_names == ("find_disaster_event",)
+    assert any("not a comprehensive list" in item for item in descriptor.limitations)
+    assert any("casualties" in item for item in descriptor.limitations)
+
+
 @pytest.mark.parametrize(
     ("source_id", "name", "disaster", "host"),
     (

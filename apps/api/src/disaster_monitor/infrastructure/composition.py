@@ -65,6 +65,9 @@ from disaster_monitor.infrastructure.disaster.nasa_eonet_adapter import (
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
 )
+from disaster_monitor.infrastructure.disaster.smithsonian_gvp_adapter import (
+    SmithsonianGvpAdapter,
+)
 from disaster_monitor.infrastructure.disaster.usgs_adapter import UsgsEarthquakeAdapter
 from disaster_monitor.infrastructure.geography.country_catalog_updates import (
     AutonomousCountryCatalogUpdater,
@@ -278,6 +281,12 @@ def build_current_disaster_report(
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
+    smithsonian_gvp = SmithsonianGvpAdapter(
+        geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
     reliefweb = ReliefWebSituationAdapter(
         app_name=settings.reliefweb_app_name,
         snapshot_recorder=snapshot_recorder,
@@ -385,6 +394,26 @@ def build_current_disaster_report(
                 allowed_hosts=gdacs.allowed_hosts,
                 event_provider=gdacs,
                 worldwide_provider=gdacs,
+            ),
+            ProviderRegistration(
+                "Smithsonian / USGS Weekly Volcanic Activity Report",
+                smithsonian_gvp,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.VOLCANIC_ERUPTION}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.PRIMARY,
+                source_id="smithsonian-usgs-volcanic-activity",
+                allowed_hosts=smithsonian_gvp.allowed_hosts,
+                event_provider=smithsonian_gvp,
+                worldwide_provider=smithsonian_gvp,
             ),
             ProviderRegistration(
                 "ReliefWeb",

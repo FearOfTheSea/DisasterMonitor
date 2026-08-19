@@ -427,6 +427,7 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
         "nasa-coolr-landslides",
         "nasa-eonet-wildfires",
         "reliefweb-situation-reports",
+        "smithsonian-usgs-volcanic-activity",
         "usgs-earthquakes",
     }
     assert all(

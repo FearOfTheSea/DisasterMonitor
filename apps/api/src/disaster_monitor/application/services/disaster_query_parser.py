@@ -79,6 +79,18 @@ _DISASTER_ALIASES: dict[Disaster, tuple[str, ...]] = {
         "bão nhiệt đới",
         "台風",
     ),
+    Disaster.VOLCANIC_ERUPTION: (
+        "volcanic eruption",
+        "volcanic eruptions",
+        "volcano eruption",
+        "volcano eruptions",
+        "erupting volcano",
+        "erupting volcanoes",
+        "erupción volcánica",
+        "erupciones volcánicas",
+        "phun trào núi lửa",
+        "火山噴火",
+    ),
 }
 _ISO_DATE = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
 _SLASH_DATE = re.compile(r"\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b")

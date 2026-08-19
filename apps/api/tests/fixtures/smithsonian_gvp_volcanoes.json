@@ -1,0 +1,41 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "Smithsonian_VOTW_Holocene_Volcanoes.fixture-282030",
+      "geometry": {"type": "Point", "coordinates": [129.714, 29.638]},
+      "properties": {
+        "Volcano_Number": 282030,
+        "Volcano_Name": "Suwanosejima",
+        "Country": "Japan",
+        "Region": "Western Pacific Volcanic Regions",
+        "Latitude": 29.638,
+        "Longitude": 129.714
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "Smithsonian_VOTW_Holocene_Volcanoes.fixture-999999",
+      "geometry": {"type": "Point", "coordinates": [150.0, 10.0]},
+      "properties": {
+        "Volcano_Number": 999999,
+        "Volcano_Name": "Ahyi",
+        "Country": "Japan",
+        "Region": "Mariana Volcanic Arc",
+        "Latitude": 10.0,
+        "Longitude": 150.0
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "Smithsonian_VOTW_Holocene_Volcanoes.fixture-bad",
+      "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+      "properties": {"Volcano_Number": "not-a-number"}
+    }
+  ],
+  "totalFeatures": 3,
+  "numberMatched": 3,
+  "numberReturned": 3,
+  "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::4326"}}
+}

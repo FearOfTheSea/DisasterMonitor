@@ -1,5 +1,5 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "sources": [
     {
       "source_id": "cems-gfm-floods",
@@ -221,7 +221,8 @@
         "flood",
         "wildfire",
         "landslide",
-        "tropical_cyclone"
+        "tropical_cyclone",
+        "volcanic_eruption"
       ],
       "country_codes": null,
       "geographic_scopes": [
@@ -248,6 +249,49 @@
         "api.reliefweb.int",
         "reliefweb.int",
         "www.reliefweb.int"
+      ]
+    },
+    {
+      "source_id": "smithsonian-usgs-volcanic-activity",
+      "organization_name": "Smithsonian Global Volcanism Program / U.S. Geological Survey Volcano Hazards Program",
+      "display_name": "Smithsonian / USGS Weekly Volcanic Activity Report",
+      "jurisdiction": "global scientific volcanic-activity reporting",
+      "authority_level": "scientific_authority",
+      "information_roles": [
+        "event_discovery"
+      ],
+      "supported_disasters": [
+        "volcanic_eruption"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_wvar_html_and_gvp_wfs_geojson",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "weekly report publication; exact source update timing is source-dependent",
+      "attribution_guidance": "Attribute admitted eruptive-activity event discovery to the Smithsonian Global Volcanism Program / USGS Volcano Hazards Program. GVP volcano metadata supplies source-backed identity and coordinates.",
+      "limitations": [
+        "WVAR is preliminary and is not a comprehensive list of all eruptions.",
+        "Routine long-running activity can be omitted, and rapidly developing events can be covered only fragmentarily.",
+        "Absence from WVAR is not evidence that no eruption is occurring.",
+        "Only explicit New Eruptive Activity and Continuing Eruptive Activity report types are admitted; unrest and other observations are deliberately excluded from volcanic-eruption events.",
+        "Event discovery does not establish casualties, evacuations, infrastructure impacts, local warnings, exclusion zones, or response status.",
+        "WVAR summaries may cite national observatories, but DisasterMonitor does not independently ingest those embedded authorities through this provider."
+      ],
+      "registered_tool_names": [
+        "find_disaster_event"
+      ],
+      "provider_registration_name": "Smithsonian / USGS Weekly Volcanic Activity Report",
+      "implementation_status": "implemented",
+      "allowed_hosts": [
+        "volcano.si.edu",
+        "webservices.volcano.si.edu"
       ]
     }
   ]

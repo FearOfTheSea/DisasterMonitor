@@ -71,6 +71,18 @@ _DISASTERS: dict[Disaster, tuple[str, ...]] = {
         "bão nhiệt đới",
         "台風",
     ),
+    Disaster.VOLCANIC_ERUPTION: (
+        "volcanic eruption",
+        "volcanic eruptions",
+        "volcano eruption",
+        "volcano eruptions",
+        "erupting volcano",
+        "erupting volcanoes",
+        "erupción volcánica",
+        "erupciones volcánicas",
+        "phun trào núi lửa",
+        "火山噴火",
+    ),
 }
 _CURRENT_EVENT_MARKERS = re.compile(
     r"(?:\b(?:latest|recent|current|today|now|news|ongoing|reported|confirmed|"

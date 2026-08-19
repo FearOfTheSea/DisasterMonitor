@@ -25,7 +25,8 @@ never dynamically imports or constructs providers.
 | NASA EONET Wildfires              | Primary   | Event discovery    | Wildfire         | Named countries and worldwide | EONET geometry and maintained-country validation            |
 | NASA COOLR Landslides             | Primary   | Event discovery    | Landslide        | Named countries and worldwide | COOLR point and maintained-country validation               |
 | GDACS tropical cyclones           | Secondary | Event discovery    | Tropical cyclone | Named countries and worldwide | None                                                        |
-| ReliefWeb                         | Secondary | Situation evidence | Earthquake, flood, wildfire, landslide, tropical cyclone | Named countries | `RELIEFWEB_APP_NAME` |
+| Smithsonian / USGS Weekly Volcanic Activity Report | Primary | Event discovery | Volcanic eruption | Named countries and worldwide | Explicit WVAR eruptive-activity classification and day-precise start |
+| ReliefWeb                         | Secondary | Situation evidence | Earthquake, flood, wildfire, landslide, tropical cyclone, volcanic eruption | Named countries | `RELIEFWEB_APP_NAME` |
 
 GFM provides primary global named-country and bounded countryless worldwide flood
 event discovery. USGS and GDACS provide global named-country and countryless worldwide
@@ -51,6 +52,12 @@ latest policy unless they register another policy. Worldwide requests do not inv
 country for offshore events. Worldwide scope currently provides event
 discovery only; it does not provide globally complete
 casualty, damage, warning, or response evidence, and every response states that gap.
+
+Smithsonian/GVP WVAR provides bounded volcanic-eruption discovery from its explicit
+`New Eruptive Activity` and `Continuing Eruptive Activity` classifications, enriched
+with GVP volcano identity, geography, and eruption metadata. It is preliminary and
+not comprehensive; unrest and other observations remain outside the eruption event
+definition.
 
 The API accepts bounded operator-supplied PNG/JPEG bytes with explicit provenance and
 event metadata. Associated images may produce local analytical observations and a

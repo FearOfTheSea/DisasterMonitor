@@ -34,6 +34,16 @@ PARSER = DisasterQueryParser(StaticCountryCatalog())
         ("Latest cyclones in Japan", Disaster.TROPICAL_CYCLONE, "JPN"),
         ("Latest tropical cyclone in Vietnam", Disaster.TROPICAL_CYCLONE, "VNM"),
         ("Latest tropical cyclones in Vietnam", Disaster.TROPICAL_CYCLONE, "VNM"),
+        ("Latest volcanic eruption in Japan", Disaster.VOLCANIC_ERUPTION, "JPN"),
+        ("Latest volcanic eruptions in Vietnam", Disaster.VOLCANIC_ERUPTION, "VNM"),
+        ("Latest volcano eruption in Japan", Disaster.VOLCANIC_ERUPTION, "JPN"),
+        ("Latest volcano eruptions in Japan", Disaster.VOLCANIC_ERUPTION, "JPN"),
+        ("Latest erupting volcano in Japan", Disaster.VOLCANIC_ERUPTION, "JPN"),
+        ("Latest erupting volcanoes in Japan", Disaster.VOLCANIC_ERUPTION, "JPN"),
+        ("Última erupción volcánica en Japón", Disaster.VOLCANIC_ERUPTION, "JPN"),
+        ("Últimas erupciones volcánicas en Japón", Disaster.VOLCANIC_ERUPTION, "JPN"),
+        ("Phun trào núi lửa gần đây ở Việt Nam", Disaster.VOLCANIC_ERUPTION, "VNM"),
+        ("最近の火山噴火 in 日本", Disaster.VOLCANIC_ERUPTION, "JPN"),
     ],
 )
 def test_parser_normalizes_disaster_and_country_aliases(
@@ -93,3 +103,14 @@ def test_earthquake_news_is_current_disaster_intent() -> None:
     assert classification.request_type == RequestType.CURRENT_DISASTER
     assert classification.query is not None
     assert classification.query.country.alpha3_code == "VEN"
+
+
+@pytest.mark.parametrize("text", ("Latest volcano in Japan", "Any volcanoes in Japan?"))
+def test_bare_volcano_terms_are_not_current_eruption_aliases(text: str) -> None:
+    assert PARSER.parse(text).status == QueryParseStatus.NO_DISASTER
+
+
+def test_bare_eruption_is_not_a_disaster_alias() -> None:
+    assert (
+        PARSER.parse("Latest eruption in Japan").status == QueryParseStatus.NO_DISASTER
+    )

@@ -60,6 +60,7 @@ _RELIEFWEB_DISASTERS = {
     Disaster.WILDFIRE: "Wild Fire",
     Disaster.LANDSLIDE: "Land Slide",
     Disaster.TROPICAL_CYCLONE: "Tropical Cyclone",
+    Disaster.VOLCANIC_ERUPTION: "Volcano",
 }
 
 

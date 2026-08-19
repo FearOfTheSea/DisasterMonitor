@@ -122,6 +122,46 @@ def test_worldwide_earthquake_scope_is_explicit_and_current_only() -> None:
     assert worldwide_disaster_query("Any flood news worldwide?") is not None
 
 
+@pytest.mark.parametrize(
+    "question",
+    (
+        "Any news about volcanic eruptions in Japan?",
+        "Any current volcanic eruption worldwide?",
+        "Latest erupting volcanoes in Vietnam.",
+    ),
+)
+def test_current_volcanic_eruption_questions_use_the_trusted_path(
+    question: str,
+) -> None:
+    assert disaster_safety_gate(question)
+    task = validate(question)
+    assert task.kind == TaskKind.INVESTIGATION
+    assert task.requires_evidence
+    assert task.disaster is Disaster.VOLCANIC_ERUPTION
+
+
+def test_worldwide_volcanic_eruption_scope_is_explicit() -> None:
+    query = worldwide_disaster_query("Any volcanic eruption news worldwide?")
+
+    assert query is not None
+    assert query.disaster is Disaster.VOLCANIC_ERUPTION
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "What is a volcanic eruption?",
+        "What causes volcanic eruptions in general?",
+        "What is a volcano?",
+    ),
+)
+def test_educational_volcano_questions_stay_general_knowledge(question: str) -> None:
+    task = validate(question)
+
+    assert not task.requires_evidence
+    assert task.kind in {TaskKind.GENERAL_KNOWLEDGE, TaskKind.NON_DISASTER}
+
+
 def test_explicit_dated_event_is_an_investigation_without_model_help() -> None:
     task = validate("Tell me about the August 5, 2026 earthquake in Japan.")
 

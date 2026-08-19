@@ -68,6 +68,10 @@ source authority, issue public warnings, or select events.
   event discovery from the COOLR report catalogue. Runtime evidence remains secondary;
   accepted reports are restricted to the documented GLC and LRC import classes, and
   the catalogue is not complete real-time surveillance.
+- Smithsonian/GVP provides bounded named-country and worldwide volcanic-eruption
+  discovery from explicit WVAR eruptive-activity report types, with source-backed GVP
+  identity and point geometry. It does not admit unrest or other observations and is
+  not comprehensive global eruption surveillance.
 - ReliefWeb is an optional, configured supplementary situation-evidence provider for
   named-country requests; without `RELIEFWEB_APP_NAME`, it remains unavailable and
   reports disclose that gap.

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import httpx
@@ -114,3 +115,17 @@ def test_reliefweb_params_use_normalized_country_and_disaster() -> None:
     assert params["filter[conditions][1][field]"] == "disaster_type.name"
     assert params["filter[conditions][1][value]"] == "Earthquake"
     assert not any(key.startswith("query[") for key in params)
+
+
+def test_reliefweb_uses_the_official_volcano_taxonomy_for_eruptions() -> None:
+    volcanic_query = replace(QUERY, disaster=Disaster.VOLCANIC_ERUPTION)
+    volcanic_event = replace(_event(), disaster=Disaster.VOLCANIC_ERUPTION)
+
+    params = build_reliefweb_params(
+        volcanic_event,
+        volcanic_query,
+        now=NOW,
+        app_name="approved-test",
+    )
+
+    assert params["filter[conditions][1][value]"] == "Volcano"

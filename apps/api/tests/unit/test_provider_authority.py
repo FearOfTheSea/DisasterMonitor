@@ -303,3 +303,33 @@ async def test_nasa_catalog_is_the_sole_primary_authority(
         ]
     finally:
         await service.aclose()
+
+
+@pytest.mark.asyncio
+async def test_smithsonian_is_the_sole_primary_volcanic_event_authority() -> None:
+    service = build_current_disaster_report(Settings())
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        primary = [
+            item
+            for item in registry.registrations
+            if item.tier is ProviderTier.PRIMARY
+            and Disaster.VOLCANIC_ERUPTION in item.capabilities.disasters
+            and item.capabilities.roles == frozenset({ProviderRole.EVENT_DISCOVERY})
+        ]
+        assert [(item.name, item.source_id) for item in primary] == [
+            (
+                "Smithsonian / USGS Weekly Volcanic Activity Report",
+                "smithsonian-usgs-volcanic-activity",
+            )
+        ]
+        registration = primary[0]
+        assert registration.capabilities.country_codes is None
+        assert registration.capabilities.event_scopes == frozenset(
+            {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+        )
+        assert registration.allowed_hosts == frozenset(
+            {"volcano.si.edu", "webservices.volcano.si.edu"}
+        )
+    finally:
+        await service.aclose()

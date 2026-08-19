@@ -1,6 +1,6 @@
 {
   "countries": ["JPN", "VNM", "VEN"],
-  "disasters": ["earthquake", "flood", "wildfire", "landslide", "tropical_cyclone"],
+  "disasters": ["earthquake", "flood", "wildfire", "landslide", "tropical_cyclone", "volcanic_eruption"],
   "roles": ["event_discovery", "situation_evidence"],
   "non_empty": [
     {"country": "JPN", "disaster": "earthquake", "role": "event_discovery", "source_ids": ["usgs-earthquakes"]},
@@ -17,7 +17,10 @@
     {"country": "VEN", "disaster": "landslide", "role": "event_discovery", "source_ids": ["nasa-coolr-landslides"]},
     {"country": "JPN", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]},
     {"country": "VNM", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]},
-    {"country": "VEN", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]}
+    {"country": "VEN", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]},
+    {"country": "JPN", "disaster": "volcanic_eruption", "role": "event_discovery", "source_ids": ["smithsonian-usgs-volcanic-activity"]},
+    {"country": "VNM", "disaster": "volcanic_eruption", "role": "event_discovery", "source_ids": ["smithsonian-usgs-volcanic-activity"]},
+    {"country": "VEN", "disaster": "volcanic_eruption", "role": "event_discovery", "source_ids": ["smithsonian-usgs-volcanic-activity"]}
   ],
   "event_conditioned": []
 }

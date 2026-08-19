@@ -1,0 +1,47 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "Smithsonian_VOTW_Holocene_Eruptions.fixture-282030-1",
+      "geometry": {"type": "Point", "coordinates": [129.714, 29.638]},
+      "properties": {
+        "Volcano_Number": 282030,
+        "Eruption_Number": 41234,
+        "StartDateYearModifier": null,
+        "StartDateYear": 2004,
+        "StartDateYearUncertainty": null,
+        "StartDateDayModifier": null,
+        "StartDateMonth": 10,
+        "StartDateDay": 23,
+        "StartDateDayUncertainty": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "Smithsonian_VOTW_Holocene_Eruptions.fixture-999999-1",
+      "geometry": {"type": "Point", "coordinates": [150.0, 10.0]},
+      "properties": {
+        "Volcano_Number": 999999,
+        "Eruption_Number": 41235,
+        "StartDateYearModifier": null,
+        "StartDateYear": 2026,
+        "StartDateYearUncertainty": null,
+        "StartDateDayModifier": null,
+        "StartDateMonth": 7,
+        "StartDateDay": 18,
+        "StartDateDayUncertainty": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "Smithsonian_VOTW_Holocene_Eruptions.fixture-bad",
+      "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+      "properties": {"Volcano_Number": 999999, "Eruption_Number": "bad"}
+    }
+  ],
+  "totalFeatures": 3,
+  "numberMatched": 3,
+  "numberReturned": 3,
+  "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::4326"}}
+}

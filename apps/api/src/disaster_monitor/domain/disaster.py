@@ -14,6 +14,7 @@ class Disaster(StrEnum):
     WILDFIRE = "wildfire"
     LANDSLIDE = "landslide"
     TROPICAL_CYCLONE = "tropical_cyclone"
+    VOLCANIC_ERUPTION = "volcanic_eruption"
 
 
 class BoundaryValidationQuality(StrEnum):

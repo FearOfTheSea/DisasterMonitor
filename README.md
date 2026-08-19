@@ -14,8 +14,8 @@ facts. See [docs/agent-runtime.md](docs/agent-runtime.md).
 - Optional local Qwen text and vision adapters.
 - Deterministic request normalization, event selection, evidence reconciliation, and
   source-attributed reports.
-- USGS, GDACS, NASA EONET wildfire, NASA COOLR landslide, and CEMS GFM global
-  disaster event adapters.
+- USGS, GDACS, NASA EONET wildfire, NASA COOLR landslide, CEMS GFM, and
+  Smithsonian/USGS volcanic-eruption event adapters.
 - Optional ReliefWeb supplementary situation reports when configured.
 - Optional PostgreSQL/PostGIS history, snapshots, workers, freshness, reviews, and
   backup tooling.

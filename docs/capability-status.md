@@ -10,6 +10,10 @@ normative promotion are separate claims.
 - **Promotion pending**: required evidence is absent; repository fixtures cannot replace it.
 - **Unsupported**: no production path is claimed.
 
+Volcanic-eruption discovery is implemented as a bounded primary Smithsonian/GVP path;
+its preliminary WVAR coverage and source limitations remain explicit and do not imply
+complete global surveillance or impact evidence.
+
 ## Family status
 
 | Family | Implemented                                                                       | Automated gate                   | Promotion                                                          |
