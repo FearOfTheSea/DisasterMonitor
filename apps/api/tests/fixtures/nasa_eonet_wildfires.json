@@ -1,0 +1,60 @@
+{
+  "title": "EONET Events",
+  "events": [
+    {
+      "id": "EONET_FIXTURE_1",
+      "title": "Wildfire in Japan",
+      "description": "A source-curated wildfire record.",
+      "categories": [
+        {"id": "wildfires", "title": "Wildfires"}
+      ],
+      "sources": [
+        {"id": "IRWIN", "url": "https://arbitrary-upstream.example/fire/1"}
+      ],
+      "geometry": [
+        {
+          "date": "2026-08-15T10:00:00Z",
+          "type": "Point",
+          "coordinates": [139.0, 35.0],
+          "magnitudeValue": 1000,
+          "magnitudeUnit": "acres"
+        },
+        {
+          "date": "2026-08-17T10:00:00Z",
+          "type": "Point",
+          "coordinates": [140.0, 36.0],
+          "magnitudeValue": 2500,
+          "magnitudeUnit": "acres"
+        }
+      ]
+    },
+    {
+      "id": "EONET_FIXTURE_BAD",
+      "title": "Malformed wildfire",
+      "categories": [
+        {"id": "wildfires", "title": "Wildfires"}
+      ],
+      "geometry": [
+        {
+          "date": "not-a-date",
+          "type": "Point",
+          "coordinates": [139.0, 35.0]
+        }
+      ]
+    },
+    {
+      "id": "EONET_FIXTURE_OTHER",
+      "title": "A storm",
+      "categories": [
+        {"id": "severeStorms", "title": "Severe Storms"}
+      ],
+      "geometry": [
+        {
+          "date": "2026-08-17T10:00:00Z",
+          "type": "Point",
+          "coordinates": [139.0, 35.0]
+        }
+      ]
+    }
+  ]
+}

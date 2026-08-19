@@ -56,6 +56,12 @@ from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
     GdacsTropicalCycloneAdapter,
 )
 from disaster_monitor.infrastructure.disaster.http import SourcePayloadRecorder
+from disaster_monitor.infrastructure.disaster.nasa_coolr_adapter import (
+    NasaCoolrLandslideAdapter,
+)
+from disaster_monitor.infrastructure.disaster.nasa_eonet_adapter import (
+    NasaEonetWildfireAdapter,
+)
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
 )
@@ -260,6 +266,18 @@ def build_current_disaster_report(
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
+    eonet = NasaEonetWildfireAdapter(
+        geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    coolr = NasaCoolrLandslideAdapter(
+        geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
     reliefweb = ReliefWebSituationAdapter(
         app_name=settings.reliefweb_app_name,
         snapshot_recorder=snapshot_recorder,
@@ -307,6 +325,46 @@ def build_current_disaster_report(
                 allowed_hosts=usgs.allowed_hosts,
                 event_provider=usgs,
                 worldwide_provider=usgs,
+            ),
+            ProviderRegistration(
+                "NASA EONET Wildfires",
+                eonet,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.WILDFIRE}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.PRIMARY,
+                source_id="nasa-eonet-wildfires",
+                allowed_hosts=eonet.allowed_hosts,
+                event_provider=eonet,
+                worldwide_provider=eonet,
+            ),
+            ProviderRegistration(
+                "NASA COOLR Landslides",
+                coolr,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.LANDSLIDE}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.PRIMARY,
+                source_id="nasa-coolr-landslides",
+                allowed_hosts=coolr.allowed_hosts,
+                event_provider=coolr,
+                worldwide_provider=coolr,
             ),
             ProviderRegistration(
                 "GDACS tropical cyclones",

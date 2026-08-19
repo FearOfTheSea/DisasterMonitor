@@ -424,6 +424,8 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
     assert {item.source_id for item in catalog.sources()} == {
         "cems-gfm-floods",
         "gdacs-tropical-cyclones",
+        "nasa-coolr-landslides",
+        "nasa-eonet-wildfires",
         "reliefweb-situation-reports",
         "usgs-earthquakes",
     }

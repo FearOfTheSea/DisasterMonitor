@@ -288,3 +288,38 @@ def test_packaged_gfm_source_metadata_declares_the_registered_authorities() -> N
         "stac.eodc.eu",
         "titiler.services.eodc.eu",
     }
+
+
+@pytest.mark.parametrize(
+    ("source_id", "name", "disaster", "host"),
+    (
+        (
+            "nasa-eonet-wildfires",
+            "NASA EONET Wildfires",
+            Disaster.WILDFIRE,
+            "eonet.gsfc.nasa.gov",
+        ),
+        (
+            "nasa-coolr-landslides",
+            "NASA COOLR Landslides",
+            Disaster.LANDSLIDE,
+            "gis.earthdata.nasa.gov",
+        ),
+    ),
+)
+def test_packaged_nasa_source_metadata_declares_registered_authority(
+    source_id: str, name: str, disaster: Disaster, host: str
+) -> None:
+    descriptor = StaticSourceCatalog().get(source_id)
+
+    assert descriptor is not None
+    assert descriptor.provider_registration_name == name
+    assert descriptor.supported_disasters == (disaster,)
+    assert descriptor.country_codes is None
+    assert set(descriptor.allowed_hosts) == {host}
+    assert set(descriptor.registered_tool_names) == {"find_disaster_event"}
+    assert descriptor.requires_configuration is False
+    assert set(descriptor.geographic_scopes) == {
+        GeographicScope.COUNTRY,
+        GeographicScope.WORLDWIDE,
+    }

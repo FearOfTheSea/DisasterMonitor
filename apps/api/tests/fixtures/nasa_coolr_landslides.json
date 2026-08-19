@@ -1,0 +1,78 @@
+{
+  "objectIdFieldName": "objectid",
+  "features": [
+    {
+      "attributes": {
+        "objectid": 101,
+        "event_id": "COOLR_FIXTURE_1",
+        "event_date": 1786960800000,
+        "event_time": "approximate and intentionally ignored",
+        "event_title": "Reported landslide near Tokyo",
+        "location_description": "Mountain road near Tokyo",
+        "landslide_category": "landslide",
+        "landslide_trigger": "rain",
+        "landslide_size": "large",
+        "event_import_source": "GLC",
+        "event_import_id": "GLC-101",
+        "latitude": 35.0,
+        "longitude": 139.0,
+        "country_name": "Japan",
+        "country_code": "JP",
+        "admin_division_name": "Tokyo",
+        "source_name": "Fixture source",
+        "submitted_date": 1786957200000,
+        "last_edited_date": 1787050800000,
+        "fatality_count": 99,
+        "injury_count": 88
+      },
+      "geometry": {
+        "x": 139.0,
+        "y": 35.0,
+        "spatialReference": {"wkid": 4326}
+      }
+    },
+    {
+      "attributes": {
+        "objectid": 102,
+        "event_id": "COOLR_FIXTURE_BAD_COORDINATE",
+        "event_date": 1786867200000,
+        "event_title": "Conflicting coordinate record",
+        "location_description": "Japan",
+        "landslide_size": "medium",
+        "event_import_source": "LRC",
+        "event_import_id": "LRC-102",
+        "latitude": 35.0,
+        "longitude": 139.0,
+        "country_name": "Japan",
+        "country_code": "JP",
+        "source_name": "Fixture source"
+      },
+      "geometry": {
+        "x": 140.0,
+        "y": 35.0,
+        "spatialReference": {"wkid": 4326}
+      }
+    },
+    {
+      "attributes": {
+        "objectid": 103,
+        "event_id": "COOLR_FIXTURE_UNKNOWN_SOURCE",
+        "event_date": 1786867200000,
+        "event_title": "Future import class",
+        "location_description": "Japan",
+        "event_import_source": "FUTURE_SOURCE",
+        "event_import_id": "103",
+        "latitude": 35.0,
+        "longitude": 139.0,
+        "country_name": "Japan",
+        "country_code": "JP",
+        "source_name": "Fixture source"
+      },
+      "geometry": {
+        "x": 139.0,
+        "y": 35.0,
+        "spatialReference": {"wkid": 4326}
+      }
+    }
+  ]
+}

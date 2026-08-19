@@ -59,12 +59,24 @@ source authority, issue public warnings, or select events.
 - CEMS Global Flood Monitoring (GFM) provides primary bounded named-country and
   worldwide flood discovery after country-clipped or bounded-footprint Observed Flood
   Extent class-1 statistics confirm nonzero flood pixels.
+- NASA EONET Wildfires provides primary bounded named-country and worldwide wildfire
+  event discovery from NASA-curated EONET metadata. It remains secondary evidence
+  authority: EONET geometry and temporal extents can be approximate, its curation
+  applies a material-size threshold, and it is not an official incident-perimeter
+  source.
+- NASA COOLR Landslides provides primary bounded named-country and worldwide landslide
+  event discovery from the COOLR report catalogue. Runtime evidence remains secondary;
+  accepted reports are restricted to the documented GLC and LRC import classes, and
+  the catalogue is not complete real-time surveillance.
 - ReliefWeb is an optional, configured supplementary situation-evidence provider for
   named-country requests; without `RELIEFWEB_APP_NAME`, it remains unavailable and
   reports disclose that gap.
 
 See [docs/sources](sources/) for source-specific limits and tests. Event-associated
 photos are a separate presentation feature documented in [event-media.md](event-media.md).
+Event discovery from these providers does not establish casualties, impacts, warnings,
+or response status; those claims remain in the separate situation-evidence and
+reconciliation workflow.
 
 ## Configuration and checks
 

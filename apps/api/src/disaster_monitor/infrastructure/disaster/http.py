@@ -116,6 +116,7 @@ async def get_json(
     allowed_hosts: frozenset[str],
     max_bytes: int = 1_000_000,
     provider_name: str = "provider",
+    accepted_content_types: frozenset[str] = frozenset(),
 ) -> Any:
     """Fetch and validate one bounded JSON response."""
     return await _request_json(
@@ -128,6 +129,7 @@ async def get_json(
         allowed_hosts=allowed_hosts,
         max_bytes=max_bytes,
         provider_name=provider_name,
+        accepted_content_types=accepted_content_types,
     )
 
 
@@ -181,6 +183,7 @@ async def _request_json(
     allowed_hosts: frozenset[str],
     max_bytes: int,
     provider_name: str,
+    accepted_content_types: frozenset[str] = frozenset(),
 ) -> Any:
     """Execute one bounded JSON request with one retry for transient failures."""
     validate_network_target(url, allowed_hosts)
@@ -202,7 +205,10 @@ async def _request_json(
                         continue
                     raise failure from error
                 content_type = response.headers.get("content-type", "").lower()
-                if "json" not in content_type:
+                media_type = content_type.partition(";")[0].strip()
+                if "json" not in content_type and media_type not in {
+                    item.lower() for item in accepted_content_types
+                }:
                     raise DisasterProviderResponseError(
                         "The source returned an unexpected content type.",
                         reason_code="unexpected_content_type",

@@ -46,6 +46,88 @@
       ]
     },
     {
+      "source_id": "nasa-eonet-wildfires",
+      "organization_name": "NASA Earth Observatory Natural Event Tracker",
+      "display_name": "NASA EONET wildfire event discovery",
+      "jurisdiction": "global curated natural-event registry",
+      "authority_level": "secondary",
+      "information_roles": [
+        "event_discovery"
+      ],
+      "supported_disasters": [
+        "wildfire"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_json_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "near-real-time curated event metadata; exact latency is source-dependent",
+      "attribution_guidance": "Attribute wildfire event discovery to NASA EONET as a curated secondary source. EONET records are not official incident perimeters or national situation reports.",
+      "limitations": [
+        "EONET wildfire curation currently applies a material-size threshold and does not represent every fire or thermal anomaly.",
+        "EONET spatial and temporal extents can be approximate and should not be treated as official incident boundaries.",
+        "Country requests use the EONET bounding box only for candidate discovery and then validate source geometry against the maintained country polygon.",
+        "Worldwide results are a bounded registry query and global completeness is not guaranteed.",
+        "This source provides event discovery only; it does not establish acreage beyond a source-reported magnitude, impacts, casualties, warnings, or response status."
+      ],
+      "registered_tool_names": [
+        "find_disaster_event"
+      ],
+      "provider_registration_name": "NASA EONET Wildfires",
+      "implementation_status": "implemented",
+      "allowed_hosts": [
+        "eonet.gsfc.nasa.gov"
+      ]
+    },
+    {
+      "source_id": "nasa-coolr-landslides",
+      "organization_name": "NASA Cooperative Open Online Landslide Repository",
+      "display_name": "NASA COOLR landslide event discovery",
+      "jurisdiction": "global landslide report catalogue",
+      "authority_level": "secondary",
+      "information_roles": [
+        "event_discovery"
+      ],
+      "supported_disasters": [
+        "landslide"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_arcgis_feature_server",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "catalog report dates and edits; exact latency is source-dependent",
+      "attribution_guidance": "Attribute landslide event discovery to NASA COOLR as a secondary report catalogue. COOLR reports can originate from the Global Landslide Catalog, Landslide Reporter, media, external databases, or reviewed citizen submissions.",
+      "limitations": [
+        "COOLR is a global report catalogue rather than complete real-time landslide surveillance.",
+        "Reports can originate from media, databases, or reviewed citizen submissions, and geographic and reporting biases remain.",
+        "Only documented GLC and LRC import classes are accepted; future classes require an explicit provenance review.",
+        "A missing COOLR record is not evidence that no landslide occurred.",
+        "This source provides event discovery only; it does not promote casualty, injury, damage, warning, or response fields into event claims."
+      ],
+      "registered_tool_names": [
+        "find_disaster_event"
+      ],
+      "provider_registration_name": "NASA COOLR Landslides",
+      "implementation_status": "implemented",
+      "allowed_hosts": [
+        "gis.earthdata.nasa.gov"
+      ]
+    },
+    {
       "source_id": "gdacs-tropical-cyclones",
       "organization_name": "Global Disaster Alert and Coordination System",
       "display_name": "GDACS tropical-cyclone event discovery",

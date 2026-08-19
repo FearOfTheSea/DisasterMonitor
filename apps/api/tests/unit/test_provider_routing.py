@@ -2,7 +2,11 @@ from datetime import UTC, datetime
 
 import pytest
 
-from disaster_monitor.application.disaster import DisasterQuery, ProviderBatch
+from disaster_monitor.application.disaster import (
+    DisasterQuery,
+    ProviderBatch,
+    WorldwideDisasterQuery,
+)
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
@@ -170,15 +174,22 @@ async def test_capabilities_include_japan_providers_and_exclude_them_abroad() ->
 
 
 @pytest.mark.asyncio
-async def test_unsupported_disaster_invokes_no_earthquake_event_provider() -> None:
-    registry, global_catalog, usgs, _global_situation = _registry()
-    result = await CompositeDisasterEventProvider(registry).find_recent_events(
-        _query(Disaster.WILDFIRE), now=NOW
-    )
-
-    assert result.records == ()
-    assert global_catalog.queries == []
-    assert usgs.queries == []
+async def test_configured_registry_routes_all_recognized_disasters() -> None:
+    service = build_current_disaster_report(Settings(), country_catalog=CATALOG)
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        for disaster in Disaster:
+            for country in CATALOG.countries():
+                selection = registry.select(
+                    _query(disaster, country), ProviderRole.EVENT_DISCOVERY
+                )
+                assert selection.registrations
+            worldwide = registry.select(
+                WorldwideDisasterQuery(disaster), ProviderRole.EVENT_DISCOVERY
+            )
+            assert worldwide.registrations
+    finally:
+        await service.aclose()
 
 
 def test_disabled_global_reports_is_a_configuration_limitation() -> None:

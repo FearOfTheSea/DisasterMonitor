@@ -275,3 +275,31 @@ async def test_gfm_is_the_sole_primary_flood_event_discovery_authority() -> None
         ]
     finally:
         await service.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("disaster", "provider_name", "source_id"),
+    (
+        (Disaster.WILDFIRE, "NASA EONET Wildfires", "nasa-eonet-wildfires"),
+        (Disaster.LANDSLIDE, "NASA COOLR Landslides", "nasa-coolr-landslides"),
+    ),
+)
+async def test_nasa_catalog_is_the_sole_primary_authority(
+    disaster: Disaster, provider_name: str, source_id: str
+) -> None:
+    service = build_current_disaster_report(Settings())
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        primary = [
+            item
+            for item in registry.registrations
+            if item.tier is ProviderTier.PRIMARY
+            and disaster in item.capabilities.disasters
+            and ProviderRole.EVENT_DISCOVERY in item.capabilities.roles
+        ]
+        assert [(item.name, item.source_id) for item in primary] == [
+            (provider_name, source_id)
+        ]
+    finally:
+        await service.aclose()

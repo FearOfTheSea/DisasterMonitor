@@ -22,12 +22,20 @@ never dynamically imports or constructs providers.
 | ---------------------------------- | --------- | ------------------ | ---------------- | ----------------------------- | ----------------------------------------------------------- |
 | CEMS Global Flood Monitoring (GFM) | Primary   | Event discovery    | Flood            | Named countries and worldwide | Country-clipped class-1 `ensemble_flood_extent` statistics |
 | USGS                              | Secondary | Event discovery    | Earthquake       | Named countries and worldwide | Country validation for named scope                         |
+| NASA EONET Wildfires              | Primary   | Event discovery    | Wildfire         | Named countries and worldwide | EONET geometry and maintained-country validation            |
+| NASA COOLR Landslides             | Primary   | Event discovery    | Landslide        | Named countries and worldwide | COOLR point and maintained-country validation               |
 | GDACS tropical cyclones           | Secondary | Event discovery    | Tropical cyclone | Named countries and worldwide | None                                                        |
 | ReliefWeb                         | Secondary | Situation evidence | Earthquake, flood, wildfire, landslide, tropical cyclone | Named countries | `RELIEFWEB_APP_NAME` |
 
 GFM provides primary global named-country and bounded countryless worldwide flood
 event discovery. USGS and GDACS provide global named-country and countryless worldwide
-event discovery for earthquakes and tropical cyclones.
+event discovery for earthquakes and tropical cyclones. NASA EONET is a curated
+secondary wildfire registry and NASA COOLR is a secondary landslide report catalogue;
+both are bounded event-discovery paths, not complete global surveillance or official
+incident/impact authorities. EONET applies material-size curation and can have
+approximate spatial and temporal extents. COOLR combines documented report sources,
+including GLC and LRC, and retains geographic and reporting biases. A missing record
+from either source is not evidence that the disaster did not occur.
 `country_codes=None` permits every admitted named country only with the explicit country
 scope; worldwide requests require the explicit worldwide scope. News requests are
 deterministically routed to event discovery. Country names remain case-insensitive,

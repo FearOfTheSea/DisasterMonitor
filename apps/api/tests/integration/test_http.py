@@ -7,6 +7,7 @@ import pytest
 from conftest import FakeLanguageModel
 
 from disaster_monitor.application.disaster import (
+    DisasterQuery,
     GeographicScope,
     ProviderBatch,
     WorldwideDisasterEvent,
@@ -53,6 +54,8 @@ from disaster_monitor.domain.multimodal import (
     DamageLevel,
     VisualAnalysisConfiguration,
 )
+from disaster_monitor.infrastructure.composition import build_current_disaster_report
+from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -890,25 +893,20 @@ async def test_current_disaster_is_honest_when_event_source_has_no_match() -> No
 
 
 @pytest.mark.asyncio
-async def test_recognized_unsupported_disaster_returns_coverage_unavailable() -> None:
-    model = FakeLanguageModel(error=AssertionError("model must not be called"))
-    app = create_app(model=model)
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.post(
-            "/api/v1/assistant",
-            json={"question": "Please give me the latest wildfire in Vietnam."},
+async def test_recognized_wildfire_has_a_source_backed_event_path() -> None:
+    service = build_current_disaster_report(Settings(_env_file=None))
+    try:
+        country = StaticCountryCatalog().get_by_alpha3("VNM")
+        assert country is not None
+        selection = service.provider_registry.select(
+            DisasterQuery(Disaster.WILDFIRE, country, "recent", ()),
+            ProviderRole.EVENT_DISCOVERY,
         )
-
-    body = response.json()
-    assert response.status_code == 200
-    assert body["response_type"] == "current_disaster_coverage_unavailable"
-    assert body["selected_event"] is None
-    assert "wildfire" in body["message"]
-    assert "Vietnam" in body["message"]
-    assert "No live factual claim" in body["message"]
+        assert [(item.name, item.source_id) for item in selection.registrations] == [
+            ("NASA EONET Wildfires", "nasa-eonet-wildfires")
+        ]
+    finally:
+        await service.aclose()
 
 
 @pytest.mark.asyncio
