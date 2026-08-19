@@ -34,6 +34,7 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     Disaster,
+    DisasterEvent,
     EarthquakeEvent,
     EventMeasurement,
     FactStatus,
@@ -238,6 +239,24 @@ def test_global_catalog_and_usgs_observations_are_one_event_with_both_ids() -> N
         "usgs:us7000fixture",
     }
     assert "global-catalog:20260805100000" in normalized[0].provider_ids
+
+
+def test_generic_clustering_rejects_empty_or_mixed_disaster_collections() -> None:
+    earthquake = _event("earthquake")
+    flood = DisasterEvent(
+        event_id="flood",
+        disaster=Disaster.FLOOD,
+        location=earthquake.location,
+        country=earthquake.country,
+        event_time=earthquake.event_time,
+        source=earthquake.source,
+        geometry=earthquake.geometry,
+        measurements=earthquake.measurements,
+    )
+    with pytest.raises(ValueError, match="at least one event"):
+        cluster_physical_events(())
+    with pytest.raises(ValueError, match="one disaster"):
+        cluster_physical_events((earthquake, flood))
 
 
 def test_qualified_provider_ids_do_not_collide_across_namespaces() -> None:

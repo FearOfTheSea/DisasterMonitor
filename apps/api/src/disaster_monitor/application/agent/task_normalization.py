@@ -15,7 +15,7 @@ from disaster_monitor.application.disaster import (
     QueryParseStatus,
     WorldwideDisasterQuery,
 )
-from disaster_monitor.application.disaster_aliases import aliases_for
+from disaster_monitor.application.disaster_aliases import recognized_disasters
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
@@ -26,64 +26,6 @@ from disaster_monitor.application.services.worldwide_disaster_policy import (
 )
 from disaster_monitor.domain.disaster import Disaster
 
-_DISASTERS: dict[Disaster, tuple[str, ...]] = {
-    Disaster.EARTHQUAKE: (
-        "earthquake",
-        "earthquakes",
-        "quake",
-        "quakes",
-        "terremoto",
-        "terremotos",
-        "động đất",
-        "地震",
-    ),
-    Disaster.FLOOD: (
-        "flood",
-        "floods",
-        "flooding",
-        "inundación",
-        "inundaciones",
-        "lũ lụt",
-        "洪水",
-    ),
-    Disaster.WILDFIRE: (
-        "wildfire",
-        "wildfires",
-        "forest fire",
-        "incendio forestal",
-        "cháy rừng",
-        "山火事",
-    ),
-    Disaster.LANDSLIDE: (
-        "landslide",
-        "landslides",
-        "deslizamiento de tierra",
-        "sạt lở đất",
-        "地滑り",
-    ),
-    Disaster.TROPICAL_CYCLONE: (
-        "typhoon",
-        "hurricane",
-        "cyclone",
-        "tropical cyclone",
-        "tifón",
-        "huracán",
-        "bão nhiệt đới",
-        "台風",
-    ),
-    Disaster.VOLCANIC_ERUPTION: (
-        "volcanic eruption",
-        "volcanic eruptions",
-        "volcano eruption",
-        "volcano eruptions",
-        "erupting volcano",
-        "erupting volcanoes",
-        "erupción volcánica",
-        "erupciones volcánicas",
-        "phun trào núi lửa",
-        "火山噴火",
-    ),
-}
 _CURRENT_EVENT_MARKERS = re.compile(
     r"(?:\b(?:latest|recent|current|today|now|news|ongoing|reported|confirmed|"
     r"this week|as of|struck|hit|occurred)\b|"
@@ -323,13 +265,7 @@ def _limited_task(
 
 
 def _disaster_mentions(text: str) -> tuple[Disaster, ...]:
-    return tuple(
-        disaster
-        for disaster, aliases in _DISASTERS.items()
-        if any(
-            _matches_alias(text, alias) for alias in (aliases_for(disaster) or aliases)
-        )
-    )
+    return recognized_disasters(text)
 
 
 def _information_needs(text: str) -> tuple[InformationNeed, ...]:
@@ -432,13 +368,6 @@ def _output_modalities(text: str) -> tuple[OutputModality, ...]:
     if re.search(r"\btimeline\b", text, re.I):
         modalities.append(OutputModality.TIMELINE)
     return tuple(dict.fromkeys(modalities))
-
-
-def _matches_alias(text: str, alias: str) -> bool:
-    boundary = r"[A-Za-z0-9_]" if not alias.isascii() else r"\w"
-    return bool(
-        re.search(rf"(?<!{boundary}){re.escape(alias)}(?!{boundary})", text, re.I)
-    )
 
 
 def _extract_raw_places(text: str) -> tuple[str, ...]:

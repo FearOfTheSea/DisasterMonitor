@@ -5,10 +5,12 @@ from enum import StrEnum
 from hashlib import sha256
 from typing import Protocol
 
+from disaster_monitor.application.services.incident_priority_policy import (
+    IncidentPriorityPolicyRegistry,
+    default_incident_priority_policy_registry,
+)
 from disaster_monitor.domain.disaster import (
     ClaimEvidenceState,
-    Disaster,
-    DisasterEvent,
     EvidenceAvailability,
     EvidenceDisposition,
     EvidenceFreshness,
@@ -16,7 +18,6 @@ from disaster_monitor.domain.disaster import (
     IncidentPriority,
     IncidentPriorityAssessment,
     IncidentPrioritySignal,
-    MeasurementKind,
 )
 
 _NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
@@ -34,18 +35,6 @@ _CLAUSE_BOUNDARY = re.compile(
     r"\bdespite\b)\s*",
     re.I,
 )
-
-
-def _measurement_value(
-    event: DisasterEvent, kind: MeasurementKind
-) -> float | str | None:
-    measurement = event.measurement(kind)
-    return measurement.value if measurement is not None else None
-
-
-def _numeric_measurement(event: DisasterEvent, kind: MeasurementKind) -> float | None:
-    value = _measurement_value(event, kind)
-    return float(value) if isinstance(value, (int, float)) else None
 
 
 _EXPLICIT_NO_OPERATIONAL_IMPACT = re.compile(
@@ -111,6 +100,13 @@ class _SignalAdder(Protocol):
 class IncidentPriorityRanker:
     """Rank incidents without source access, model inference, or country weighting."""
 
+    def __init__(
+        self, policy_registry: IncidentPriorityPolicyRegistry | None = None
+    ) -> None:
+        self._policy_registry = (
+            policy_registry or default_incident_priority_policy_registry()
+        )
+
     def assess(self, state: EvidenceWorldState) -> IncidentPriorityAssessment:
         event = state.physical_event.event
         signals: list[IncidentPrioritySignal] = []
@@ -136,79 +132,16 @@ class IncidentPriorityRanker:
             )
             floor = _max_priority(floor, priority_floor)
 
-        magnitude = _numeric_measurement(event, MeasurementKind.MAGNITUDE)
-        if event.disaster == Disaster.EARTHQUAKE and magnitude is not None:
-            if magnitude >= 7:
-                add(
-                    "tr.priority.earthquake_magnitude_critical",
-                    "Verified earthquake magnitude is at least 7.0.",
-                    55,
-                    priority_floor=IncidentPriority.CRITICAL,
-                )
-            elif magnitude >= 6:
-                add(
-                    "tr.priority.earthquake_magnitude_high",
-                    "Verified earthquake magnitude is at least 6.0.",
-                    38,
-                    priority_floor=IncidentPriority.HIGH,
-                )
-            elif magnitude >= 5:
-                add(
-                    "tr.priority.earthquake_magnitude_moderate",
-                    "Verified earthquake magnitude is at least 5.0.",
-                    22,
-                    priority_floor=IncidentPriority.MODERATE,
-                )
-            elif magnitude >= 4:
-                add(
-                    "tr.priority.earthquake_magnitude_observed",
-                    "Verified earthquake magnitude is at least 4.0.",
-                    10,
-                )
-
-        intensity = _intensity_level(
-            _measurement_value(event, MeasurementKind.INTENSITY)
-        )
-        if intensity is not None and intensity >= 7:
+        for contribution in self._policy_registry.for_disaster(
+            event.disaster
+        ).event_signals(event):
             add(
-                "tr.priority.intensity_critical",
-                "Verified event intensity reached the declared critical level.",
-                55,
-                priority_floor=IncidentPriority.CRITICAL,
+                contribution.rule_id,
+                contribution.detail,
+                contribution.score_delta,
+                evidence_ids=contribution.evidence_ids,
+                priority_floor=contribution.priority_floor,
             )
-        elif intensity is not None and intensity >= 6:
-            add(
-                "tr.priority.intensity_high",
-                "Verified event intensity reached the declared high level.",
-                40,
-                priority_floor=IncidentPriority.HIGH,
-            )
-
-        significance = _numeric_measurement(
-            event, MeasurementKind.PROVIDER_SIGNIFICANCE
-        )
-        if significance is not None:
-            if significance >= 1_000:
-                add(
-                    "tr.priority.provider_significance_critical",
-                    "Verified provider significance is at least 1000.",
-                    50,
-                    priority_floor=IncidentPriority.CRITICAL,
-                )
-            elif significance >= 600:
-                add(
-                    "tr.priority.provider_significance_high",
-                    "Verified provider significance is at least 600.",
-                    35,
-                    priority_floor=IncidentPriority.HIGH,
-                )
-            elif significance >= 300:
-                add(
-                    "tr.priority.provider_significance_moderate",
-                    "Verified provider significance is at least 300.",
-                    20,
-                    priority_floor=IncidentPriority.MODERATE,
-                )
 
         self._add_human_impact_signals(state, add)
         if self._add_operational_signals(state, add):
@@ -485,15 +418,6 @@ def _claim_number(claim: ClaimEvidenceState) -> float | None:
         return None
     match = _NUMBER.search(claim.current.fact.value.replace(",", ""))
     return None if match is None else float(match.group())
-
-
-def _intensity_level(value: float | str | None) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return int(value)
-    match = re.search(r"[1-7]", value)
-    return None if match is None else int(match.group())
 
 
 def _score_priority(score: int) -> IncidentPriority:

@@ -7,6 +7,18 @@ DOMAIN = SRC / "domain"
 APPLICATION = SRC / "application"
 INFRASTRUCTURE = SRC / "infrastructure"
 PRESENTATION = SRC / "presentation"
+INCIDENT_PRIORITY = APPLICATION / "services" / "incident_priority.py"
+
+DISASTER_POLICY_MODULES = {
+    "disaster_monitor.application.disaster_aliases",
+    "disaster_monitor.application.services.disaster_query_policy",
+    "disaster_monitor.application.services.event_media",
+    "disaster_monitor.application.services.event_resolution",
+    "disaster_monitor.application.services.evidence_correlation",
+    "disaster_monitor.application.services.incident_priority_policy",
+    "disaster_monitor.application.services.report_profiles",
+    "disaster_monitor.application.services.worldwide_disaster_policy",
+}
 
 
 def _python_files(directory: Path) -> tuple[Path, ...]:
@@ -113,3 +125,42 @@ def test_concrete_adapters_are_constructed_only_in_composition_modules() -> None
                 violations.append(f"{path.relative_to(SRC)} constructs {name}")
 
     assert violations == []
+
+
+def test_generic_application_modules_do_not_branch_on_specific_disasters() -> None:
+    violations = []
+    for path in _python_files(APPLICATION):
+        module = _module_name(path)
+        if module in DISASTER_POLICY_MODULES:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "Disaster"
+            ):
+                violations.append(f"{path.relative_to(SRC)} uses Disaster.{node.attr}")
+
+    assert violations == []
+
+
+def test_generic_incident_priority_has_no_measurement_based_event_severity_logic() -> (
+    None
+):
+    tree = ast.parse(
+        INCIDENT_PRIORITY.read_text(encoding="utf-8"), filename=str(INCIDENT_PRIORITY)
+    )
+    references = [
+        node
+        for node in ast.walk(tree)
+        if (
+            isinstance(node, ast.Name)
+            and node.id == "MeasurementKind"
+            or isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "MeasurementKind"
+        )
+    ]
+
+    assert references == []

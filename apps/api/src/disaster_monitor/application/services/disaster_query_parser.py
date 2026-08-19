@@ -11,14 +11,13 @@ from disaster_monitor.application.disaster import (
     RequestClassification,
     RequestType,
 )
-from disaster_monitor.application.disaster_aliases import aliases_for
+from disaster_monitor.application.disaster_aliases import recognized_disasters
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_policy import (
     DisasterQueryPolicyRegistry,
     default_disaster_query_policies,
 )
 from disaster_monitor.application.services.prompt_preparation import normalize_question
-from disaster_monitor.domain.disaster import Disaster
 
 _CURRENT_TERMS = re.compile(
     r"\b(?:recent|latest|current|today|now|news|update|updates|developments|"
@@ -29,69 +28,6 @@ _MAP_TERMS = re.compile(
     r"\b(?:map|location|where|coordinate|latitude|longitude|zoom|visible)\w*\b",
     re.IGNORECASE,
 )
-_DISASTER_ALIASES: dict[Disaster, tuple[str, ...]] = {
-    Disaster.EARTHQUAKE: (
-        "earthquake",
-        "earthquakes",
-        "quake",
-        "quakes",
-        "terremoto",
-        "terremotos",
-        "động đất",
-        "地震",
-    ),
-    Disaster.FLOOD: (
-        "flood",
-        "floods",
-        "flooding",
-        "inundación",
-        "inundaciones",
-        "lũ lụt",
-        "洪水",
-    ),
-    Disaster.WILDFIRE: (
-        "wildfire",
-        "wildfires",
-        "forest fire",
-        "forest fires",
-        "incendio forestal",
-        "cháy rừng",
-        "山火事",
-    ),
-    Disaster.LANDSLIDE: (
-        "landslide",
-        "landslides",
-        "deslizamiento de tierra",
-        "sạt lở đất",
-        "地滑り",
-    ),
-    Disaster.TROPICAL_CYCLONE: (
-        "typhoon",
-        "typhoons",
-        "hurricane",
-        "hurricanes",
-        "cyclone",
-        "cyclones",
-        "tropical cyclone",
-        "tropical cyclones",
-        "tifón",
-        "huracán",
-        "bão nhiệt đới",
-        "台風",
-    ),
-    Disaster.VOLCANIC_ERUPTION: (
-        "volcanic eruption",
-        "volcanic eruptions",
-        "volcano eruption",
-        "volcano eruptions",
-        "erupting volcano",
-        "erupting volcanoes",
-        "erupción volcánica",
-        "erupciones volcánicas",
-        "phun trào núi lửa",
-        "火山噴火",
-    ),
-}
 _ISO_DATE = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
 _SLASH_DATE = re.compile(r"\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b")
 _MONTH_DATE = re.compile(
@@ -122,13 +58,6 @@ _MONTHS = {
 _COORDINATES = re.compile(
     r"(?<![\w.])(-?\d{1,3}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)(?![\w.])"
 )
-
-
-def _matches_alias(text: str, alias: str) -> bool:
-    boundary = r"[A-Za-z0-9_]" if not alias.isascii() else r"\w"
-    return bool(
-        re.search(rf"(?<!{boundary}){re.escape(alias)}(?!{boundary})", text, re.I)
-    )
 
 
 def _extract_day(text: str) -> date | None:
@@ -194,14 +123,7 @@ class DisasterQueryParser:
 
     def parse(self, text: str) -> DisasterQueryParseResult:
         normalized = normalize_question(text)
-        disasters = tuple(
-            disaster
-            for disaster, aliases in _DISASTER_ALIASES.items()
-            if any(
-                _matches_alias(normalized, alias)
-                for alias in (aliases_for(disaster) or aliases)
-            )
-        )
+        disasters = recognized_disasters(normalized)
         if not disasters:
             return DisasterQueryParseResult(QueryParseStatus.NO_DISASTER)
         if len(disasters) > 1:

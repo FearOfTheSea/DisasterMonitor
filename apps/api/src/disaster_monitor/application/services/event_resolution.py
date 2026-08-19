@@ -736,7 +736,15 @@ def resolve_recent_event(
 
 
 def cluster_physical_events(
-    events: tuple[DisasterEvent, ...], disaster: Disaster = Disaster.EARTHQUAKE
+    events: tuple[DisasterEvent, ...],
 ) -> tuple[DisasterEvent, ...]:
-    """Cluster equivalent records using application-owned disaster policy."""
+    """Cluster records after validating that their disaster policy is unambiguous."""
+    if not events:
+        raise ValueError("Physical-event clustering requires at least one event.")
+    disasters = {event.disaster for event in events}
+    if len(disasters) != 1:
+        raise ValueError(
+            "Physical-event clustering requires one disaster across all events."
+        )
+    disaster = next(iter(disasters))
     return default_event_policy_registry().for_disaster(disaster).cluster(events)

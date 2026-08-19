@@ -2,7 +2,16 @@ from datetime import UTC, datetime
 
 import pytest
 
+from disaster_monitor.application.agent.task_normalization import (
+    deterministic_task_draft,
+)
 from disaster_monitor.application.disaster import QueryParseStatus, RequestType
+from disaster_monitor.application.disaster_aliases import (
+    DISASTER_ALIASES,
+    _validate_alias_catalog,
+    aliases_for,
+    recognized_disasters,
+)
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
@@ -113,4 +122,37 @@ def test_bare_volcano_terms_are_not_current_eruption_aliases(text: str) -> None:
 def test_bare_eruption_is_not_a_disaster_alias() -> None:
     assert (
         PARSER.parse("Latest eruption in Japan").status == QueryParseStatus.NO_DISASTER
+    )
+
+
+def test_canonical_alias_catalog_covers_exactly_each_disaster() -> None:
+    assert set(DISASTER_ALIASES) == set(Disaster)
+    assert all(aliases_for(disaster) for disaster in Disaster)
+
+
+def test_missing_alias_mapping_fails_the_catalog_invariant(monkeypatch) -> None:
+    monkeypatch.delitem(DISASTER_ALIASES, Disaster.FLOOD)
+
+    with pytest.raises(RuntimeError, match="cover every Disaster"):
+        _validate_alias_catalog()
+
+
+def test_parser_and_task_normalizer_share_every_canonical_alias() -> None:
+    for disaster, aliases in DISASTER_ALIASES.items():
+        text = f"Latest {aliases[0]} in Japan"
+
+        assert recognized_disasters(text) == (disaster,)
+        parsed = PARSER.parse(text)
+        assert parsed.query is not None and parsed.query.disaster is disaster
+        assert deterministic_task_draft(text).disaster_mentions == (disaster.value,)
+
+
+def test_forest_fires_follow_the_same_wildfire_trusted_path_in_both_layers() -> None:
+    text = "Latest forest fires in Vietnam"
+
+    parsed = PARSER.parse(text)
+    assert parsed.query is not None
+    assert parsed.query.disaster is Disaster.WILDFIRE
+    assert deterministic_task_draft(text).disaster_mentions == (
+        Disaster.WILDFIRE.value,
     )
