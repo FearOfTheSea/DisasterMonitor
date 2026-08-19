@@ -14,14 +14,16 @@ official, and the records aggregate underlying source metadata. The current wild
 curation applies a material-size threshold, so small fires and other thermal
 anomalies may be absent. Global completeness is not guaranteed.
 
-The adapter preserves one physical EONET event across its dated geometry observations.
-It uses the earliest valid geometry date as the event time, the latest valid date as
-the source update time, and selects the latest country-intersecting geometry for a
-named-country query. Point geometry is copied directly. A single source-supplied
-polygon ring may be retained as an area; ambiguous or unrepresentable geometry is
-excluded. A source-reported `magnitudeValue` and non-empty `magnitudeUnit` are kept as
-the generic magnitude measurement without converting them to acreage, severity,
-confidence, or another inferred quantity.
+The adapter admits an event only when its valid source geometry includes an
+observation inside the bounded query window. It then preserves one physical EONET
+event across all of that event's valid dated geometry observations: the earliest valid
+geometry date is the event time, the latest valid date is the source update time, and
+the latest query-relevant country-intersecting geometry is selected for a named-country
+query. Point geometry is copied directly. A single source-supplied polygon ring may be
+retained as an area; ambiguous or unrepresentable geometry is excluded. A
+source-reported `magnitudeValue` and non-empty `magnitudeUnit` are kept as the generic
+magnitude measurement without converting them to acreage, severity, confidence, or
+another inferred quantity.
 
 The source reference is the EONET event URL on `eonet.gsfc.nasa.gov`, never a nested
 IRWIN, GDACS, or other upstream URL. This provider supplies event discovery only. It

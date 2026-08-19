@@ -279,8 +279,7 @@ class NasaEonetWildfireAdapter:
         for geometry_index, raw_observation in enumerate(raw_geometry):
             try:
                 observation = _parse_observation(raw_observation)
-                if start <= observation.observed_at <= end:
-                    observations.append(observation)
+                observations.append(observation)
             except (TypeError, ValueError) as error:
                 issues.append(
                     ProviderIssue(
@@ -296,10 +295,23 @@ class NasaEonetWildfireAdapter:
                 _invalid_record(index, ValueError("no valid dated geometry")),
             )
 
+        relevant_observations = tuple(
+            observation
+            for observation in observations
+            if start <= observation.observed_at <= end
+        )
+        if not relevant_observations:
+            return None, (
+                _invalid_record(
+                    index,
+                    ValueError("no valid geometry in the bounded query window"),
+                ),
+            )
+
         selected = max(
             (
                 observation
-                for observation in observations
+                for observation in relevant_observations
                 if _observation_matches_country(observation, country, self._geography)
             ),
             key=lambda observation: observation.observed_at,
@@ -317,7 +329,7 @@ class NasaEonetWildfireAdapter:
                 ),
             )
         selected = selected or max(
-            observations, key=lambda observation: observation.observed_at
+            relevant_observations, key=lambda observation: observation.observed_at
         )
         event_time = min(observation.observed_at for observation in observations)
         updated_at = max(observation.observed_at for observation in observations)
@@ -393,7 +405,9 @@ class NasaEonetWildfireAdapter:
             "status": "all",
             "start": start.date().isoformat(),
             "end": end.date().isoformat(),
-            "limit": _MAX_EVENTS,
+            "limit": min(_MAX_EVENTS, max(1, query.limit))
+            if isinstance(query, WorldwideDisasterQuery)
+            else _MAX_EVENTS,
         }
         if country is not None:
             area = country.geographic_area
@@ -434,7 +448,12 @@ class NasaEonetWildfireAdapter:
         snapshot_id = (
             capture.snapshot.snapshot_id if capture and capture.snapshot else None
         )
-        for index, raw_event in enumerate(raw_events[:_MAX_EVENTS]):
+        result_limit = (
+            min(_MAX_EVENTS, max(1, query.limit))
+            if isinstance(query, WorldwideDisasterQuery)
+            else _MAX_EVENTS
+        )
+        for index, raw_event in enumerate(raw_events[:result_limit]):
             record, event_issues = self._parse_event(
                 raw_event,
                 now=now,
@@ -447,6 +466,8 @@ class NasaEonetWildfireAdapter:
             if record is not None:
                 records.append(record)
             issues.extend(event_issues)
+        records, duplicate_issues = _deduplicate_records(records)
+        issues.extend(duplicate_issues)
         if not records and not issues:
             issues.append(
                 ProviderIssue(
@@ -558,7 +579,39 @@ def _source_ids(value: object) -> tuple[str, ...]:
         identifier = _text(item.get("id"))
         if identifier and identifier not in identifiers:
             identifiers.append(identifier)
-    return tuple(identifiers)
+    return tuple(sorted(identifiers))
+
+
+def _deduplicate_records(
+    records: list[WorldwideDisasterEvent | DisasterEvent],
+) -> tuple[
+    list[WorldwideDisasterEvent | DisasterEvent],
+    tuple[ProviderIssue, ...],
+]:
+    unique: dict[str, WorldwideDisasterEvent | DisasterEvent] = {}
+    conflicting: set[str] = set()
+    issues: list[ProviderIssue] = []
+    for index, record in enumerate(records):
+        if record.event_id in conflicting:
+            continue
+        previous = unique.get(record.event_id)
+        if previous is None:
+            unique[record.event_id] = record
+            continue
+        if previous == record:
+            continue
+        del unique[record.event_id]
+        conflicting.add(record.event_id)
+        issues.append(
+            ProviderIssue(
+                NasaEonetWildfireAdapter.provider_name,
+                f"{NasaEonetWildfireAdapter.provider_name}: Conflicting duplicate "
+                "event identities were excluded.",
+                reason_code="duplicate_identity",
+                detail=f"normalized event {record.event_id!r} at record {index}",
+            )
+        )
+    return list(unique.values()), tuple(issues)
 
 
 def _observation_matches_country(

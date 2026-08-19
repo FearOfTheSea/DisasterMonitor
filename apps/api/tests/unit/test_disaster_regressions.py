@@ -259,6 +259,35 @@ def test_generic_clustering_rejects_empty_or_mixed_disaster_collections() -> Non
         cluster_physical_events((earthquake, flood))
 
 
+def test_generic_flood_clustering_does_not_apply_earthquake_proximity_heuristics() -> (
+    None
+):
+    first_source = _source("Flood source one", "First flood")
+    second_source = _source("Flood source two", "Second flood")
+    first = DisasterEvent(
+        event_id="flood-one",
+        disaster=Disaster.FLOOD,
+        location="Ishikawa, Japan",
+        country=JAPAN,
+        event_time=NOW,
+        source=first_source,
+        geometry=point_event_geometry(37.0, 137.0, first_source),
+    )
+    second = DisasterEvent(
+        event_id="flood-two",
+        disaster=Disaster.FLOOD,
+        location="Ishikawa, Japan",
+        country=JAPAN,
+        event_time=NOW + timedelta(minutes=1),
+        source=second_source,
+        geometry=point_event_geometry(37.01, 137.01, second_source),
+    )
+
+    clustered = cluster_physical_events((first, second))
+
+    assert len(clustered) == 2
+
+
 def test_qualified_provider_ids_do_not_collide_across_namespaces() -> None:
     selected = _event("global-catalog:shared")
 

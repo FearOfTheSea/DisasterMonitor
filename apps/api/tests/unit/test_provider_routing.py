@@ -4,6 +4,7 @@ import pytest
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
+    GeographicScope,
     ProviderBatch,
     WorldwideDisasterQuery,
 )
@@ -12,6 +13,7 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRegistration,
     ProviderRegistry,
     ProviderRole,
+    ProviderTier,
 )
 from disaster_monitor.domain.disaster import (
     Disaster,
@@ -34,6 +36,35 @@ CATALOG = StaticCountryCatalog()
 JAPAN = CATALOG.get_by_alpha3("JPN")
 VENEZUELA = CATALOG.get_by_alpha3("VEN")
 assert JAPAN is not None and VENEZUELA is not None
+
+EXPECTED_EVENT_DISCOVERY_AUTHORITIES = {
+    Disaster.EARTHQUAKE: ("USGS", "usgs-earthquakes", ProviderTier.SECONDARY),
+    Disaster.FLOOD: (
+        "CEMS Global Flood Monitoring (GFM)",
+        "cems-gfm-floods",
+        ProviderTier.PRIMARY,
+    ),
+    Disaster.WILDFIRE: (
+        "NASA EONET Wildfires",
+        "nasa-eonet-wildfires",
+        ProviderTier.PRIMARY,
+    ),
+    Disaster.LANDSLIDE: (
+        "NASA COOLR Landslides",
+        "nasa-coolr-landslides",
+        ProviderTier.PRIMARY,
+    ),
+    Disaster.TROPICAL_CYCLONE: (
+        "GDACS tropical cyclones",
+        "gdacs-tropical-cyclones",
+        ProviderTier.SECONDARY,
+    ),
+    Disaster.VOLCANIC_ERUPTION: (
+        "Smithsonian / USGS Weekly Volcanic Activity Report",
+        "smithsonian-usgs-volcanic-activity",
+        ProviderTier.PRIMARY,
+    ),
+}
 
 
 def _query(disaster: Disaster, country=JAPAN) -> DisasterQuery:
@@ -178,16 +209,33 @@ async def test_configured_registry_routes_all_recognized_disasters() -> None:
     service = build_current_disaster_report(Settings(), country_catalog=CATALOG)
     try:
         registry = service._provider_registry  # noqa: SLF001
+        assert set(EXPECTED_EVENT_DISCOVERY_AUTHORITIES) == set(Disaster)
         for disaster in Disaster:
+            expected_name, expected_source_id, expected_tier = (
+                EXPECTED_EVENT_DISCOVERY_AUTHORITIES[disaster]
+            )
             for country in CATALOG.countries():
                 selection = registry.select(
                     _query(disaster, country), ProviderRole.EVENT_DISCOVERY
                 )
-                assert selection.registrations
+                assert [
+                    (item.name, item.source_id, item.tier)
+                    for item in selection.registrations
+                ] == [(expected_name, expected_source_id, expected_tier)]
+                registration = selection.registrations[0]
+                assert GeographicScope.COUNTRY in registration.capabilities.event_scopes
+                assert registration.capabilities.country_codes is None
             worldwide = registry.select(
                 WorldwideDisasterQuery(disaster), ProviderRole.EVENT_DISCOVERY
             )
-            assert worldwide.registrations
+            assert [
+                (item.name, item.source_id, item.tier)
+                for item in worldwide.registrations
+            ] == [(expected_name, expected_source_id, expected_tier)]
+            assert (
+                GeographicScope.WORLDWIDE
+                in worldwide.registrations[0].capabilities.event_scopes
+            )
     finally:
         await service.aclose()
 

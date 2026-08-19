@@ -14,8 +14,10 @@ from disaster_monitor.application.disaster import (
     DisasterQuery,
     GeographicScope,
     ProviderBatch,
+    ProviderIssue,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
+    WorldwideSelectionIntent,
 )
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
@@ -39,7 +41,10 @@ from disaster_monitor.domain.disaster import (
     EventCoordinate,
     EventGeometry,
     EventGeometryKind,
+    EventMeasurement,
     GeographicArea,
+    MeasurementKind,
+    ProviderTier,
     SituationReport,
     SourceReference,
     point_event_geometry,
@@ -80,6 +85,22 @@ class SyntheticWorldwideProvider:
         )
 
 
+class TieredWorldwideProvider:
+    def __init__(
+        self,
+        source_id: str,
+        result: ProviderBatch[WorldwideDisasterEvent] | Exception,
+    ) -> None:
+        self.source_id = source_id
+        self.allowed_hosts = frozenset({f"{source_id}.example"})
+        self.result = result
+
+    async def find_worldwide_events(self, query, *, now):
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+
 class NoGeneralModel:
     async def generate(self, request):
         raise AssertionError("worldwide disaster requests must stay source-backed")
@@ -103,6 +124,281 @@ def _event() -> WorldwideDisasterEvent:
         source=source,
         geometry=point_event_geometry(1.0, 2.0, source),
     )
+
+
+def _tiered_event(
+    source_id: str,
+    event_id: str,
+    event_time: datetime,
+    *,
+    disaster: Disaster = Disaster.FLOOD,
+    magnitude: float | None = None,
+) -> WorldwideDisasterEvent:
+    source = SourceReference(
+        source_id=source_id,
+        publisher=f"{source_id} publisher",
+        title=f"{source_id} event",
+        canonical_url=f"https://{source_id}.example/{event_id}",
+        published_at=event_time,
+        updated_at=event_time,
+        retrieved_at=NOW,
+    )
+    measurements = (
+        (EventMeasurement(MeasurementKind.MAGNITUDE, magnitude, source=source),)
+        if magnitude is not None
+        else ()
+    )
+    return WorldwideDisasterEvent(
+        event_id=event_id,
+        disaster=disaster,
+        location=f"{source_id} location",
+        event_time=event_time,
+        source=source,
+        geometry=point_event_geometry(1.0, 2.0, source),
+        measurements=measurements,
+    )
+
+
+def _tiered_registration(
+    name: str,
+    provider: TieredWorldwideProvider,
+    *,
+    disaster: Disaster,
+    tier: ProviderTier,
+) -> ProviderRegistration:
+    return ProviderRegistration(
+        name,
+        provider,
+        ProviderCapabilities(
+            roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+            disasters=frozenset({disaster}),
+            country_codes=None,
+            geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+            event_scopes=frozenset({GeographicScope.WORLDWIDE}),
+        ),
+        tier=tier,
+        source_id=provider.source_id,
+        allowed_hosts=provider.allowed_hosts,
+        worldwide_provider=provider,
+    )
+
+
+def _tiered_service(
+    registrations: tuple[ProviderRegistration, ...],
+) -> WorldwideDisasterReportService:
+    return WorldwideDisasterReportService(
+        ProviderRegistry(registrations),
+        clock=lambda: NOW,
+    )
+
+
+@pytest.mark.asyncio
+async def test_worldwide_default_policy_keeps_primary_over_newer_secondary() -> None:
+    primary = TieredWorldwideProvider(
+        "primary-floods",
+        ProviderBatch((_tiered_event("primary-floods", "old", NOW),)),
+    )
+    secondary = TieredWorldwideProvider(
+        "secondary-floods",
+        ProviderBatch(
+            (_tiered_event("secondary-floods", "new", NOW.replace(hour=13)),)
+        ),
+    )
+
+    report = await _tiered_service(
+        (
+            _tiered_registration(
+                "Secondary floods",
+                secondary,
+                disaster=Disaster.FLOOD,
+                tier=ProviderTier.SECONDARY,
+            ),
+            _tiered_registration(
+                "Primary floods",
+                primary,
+                disaster=Disaster.FLOOD,
+                tier=ProviderTier.PRIMARY,
+            ),
+        )
+    ).execute(WorldwideDisasterQuery(Disaster.FLOOD))
+
+    assert report.selected_event is not None
+    assert report.selected_event.event_id == "old"
+    assert report.selected_event.source.source_id == "primary-floods"
+
+
+@pytest.mark.asyncio
+async def test_worldwide_earthquake_strongest_intent_stays_with_primary_tier() -> None:
+    primary = TieredWorldwideProvider(
+        "primary-quakes",
+        ProviderBatch(
+            (
+                _tiered_event(
+                    "primary-quakes",
+                    "primary",
+                    NOW,
+                    disaster=Disaster.EARTHQUAKE,
+                    magnitude=4.0,
+                ),
+            )
+        ),
+    )
+    secondary = TieredWorldwideProvider(
+        "secondary-quakes",
+        ProviderBatch(
+            (
+                _tiered_event(
+                    "secondary-quakes",
+                    "secondary",
+                    NOW,
+                    disaster=Disaster.EARTHQUAKE,
+                    magnitude=8.0,
+                ),
+            )
+        ),
+    )
+
+    report = await _tiered_service(
+        (
+            _tiered_registration(
+                "Secondary quakes",
+                secondary,
+                disaster=Disaster.EARTHQUAKE,
+                tier=ProviderTier.SECONDARY,
+            ),
+            _tiered_registration(
+                "Primary quakes",
+                primary,
+                disaster=Disaster.EARTHQUAKE,
+                tier=ProviderTier.PRIMARY,
+            ),
+        )
+    ).execute(
+        WorldwideDisasterQuery(
+            Disaster.EARTHQUAKE,
+            selection_intent=WorldwideSelectionIntent.STRONGEST,
+        )
+    )
+
+    assert report.selected_event is not None
+    assert report.selected_event.event_id == "primary"
+
+
+@pytest.mark.asyncio
+async def test_worldwide_secondary_is_fallback_after_failed_or_rejected_primary() -> (
+    None
+):
+    rejected_primary = TieredWorldwideProvider(
+        "rejected-primary",
+        ProviderBatch(
+            records=(_tiered_event("spoofed-source", "bad", NOW),),
+            issues=(
+                ProviderIssue(
+                    "Rejected primary",
+                    "Rejected primary reported malformed data.",
+                    reason_code="invalid_record",
+                ),
+            ),
+        ),
+    )
+    secondary = TieredWorldwideProvider(
+        "secondary-fallback",
+        ProviderBatch((_tiered_event("secondary-fallback", "fallback", NOW),)),
+    )
+    rejected_registration = _tiered_registration(
+        "Rejected primary",
+        rejected_primary,
+        disaster=Disaster.FLOOD,
+        tier=ProviderTier.PRIMARY,
+    )
+    secondary_registration = _tiered_registration(
+        "Secondary fallback",
+        secondary,
+        disaster=Disaster.FLOOD,
+        tier=ProviderTier.SECONDARY,
+    )
+
+    report = await _tiered_service(
+        (secondary_registration, rejected_registration)
+    ).execute(WorldwideDisasterQuery(Disaster.FLOOD))
+
+    assert report.selected_event is not None
+    assert report.selected_event.event_id == "fallback"
+    assert any(
+        "Rejected primary reported malformed data" in warning
+        for warning in report.warnings
+    )
+    assert any("violated source policy" in warning for warning in report.warnings)
+
+
+@pytest.mark.asyncio
+async def test_worldwide_secondary_falls_back_after_typed_primary_failure() -> None:
+    primary = TieredWorldwideProvider("failed-primary", RuntimeError("offline"))
+    secondary = TieredWorldwideProvider(
+        "secondary-after-failure",
+        ProviderBatch((_tiered_event("secondary-after-failure", "fallback", NOW),)),
+    )
+
+    report = await _tiered_service(
+        (
+            _tiered_registration(
+                "Failed primary",
+                primary,
+                disaster=Disaster.FLOOD,
+                tier=ProviderTier.PRIMARY,
+            ),
+            _tiered_registration(
+                "Secondary after failure",
+                secondary,
+                disaster=Disaster.FLOOD,
+                tier=ProviderTier.SECONDARY,
+            ),
+        )
+    ).execute(WorldwideDisasterQuery(Disaster.FLOOD))
+
+    assert report.selected_event is not None
+    assert report.selected_event.event_id == "fallback"
+    assert any(
+        "Failed primary could not be reached" in warning for warning in report.warnings
+    )
+
+
+@pytest.mark.asyncio
+async def test_worldwide_tier_selection_is_independent_of_registration_order() -> None:
+    async def run(order: tuple[str, ...]) -> str | None:
+        providers = {
+            "primary": TieredWorldwideProvider(
+                "ordered-primary",
+                ProviderBatch((_tiered_event("ordered-primary", "primary", NOW),)),
+            ),
+            "secondary": TieredWorldwideProvider(
+                "ordered-secondary",
+                ProviderBatch(
+                    (
+                        _tiered_event(
+                            "ordered-secondary", "secondary", NOW.replace(hour=13)
+                        ),
+                    )
+                ),
+            ),
+        }
+        registrations = tuple(
+            _tiered_registration(
+                f"{label.title()} ordered",
+                providers[label],
+                disaster=Disaster.FLOOD,
+                tier=ProviderTier.PRIMARY
+                if label == "primary"
+                else ProviderTier.SECONDARY,
+            )
+            for label in order
+        )
+        report = await _tiered_service(registrations).execute(
+            WorldwideDisasterQuery(Disaster.FLOOD)
+        )
+        return report.selected_event.event_id if report.selected_event else None
+
+    assert await run(("primary", "secondary")) == await run(("secondary", "primary"))
 
 
 def _registry(provider: object) -> ProviderRegistry:

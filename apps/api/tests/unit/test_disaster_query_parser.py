@@ -2,8 +2,11 @@ from datetime import UTC, datetime
 
 import pytest
 
+from disaster_monitor.application.agent.models import TaskKind, ValidationStatus
 from disaster_monitor.application.agent.task_normalization import (
     deterministic_task_draft,
+    disaster_safety_gate,
+    validate_disaster_task,
 )
 from disaster_monitor.application.disaster import QueryParseStatus, RequestType
 from disaster_monitor.application.disaster_aliases import (
@@ -137,14 +140,68 @@ def test_missing_alias_mapping_fails_the_catalog_invariant(monkeypatch) -> None:
         _validate_alias_catalog()
 
 
-def test_parser_and_task_normalizer_share_every_canonical_alias() -> None:
-    for disaster, aliases in DISASTER_ALIASES.items():
-        text = f"Latest {aliases[0]} in Japan"
+@pytest.mark.parametrize(
+    ("disaster", "alias"),
+    tuple(
+        (disaster, alias)
+        for disaster, aliases in DISASTER_ALIASES.items()
+        for alias in aliases
+    ),
+)
+def test_every_maintained_alias_uses_both_trusted_paths(
+    disaster: Disaster, alias: str
+) -> None:
+    text = f"Latest {alias} in Japan"
 
-        assert recognized_disasters(text) == (disaster,)
-        parsed = PARSER.parse(text)
-        assert parsed.query is not None and parsed.query.disaster is disaster
-        assert deterministic_task_draft(text).disaster_mentions == (disaster.value,)
+    assert recognized_disasters(text) == (disaster,)
+    parsed = PARSER.parse(text)
+    assert parsed.query is not None and parsed.query.disaster is disaster
+    assert deterministic_task_draft(text).disaster_mentions == (disaster.value,)
+    assert disaster_safety_gate(text)
+    task = validate_disaster_task(
+        text,
+        deterministic_task_draft(text),
+        country_catalog=StaticCountryCatalog(),
+        query_parser=PARSER,
+    )
+    assert task.kind is TaskKind.INVESTIGATION
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.disaster is disaster
+
+
+@pytest.mark.parametrize(
+    "alias",
+    tuple(
+        alias
+        for aliases in DISASTER_ALIASES.values()
+        for alias in aliases
+        if alias.isascii()
+    ),
+)
+def test_ascii_aliases_respect_identifier_boundaries_punctuation_and_case(
+    alias: str,
+) -> None:
+    assert recognized_disasters(f"Latest x{alias}z in Japan") == ()
+    assert recognized_disasters(f"Latest ({alias}) in Japan")
+    assert recognized_disasters(f"Latest {alias.upper()} in Japan") == (
+        recognized_disasters(f"Latest {alias} in Japan")[0],
+    )
+
+
+def test_multiple_disaster_aliases_are_explicitly_ambiguous() -> None:
+    text = "Latest earthquake and flood in Japan"
+
+    assert recognized_disasters(text) == (Disaster.EARTHQUAKE, Disaster.FLOOD)
+    assert disaster_safety_gate(text)
+    assert PARSER.parse(text).status is QueryParseStatus.MULTIPLE_DISASTERS
+    task = validate_disaster_task(
+        text,
+        deterministic_task_draft(text),
+        country_catalog=StaticCountryCatalog(),
+        query_parser=PARSER,
+    )
+    assert task.kind is TaskKind.INVESTIGATION
+    assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
 
 
 def test_forest_fires_follow_the_same_wildfire_trusted_path_in_both_layers() -> None:

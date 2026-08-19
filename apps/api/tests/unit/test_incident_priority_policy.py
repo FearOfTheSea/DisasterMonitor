@@ -13,6 +13,7 @@ from disaster_monitor.application.services.incident_priority import (
 )
 from disaster_monitor.application.services.incident_priority_policy import (
     EarthquakeIncidentPriorityPolicy,
+    IncidentPriorityContribution,
     default_incident_priority_policy_registry,
 )
 from disaster_monitor.domain.disaster import (
@@ -164,6 +165,138 @@ def test_earthquake_event_severity_contributions_preserve_existing_rules(
     assert contribution[0].rule_id == rule_id
     assert contribution[0].score_delta == score_delta
     assert contribution[0].priority_floor is floor
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_rule"),
+    (
+        (3.99, None),
+        (4.0, "tr.priority.earthquake_magnitude_observed"),
+        (4.99, "tr.priority.earthquake_magnitude_observed"),
+        (5.0, "tr.priority.earthquake_magnitude_moderate"),
+        (5.99, "tr.priority.earthquake_magnitude_moderate"),
+        (6.0, "tr.priority.earthquake_magnitude_high"),
+        (6.99, "tr.priority.earthquake_magnitude_high"),
+        (7.0, "tr.priority.earthquake_magnitude_critical"),
+    ),
+)
+def test_magnitude_threshold_boundaries_are_closed_at_reviewed_values(
+    value: float, expected_rule: str | None
+) -> None:
+    contributions = EarthquakeIncidentPriorityPolicy().event_signals(
+        _event(measurements=(_measurement(MeasurementKind.MAGNITUDE, value),))
+    )
+
+    assert tuple(item.rule_id for item in contributions) == (
+        (expected_rule,) if expected_rule is not None else ()
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_rule"),
+    (
+        (299.99, None),
+        (300.0, "tr.priority.provider_significance_moderate"),
+        (599.99, "tr.priority.provider_significance_moderate"),
+        (600.0, "tr.priority.provider_significance_high"),
+        (999.99, "tr.priority.provider_significance_high"),
+        (1000.0, "tr.priority.provider_significance_critical"),
+    ),
+)
+def test_provider_significance_threshold_boundaries_are_closed_at_reviewed_values(
+    value: float, expected_rule: str | None
+) -> None:
+    contributions = EarthquakeIncidentPriorityPolicy().event_signals(
+        _event(
+            measurements=(_measurement(MeasurementKind.PROVIDER_SIGNIFICANCE, value),)
+        )
+    )
+
+    assert tuple(item.rule_id for item in contributions) == (
+        (expected_rule,) if expected_rule is not None else ()
+    )
+
+
+@pytest.mark.parametrize(
+    "value", ("MMI 5.9", "MMI 6-", "MMI 8", "MMI 17", "7", "MMI 6 text")
+)
+def test_malformed_or_unrecognized_intensity_fails_closed(value: str) -> None:
+    contributions = EarthquakeIncidentPriorityPolicy().event_signals(
+        _event(measurements=(_measurement(MeasurementKind.INTENSITY, value),))
+    )
+
+    assert contributions == ()
+
+
+@pytest.mark.parametrize("value", ("MMI 6", "MMI 6+"))
+def test_reviewed_high_intensity_forms_are_admitted(value: str) -> None:
+    contributions = EarthquakeIncidentPriorityPolicy().event_signals(
+        _event(measurements=(_measurement(MeasurementKind.INTENSITY, value),))
+    )
+
+    assert contributions[0].rule_id == "tr.priority.intensity_high"
+
+
+def test_injected_priority_registry_is_used_once_for_exact_disaster() -> None:
+    calls: list[Disaster] = []
+    event_calls: list[DisasterEvent] = []
+
+    class FakePolicy:
+        def event_signals(self, event: DisasterEvent):
+            event_calls.append(event)
+            return (
+                IncidentPriorityContribution(
+                    "test.priority.flood_contribution",
+                    "Injected flood contribution.",
+                    13,
+                    priority_floor=IncidentPriority.MODERATE,
+                ),
+            )
+
+    class FakeRegistry:
+        def for_disaster(self, disaster: Disaster):
+            calls.append(disaster)
+            return FakePolicy()
+
+    event = _event(Disaster.FLOOD)
+    report_source = _source("flood-report")
+    report = SituationReport(
+        source=report_source,
+        narrative="Two fatalities were reported.",
+        facts=(
+            ReportedFact(
+                category="fatalities",
+                label="Fatalities",
+                value="2",
+                status=FactStatus.CONFIRMED,
+                source=report_source,
+                event_id=event.event_id,
+                claim_id="fatalities",
+            ),
+        ),
+        event_id=event.event_id,
+        disaster=Disaster.FLOOD,
+        country_codes=(COUNTRY.alpha3_code,),
+    )
+    ranker = IncidentPriorityRanker(
+        policy_registry=FakeRegistry(),  # type: ignore[arg-type]
+    )
+
+    assessment = ranker.assess(_state(event, (report,)))
+
+    assert calls == [Disaster.FLOOD]
+    assert event_calls == [event]
+    matching = [
+        signal
+        for signal in assessment.signals
+        if signal.rule_id == "test.priority.flood_contribution"
+    ]
+    assert len(matching) == 1
+    assert assessment.score >= 13
+    assert any(
+        signal.rule_id == "tr.priority.verified_fatalities"
+        for signal in assessment.signals
+    )
 
 
 @pytest.mark.parametrize(

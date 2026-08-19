@@ -1,7 +1,7 @@
 """Bounded Smithsonian/USGS volcanic-eruption event discovery."""
 
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
 from typing import cast
@@ -118,22 +118,12 @@ class _WvarSummaryParser(HTMLParser):
         self._cell_links: list[str] = []
         self._tables: list[tuple[tuple[_SummaryCell, ...], ...]] = []
         self._table_rows: list[tuple[_SummaryCell, ...]] = []
-        self.report_ids: dict[int, str] = {}
-        self.report_urls: dict[int, str] = {}
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
         attributes = dict(attrs)
         href = attributes.get("href")
         if tag == "a" and href:
-            match = _REPORT_LINK.search(href)
-            if match:
-                identifier = unquote(match.group(1)).strip()
-                volcano_match = _REPORT_IDENTIFIER.search(identifier)
-                if volcano_match:
-                    volcano_number = int(volcano_match.group(1))
-                    self.report_ids[volcano_number] = identifier
-                    self.report_urls[volcano_number] = href
             if self._cell_text is not None:
                 self._cell_links.append(href)
         if tag == "table":
@@ -204,6 +194,19 @@ class _WvarSummaryParser(HTMLParser):
                     ),
                     None,
                 )
+                row_report = next(
+                    (
+                        (identifier, href)
+                        for cell in cells
+                        for href in cell.links
+                        if (match := _REPORT_LINK.search(href))
+                        and (identifier := unquote(match.group(1)).strip())
+                        and (volcano_match := _REPORT_IDENTIFIER.search(identifier))
+                        and number is not None
+                        and int(volcano_match.group(1)) == number
+                    ),
+                    (None, None),
+                )
                 rows.append(
                     _WvarRow(
                         values.get("name", ""),
@@ -212,8 +215,8 @@ class _WvarSummaryParser(HTMLParser):
                         values.get("eruption start date", ""),
                         values.get("report type", ""),
                         number,
-                        self.report_ids.get(number) if number is not None else None,
-                        self.report_urls.get(number) if number is not None else None,
+                        row_report[0],
+                        row_report[1],
                     )
                 )
             return tuple(rows)
@@ -307,7 +310,7 @@ def _source_report_url(href: str | None) -> str | None:
     target = urlsplit(url)
     if (
         target.scheme.lower() != "https"
-        or target.hostname not in {"volcano.si.edu"}
+        or (target.hostname or "").lower().rstrip(".") not in {"volcano.si.edu"}
         or target.username is not None
         or target.password is not None
         or target.port not in {None, 443}
@@ -756,6 +759,7 @@ class SmithsonianGvpAdapter:
         )
         issues.extend(eruption_issues)
         records: dict[str, DisasterEvent | WorldwideDisasterEvent] = {}
+        duplicate_ids: set[str] = set()
         for row, week_start, snapshot_id, _ in rows:
             if row.volcano_number is None:
                 continue
@@ -797,11 +801,22 @@ class SmithsonianGvpAdapter:
                     )
                 )
                 continue
+            if record.event_id in duplicate_ids:
+                continue
             existing = records.get(record.event_id)
             if existing is None:
                 records[record.event_id] = record
-            else:
-                records[record.event_id] = _merge_provider_ids(existing, record)
+            elif not _equivalent_duplicate(existing, record):
+                del records[record.event_id]
+                duplicate_ids.add(record.event_id)
+                issues.append(
+                    ProviderIssue(
+                        self.provider_name,
+                        "Conflicting duplicate WVAR event identities were excluded.",
+                        reason_code="duplicate_identity",
+                        detail=f"normalized event {record.event_id!r}",
+                    )
+                )
         if not records and not issues:
             issues.append(
                 ProviderIssue(
@@ -811,7 +826,8 @@ class SmithsonianGvpAdapter:
                 )
             )
         return ProviderBatch[DisasterEvent | WorldwideDisasterEvent](
-            records=tuple(records.values()), issues=tuple(issues)
+            records=tuple(records[key] for key in sorted(records)),
+            issues=tuple(issues),
         )
 
     async def find_recent_events(
@@ -850,9 +866,32 @@ class SmithsonianGvpAdapter:
             await self._client.aclose()
 
 
-def _merge_provider_ids(
+def _equivalent_duplicate(
     first: DisasterEvent | WorldwideDisasterEvent,
     second: DisasterEvent | WorldwideDisasterEvent,
-) -> DisasterEvent | WorldwideDisasterEvent:
-    ids = tuple(dict.fromkeys((*first.provider_ids, *second.provider_ids)))
-    return replace(first, provider_ids=ids)
+) -> bool:
+    """Treat repeated weekly fallback pages as one identity only when stable."""
+    if (
+        first.event_id != second.event_id
+        or first.disaster != second.disaster
+        or first.location != second.location
+        or first.event_time != second.event_time
+        or first.provider_ids != second.provider_ids
+        or first.geometry is None
+        or second.geometry is None
+        or first.geometry.kind != second.geometry.kind
+        or first.geometry.coordinates != second.geometry.coordinates
+        or first.geometry.description != second.geometry.description
+    ):
+        return False
+    return (
+        first.source.source_id == second.source.source_id
+        and first.source.publisher == second.source.publisher
+        and first.source.title == second.source.title
+        and first.source.published_at == second.source.published_at
+        and first.source.updated_at == second.source.updated_at
+        and first.source.retrieved_at == second.source.retrieved_at
+        and first.source.authority == second.source.authority
+        and first.source.snapshot_id == second.source.snapshot_id
+        and first.measurements == second.measurements
+    )

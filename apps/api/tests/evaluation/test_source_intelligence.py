@@ -294,6 +294,12 @@ def _run_schema_mutations() -> tuple[int, int]:
         object(),
         replace(valid, source=_source("wrong-events")),
         replace(valid, source=_source("approved-events", host="evil.test")),
+        replace(valid, source=_source("approved-events", host="example.test.evil")),
+        replace(
+            valid,
+            source=_source("approved-events", host="user:secret@example.test"),
+        ),
+        replace(valid, source=_source("approved-events", host="example.test:444")),
         replace(valid, disaster=Disaster.FLOOD),
         string_disaster,
         wrong_country,
@@ -376,6 +382,36 @@ def _run_schema_mutations() -> tuple[int, int]:
                 )
             passed += 1
     return passed, total
+
+
+def test_event_geometry_and_measurement_provenance_must_match_event_source() -> None:
+    query = _query()
+    valid = _event("approved-events")
+    wrong_geometry_source = _source("wrong-geometry")
+    wrong_measurement_source = _source("wrong-measurement")
+    assert valid.geometry is not None
+    assert valid.measurements
+    mutations = (
+        replace(
+            valid,
+            geometry=replace(valid.geometry, source=wrong_geometry_source),
+        ),
+        replace(
+            valid,
+            measurements=(
+                replace(valid.measurements[0], source=wrong_measurement_source),
+            ),
+        ),
+    )
+
+    for mutation in mutations:
+        with pytest.raises(SourceEvidencePolicyError):
+            validate_event_evidence(
+                mutation,
+                query,
+                source_id="approved-events",
+                allowed_hosts=frozenset({"example.test"}),
+            )
 
 
 class _EpisodeProvider:

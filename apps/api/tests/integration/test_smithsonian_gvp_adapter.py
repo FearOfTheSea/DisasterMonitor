@@ -264,3 +264,141 @@ async def test_point_inside_maintained_country_polygon_is_accepted() -> None:
     assert event.geometry.coordinates[0].latitude == 35.0
     assert event.geometry.coordinates[0].longitude == 135.0
     await client.aclose()
+
+
+def _wvar_without_row_report() -> str:
+    report_link = (
+        '          <a href="showreport.cfm?gvpvar=GVP.WVAR20260716-282030">Report</a>\n'
+    )
+    return (
+        (FIXTURES / "smithsonian_wvar_weekly.html")
+        .read_text(encoding="utf-8")
+        .replace(report_link, "")
+    )
+
+
+async def _suwanosejima_event(wvar: str):
+    requests: list[httpx.Request] = []
+    client = client_for(requests, wvar=wvar)
+    result = await SmithsonianGvpAdapter(
+        geography=StaticCountryCatalog(), client=client
+    ).find_worldwide_events(WorldwideDisasterQuery(Disaster.VOLCANIC_ERUPTION), now=NOW)
+    await client.aclose()
+    return next(
+        item for item in result.records if item.event_id == "gvp-eruption:41234"
+    )
+
+
+@pytest.mark.asyncio
+async def test_wvar_provenance_is_row_local_against_page_decoys() -> None:
+    decoy_282030 = '<a href="showreport.cfm?gvpvar=GVP.WVAR20260801-282030">Decoy</a>'
+    decoy_999999 = (
+        '<a href="showreport.cfm?gvpvar=GVP.WVAR20260801-999999">Other volcano</a>'
+    )
+    without_row = _wvar_without_row_report()
+    variants = (
+        without_row.replace("<body>", f"<body>{decoy_282030}", 1),
+        without_row.replace("</body>", f"{decoy_282030}</body>", 1),
+        without_row.replace("<body>", f"<body>{decoy_999999}", 1),
+    )
+    for html in variants:
+        event = await _suwanosejima_event(html)
+        assert event.source.canonical_url == (
+            "https://volcano.si.edu/reports_weekly.cfm?weekstart=20260716"
+        )
+        assert event.provider_ids == (
+            "gvp-volcano:282030",
+            "gvp-eruption:41234",
+        )
+
+
+@pytest.mark.asyncio
+async def test_wvar_row_local_report_wins_over_conflicting_page_decoy() -> None:
+    html = (
+        (FIXTURES / "smithsonian_wvar_weekly.html")
+        .read_text(encoding="utf-8")
+        .replace(
+            "<body>",
+            '<body><a href="showreport.cfm?gvpvar=GVP.WVAR20260801-282030">Decoy</a>',
+            1,
+        )
+    )
+
+    event = await _suwanosejima_event(html)
+
+    assert event.source.canonical_url == (
+        "https://volcano.si.edu/reports_weekly.cfm/showreport.cfm?"
+        "gvpvar=GVP.WVAR20260716-282030"
+    )
+    assert event.provider_ids[-1] == "wvar:GVP.WVAR20260716-282030"
+
+
+@pytest.mark.asyncio
+async def test_smithsonian_duplicate_source_identity_is_not_silently_merged() -> None:
+    html = (
+        (FIXTURES / "smithsonian_wvar_weekly.html")
+        .read_text(encoding="utf-8")
+        .replace(
+            "    </table>",
+            """      <tr>
+        <td>
+          <a href="volcano.cfm?vn=282030">Suwanosejima</a>
+          <a href="showreport.cfm?gvpvar=GVP.WVAR20260801-282030">Conflicting report</a>
+        </td>
+        <td>Japan</td>
+        <td>Ryukyu Volcanic Arc</td>
+        <td>2004 Oct 23</td>
+        <td>Continuing Eruptive Activity</td>
+      </tr>
+    </table>""",
+            1,
+        )
+    )
+    requests: list[httpx.Request] = []
+    client = client_for(requests, wvar=html)
+    result = await SmithsonianGvpAdapter(
+        geography=StaticCountryCatalog(), client=client
+    ).find_worldwide_events(WorldwideDisasterQuery(Disaster.VOLCANIC_ERUPTION), now=NOW)
+
+    assert all(item.event_id != "gvp-eruption:41234" for item in result.records)
+    assert any(issue.reason_code == "duplicate_identity" for issue in result.issues)
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_smithsonian_gvp_feature_order_does_not_change_normalized_events() -> (
+    None
+):
+    volcanoes = load_json("smithsonian_gvp_volcanoes.json")
+    eruptions = load_json("smithsonian_gvp_eruptions.json")
+    assert isinstance(volcanoes["features"], list)
+    assert isinstance(eruptions["features"], list)
+    reversed_volcanoes = {
+        **volcanoes,
+        "features": list(reversed(volcanoes["features"])),
+    }
+    reversed_eruptions = {
+        **eruptions,
+        "features": list(reversed(eruptions["features"])),
+    }
+
+    forward_client = client_for([], volcanoes=volcanoes, eruptions=eruptions)
+    reverse_client = client_for(
+        [], volcanoes=reversed_volcanoes, eruptions=reversed_eruptions
+    )
+    forward = await SmithsonianGvpAdapter(
+        geography=StaticCountryCatalog(), client=forward_client
+    ).find_worldwide_events(WorldwideDisasterQuery(Disaster.VOLCANIC_ERUPTION), now=NOW)
+    reverse = await SmithsonianGvpAdapter(
+        geography=StaticCountryCatalog(), client=reverse_client
+    ).find_worldwide_events(WorldwideDisasterQuery(Disaster.VOLCANIC_ERUPTION), now=NOW)
+
+    assert {
+        (item.event_id, item.event_time, item.source.canonical_url, item.provider_ids)
+        for item in forward.records
+    } == {
+        (item.event_id, item.event_time, item.source.canonical_url, item.provider_ids)
+        for item in reverse.records
+    }
+    await forward_client.aclose()
+    await reverse_client.aclose()

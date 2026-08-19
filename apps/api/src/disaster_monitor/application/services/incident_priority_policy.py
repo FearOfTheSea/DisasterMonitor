@@ -183,6 +183,21 @@ def _intensity_level(value: float | str | None) -> int | None:
     if value is None:
         return None
     if isinstance(value, (int, float)):
-        return int(value)
-    match = re.search(r"[1-7]", value)
-    return None if match is None else int(match.group())
+        return int(value) if 1 <= value <= 7 else None
+    match = re.fullmatch(
+        r"\s*MMI\s*(?P<level>[1-7](?:\.\d+)?(?:[+-])?)\s*",
+        value,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    level = match.group("level")
+    suffix = level[-1] if level[-1] in "+-" else ""
+    numeric = float(level[:-1] if suffix else level)
+    if suffix == "+":
+        numeric = float(int(numeric))
+    elif suffix == "-":
+        numeric = float(int(numeric)) - 0.5
+    if not 1 <= numeric <= 7:
+        return None
+    return int(numeric)

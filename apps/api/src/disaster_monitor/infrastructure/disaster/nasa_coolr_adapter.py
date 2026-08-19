@@ -435,6 +435,8 @@ class NasaCoolrLandslideAdapter:
                 records.append(record)
             if issue is not None:
                 issues.append(issue)
+        records, duplicate_issues = _deduplicate_records(records)
+        issues.extend(duplicate_issues)
         if not records and not issues:
             issues.append(
                 ProviderIssue(
@@ -503,12 +505,43 @@ def _location(attributes: Mapping[str, object]) -> str:
         "admin_division_name",
         "country_name",
         "country_code",
-        "source_name",
     ):
         value = _text(attributes.get(field_name))
         if value:
             return value
     return ""
+
+
+def _deduplicate_records(
+    records: list[WorldwideDisasterEvent | DisasterEvent],
+) -> tuple[
+    list[WorldwideDisasterEvent | DisasterEvent],
+    tuple[ProviderIssue, ...],
+]:
+    unique: dict[str, WorldwideDisasterEvent | DisasterEvent] = {}
+    conflicting: set[str] = set()
+    issues: list[ProviderIssue] = []
+    for index, record in enumerate(records):
+        if record.event_id in conflicting:
+            continue
+        previous = unique.get(record.event_id)
+        if previous is None:
+            unique[record.event_id] = record
+            continue
+        if previous == record:
+            continue
+        del unique[record.event_id]
+        conflicting.add(record.event_id)
+        issues.append(
+            ProviderIssue(
+                NasaCoolrLandslideAdapter.provider_name,
+                f"{NasaCoolrLandslideAdapter.provider_name}: Conflicting duplicate "
+                "event identities were excluded.",
+                reason_code="duplicate_identity",
+                detail=f"normalized event {record.event_id!r} at feature {index}",
+            )
+        )
+    return list(unique.values()), tuple(issues)
 
 
 def _invalid_record(index: int, error: Exception) -> ProviderIssue:

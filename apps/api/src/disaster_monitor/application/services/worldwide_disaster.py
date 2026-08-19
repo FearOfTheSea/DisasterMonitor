@@ -24,7 +24,11 @@ from disaster_monitor.application.services.worldwide_disaster_policy import (
     WorldwideDisasterPolicyRegistry,
     default_worldwide_disaster_policy_registry,
 )
-from disaster_monitor.domain.disaster import EventGeographyStatus, SituationReport
+from disaster_monitor.domain.disaster import (
+    EventGeographyStatus,
+    ProviderTier,
+    SituationReport,
+)
 
 
 def _now_utc() -> datetime:
@@ -55,7 +59,7 @@ class WorldwideDisasterReportService:
                 "provider authority is unavailable or ambiguous."
             )
             return _failed_report(detail, now, warnings)
-        accepted: list[WorldwideDisasterEvent] = []
+        accepted_by_tier: dict[ProviderTier, list[WorldwideDisasterEvent]] = {}
         event_actions: list[str] = []
         for registration in selection.registrations:
             provider = registration.worldwide_provider
@@ -84,13 +88,14 @@ class WorldwideDisasterReportService:
                 )
             for event_record in batch.records:
                 try:
-                    accepted.append(
-                        validate_worldwide_event_evidence(
-                            event_record,
-                            query,
-                            source_id=registration.source_id,
-                            allowed_hosts=registration.allowed_hosts,
-                        )
+                    validated_event = validate_worldwide_event_evidence(
+                        event_record,
+                        query,
+                        source_id=registration.source_id,
+                        allowed_hosts=registration.allowed_hosts,
+                    )
+                    accepted_by_tier.setdefault(registration.tier, []).append(
+                        validated_event
                     )
                 except SourceEvidencePolicyError:
                     warnings.append(
@@ -102,7 +107,17 @@ class WorldwideDisasterReportService:
                 f"Queried worldwide event provider {registration.name}."
             )
         policy = self._policies.for_disaster(query.disaster)
-        selected = policy.select(tuple(accepted), query)
+        highest_available_tier = max(
+            accepted_by_tier,
+            key=lambda tier: tier.precedence,
+            default=None,
+        )
+        tier_events = (
+            tuple(accepted_by_tier[highest_available_tier])
+            if highest_available_tier is not None
+            else ()
+        )
+        selected = policy.select(tier_events, query)
         if selected is None:
             return _failed_report(
                 "I could not verify a matching worldwide event from the configured "
