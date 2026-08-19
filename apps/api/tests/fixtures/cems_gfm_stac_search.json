@@ -1,0 +1,68 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "stac_version": "1.0.0",
+      "id": "ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T3",
+      "collection": "GFM",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[128.0, 30.0], [132.0, 30.0], [139.0, 35.0], [128.0, 30.0]]]
+      },
+      "properties": {
+        "datetime": "2026-08-18T01:49:33Z",
+        "created": "2026-08-18T04:55:04Z",
+        "parent": "S1D_IW_GRDH_1SDV_20260818T014933_20260818T014958_004188_007AC6_64D3",
+        "Equi7Tile": "AS020M_E012N033T3",
+        "constellation": "sentinel-1"
+      },
+      "assets": {
+        "ensemble_flood_extent": {
+          "href": "https://data.eodc.eu/collections/GFM_LAYERS/flood_extent/AS020M/2026/08/18/ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T3.tif",
+          "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+          "roles": ["data"]
+        }
+      },
+      "links": [
+        {
+          "rel": "self",
+          "href": "https://stac.eodc.eu/api/v1/collections/GFM/items/ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T3",
+          "type": "application/geo+json"
+        }
+      ]
+    },
+    {
+      "type": "Feature",
+      "stac_version": "1.0.0",
+      "id": "ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T4",
+      "collection": "GFM",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[139.0, 35.0], [143.0, 35.0], [146.0, 39.0], [139.0, 35.0]]]
+      },
+      "properties": {
+        "datetime": "2026-08-18T01:49:33Z",
+        "created": "2026-08-18T04:55:04Z",
+        "parent": "S1D_IW_GRDH_1SDV_20260818T014933_20260818T014958_004188_007AC6_64D3",
+        "Equi7Tile": "AS020M_E012N033T4",
+        "constellation": "sentinel-1"
+      },
+      "assets": {
+        "ensemble_flood_extent": {
+          "href": "https://data.eodc.eu/collections/GFM_LAYERS/flood_extent/AS020M/2026/08/18/ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T4.tif",
+          "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+          "roles": ["data"]
+        }
+      },
+      "links": [
+        {
+          "rel": "self",
+          "href": "https://stac.eodc.eu/api/v1/collections/GFM/items/ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T4",
+          "type": "application/geo+json"
+        }
+      ]
+    }
+  ],
+  "links": []
+}

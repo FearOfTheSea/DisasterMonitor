@@ -118,12 +118,82 @@ async def get_json(
     provider_name: str = "provider",
 ) -> Any:
     """Fetch and validate one bounded JSON response."""
+    return await _request_json(
+        client,
+        url,
+        method="GET",
+        params=params,
+        headers=headers,
+        capture=capture,
+        allowed_hosts=allowed_hosts,
+        max_bytes=max_bytes,
+        provider_name=provider_name,
+    )
+
+
+async def post_json(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    params: Mapping[str, HttpParam] | None = None,
+    headers: Mapping[str, str] | None = None,
+    json_body: object,
+    capture: SnapshotCapture | None = None,
+    allowed_hosts: frozenset[str],
+    max_bytes: int = 1_000_000,
+    provider_name: str = "provider",
+) -> Any:
+    """POST one bounded JSON document using the shared transport rules."""
+    try:
+        content = json.dumps(
+            json_body, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+    except (TypeError, ValueError) as error:
+        raise DisasterProviderResponseError(
+            "The provider request body is not valid JSON.",
+            reason_code="invalid_payload",
+        ) from error
+    request_headers = dict(headers or {})
+    request_headers.setdefault("content-type", "application/json")
+    return await _request_json(
+        client,
+        url,
+        method="POST",
+        params=params,
+        headers=request_headers,
+        content=content,
+        capture=capture,
+        allowed_hosts=allowed_hosts,
+        max_bytes=max_bytes,
+        provider_name=provider_name,
+    )
+
+
+async def _request_json(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    method: str,
+    params: Mapping[str, HttpParam] | None = None,
+    headers: Mapping[str, str] | None = None,
+    content: bytes | None = None,
+    capture: SnapshotCapture | None = None,
+    allowed_hosts: frozenset[str],
+    max_bytes: int,
+    provider_name: str,
+) -> Any:
+    """Execute one bounded JSON request with one retry for transient failures."""
     validate_network_target(url, allowed_hosts)
+    response_body = b""
     for attempt in range(2):
         try:
-            async with client.stream(
-                "GET", url, params=params, headers=headers
-            ) as response:
+            request_kwargs: dict[str, Any] = {
+                "params": params,
+                "headers": headers,
+            }
+            if content is not None:
+                request_kwargs["content"] = content
+            async with client.stream(method, url, **request_kwargs) as response:
                 try:
                     response.raise_for_status()
                 except httpx.HTTPStatusError as error:
@@ -159,8 +229,8 @@ async def get_json(
                             "The source response exceeded the configured size limit.",
                             reason_code="response_too_large",
                         )
-                content = bytes(body)
-                await _capture_response(response, content, capture)
+                response_body = bytes(body)
+                await _capture_response(response, response_body, capture)
         except DisasterProviderResponseError:
             raise
         except httpx.TimeoutException as error:
@@ -181,12 +251,12 @@ async def get_json(
             raise failure from error
         else:
             break
-    if not content:
+    if not response_body:
         raise DisasterProviderResponseError(
             "The source returned an empty response.", reason_code="empty_result"
         )
     try:
-        return json.loads(content)
+        return json.loads(response_body)
     except json.JSONDecodeError as error:
         raise DisasterProviderResponseError(
             "The source returned malformed JSON.", reason_code="malformed_json"

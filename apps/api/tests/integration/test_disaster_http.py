@@ -4,7 +4,7 @@ import pytest
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
 )
-from disaster_monitor.infrastructure.disaster.http import get_json
+from disaster_monitor.infrastructure.disaster.http import get_json, post_json
 
 
 class _TrackingStream(httpx.AsyncByteStream):
@@ -77,3 +77,36 @@ async def test_http_recovers_from_one_transient_network_failure() -> None:
 
     assert payload == {"status": "ok"}
     assert attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_json_post_is_bounded_and_preserves_request_body() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=b'{"status":"ok"}',
+            request=request,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        payload = await post_json(
+            client,
+            "https://example.test/statistics",
+            params={"categorical": True, "c": (1,)},
+            json_body={"type": "Feature", "properties": {}},
+            allowed_hosts=frozenset({"example.test"}),
+        )
+
+    assert payload == {"status": "ok"}
+    assert len(requests) == 1
+    assert requests[0].method == "POST"
+    assert requests[0].headers["content-type"] == "application/json"
+    assert requests[0].read().decode() == '{"type":"Feature","properties":{}}'
+    assert dict(requests[0].url.params.multi_items()) == {
+        "categorical": "true",
+        "c": "1",
+    }

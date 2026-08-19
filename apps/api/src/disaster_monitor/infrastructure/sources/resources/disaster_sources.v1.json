@@ -2,6 +2,50 @@
   "version": "2.0.0",
   "sources": [
     {
+      "source_id": "cems-gfm-floods",
+      "organization_name": "Copernicus Emergency Management Service / EODC",
+      "display_name": "CEMS Global Flood Monitoring (GFM)",
+      "jurisdiction": "global scientific satellite monitoring",
+      "authority_level": "scientific_authority",
+      "information_roles": [
+        "event_discovery",
+        "scientific_event_verification",
+        "satellite_observation"
+      ],
+      "supported_disasters": [
+        "flood"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_stac_and_titiler_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "near-real-time Sentinel-1 acquisition processing; exact latency is source-dependent",
+      "attribution_guidance": "Attribute flood event discovery to Copernicus Emergency Management Service Global Flood Monitoring, with EODC as the catalogue and processing host. Observed Flood Extent establishes detected flood pixels only, not severity, impacts, casualties, warnings, or national totals.",
+      "limitations": [
+        "A STAC item or acquisition footprint is not evidence of flooding; a country-clipped ensemble_flood_extent statistic with nonzero class-1 pixels is required.",
+        "Country requests use the maintained country polygon in the catalog and omit flood geometry when only positive clipped statistics are available.",
+        "Worldwide discovery is a bounded scan of recent GFM items and is not globally complete.",
+        "This source does not provide severity, damage, casualties, affected population, warnings, response status, or national flood totals."
+      ],
+      "registered_tool_names": [
+        "find_disaster_event"
+      ],
+      "provider_registration_name": "CEMS Global Flood Monitoring (GFM)",
+      "implementation_status": "implemented",
+      "allowed_hosts": [
+        "data.eodc.eu",
+        "stac.eodc.eu",
+        "titiler.services.eodc.eu"
+      ]
+    },
+    {
       "source_id": "gdacs-tropical-cyclones",
       "organization_name": "Global Disaster Alert and Coordination System",
       "display_name": "GDACS tropical-cyclone event discovery",

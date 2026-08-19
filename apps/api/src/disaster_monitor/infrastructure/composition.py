@@ -47,6 +47,7 @@ from disaster_monitor.application.services.source_consistency import (
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.disaster.cems_gfm_adapter import CemsGfmAdapter
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
     CompositeSituationReportProvider,
@@ -253,6 +254,12 @@ def build_current_disaster_report(
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
+    gfm = CemsGfmAdapter(
+        geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
     reliefweb = ReliefWebSituationAdapter(
         app_name=settings.reliefweb_app_name,
         snapshot_recorder=snapshot_recorder,
@@ -261,6 +268,26 @@ def build_current_disaster_report(
     )
     registry = ProviderRegistry(
         (
+            ProviderRegistration(
+                "CEMS Global Flood Monitoring (GFM)",
+                gfm,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.FLOOD}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.PRIMARY,
+                source_id="cems-gfm-floods",
+                allowed_hosts=gfm.allowed_hosts,
+                event_provider=gfm,
+                worldwide_provider=gfm,
+            ),
             ProviderRegistration(
                 "USGS",
                 usgs,

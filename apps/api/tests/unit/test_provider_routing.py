@@ -15,6 +15,8 @@ from disaster_monitor.domain.disaster import (
     SituationReport,
     SourceReference,
 )
+from disaster_monitor.infrastructure.composition import build_current_disaster_report
+from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
     CompositeSituationReportProvider,
@@ -187,3 +189,19 @@ def test_disabled_global_reports_is_a_configuration_limitation() -> None:
 
     assert [item.name for item in selection.registrations] == ["Global Situation"]
     assert selection.unavailable_configuration == ("Global Reports",)
+
+
+@pytest.mark.asyncio
+async def test_gfm_is_routable_for_every_catalog_country() -> None:
+    service = build_current_disaster_report(Settings(), country_catalog=CATALOG)
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        for country in CATALOG.countries():
+            selection = registry.select(
+                _query(Disaster.FLOOD, country), ProviderRole.EVENT_DISCOVERY
+            )
+            assert [item.name for item in selection.registrations] == [
+                "CEMS Global Flood Monitoring (GFM)"
+            ]
+    finally:
+        await service.aclose()

@@ -44,6 +44,8 @@ from disaster_monitor.domain.disaster import (
     SourceReference,
     point_event_geometry,
 )
+from disaster_monitor.infrastructure.composition import build_current_disaster_report
+from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -281,3 +283,22 @@ def test_worldwide_task_scope_is_explicit_before_provider_selection() -> None:
     assert task.country is None
     assert task.query is None
     assert task.worldwide_query == WorldwideDisasterQuery(Disaster.FLOOD)
+
+
+@pytest.mark.asyncio
+async def test_gfm_worldwide_capability_is_explicitly_bounded() -> None:
+    service = build_current_disaster_report(Settings())
+    try:
+        selection = service._provider_registry.select(  # noqa: SLF001
+            WorldwideDisasterQuery(Disaster.FLOOD, time_window_days=365, limit=999),
+            ProviderRole.EVENT_DISCOVERY,
+        )
+        assert [item.name for item in selection.registrations] == [
+            "CEMS Global Flood Monitoring (GFM)"
+        ]
+        assert selection.registrations[0].tier.value == "primary"
+        assert selection.registrations[0].capabilities.event_scopes == frozenset(
+            {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+        )
+    finally:
+        await service.aclose()

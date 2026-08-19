@@ -56,6 +56,9 @@ source authority, issue public warnings, or select events.
 
 - USGS provides bounded named-country and worldwide earthquake discovery.
 - GDACS provides bounded named-country and worldwide tropical-cyclone discovery.
+- CEMS Global Flood Monitoring (GFM) provides primary bounded named-country and
+  worldwide flood discovery after country-clipped or bounded-footprint Observed Flood
+  Extent class-1 statistics confirm nonzero flood pixels.
 - ReliefWeb is an optional, configured supplementary situation-evidence provider for
   named-country requests; without `RELIEFWEB_APP_NAME`, it remains unavailable and
   reports disclose that gap.

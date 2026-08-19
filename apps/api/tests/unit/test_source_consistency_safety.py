@@ -22,6 +22,9 @@ from disaster_monitor.application.services.source_consistency import (
     validate_provider_source_consistency,
 )
 from disaster_monitor.domain.disaster import Country, Disaster, GeographicArea
+from disaster_monitor.infrastructure.sources.static_source_catalog import (
+    StaticSourceCatalog,
+)
 
 
 @dataclass(frozen=True)
@@ -270,3 +273,18 @@ def test_accepts_matching_situation_source_metadata() -> None:
     provider = registration(roles=frozenset({ProviderRole.SITUATION_EVIDENCE}))
 
     validate(descriptor, provider)
+
+
+def test_packaged_gfm_source_metadata_declares_the_registered_authorities() -> None:
+    descriptor = StaticSourceCatalog().get("cems-gfm-floods")
+
+    assert descriptor is not None
+    assert descriptor.provider_registration_name == "CEMS Global Flood Monitoring (GFM)"
+    assert descriptor.authority_level == "scientific_authority"
+    assert descriptor.supported_disasters == (Disaster.FLOOD,)
+    assert descriptor.country_codes is None
+    assert set(descriptor.allowed_hosts) == {
+        "data.eodc.eu",
+        "stac.eodc.eu",
+        "titiler.services.eodc.eu",
+    }

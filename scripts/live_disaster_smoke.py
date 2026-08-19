@@ -11,6 +11,7 @@ from disaster_monitor.application.services.current_disaster_report import (  # n
     CurrentDisasterReportService,
 )
 from disaster_monitor.infrastructure.composition import (  # noqa: E402
+    build_country_catalog,
     build_current_disaster_report,
     build_disaster_query_parser,
 )
@@ -23,6 +24,9 @@ from disaster_monitor.infrastructure.configuration import Settings  # noqa: E402
 QUESTIONS = (
     "Give me latest information on earthquake in Japan.",
     "Give me the latest information on the July 28, 2026 Kumamoto earthquake in Japan.",
+    "Give me the latest flood information in Japan.",
+    "Give me the latest flood information in the Philippines.",
+    "Give me the latest flood information in China.",
 )
 
 
@@ -47,9 +51,12 @@ async def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")
     settings = Settings()
-    query_parser = build_disaster_query_parser()
+    country_catalog = build_country_catalog(settings)
+    query_parser = build_disaster_query_parser(country_catalog)
     for question in QUESTIONS:
-        service: CurrentDisasterReportService = build_current_disaster_report(settings)
+        service: CurrentDisasterReportService = build_current_disaster_report(
+            settings, country_catalog
+        )
         try:
             query = query_parser.parse(question).query
             if query is None:

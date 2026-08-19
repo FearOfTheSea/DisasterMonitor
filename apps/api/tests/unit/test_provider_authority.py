@@ -24,6 +24,8 @@ from disaster_monitor.domain.disaster import (
     SourceReference,
     point_event_geometry,
 )
+from disaster_monitor.infrastructure.composition import build_current_disaster_report
+from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
 )
@@ -254,3 +256,22 @@ def test_canonical_selection_is_order_independent() -> None:
 
     assert forward.event == reverse.event
     assert forward.physical_event_id == reverse.physical_event_id
+
+
+@pytest.mark.asyncio
+async def test_gfm_is_the_sole_primary_flood_event_discovery_authority() -> None:
+    service = build_current_disaster_report(Settings())
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        primary = [
+            item
+            for item in registry.select(
+                _query(), ProviderRole.EVENT_DISCOVERY
+            ).registrations
+            if item.tier is ProviderTier.PRIMARY
+        ]
+        assert [(item.name, item.source_id) for item in primary] == [
+            ("CEMS Global Flood Monitoring (GFM)", "cems-gfm-floods")
+        ]
+    finally:
+        await service.aclose()

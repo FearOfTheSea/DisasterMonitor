@@ -18,13 +18,16 @@ never dynamically imports or constructs providers.
 
 ## Current live capability matrix
 
-| Provider                | Tier      | Role            | Disasters        | Scope                         | Additional requirement              |
-| ----------------------- | --------- | --------------- | ---------------- | ----------------------------- | ----------------------------------- |
-| USGS                    | Secondary | Event discovery | Earthquake       | Named countries and worldwide | Country validation for named scope  |
-| GDACS tropical cyclones | Secondary | Event discovery | Tropical cyclone | Named countries and worldwide | None                                |
-| ReliefWeb               | Secondary | Situation evidence | Earthquake, flood, wildfire, landslide, tropical cyclone | Named countries | `RELIEFWEB_APP_NAME` |
+| Provider                           | Tier      | Role               | Disasters        | Scope                         | Additional requirement                                      |
+| ---------------------------------- | --------- | ------------------ | ---------------- | ----------------------------- | ----------------------------------------------------------- |
+| CEMS Global Flood Monitoring (GFM) | Primary   | Event discovery    | Flood            | Named countries and worldwide | Country-clipped class-1 `ensemble_flood_extent` statistics |
+| USGS                              | Secondary | Event discovery    | Earthquake       | Named countries and worldwide | Country validation for named scope                         |
+| GDACS tropical cyclones           | Secondary | Event discovery    | Tropical cyclone | Named countries and worldwide | None                                                        |
+| ReliefWeb                         | Secondary | Situation evidence | Earthquake, flood, wildfire, landslide, tropical cyclone | Named countries | `RELIEFWEB_APP_NAME` |
 
-USGS and GDACS provide global named-country and countryless worldwide event discovery.
+GFM provides primary global named-country and bounded countryless worldwide flood
+event discovery. USGS and GDACS provide global named-country and countryless worldwide
+event discovery for earthquakes and tropical cyclones.
 `country_codes=None` permits every admitted named country only with the explicit country
 scope; worldwide requests require the explicit worldwide scope. News requests are
 deterministically routed to event discovery. Country names remain case-insensitive,
@@ -46,9 +49,11 @@ event metadata. Associated images may produce local analytical observations and 
 typed vector COP; this request boundary is not a live provider and does not alter the
 catalog above. Separately, the assistant can display bounded contextual source photos
 associated with the already-selected event. That gallery uses exact registered page and
-asset hosts and remains outside the provider/evidence matrix. Analytical or satellite/
-aerial image retrieval, live raster products, official-warning overlay providers,
-CARTO, TerraLabo, and open-ended source crawling remain unsupported. Structured
+asset hosts and remains outside the provider/evidence matrix. Analytical or arbitrary
+satellite/aerial image retrieval, official-warning overlay providers, CARTO, TerraLabo,
+and open-ended source crawling remain unsupported. GFM uses official server-side
+statistics only for flood event discovery and does not expose raster products as
+general imagery. Structured
 source-candidate metadata can be screened into a separate review queue, but it cannot
 alter this matrix or contribute evidence. See
 [Event-associated source media](event-media.md).
