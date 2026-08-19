@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from disaster_monitor.application.media import MediaEventContext
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.media.news_scraper import NewsEventMediaProvider
 
 NOW = datetime(2026, 8, 15, 12, tzinfo=UTC)
@@ -61,7 +61,7 @@ async def test_news_provider_extracts_registered_source_metadata_and_image() -> 
     context = MediaEventContext(
         event_id="us6000tjl2",
         physical_event_id="physical-event:fixture",
-        hazard=Hazard.EARTHQUAKE,
+        disaster=Disaster.EARTHQUAKE,
         location="San José del Palmar, Colombia",
         event_time=datetime(2026, 8, 10, 5, 54, tzinfo=UTC),
         provider_ids=("us6000tjl2",),
@@ -120,7 +120,7 @@ async def test_news_provider_refuses_an_image_outside_registered_hosts() -> None
     context = MediaEventContext(
         event_id="us6000tjl2",
         physical_event_id="physical-event:fixture",
-        hazard=Hazard.EARTHQUAKE,
+        disaster=Disaster.EARTHQUAKE,
         location="San Jose del Palmar, Colombia",
         event_time=datetime(2026, 8, 10, 5, 54, tzinfo=UTC),
         provider_ids=("us6000tjl2",),

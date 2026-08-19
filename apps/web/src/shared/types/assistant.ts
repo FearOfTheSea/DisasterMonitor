@@ -53,7 +53,7 @@ export type MapNavigationAction = {
 export type InvestigationSummary = {
   status: string;
   task_summary: string;
-  hazard?: string | null;
+  disaster?: string | null;
   country?: string | null;
   information_needs: string[];
   output_modalities: string[];
@@ -135,7 +135,7 @@ export type EventGeometry = {
 
 export type SelectedEvent = {
   event_id: string;
-  hazard: string;
+  disaster: string;
   location: string;
   event_time: string;
   geometry?: EventGeometry | null;
@@ -283,7 +283,7 @@ export type MultimodalAsset = {
   width?: number | null;
   height?: number | null;
   footprint?: Wgs84PolygonGeometry | null;
-  declared_hazard?: string | null;
+  declared_disaster?: string | null;
   declared_country_code?: string | null;
   capture_role: string;
   processing_level?: string | null;
@@ -300,7 +300,7 @@ export type AssetEventAssociation = {
   status: string;
   geography_match?: boolean | null;
   time_match?: boolean | null;
-  hazard_match?: boolean | null;
+  disaster_match?: boolean | null;
   country_match?: boolean | null;
   event_id_match?: boolean | null;
   distance_km?: number | null;

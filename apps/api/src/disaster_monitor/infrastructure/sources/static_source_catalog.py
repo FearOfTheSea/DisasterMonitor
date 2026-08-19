@@ -10,7 +10,7 @@ from disaster_monitor.application.agent.models import (
     SourceInformationRole,
 )
 from disaster_monitor.application.disaster import GeographicScope
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
 
 class StaticSourceCatalog:
@@ -46,7 +46,7 @@ class StaticSourceCatalog:
 def _descriptor(item: dict[str, object]) -> SourceDescriptor:
     country_codes = item["country_codes"]
     roles = cast(list[str], item["information_roles"])
-    hazards = cast(list[str], item["supported_hazards"])
+    disasters = cast(list[str], item["supported_disasters"])
     geographic_scopes = cast(list[str], item["geographic_scopes"])
     languages = cast(list[str], item["supported_languages"])
     limitations = cast(list[str], item["limitations"])
@@ -59,7 +59,7 @@ def _descriptor(item: dict[str, object]) -> SourceDescriptor:
         jurisdiction=str(item["jurisdiction"]),
         authority_level=str(item["authority_level"]),
         information_roles=tuple(SourceInformationRole(value) for value in roles),
-        supported_hazards=tuple(Hazard(value) for value in hazards),
+        supported_disasters=tuple(Disaster(value) for value in disasters),
         geographic_scopes=tuple(GeographicScope(value) for value in geographic_scopes),
         country_codes=(
             None

@@ -227,7 +227,9 @@ def build_evidence_world_state(
     """Build order-independent current claim state without deleting history."""
     if physical_event is None:
         identity = (
-            default_event_policy_registry().for_hazard(event.hazard).identify((event,))
+            default_event_policy_registry()
+            .for_disaster(event.disaster)
+            .identify((event,))
         )
         physical_event = identity.physical_events[0]
 

@@ -28,7 +28,6 @@ _SIGNAL_ROLES = {
     "infrastructure_status": (SourceInformationRole.INFRASTRUCTURE_STATUS,),
     "emergency_response": (SourceInformationRole.EMERGENCY_RESPONSE,),
     "situation_report": (SourceInformationRole.HUMANITARIAN_REPORTING,),
-    "tsunami_status": (SourceInformationRole.TSUNAMI_STATUS,),
 }
 
 
@@ -46,8 +45,8 @@ class SourceScout:
             risk_flags.append("invalid_identity")
         if not roles:
             risk_flags.append("no_supported_information_role")
-        if not submission.hazards:
-            risk_flags.append("no_supported_hazard")
+        if not submission.disasters:
+            risk_flags.append("no_supported_disaster")
         if submission.country_codes is not None and any(
             not _COUNTRY_CODE.fullmatch(code) for code in submission.country_codes
         ):

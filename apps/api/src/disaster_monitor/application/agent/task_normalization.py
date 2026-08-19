@@ -15,7 +15,7 @@ from disaster_monitor.application.disaster import (
     QueryParseStatus,
     WorldwideDisasterQuery,
 )
-from disaster_monitor.application.hazard_aliases import aliases_for
+from disaster_monitor.application.disaster_aliases import aliases_for
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
@@ -24,10 +24,10 @@ from disaster_monitor.application.services.worldwide_disaster_policy import (
     WorldwideDisasterPolicyRegistry,
     default_worldwide_disaster_policy_registry,
 )
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
-_HAZARDS: dict[Hazard, tuple[str, ...]] = {
-    Hazard.EARTHQUAKE: (
+_DISASTERS: dict[Disaster, tuple[str, ...]] = {
+    Disaster.EARTHQUAKE: (
         "earthquake",
         "earthquakes",
         "quake",
@@ -37,8 +37,7 @@ _HAZARDS: dict[Hazard, tuple[str, ...]] = {
         "động đất",
         "地震",
     ),
-    Hazard.TSUNAMI: ("tsunami", "tsunamis", "sóng thần", "津波"),
-    Hazard.FLOOD: (
+    Disaster.FLOOD: (
         "flood",
         "floods",
         "flooding",
@@ -47,7 +46,7 @@ _HAZARDS: dict[Hazard, tuple[str, ...]] = {
         "lũ lụt",
         "洪水",
     ),
-    Hazard.WILDFIRE: (
+    Disaster.WILDFIRE: (
         "wildfire",
         "wildfires",
         "forest fire",
@@ -55,14 +54,14 @@ _HAZARDS: dict[Hazard, tuple[str, ...]] = {
         "cháy rừng",
         "山火事",
     ),
-    Hazard.LANDSLIDE: (
+    Disaster.LANDSLIDE: (
         "landslide",
         "landslides",
         "deslizamiento de tierra",
         "sạt lở đất",
         "地滑り",
     ),
-    Hazard.TROPICAL_CYCLONE: (
+    Disaster.TROPICAL_CYCLONE: (
         "typhoon",
         "hurricane",
         "cyclone",
@@ -132,26 +131,26 @@ def worldwide_disaster_query(
     *,
     policies: WorldwideDisasterPolicyRegistry | None = None,
 ) -> WorldwideDisasterQuery | None:
-    """Admit explicit current worldwide requests for any admitted hazard."""
-    hazards = _hazard_mentions(question)
+    """Admit explicit current worldwide requests for any admitted disaster."""
+    disasters = _disaster_mentions(question)
     if (
-        len(hazards) != 1
+        len(disasters) != 1
         or not disaster_safety_gate(question)
         or not _WORLDWIDE_MARKERS.search(question)
     ):
         return None
-    policy = (policies or default_worldwide_disaster_policy_registry()).for_hazard(
-        hazards[0]
+    policy = (policies or default_worldwide_disaster_policy_registry()).for_disaster(
+        disasters[0]
     )
     return WorldwideDisasterQuery(
-        hazard=hazards[0], selection_intent=policy.selection_for(question)
+        disaster=disasters[0], selection_intent=policy.selection_for(question)
     )
 
 
 def disaster_safety_gate(question: str) -> bool:
     """Conservatively retain factual disaster requests in the trusted path."""
-    hazards = _hazard_mentions(question)
-    if not hazards:
+    disasters = _disaster_mentions(question)
+    if not disasters:
         return False
     if _CURRENT_EVENT_MARKERS.search(question) or _EVENT_DATE_MARKER.search(question):
         return True
@@ -161,15 +160,15 @@ def disaster_safety_gate(question: str) -> bool:
 
 
 def deterministic_task_draft(question: str) -> DisasterTaskDraft:
-    hazards = tuple(hazard.value for hazard in _hazard_mentions(question))
+    disasters = tuple(disaster.value for disaster in _disaster_mentions(question))
     places = list(_extract_raw_places(question))
     needs = tuple(item.value for item in _information_needs(question))
     modalities = tuple(item.value for item in _output_modalities(question))
     evidence = disaster_safety_gate(question)
     return DisasterTaskDraft(
-        disaster_related=bool(hazards),
+        disaster_related=bool(disasters),
         current_or_event_specific=evidence,
-        hazard_mentions=hazards,
+        disaster_mentions=disasters,
         place_mentions=tuple(places),
         information_needs=needs,
         output_modalities=modalities,
@@ -185,26 +184,26 @@ def validate_disaster_task(
 ) -> ValidatedDisasterTask:
     """Canonicalize only through maintained deterministic application metadata."""
     safety_requires_evidence = disaster_safety_gate(question)
-    deterministic_hazards = _hazard_mentions(question)
-    if not deterministic_hazards:
+    deterministic_disasters = _disaster_mentions(question)
+    if not deterministic_disasters:
         return ValidatedDisasterTask(
             question, TaskKind.NON_DISASTER, False, information_needs=()
         )
-    hazards = deterministic_hazards
+    disasters = deterministic_disasters
     requires_evidence = safety_requires_evidence
     if not requires_evidence:
         return ValidatedDisasterTask(
             question,
             TaskKind.GENERAL_KNOWLEDGE,
             False,
-            hazard=hazards[0] if len(hazards) == 1 else None,
+            disaster=disasters[0] if len(disasters) == 1 else None,
             information_needs=(InformationNeed.GENERAL_INFORMATION,),
         )
-    if len(hazards) != 1:
+    if len(disasters) != 1:
         detail = (
-            "Please specify exactly one disaster hazard for this investigation."
-            if len(hazards) > 1
-            else "Please specify the disaster hazard to investigate."
+            "Please specify exactly one disaster disaster for this investigation."
+            if len(disasters) > 1
+            else "Please specify the disaster disaster to investigate."
         )
         return _limited_task(
             question,
@@ -219,7 +218,7 @@ def validate_disaster_task(
             question=question,
             kind=TaskKind.INVESTIGATION,
             requires_evidence=True,
-            hazard=hazards[0],
+            disaster=disasters[0],
             geographic_scope=GeographicScope.WORLDWIDE,
             information_needs=_information_needs(question),
             output_modalities=_output_modalities(question) or (OutputModality.TEXT,),
@@ -234,7 +233,7 @@ def validate_disaster_task(
             ValidationStatus.CLARIFICATION_REQUIRED,
             "This phase can investigate exactly one country at a time. "
             "Which country should I use?",
-            hazard=hazards[0],
+            disaster=disasters[0],
         )
     if not countries:
         unresolved = next(iter(draft.place_mentions), None) or next(
@@ -250,7 +249,7 @@ def validate_disaster_task(
             True,
             ValidationStatus.CATALOG_LIMITATION,
             detail,
-            hazard=hazards[0],
+            disaster=disasters[0],
             unresolved_place=unresolved,
         )
 
@@ -262,7 +261,7 @@ def validate_disaster_task(
             ValidationStatus.CLARIFICATION_REQUIRED,
             "This phase can investigate exactly one country at a time. "
             "Which country should I use?",
-            hazard=hazards[0],
+            disaster=disasters[0],
         )
     if parsed.query is None:
         return _limited_task(
@@ -270,7 +269,7 @@ def validate_disaster_task(
             True,
             ValidationStatus.CLARIFICATION_REQUIRED,
             parsed.detail or "The disaster request could not be normalized safely.",
-            hazard=hazards[0],
+            disaster=disasters[0],
         )
     needs = _information_needs(question)
     modalities = _output_modalities(question)
@@ -278,7 +277,7 @@ def validate_disaster_task(
         question=question,
         kind=TaskKind.INVESTIGATION,
         requires_evidence=True,
-        hazard=hazards[0],
+        disaster=disasters[0],
         country=countries[0],
         date_from=parsed.query.date_from,
         date_to=parsed.query.date_to,
@@ -295,14 +294,14 @@ def _limited_task(
     status: ValidationStatus,
     detail: str,
     *,
-    hazard: Hazard | None = None,
+    disaster: Disaster | None = None,
     unresolved_place: str | None = None,
 ) -> ValidatedDisasterTask:
     return ValidatedDisasterTask(
         question=question,
         kind=TaskKind.INVESTIGATION,
         requires_evidence=requires_evidence,
-        hazard=hazard,
+        disaster=disaster,
         unresolved_place=unresolved_place,
         validation_status=status,
         detail=detail,
@@ -311,12 +310,12 @@ def _limited_task(
     )
 
 
-def _hazard_mentions(text: str) -> tuple[Hazard, ...]:
+def _disaster_mentions(text: str) -> tuple[Disaster, ...]:
     return tuple(
-        hazard
-        for hazard, aliases in _HAZARDS.items()
+        disaster
+        for disaster, aliases in _DISASTERS.items()
         if any(
-            _matches_alias(text, alias) for alias in (aliases_for(hazard) or aliases)
+            _matches_alias(text, alias) for alias in (aliases_for(disaster) or aliases)
         )
     )
 

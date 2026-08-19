@@ -33,10 +33,10 @@ from disaster_monitor.application.services.provider_registry import (
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
+    Disaster,
     EarthquakeEvent,
     EventMeasurement,
     FactStatus,
-    Hazard,
     MeasurementKind,
     ReportedFact,
     SituationReport,
@@ -80,7 +80,7 @@ def _event(
     source = _source("USGS", event_id)
     return EarthquakeEvent(
         event_id=event_id,
-        hazard=Hazard.EARTHQUAKE,
+        disaster=Disaster.EARTHQUAKE,
         location=location,
         country=JAPAN,
         event_time=NOW - timedelta(hours=hours_old),
@@ -104,7 +104,7 @@ def _query(**kwargs: object) -> DisasterQuery:
     magnitude = kwargs.pop("magnitude", None)
     event_identifier = kwargs.pop("event_identifier", None)
     values: dict[str, object] = {
-        "hazard": Hazard.EARTHQUAKE,
+        "disaster": Disaster.EARTHQUAKE,
         "country": JAPAN,
         "time_intent": "recent",
         "focus": ("damage",),
@@ -228,30 +228,30 @@ def test_event_sequence_requires_more_than_an_aftershock_label() -> None:
     )
 
 
-def test_jma_and_usgs_observations_are_one_event_with_both_ids() -> None:
-    jma = _event("jma:20260805100000", magnitude=5.9)
+def test_global_catalog_and_usgs_observations_are_one_event_with_both_ids() -> None:
+    global_catalog = _event("global-catalog:20260805100000", magnitude=5.9)
     usgs = _event("usgs:us7000fixture", magnitude=6.0)
-    normalized = cluster_physical_events((jma, usgs))
+    normalized = cluster_physical_events((global_catalog, usgs))
     assert len(normalized) == 1
     assert set(normalized[0].provider_ids) == {
-        "jma:20260805100000",
+        "global-catalog:20260805100000",
         "usgs:us7000fixture",
     }
-    assert "jma:20260805100000" in normalized[0].provider_ids
+    assert "global-catalog:20260805100000" in normalized[0].provider_ids
 
 
 def test_qualified_provider_ids_do_not_collide_across_namespaces() -> None:
-    selected = _event("jma:shared")
+    selected = _event("global-catalog:shared")
 
-    assert selected.has_provider_id("jma:shared")
+    assert selected.has_provider_id("global-catalog:shared")
     assert selected.has_provider_id("shared")
     assert not selected.has_provider_id("usgs:shared")
 
 
 def test_rejected_report_cannot_contribute_facts_and_narrative_is_preserved() -> None:
     event = _event("usgs:target")
-    good_source = _source("ReliefWeb", "Ishikawa update")
-    bad_source = _source("ReliefWeb", "Tokyo update")
+    good_source = _source("Global Reports", "Ishikawa update")
+    bad_source = _source("Global Reports", "Tokyo update")
     good = SituationReport(
         source=good_source,
         narrative="A named airport closed and shelters opened in Ishikawa.",
@@ -295,7 +295,7 @@ def test_generic_correlation_does_not_match_equal_magnitude_without_neutral_clue
     None
 ):
     event = _event("usgs:target", magnitude=6.0)
-    source = _source("ReliefWeb", "unrelated report")
+    source = _source("Global Reports", "unrelated report")
     report = SituationReport(
         source=source,
         narrative="A report with magnitude 6.0 but no matching location or date.",
@@ -308,7 +308,7 @@ def test_generic_correlation_does_not_match_equal_magnitude_without_neutral_clue
 
 def test_earthquake_magnitude_correlation_is_owned_by_its_policy() -> None:
     event = _event("usgs:target", magnitude=6.0)
-    source = _source("ReliefWeb", "Ishikawa report")
+    source = _source("Global Reports", "Ishikawa report")
     report = SituationReport(
         source=source,
         narrative="Ishikawa earthquake report with magnitude 6.0.",
@@ -322,9 +322,7 @@ def test_earthquake_magnitude_correlation_is_owned_by_its_policy() -> None:
     )
 
 
-def test_hazard_parser_does_not_apply_earthquake_discriminators_to_other_hazards() -> (
-    None
-):
+def test_disaster_parser_does_not_apply_earthquake_discriminators_to_other_disasters():
     result = PARSER.parse(
         "Latest flood in Japan, magnitude 6.0, provider event us7000fixture."
     )
@@ -335,7 +333,7 @@ def test_hazard_parser_does_not_apply_earthquake_discriminators_to_other_hazards
 
 def test_injected_correlation_policy_is_applied_once_by_reconciler() -> None:
     event = _event("usgs:target")
-    source = _source("ReliefWeb", "Ishikawa update")
+    source = _source("Global Reports", "Ishikawa update")
     report = SituationReport(
         source=source,
         narrative="Ishikawa earthquake update.",
@@ -351,7 +349,7 @@ def test_injected_correlation_policy_is_applied_once_by_reconciler() -> None:
             return CorrelationStatus.MATCHED
 
     class CountingPolicies:
-        def for_hazard(self, _hazard):
+        def for_disaster(self, _disaster):
             return CountingPolicy()
 
     packet = EvidenceReconciler(CountingPolicies()).build(
@@ -382,12 +380,12 @@ async def test_event_without_situation_records_is_explicitly_partial() -> None:
         provider_capabilities=(
             ProviderCapabilities(
                 frozenset({ProviderRole.EVENT_DISCOVERY}),
-                frozenset({Hazard.EARTHQUAKE}),
+                frozenset({Disaster.EARTHQUAKE}),
                 None,
             ),
             ProviderCapabilities(
                 frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                frozenset({Hazard.EARTHQUAKE}),
+                frozenset({Disaster.EARTHQUAKE}),
                 None,
             ),
         ),

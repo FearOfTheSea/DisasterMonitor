@@ -11,12 +11,12 @@ from disaster_monitor.application.disaster import (
 )
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     DisasterEvent,
     EventGeometry,
     EventGeometryKind,
     EventMeasurement,
     FactStatus,
-    Hazard,
     MeasurementKind,
     PhysicalEventIdentity,
     ReportedFact,
@@ -44,9 +44,9 @@ def validate_event_evidence(
     _validate_source(record.source, source_id=source_id, allowed_hosts=allowed_hosts)
     if not isinstance(record.country, Country):
         raise SourceEvidencePolicyError("The event country is invalid.")
-    if not isinstance(record.hazard, Hazard) or record.hazard != query.hazard:
+    if not isinstance(record.disaster, Disaster) or record.disaster != query.disaster:
         raise SourceEvidencePolicyError(
-            "The event hazard is outside the selected scope."
+            "The event disaster is outside the selected scope."
         )
     if record.country.alpha3_code != query.country.alpha3_code:
         raise SourceEvidencePolicyError(
@@ -78,9 +78,9 @@ def validate_worldwide_event_evidence(
             "The worldwide event provider returned a wrong record type."
         )
     _validate_source(record.source, source_id=source_id, allowed_hosts=allowed_hosts)
-    if record.hazard != query.hazard:
+    if record.disaster != query.disaster:
         raise SourceEvidencePolicyError(
-            "The worldwide event hazard is outside the selected scope."
+            "The worldwide event disaster is outside the selected scope."
         )
     if (
         not isinstance(record.event_id, str)
@@ -114,11 +114,11 @@ def validate_situation_evidence(
     if not isinstance(record.facts, tuple):
         raise SourceEvidencePolicyError("The situation fact collection is invalid.")
     _validate_measurements(record.measurements, record.source)
-    if record.hazard is not None and (
-        not isinstance(record.hazard, Hazard) or record.hazard != query.hazard
+    if record.disaster is not None and (
+        not isinstance(record.disaster, Disaster) or record.disaster != query.disaster
     ):
         raise SourceEvidencePolicyError(
-            "The situation hazard is outside the selected scope."
+            "The situation disaster is outside the selected scope."
         )
     if not isinstance(record.country_codes, tuple) or any(
         not isinstance(code, str) for code in record.country_codes
@@ -166,9 +166,9 @@ def validate_worldwide_situation_evidence(
     if not isinstance(record.narrative, str):
         raise SourceEvidencePolicyError("The worldwide situation narrative is invalid.")
     _validate_measurements(record.measurements, record.source)
-    if record.hazard is not None and record.hazard != query.hazard:
+    if record.disaster is not None and record.disaster != query.disaster:
         raise SourceEvidencePolicyError(
-            "The worldwide situation hazard is outside the selected scope."
+            "The worldwide situation disaster is outside the selected scope."
         )
     return record
 
@@ -280,7 +280,7 @@ def validate_physical_event_evidence(
     """Validate an aggregate without erasing observation-level provenance."""
     if not isinstance(record, DisasterEvent):
         raise SourceEvidencePolicyError("The merged event has an invalid type.")
-    if record.hazard != query.hazard or record.country.alpha3_code != (
+    if record.disaster != query.disaster or record.country.alpha3_code != (
         query.country.alpha3_code
     ):
         raise SourceEvidencePolicyError("The merged event is outside query scope.")

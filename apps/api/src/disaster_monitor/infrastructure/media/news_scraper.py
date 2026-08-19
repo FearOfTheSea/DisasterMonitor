@@ -408,7 +408,7 @@ def _load_policies() -> tuple[PublisherMediaPolicy, ...]:
 def _search_queries(
     context: MediaEventContext, preferred_domains: tuple[str, ...]
 ) -> tuple[str, ...]:
-    hazard = context.hazard.value.replace("_", " ")
+    disaster = context.disaster.value.replace("_", " ")
     location = re.sub(
         r"^\s*\d+(?:\.\d+)?\s*km\s+[A-Z-]+\s+of\s+",
         "",
@@ -419,11 +419,11 @@ def _search_queries(
     if not country and "," in location:
         country = location.rsplit(",", 1)[-1].strip()
     locality = location.split(",", 1)[0].strip()
-    terms = [hazard, f'"{locality}"']
+    terms = [disaster, f'"{locality}"']
     if country and country.casefold() not in locality.casefold():
         terms.append(country)
     exact = " ".join(item for item in terms if item).strip()[:200]
-    broad = " ".join(item for item in (hazard, country) if item).strip()[:200]
+    broad = " ".join(item for item in (disaster, country) if item).strip()[:200]
     preferred = (
         f"{broad} ("
         + " OR ".join(f"site:{domain}" for domain in preferred_domains)

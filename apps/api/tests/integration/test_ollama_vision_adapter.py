@@ -12,7 +12,7 @@ from disaster_monitor.application.multimodal import (
 from disaster_monitor.application.services.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
 )
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.domain.errors import ModelResponseError
 from disaster_monitor.domain.multimodal import CaptureRole, DamageLevel
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
@@ -34,7 +34,7 @@ def _asset():
             attribution="Adapter unit fixture",
             captured_at=NOW,
             footprint_coordinates=(((0.0, 0.0), (0.2, 0.0), (0.2, 0.2), (0.0, 0.0)),),
-            declared_hazard=Hazard.EARTHQUAKE,
+            declared_disaster=Disaster.EARTHQUAKE,
             declared_country_code="JPN",
             capture_role=CaptureRole.SINGLE_CAPTURE,
             processing_level="raw",

@@ -31,7 +31,7 @@ def valid_draft() -> dict[str, object]:
     return {
         "disaster_related": True,
         "current_or_event_specific": True,
-        "hazard_mentions": ["earthquake"],
+        "disaster_mentions": ["earthquake"],
         "place_mentions": ["Japan"],
         "time_expression": "August 5, 2026",
         "information_needs": ["fatalities"],
@@ -47,7 +47,7 @@ async def test_agent_json_is_strictly_parsed() -> None:
     model = SequenceModel([json.dumps(valid_draft())])
     result = await StructuredAgentModel(model).interpret("Latest earthquake in Japan")
 
-    assert result.hazard_mentions == ("earthquake",)
+    assert result.disaster_mentions == ("earthquake",)
     assert result.information_needs == ("fatalities",)
     assert len(model.requests) == 1
 

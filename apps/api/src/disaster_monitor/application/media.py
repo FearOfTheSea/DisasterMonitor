@@ -1,10 +1,10 @@
-"""Hazard-neutral application contracts for event-associated source media."""
+"""Disaster-neutral application contracts for event-associated source media."""
 
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
 
 class MediaAssociationStatus(StrEnum):
@@ -29,7 +29,7 @@ class MediaCreditKind(StrEnum):
 
 
 class MediaContentRole(StrEnum):
-    """Generic disaster-media roles; these are not hazard classifications."""
+    """Generic disaster-media roles; these are not disaster classifications."""
 
     AFTERMATH = "aftermath"
     RESCUE_EFFORT = "rescue_effort"
@@ -44,7 +44,7 @@ class MediaEventContext:
 
     event_id: str
     physical_event_id: str
-    hazard: Hazard
+    disaster: Disaster
     location: str
     event_time: datetime
     provider_ids: tuple[str, ...]

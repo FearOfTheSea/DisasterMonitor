@@ -33,7 +33,7 @@ from disaster_monitor.infrastructure.configuration import Settings  # noqa: E402
 from disaster_monitor.infrastructure.disaster.composite import (  # noqa: E402
     CompositeDisasterEventProvider,
 )
-from disaster_monitor.domain.disaster import Hazard  # noqa: E402
+from disaster_monitor.domain.disaster import Disaster  # noqa: E402
 from disaster_monitor.main import create_app  # noqa: E402
 
 
@@ -56,12 +56,12 @@ def main() -> int:
                     provider_capabilities=(
                         ProviderCapabilities(
                             frozenset({ProviderRole.EVENT_DISCOVERY}),
-                            frozenset({Hazard.EARTHQUAKE}),
+                            frozenset({Disaster.EARTHQUAKE}),
                             None,
                         ),
                         ProviderCapabilities(
                             frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                            frozenset({Hazard.EARTHQUAKE}),
+                            frozenset({Disaster.EARTHQUAKE}),
                             None,
                         ),
                     ),

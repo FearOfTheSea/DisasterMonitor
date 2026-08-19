@@ -66,8 +66,8 @@ def multimodal_state_response(
                     if asset.footprint is None
                     else _polygon_geometry(asset.footprint)
                 ),
-                declared_hazard=(
-                    asset.declared_hazard.value if asset.declared_hazard else None
+                declared_disaster=(
+                    asset.declared_disaster.value if asset.declared_disaster else None
                 ),
                 declared_country_code=asset.declared_country_code,
                 capture_role=asset.capture_role.value,
@@ -87,7 +87,7 @@ def multimodal_state_response(
                 status=item.status.value,
                 geography_match=item.geography_match,
                 time_match=item.time_match,
-                hazard_match=item.hazard_match,
+                disaster_match=item.disaster_match,
                 country_match=item.country_match,
                 event_id_match=item.event_id_match,
                 distance_km=item.distance_km,

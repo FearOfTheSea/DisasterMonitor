@@ -195,7 +195,7 @@ export class AssistantClient {
     const item = value as Record<string, unknown>;
     return (
       typeof item.event_id === 'string' &&
-      typeof item.hazard === 'string' &&
+      typeof item.disaster === 'string' &&
       typeof item.location === 'string' &&
       typeof item.event_time === 'string' &&
       this.isEventGeometry(item.geometry) &&
@@ -357,7 +357,7 @@ export class AssistantClient {
     return (
       typeof item.status === 'string' &&
       typeof item.task_summary === 'string' &&
-      (item.hazard == null || typeof item.hazard === 'string') &&
+      (item.disaster == null || typeof item.disaster === 'string') &&
       (item.country == null || typeof item.country === 'string') &&
       this.isStringArray(item.information_needs) &&
       this.isStringArray(item.output_modalities) &&

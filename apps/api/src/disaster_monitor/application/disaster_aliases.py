@@ -1,6 +1,6 @@
-"""Shared deterministic hazard aliases."""
+"""Shared deterministic disaster aliases."""
 
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
 TROPICAL_CYCLONE_ALIASES: tuple[str, ...] = (
     "cyclone",
@@ -20,6 +20,6 @@ TROPICAL_CYCLONE_ALIASES: tuple[str, ...] = (
 )
 
 
-def aliases_for(hazard: Hazard) -> tuple[str, ...]:
-    """Return the maintained alias set for a hazard."""
-    return TROPICAL_CYCLONE_ALIASES if hazard is Hazard.TROPICAL_CYCLONE else ()
+def aliases_for(disaster: Disaster) -> tuple[str, ...]:
+    """Return the maintained alias set for a disaster."""
+    return TROPICAL_CYCLONE_ALIASES if disaster is Disaster.TROPICAL_CYCLONE else ()

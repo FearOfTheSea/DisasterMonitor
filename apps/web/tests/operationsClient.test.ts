@@ -18,7 +18,7 @@ describe('operationsClient', () => {
         new Response(
           JSON.stringify([
             {
-              source_id: 'nchmf-vietnam-warnings',
+              source_id: 'global-warnings-vietnam-warnings',
               state: 'fresh',
               last_attempt_at: null,
               last_success_at: '2026-08-13T08:00:00Z',

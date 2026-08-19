@@ -21,11 +21,11 @@ from disaster_monitor.application.services.source_evidence_policy import (
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
+    Disaster,
     DisasterEvent,
     EvidenceDisposition,
     EvidenceFreshness,
     FactStatus,
-    Hazard,
     PhysicalEventIdentity,
     ReportedFact,
     SituationReport,
@@ -48,7 +48,7 @@ class _CorrelationPolicy(Protocol):
 
 
 class _CorrelationPolicies(Protocol):
-    def for_hazard(self, hazard: Hazard) -> _CorrelationPolicy: ...
+    def for_disaster(self, disaster: Disaster) -> _CorrelationPolicy: ...
 
 
 def sanitize_provider_text(text: str, *, limit: int = MAX_NARRATIVE_LENGTH) -> str:
@@ -95,7 +95,7 @@ def _has_correlation_metadata(report: SituationReport) -> bool:
         or report.locations
         or report.countries
         or report.country_codes
-        or report.hazard is not None
+        or report.disaster is not None
         or report.measurements
     )
 
@@ -161,8 +161,8 @@ def build_evidence_packet(
     correlation_warning_counts: dict[tuple[CorrelationStatus, str], int] = {}
     for report in reports:
         hard_scope_mismatch = (
-            report.hazard is not None
-            and report.hazard != query.hazard
+            report.disaster is not None
+            and report.disaster != query.disaster
             or bool(report.country_codes)
             and query.country.alpha3_code
             not in {code.upper() for code in report.country_codes}
@@ -189,13 +189,13 @@ def build_evidence_packet(
         if status == CorrelationStatus.POSSIBLE:
             correlation_warnings.append(
                 f"{quantity} {publisher} {article} may describe a different "
-                f"{query.hazard.value} event in {query.country.canonical_name} "
+                f"{query.disaster.value} event in {query.country.canonical_name} "
                 "and was excluded from event facts."
             )
         else:
             correlation_warnings.append(
                 f"{quantity} {publisher} {article} did not match the selected "
-                f"{query.hazard.value} event in {query.country.canonical_name} "
+                f"{query.disaster.value} event in {query.country.canonical_name} "
                 "and was excluded."
             )
     normalized_reports: list[SituationReport] = []
@@ -306,7 +306,6 @@ def build_evidence_packet(
         "communications",
         "critical_facilities",
         "damage_status",
-        "tsunami",
         "response",
         "government_response",
         "emergency_response",
@@ -396,5 +395,5 @@ class EvidenceReconciler:
             warnings=warnings,
             retrieved_at=retrieved_at,
             physical_event=physical_event,
-            correlation=policies.for_hazard(query.hazard).correlate,
+            correlation=policies.for_disaster(query.disaster).correlate,
         )

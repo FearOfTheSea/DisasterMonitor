@@ -17,9 +17,9 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderTier,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventMeasurement,
-    Hazard,
     MeasurementKind,
     SourceReference,
     point_event_geometry,
@@ -47,7 +47,7 @@ class StaticEventProvider:
 
 
 def _query() -> DisasterQuery:
-    return DisasterQuery(Hazard.FLOOD, JAPAN, "recent", ("latest",))
+    return DisasterQuery(Disaster.FLOOD, JAPAN, "recent", ("latest",))
 
 
 def _source(source_id: str) -> SourceReference:
@@ -77,7 +77,7 @@ def _event(
     )
     return DisasterEvent(
         event_id="flood:shared",
-        hazard=Hazard.FLOOD,
+        disaster=Disaster.FLOOD,
         location=location,
         country=JAPAN,
         event_time=event_time,
@@ -99,7 +99,7 @@ def _registration(
         provider,
         ProviderCapabilities(
             roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-            hazards=frozenset({Hazard.FLOOD}),
+            disasters=frozenset({Disaster.FLOOD}),
             country_codes=frozenset({"JPN"}),
             event_scopes=frozenset({GeographicScope.COUNTRY}),
         ),

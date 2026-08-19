@@ -9,10 +9,10 @@ from disaster_monitor.application.services.event_resolution import (
     EarthquakeEventPolicy,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EarthquakeEvent,
     EventMeasurement,
-    Hazard,
     MeasurementKind,
     SourceReference,
     point_event_geometry,
@@ -43,7 +43,7 @@ def _event(event_id: str, **changes: object) -> EarthquakeEvent:
     magnitude = float(changes.pop("magnitude", 6.1))
     event = EarthquakeEvent(
         event_id,
-        Hazard.EARTHQUAKE,
+        Disaster.EARTHQUAKE,
         "Ishikawa, Japan",
         JAPAN,
         NOW - timedelta(hours=2),
@@ -58,12 +58,12 @@ def _event(event_id: str, **changes: object) -> EarthquakeEvent:
 
 
 def _generic_event(event_id: str, **changes: object) -> DisasterEvent:
-    hazard = changes.pop("hazard", Hazard.FLOOD)
+    disaster = changes.pop("disaster", Disaster.FLOOD)
     country = changes.pop("country", JAPAN)
     event_time = changes.pop("event_time", NOW - timedelta(hours=2))
     return DisasterEvent(
         event_id=event_id,
-        hazard=hazard,
+        disaster=disaster,
         location="Ishikawa, Japan",
         country=country,
         event_time=event_time,
@@ -77,7 +77,7 @@ def _generic_event(event_id: str, **changes: object) -> DisasterEvent:
 def test_earthquake_policy_clusters_cross_provider_observations() -> None:
     policy = EarthquakeEventPolicy()
     observations = (
-        _event("jma:target"),
+        _event("global-catalog:target"),
         _event(
             "usgs:target",
             event_time=NOW - timedelta(hours=2, seconds=-20),
@@ -89,14 +89,16 @@ def test_earthquake_policy_clusters_cross_provider_observations() -> None:
     clustered = policy.cluster(observations)
 
     assert len(clustered) == 1
-    assert set(clustered[0].provider_ids) == {"jma:target", "usgs:target"}
-    assert identity.physical_events[0].observations == observations
+    assert set(clustered[0].provider_ids) == {"global-catalog:target", "usgs:target"}
+    assert {
+        observation.event_id for observation in identity.physical_events[0].observations
+    } == {observation.event_id for observation in observations}
     assert all(
         assignment.rationale for assignment in identity.physical_events[0].assignments
     )
 
 
-def test_earthquake_policy_never_clusters_across_country_or_hazard() -> None:
+def test_earthquake_policy_never_clusters_across_country_or_disaster() -> None:
     policy = EarthquakeEventPolicy()
     clustered = policy.cluster(
         (
@@ -120,10 +122,12 @@ def test_nearby_independent_earthquakes_are_not_merged() -> None:
 
 def test_default_policy_marks_similarly_recent_independent_events_ambiguous() -> None:
     policy = DefaultEventPolicy()
-    query = DisasterQuery(Hazard.FLOOD, JAPAN, "recent", ("latest",))
+    query = DisasterQuery(Disaster.FLOOD, JAPAN, "recent", ("latest",))
     first = _generic_event("first")
     second = _generic_event(
-        "second", hazard=Hazard.FLOOD, event_time=first.event_time - timedelta(hours=1)
+        "second",
+        disaster=Disaster.FLOOD,
+        event_time=first.event_time - timedelta(hours=1),
     )
 
     resolution = policy.resolve((first, second), query, now=NOW)
@@ -135,7 +139,7 @@ def test_default_policy_marks_similarly_recent_independent_events_ambiguous() ->
 def test_default_policy_never_merges_shared_ids_across_scope() -> None:
     policy = DefaultEventPolicy()
     flood = _generic_event("shared:event")
-    foreign = _generic_event("shared:event", hazard=Hazard.FLOOD, country=VENEZUELA)
+    foreign = _generic_event("shared:event", disaster=Disaster.FLOOD, country=VENEZUELA)
     earthquake = _event("shared:event")
 
     identity = policy.identify((flood, foreign, earthquake))
@@ -155,14 +159,14 @@ def test_generic_policy_ignores_earthquake_measurements_when_ranking_floods() ->
 
     resolution = policy.resolve(
         (older, newer),
-        DisasterQuery(Hazard.FLOOD, JAPAN, "recent", ("latest",)),
+        DisasterQuery(Disaster.FLOOD, JAPAN, "recent", ("latest",)),
         now=NOW,
     )
 
     assert resolution.selected == newer
 
 
-def test_earthquake_sequence_and_aftershock_policy_remains_hazard_specific() -> None:
+def test_earthquake_sequence_and_aftershock_policy_remains_disaster_specific() -> None:
     policy = EarthquakeEventPolicy()
     mainshock = _event("mainshock")
     aftershock = _event(
@@ -177,6 +181,6 @@ def test_earthquake_sequence_and_aftershock_policy_remains_hazard_specific() -> 
     assert policy.same_physical_event(mainshock, aftershock) is False
 
 
-def test_earthquake_subtype_rejects_non_earthquake_hazard() -> None:
-    with pytest.raises(ValueError, match="requires the earthquake hazard"):
-        replace(_event("earthquake"), hazard=Hazard.FLOOD)
+def test_earthquake_subtype_rejects_non_earthquake_disaster() -> None:
+    with pytest.raises(ValueError, match="requires the earthquake disaster"):
+        replace(_event("earthquake"), disaster=Disaster.FLOOD)

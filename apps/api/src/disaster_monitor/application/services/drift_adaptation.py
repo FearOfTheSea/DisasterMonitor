@@ -34,8 +34,8 @@ class DistributionDriftDetector:
 
     def assess(self, observation: DriftObservation) -> DriftAssessment:
         signals: list[str] = []
-        if observation.unknown_hazard:
-            signals.append("drift.unknown_hazard")
+        if observation.unknown_disaster:
+            signals.append("drift.unknown_disaster")
         if observation.unknown_language:
             signals.append("drift.unknown_language")
         if observation.unknown_provider_schema:
@@ -195,7 +195,7 @@ def load_drift_observations(
         "drift_type",
         "expected_drift",
         "severity",
-        "unknown_hazard",
+        "unknown_disaster",
         "unknown_language",
         "unknown_provider_schema",
         "source_latency_ratio",
@@ -219,7 +219,7 @@ def load_drift_observations(
                 drift_type=DriftType(_string(item["drift_type"], "drift_type")),
                 expected_drift=item["expected_drift"] is True,
                 severity=float(item["severity"]),
-                unknown_hazard=item["unknown_hazard"] is True,
+                unknown_disaster=item["unknown_disaster"] is True,
                 unknown_language=item["unknown_language"] is True,
                 unknown_provider_schema=item["unknown_provider_schema"] is True,
                 source_latency_ratio=float(item["source_latency_ratio"]),

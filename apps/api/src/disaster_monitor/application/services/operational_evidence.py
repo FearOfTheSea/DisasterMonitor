@@ -60,7 +60,7 @@ class OperationalEvidenceRecorder:
         await self._repository.append_physical_event(
             PhysicalEventRecord(
                 physical_event_id=state.physical_event.physical_event_id,
-                hazard=event.hazard.value,
+                disaster=event.disaster.value,
                 country_code=event.country.alpha3_code,
                 latitude=(
                     event.geometry.coordinates[0].latitude
@@ -141,7 +141,7 @@ def _event_observation_record(
         "physical_event_id": state.physical_event.physical_event_id,
         "event_id": event.event_id,
         "provider_ids": sorted(event.provider_ids),
-        "hazard": event.hazard.value,
+        "disaster": event.disaster.value,
         "country_code": event.country.alpha3_code,
         "location": event.location,
         "event_time": _time(event.event_time),

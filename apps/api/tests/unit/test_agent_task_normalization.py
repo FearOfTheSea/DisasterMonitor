@@ -16,7 +16,7 @@ from disaster_monitor.application.agent.task_normalization import (
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -71,7 +71,7 @@ def test_deterministic_normalization_recognizes_all_cyclone_alias_forms(
 ) -> None:
     draft = deterministic_task_draft(question)
 
-    assert draft.hazard_mentions == (Hazard.TROPICAL_CYCLONE.value,)
+    assert draft.disaster_mentions == (Disaster.TROPICAL_CYCLONE.value,)
 
 
 def test_news_request_uses_trusted_path_for_any_admitted_country() -> None:
@@ -114,7 +114,7 @@ def test_worldwide_earthquake_scope_is_explicit_and_current_only() -> None:
         "What was the strongest earthquake across the world this week?"
     )
 
-    assert latest is not None and latest.hazard is Hazard.EARTHQUAKE
+    assert latest is not None and latest.disaster is Disaster.EARTHQUAKE
     assert strongest is not None
     assert strongest.selection_intent.value == "strongest"
     assert worldwide_disaster_query("Latest earthquake anywhere?") is not None
@@ -137,7 +137,7 @@ def test_canonicalizes_supported_current_disaster_task_and_information_scope() -
     )
 
     assert task.kind == TaskKind.INVESTIGATION
-    assert task.hazard == Hazard.EARTHQUAKE
+    assert task.disaster == Disaster.EARTHQUAKE
     assert task.country is not None and task.country.alpha3_code == "JPN"
     assert task.information_needs == (InformationNeed.FATALITIES,)
     assert OutputModality.FOCUSED_FACT in task.output_modalities
@@ -146,7 +146,9 @@ def test_canonicalizes_supported_current_disaster_task_and_information_scope() -
     assert task.query.date_from.isoformat() == "2026-08-04T15:00:00+00:00"
 
 
-def test_unknown_country_multiple_country_and_unsupported_hazard_are_retained() -> None:
+def test_unknown_country_multiple_country_and_unsupported_disaster_are_retained() -> (
+    None
+):
     thailand = validate("Give me the latest earthquake information in Thailand.")
     multiple = validate("Compare the latest earthquakes in Japan and Venezuela.")
     flood = validate("Give me the latest flood information in Vietnam.")
@@ -155,7 +157,7 @@ def test_unknown_country_multiple_country_and_unsupported_hazard_are_retained() 
     assert thailand.unresolved_place == "Thailand"
     assert multiple.validation_status == ValidationStatus.CLARIFICATION_REQUIRED
     assert flood.validation_status == ValidationStatus.VALID
-    assert flood.hazard == Hazard.FLOOD
+    assert flood.disaster == Disaster.FLOOD
     assert flood.country is not None and flood.country.alpha3_code == "VNM"
 
 
@@ -163,7 +165,7 @@ def test_model_cannot_invent_country_or_override_deterministic_disaster_gate() -
     draft = DisasterTaskDraft(
         disaster_related=False,
         current_or_event_specific=False,
-        hazard_mentions=("earthquake",),
+        disaster_mentions=("earthquake",),
         place_mentions=("Thailand", "TST"),
     )
 
@@ -187,7 +189,7 @@ def test_model_draft_cannot_expand_user_task_scope() -> None:
     invented_disaster = DisasterTaskDraft(
         disaster_related=True,
         current_or_event_specific=True,
-        hazard_mentions=("earthquake",),
+        disaster_mentions=("earthquake",),
         place_mentions=("Japan",),
         information_needs=("map_visualization",),
         output_modalities=("text", "map"),
@@ -195,7 +197,7 @@ def test_model_draft_cannot_expand_user_task_scope() -> None:
     expanded_investigation = DisasterTaskDraft(
         disaster_related=True,
         current_or_event_specific=True,
-        hazard_mentions=("earthquake", "tsunami"),
+        disaster_mentions=("earthquake", "flood"),
         place_mentions=("Japan", "Venezuela"),
         information_needs=("event_overview", "images", "decision_support"),
         output_modalities=("text", "images", "map"),
@@ -206,7 +208,7 @@ def test_model_draft_cannot_expand_user_task_scope() -> None:
 
     assert map_task.kind == TaskKind.NON_DISASTER
     assert investigation.kind == TaskKind.INVESTIGATION
-    assert investigation.hazard == Hazard.EARTHQUAKE
+    assert investigation.disaster == Disaster.EARTHQUAKE
     assert investigation.country is not None
     assert investigation.country.alpha3_code == "JPN"
     assert investigation.information_needs == (InformationNeed.EVENT_OVERVIEW,)

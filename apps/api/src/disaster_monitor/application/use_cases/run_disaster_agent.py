@@ -141,7 +141,7 @@ class RunDisasterAgent:
         context = MediaEventContext(
             event_id=event.event_id,
             physical_event_id=physical_event_id or f"selected-event:{event.event_id}",
-            hazard=event.hazard,
+            disaster=event.disaster,
             location=event.location,
             event_time=event.event_time,
             provider_ids=event.provider_ids,
@@ -236,7 +236,7 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
     return InvestigationSummary(
         status=state.final_status.value,
         task_summary=(task.detail or task.question)[:500],
-        hazard=task.hazard.value if task.hazard else None,
+        disaster=task.disaster.value if task.disaster else None,
         country=task.country.alpha3_code if task.country else task.unresolved_place,
         information_needs=tuple(item.value for item in task.information_needs),
         output_modalities=tuple(item.value for item in task.output_modalities),

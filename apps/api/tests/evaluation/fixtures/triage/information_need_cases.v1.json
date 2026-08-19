@@ -345,7 +345,7 @@
       "requires_evidence": false
     },
     {
-      "id": "adversarial-no-hazard",
+      "id": "adversarial-no-disaster",
       "text": "Show the current emergency response map for Japan.",
       "needs": ["emergency_response", "map_visualization"],
       "requires_evidence": false

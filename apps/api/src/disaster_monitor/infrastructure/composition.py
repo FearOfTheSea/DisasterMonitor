@@ -45,32 +45,16 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.application.services.source_consistency import (
     validate_provider_source_consistency,
 )
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
     CompositeSituationReportProvider,
 )
-from disaster_monitor.infrastructure.disaster.fdma_adapter import (
-    FdmaSituationReportAdapter,
-)
-from disaster_monitor.infrastructure.disaster.firms_adapter import (
-    FirmsActiveFireAdapter,
-)
 from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
     GdacsTropicalCycloneAdapter,
 )
-from disaster_monitor.infrastructure.disaster.gfm_adapter import (
-    GfmFloodNotificationAdapter,
-)
 from disaster_monitor.infrastructure.disaster.http import SourcePayloadRecorder
-from disaster_monitor.infrastructure.disaster.jma_adapter import (
-    JmaEarthquakeAdapter,
-    JmaSignificantEarthquakeAdapter,
-    JmaTsunamiSituationAdapter,
-    has_jma_event_id,
-)
-from disaster_monitor.infrastructure.disaster.nchmf_adapter import NchmfWarningAdapter
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
 )
@@ -201,27 +185,15 @@ def build_visual_analyzer(settings: Settings) -> VisualAnalyzer:
 
 
 def build_source_catalog(settings: Settings | None = None) -> StaticSourceCatalog:
-    """Construct the packaged maintained disaster-source catalog."""
+    """Construct the packaged maintained global disaster-source catalog."""
     if settings is None:
         return StaticSourceCatalog()
-    name = (settings.reliefweb_app_name or "").strip().lower()
+    app_name = (settings.reliefweb_app_name or "").strip().lower()
     configured = bool(
-        name and name not in {"disaster-monitor-local", "change-me", "your-app-name"}
+        app_name
+        and app_name not in {"disaster-monitor-local", "change-me", "your-app-name"}
     )
-    return StaticSourceCatalog(
-        {
-            "reliefweb-situation-reports": configured,
-            "nasa-firms-active-fire": bool(
-                settings.firms_map_key is not None
-                and settings.firms_map_key.get_secret_value().strip()
-            ),
-            "copernicus-gfm-vietnam": bool(
-                settings.gfm_access_token is not None
-                and settings.gfm_access_token.get_secret_value().strip()
-                and settings.gfm_user_id
-            ),
-        }
-    )
+    return StaticSourceCatalog({"reliefweb-situation-reports": configured})
 
 
 def build_country_catalog(settings: Settings | None = None) -> StaticCountryCatalog:
@@ -268,16 +240,6 @@ def build_current_disaster_report(
     operational_evidence: OperationalEvidenceRecorder | None = None,
 ) -> CurrentDisasterReportService:
     """Construct capability-registered live disaster providers."""
-    jma_rolling = JmaEarthquakeAdapter(
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    jma_significant = JmaSignificantEarthquakeAdapter(
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
     geography = country_catalog or build_country_catalog()
     usgs = UsgsEarthquakeAdapter(
         geography=geography,
@@ -291,86 +253,20 @@ def build_current_disaster_report(
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
-    fdma = FdmaSituationReportAdapter(
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    jma_tsunami = JmaTsunamiSituationAdapter(
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
     reliefweb = ReliefWebSituationAdapter(
         app_name=settings.reliefweb_app_name,
         snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
-    nchmf = NchmfWarningAdapter(
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    firms = FirmsActiveFireAdapter(
-        geography=geography,
-        map_key=(
-            settings.firms_map_key.get_secret_value()
-            if settings.firms_map_key is not None
-            else None
-        ),
-        dataset=settings.firms_dataset,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    gfm = GfmFloodNotificationAdapter(
-        access_token=(
-            settings.gfm_access_token.get_secret_value()
-            if settings.gfm_access_token is not None
-            else None
-        ),
-        user_id=settings.gfm_user_id,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    event_japan = ProviderCapabilities(
-        roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-        hazards=frozenset({Hazard.EARTHQUAKE}),
-        country_codes=frozenset({"JPN"}),
-    )
-    situation_japan = ProviderCapabilities(
-        roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
-        hazards=frozenset({Hazard.EARTHQUAKE}),
-        country_codes=frozenset({"JPN"}),
-    )
     registry = ProviderRegistry(
         (
-            ProviderRegistration(
-                "JMA rolling earthquake",
-                jma_rolling,
-                event_japan,
-                tier=ProviderTier.PRIMARY,
-                source_id="jma-rolling-earthquakes",
-                allowed_hosts=jma_rolling.allowed_hosts,
-                event_provider=jma_rolling,
-            ),
-            ProviderRegistration(
-                "JMA significant earthquake",
-                jma_significant,
-                event_japan,
-                tier=ProviderTier.SECONDARY,
-                source_id="jma-significant-earthquakes",
-                allowed_hosts=jma_significant.allowed_hosts,
-                event_provider=jma_significant,
-            ),
             ProviderRegistration(
                 "USGS",
                 usgs,
                 ProviderCapabilities(
                     roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    hazards=frozenset({Hazard.EARTHQUAKE}),
+                    disasters=frozenset({Disaster.EARTHQUAKE}),
                     country_codes=None,
                     geographic_scopes=frozenset(
                         {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
@@ -390,7 +286,7 @@ def build_current_disaster_report(
                 gdacs,
                 ProviderCapabilities(
                     roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    hazards=frozenset({Hazard.TROPICAL_CYCLONE}),
+                    disasters=frozenset({Disaster.TROPICAL_CYCLONE}),
                     country_codes=None,
                     geographic_scopes=frozenset(
                         {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
@@ -406,31 +302,13 @@ def build_current_disaster_report(
                 worldwide_provider=gdacs,
             ),
             ProviderRegistration(
-                "FDMA",
-                fdma,
-                situation_japan,
-                tier=ProviderTier.PRIMARY,
-                source_id="fdma-situation-reports",
-                allowed_hosts=fdma.allowed_hosts,
-                situation_provider=fdma,
-            ),
-            ProviderRegistration(
-                "JMA tsunami status",
-                jma_tsunami,
-                situation_japan,
-                tier=ProviderTier.SECONDARY,
-                source_id="jma-tsunami-status",
-                event_eligibility=has_jma_event_id,
-                allowed_hosts=jma_tsunami.allowed_hosts,
-                situation_provider=jma_tsunami,
-            ),
-            ProviderRegistration(
                 "ReliefWeb",
                 reliefweb,
                 ProviderCapabilities(
                     roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    hazards=frozenset(Hazard),
+                    disasters=frozenset(Disaster),
                     country_codes=None,
+                    geographic_scopes=frozenset({GeographicScope.COUNTRY}),
                     requires_configuration=True,
                 ),
                 tier=ProviderTier.SECONDARY,
@@ -439,82 +317,9 @@ def build_current_disaster_report(
                 allowed_hosts=reliefweb.allowed_hosts,
                 situation_provider=reliefweb,
             ),
-            ProviderRegistration(
-                "NCHMF Vietnam warnings",
-                nchmf,
-                ProviderCapabilities(
-                    roles=frozenset(
-                        {
-                            ProviderRole.EVENT_DISCOVERY,
-                            ProviderRole.SITUATION_EVIDENCE,
-                        }
-                    ),
-                    hazards=frozenset(
-                        {
-                            Hazard.FLOOD,
-                            Hazard.LANDSLIDE,
-                            Hazard.TROPICAL_CYCLONE,
-                        }
-                    ),
-                    country_codes=frozenset({"VNM"}),
-                ),
-                tier=ProviderTier.PRIMARY,
-                source_id="nchmf-vietnam-warnings",
-                allowed_hosts=nchmf.allowed_hosts,
-                event_provider=nchmf,
-                situation_provider=nchmf,
-            ),
-            ProviderRegistration(
-                "NASA FIRMS active fire",
-                firms,
-                ProviderCapabilities(
-                    roles=frozenset(
-                        {
-                            ProviderRole.EVENT_DISCOVERY,
-                            ProviderRole.SITUATION_EVIDENCE,
-                        }
-                    ),
-                    hazards=frozenset({Hazard.WILDFIRE}),
-                    country_codes=None,
-                    requires_configuration=True,
-                ),
-                tier=ProviderTier.PRIMARY,
-                source_id="nasa-firms-active-fire",
-                configured=firms.configured,
-                allowed_hosts=firms.allowed_hosts,
-                event_provider=firms,
-                situation_provider=firms,
-            ),
-            ProviderRegistration(
-                "Copernicus GFM Vietnam notifications",
-                gfm,
-                ProviderCapabilities(
-                    roles=frozenset(
-                        {
-                            ProviderRole.EVENT_DISCOVERY,
-                            ProviderRole.SITUATION_EVIDENCE,
-                        }
-                    ),
-                    hazards=frozenset({Hazard.FLOOD}),
-                    country_codes=frozenset({"VNM"}),
-                    requires_configuration=True,
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="copernicus-gfm-vietnam",
-                configured=gfm.configured,
-                allowed_hosts=gfm.allowed_hosts,
-                event_provider=gfm,
-                situation_provider=gfm,
-            ),
         )
     )
-    source_catalog = StaticSourceCatalog(
-        {
-            "reliefweb-situation-reports": reliefweb.configured,
-            "nasa-firms-active-fire": firms.configured,
-            "copernicus-gfm-vietnam": gfm.configured,
-        }
-    )
+    source_catalog = build_source_catalog(settings)
     validate_provider_source_consistency(registry, source_catalog)
     event_provider = CompositeDisasterEventProvider(registry)
     situation_provider = CompositeSituationReportProvider(registry)

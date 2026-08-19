@@ -43,11 +43,11 @@ from disaster_monitor.domain.decision import (
     DecisionStatementType,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventMeasurement,
     EvidenceDisposition,
     FactStatus,
-    Hazard,
     MeasurementKind,
     ReportedFact,
     SituationReport,
@@ -69,7 +69,7 @@ def _load() -> dict[str, object]:
 
 def _state(item: dict[str, object]):
     case_id = str(item["id"])
-    hazard = Hazard(str(item["hazard"]))
+    disaster = Disaster(str(item["disaster"]))
     country = COUNTRIES.get_by_alpha3(str(item["country_code"]))
     assert country is not None
     event_time = datetime(2026, 8, 11, 6, tzinfo=UTC)
@@ -85,7 +85,7 @@ def _state(item: dict[str, object]):
     )
     event = DisasterEvent(
         event_id=case_id,
-        hazard=hazard,
+        disaster=disaster,
         location=country.canonical_name,
         country=country,
         event_time=event_time,
@@ -104,7 +104,7 @@ def _state(item: dict[str, object]):
     )
     physical_event = (
         default_event_policy_registry()
-        .for_hazard(hazard)
+        .for_disaster(disaster)
         .identify((event,))
         .physical_events[0]
     )
@@ -151,7 +151,7 @@ def _state(item: dict[str, object]):
                 narrative="Frozen decision-support packet.",
                 facts=facts,
                 event_id=case_id,
-                hazard=hazard,
+                disaster=disaster,
                 country_codes=(country.alpha3_code,),
             )
         )

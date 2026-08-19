@@ -16,7 +16,7 @@ from disaster_monitor.application.ports.disaster_information import (
     WorldwideDisasterProvider,
     WorldwideSituationProvider,
 )
-from disaster_monitor.domain.disaster import DisasterEvent, Hazard, ProviderTier
+from disaster_monitor.domain.disaster import Disaster, DisasterEvent, ProviderTier
 
 __all__ = [
     "ProviderCapabilities",
@@ -48,7 +48,7 @@ class ProviderCapabilities:
     """Static query scope advertised by one provider registration."""
 
     roles: frozenset[ProviderRole]
-    hazards: frozenset[Hazard]
+    disasters: frozenset[Disaster]
     country_codes: frozenset[str] | None
     requires_configuration: bool = False
     geographic_scopes: frozenset[GeographicScope] = frozenset({GeographicScope.COUNTRY})
@@ -58,7 +58,7 @@ class ProviderCapabilities:
     def supports(
         self, query: DisasterQuery | WorldwideDisasterQuery, role: ProviderRole
     ) -> bool:
-        if role not in self.roles or query.hazard not in self.hazards:
+        if role not in self.roles or query.disaster not in self.disasters:
             return False
         scopes = (
             self.event_scopes
@@ -180,7 +180,7 @@ class ProviderRegistry:
 
     def _validate_primary_authority(self) -> None:
         primary_coverage: dict[
-            tuple[Hazard, ProviderRole, GeographicScope],
+            tuple[Disaster, ProviderRole, GeographicScope],
             list[tuple[str, frozenset[str] | None]],
         ] = {}
         for registration in self._registrations:
@@ -195,9 +195,9 @@ class ProviderRegistry:
                     if role is ProviderRole.EVENT_DISCOVERY
                     else registration.capabilities.situation_scopes
                 )
-                for hazard in registration.capabilities.hazards:
+                for disaster in registration.capabilities.disasters:
                     for scope in scopes:
-                        key = (hazard, role, scope)
+                        key = (disaster, role, scope)
                         countries = (
                             registration.capabilities.country_codes
                             if scope is GeographicScope.COUNTRY
@@ -213,7 +213,7 @@ class ProviderRegistry:
                             if overlaps:
                                 raise ValueError(
                                     "Multiple configured primary providers for "
-                                    f"{hazard.value}/{role.value}/{scope.value}: "
+                                    f"{disaster.value}/{role.value}/{scope.value}: "
                                     f"{previous} and {registration.name}."
                                 )
                         primary_coverage.setdefault(key, []).append(

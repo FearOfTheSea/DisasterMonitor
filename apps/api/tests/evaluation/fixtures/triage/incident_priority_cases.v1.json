@@ -3,7 +3,7 @@
   "episodes": [
     {
       "id": "eq-jpn-catastrophic",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "event_time": "2026-08-11T00:00:00Z",
       "magnitude": 7.6,
@@ -19,7 +19,7 @@
     },
     {
       "id": "flood-vnm-lethal",
-      "hazard": "flood",
+      "disaster": "flood",
       "country_code": "VNM",
       "event_time": "2026-08-10T23:00:00Z",
       "facts": [
@@ -31,7 +31,7 @@
     },
     {
       "id": "cyclone-ven-missing",
-      "hazard": "tropical_cyclone",
+      "disaster": "tropical_cyclone",
       "country_code": "VEN",
       "event_time": "2026-08-10T22:00:00Z",
       "facts": [
@@ -44,7 +44,7 @@
     },
     {
       "id": "eq-vnm-major-unknown",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "VNM",
       "event_time": "2026-08-10T21:00:00Z",
       "magnitude": 7.0,
@@ -54,7 +54,7 @@
     },
     {
       "id": "eq-jpn-strong",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "event_time": "2026-08-10T20:00:00Z",
       "magnitude": 6.2,
@@ -64,7 +64,7 @@
     },
     {
       "id": "flood-vnm-evacuation",
-      "hazard": "flood",
+      "disaster": "flood",
       "country_code": "VNM",
       "event_time": "2026-08-10T19:00:00Z",
       "facts": [
@@ -76,7 +76,7 @@
     },
     {
       "id": "landslide-ven-severe-damage",
-      "hazard": "landslide",
+      "disaster": "landslide",
       "country_code": "VEN",
       "event_time": "2026-08-10T18:00:00Z",
       "facts": [
@@ -91,7 +91,7 @@
     },
     {
       "id": "wildfire-jpn-warning",
-      "hazard": "wildfire",
+      "disaster": "wildfire",
       "country_code": "JPN",
       "event_time": "2026-08-10T17:00:00Z",
       "facts": [
@@ -102,7 +102,7 @@
     },
     {
       "id": "eq-ven-moderate",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "VEN",
       "event_time": "2026-08-10T16:00:00Z",
       "magnitude": 5.2,
@@ -112,7 +112,7 @@
     },
     {
       "id": "flood-jpn-small-evacuation",
-      "hazard": "flood",
+      "disaster": "flood",
       "country_code": "JPN",
       "event_time": "2026-08-10T15:00:00Z",
       "facts": [{ "category": "evacuations", "value": "20" }],
@@ -121,7 +121,7 @@
     },
     {
       "id": "landslide-vnm-local-damage",
-      "hazard": "landslide",
+      "disaster": "landslide",
       "country_code": "VNM",
       "event_time": "2026-08-10T14:00:00Z",
       "facts": [{ "category": "physical_damage", "value": "Localized damage" }],
@@ -130,7 +130,7 @@
     },
     {
       "id": "eq-jpn-low",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "event_time": "2026-08-10T13:00:00Z",
       "magnitude": 4.2,
@@ -140,7 +140,7 @@
     },
     {
       "id": "flood-ven-no-impact",
-      "hazard": "flood",
+      "disaster": "flood",
       "country_code": "VEN",
       "event_time": "2026-08-10T12:00:00Z",
       "facts": [],
@@ -151,11 +151,11 @@
   "scope_parity": {
     "facts": [{ "category": "infrastructure", "value": "Power outage" }],
     "variants": [
-      { "id": "parity-eq-jpn", "hazard": "earthquake", "country_code": "JPN" },
-      { "id": "parity-flood-vnm", "hazard": "flood", "country_code": "VNM" },
+      { "id": "parity-eq-jpn", "disaster": "earthquake", "country_code": "JPN" },
+      { "id": "parity-flood-vnm", "disaster": "flood", "country_code": "VNM" },
       {
         "id": "parity-wildfire-ven",
-        "hazard": "wildfire",
+        "disaster": "wildfire",
         "country_code": "VEN"
       }
     ]

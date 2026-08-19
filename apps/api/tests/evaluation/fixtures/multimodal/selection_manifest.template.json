@@ -16,7 +16,7 @@
       "attribution": "REPLACE_WITH_REQUIRED_ATTRIBUTION",
       "captured_at": "REPLACE_WITH_TIMEZONE_AWARE_CAPTURE_TIME",
       "capture_role": "post_event",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "REPLACE_WITH_ALPHA3",
       "footprint": [[[0.0, 0.0], [0.1, 0.0], [0.1, 0.1], [0.0, 0.1], [0.0, 0.0]]],
       "event": {

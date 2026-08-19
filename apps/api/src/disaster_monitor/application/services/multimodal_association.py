@@ -52,7 +52,7 @@ class MultimodalEventAssociator:
                 EventAssociationStatus.ORPHANED,
                 geography=None,
                 time=None,
-                hazard=None,
+                disaster=None,
                 country=None,
                 event_id=None,
                 distance=None,
@@ -67,7 +67,7 @@ class MultimodalEventAssociator:
                 EventAssociationStatus.ORPHANED,
                 geography=None,
                 time=None,
-                hazard=None,
+                disaster=None,
                 country=None,
                 event_id=None,
                 distance=None,
@@ -82,7 +82,7 @@ class MultimodalEventAssociator:
                 EventAssociationStatus.ORPHANED,
                 geography=None,
                 time=None,
-                hazard=None,
+                disaster=None,
                 country=None,
                 event_id=None,
                 distance=None,
@@ -91,9 +91,9 @@ class MultimodalEventAssociator:
                 detail="The selected physical event lacks point georeference.",
             )
 
-        hazard_match = asset.declared_hazard == event.hazard
+        disaster_match = asset.declared_disaster == event.disaster
         country_match = asset.declared_country_code == event.country.alpha3_code
-        rules.extend(("mm.association.hazard_exact", "mm.association.country_exact"))
+        rules.extend(("mm.association.disaster_exact", "mm.association.country_exact"))
         event_identifiers = {
             physical_event.physical_event_id.casefold(),
             event.event_id.casefold(),
@@ -120,7 +120,7 @@ class MultimodalEventAssociator:
         rules.append(f"mm.association.capture_role.{asset.capture_role.value}")
 
         mismatched = (
-            not hazard_match
+            not disaster_match
             or not country_match
             or event_id_match is False
             or not time_match
@@ -129,7 +129,7 @@ class MultimodalEventAssociator:
         if mismatched:
             status = EventAssociationStatus.UNMATCHED
             detail = (
-                "Trusted hazard, country, event, time, or footprint metadata "
+                "Trusted disaster, country, event, time, or footprint metadata "
                 "mismatched."
             )
         elif near_boundary:
@@ -138,7 +138,8 @@ class MultimodalEventAssociator:
         else:
             status = EventAssociationStatus.ASSOCIATED
             detail = (
-                "Explicit hazard, country, capture time, and footprint metadata match."
+                "Explicit disaster, country, capture time, and footprint metadata "
+                "match."
             )
         return self._result(
             asset,
@@ -146,7 +147,7 @@ class MultimodalEventAssociator:
             status,
             geography=geography_match,
             time=time_match,
-            hazard=hazard_match,
+            disaster=disaster_match,
             country=country_match,
             event_id=event_id_match,
             distance=distance,
@@ -172,7 +173,7 @@ class MultimodalEventAssociator:
         *,
         geography: bool | None,
         time: bool | None,
-        hazard: bool | None,
+        disaster: bool | None,
         country: bool | None,
         event_id: bool | None,
         distance: float | None,
@@ -197,7 +198,7 @@ class MultimodalEventAssociator:
             status=status,
             geography_match=geography,
             time_match=time,
-            hazard_match=hazard,
+            disaster_match=disaster,
             country_match=country,
             event_id_match=event_id,
             distance_km=distance,

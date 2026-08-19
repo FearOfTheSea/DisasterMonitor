@@ -21,11 +21,11 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 from disaster_monitor.domain.disaster import (
     BoundaryValidationQuality,
     Country,
+    Disaster,
     DisasterEvent,
     EarthquakeEvent,
     EventGeographyStatus,
     EventMeasurement,
-    Hazard,
     MeasurementKind,
     SourceAuthority,
     SourceReference,
@@ -225,7 +225,7 @@ class UsgsEarthquakeAdapter:
         return (
             EarthquakeEvent(
                 event_id=f"usgs:{event_id}",
-                hazard=Hazard.EARTHQUAKE,
+                disaster=Disaster.EARTHQUAKE,
                 location=(place or query.country.canonical_name),
                 country=query.country,
                 event_time=event_time,
@@ -325,7 +325,7 @@ class UsgsEarthquakeAdapter:
         return (
             WorldwideDisasterEvent(
                 event_id=f"usgs:{event_id}",
-                hazard=Hazard.EARTHQUAKE,
+                disaster=Disaster.EARTHQUAKE,
                 location=_text(properties.get("place")) or "Worldwide earthquake",
                 event_time=event_time,
                 source=source,

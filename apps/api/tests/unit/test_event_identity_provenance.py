@@ -12,9 +12,9 @@ from disaster_monitor.application.services.source_evidence_policy import (
     validate_physical_event_evidence,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventMeasurement,
-    Hazard,
     MeasurementKind,
     SourceReference,
     point_event_geometry,
@@ -51,7 +51,7 @@ def _event(
 ) -> DisasterEvent:
     return DisasterEvent(
         event_id=event_id,
-        hazard=Hazard.FLOOD,
+        disaster=Disaster.FLOOD,
         location="Japan",
         country=JAPAN,
         event_time=event_time,
@@ -63,7 +63,7 @@ def _event(
 
 
 def _query() -> DisasterQuery:
-    return DisasterQuery(Hazard.FLOOD, JAPAN, "recent", ("latest",))
+    return DisasterQuery(Disaster.FLOOD, JAPAN, "recent", ("latest",))
 
 
 def test_generic_policy_merges_shared_provider_identity_within_safe_timing() -> None:

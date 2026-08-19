@@ -6,11 +6,11 @@ and [capability-status.md](capability-status.md) for release evidence.
 
 ## Flow
 
-1. Normalize one hazard, explicit geographic scope (country or worldwide), information
+1. Normalize one disaster, explicit geographic scope (country or worldwide), information
    need, output mode, and optional event discriminators.
 2. Select registry-approved providers. Unsupported combinations return
    `current_disaster_coverage_unavailable` without a factual model response.
-3. Discover and select a physical event using deterministic, hazard- and country-safe
+3. Discover and select a physical event using deterministic, disaster- and country-safe
    policy. Ambiguous events remain separate and are disclosed.
 4. Retrieve eligible situation evidence and preserve provider failures independently.
 5. Reconcile observations into canonical temporal evidence. Revisions, conflicts,
@@ -31,7 +31,7 @@ compose_disaster_answer
 The parser routes recognized current-event questions, including “news” requests, to
 this path. Explicit worldwide requests use the same normalized-task and capability
 selection path as named-country requests, without inventing a country. Worldwide
-ranking and wording are supplied by the selected hazard policy; the result is limited
+ranking and wording are supplied by the selected disaster policy; the result is limited
 to event discovery, not global impact coverage.
 
 ## Evidence and authority
@@ -54,12 +54,11 @@ source authority, issue public warnings, or select events.
 
 ## Providers
 
-- JMA rolling and significant-earthquake feeds discover Japan events.
 - USGS provides bounded named-country and worldwide earthquake discovery.
-- FDMA provides official Japan earthquake situation reports.
-- JMA provides tsunami status for selected events with a JMA identifier.
-- ReliefWeb provides configured preliminary supplementary reports.
-- NCHMF, FIRMS, GFM, and explicitly registered CAP paths cover Roadmap-2 roles.
+- GDACS provides bounded named-country and worldwide tropical-cyclone discovery.
+- ReliefWeb is an optional, configured supplementary situation-evidence provider for
+  named-country requests; without `RELIEFWEB_APP_NAME`, it remains unavailable and
+  reports disclose that gap.
 
 See [docs/sources](sources/) for source-specific limits and tests. Event-associated
 photos are a separate presentation feature documented in [event-media.md](event-media.md).
@@ -71,7 +70,8 @@ Adapters use `apps/api/.env` or the process environment:
 ```text
 DISASTER_PROVIDER_TIMEOUT_SECONDS=10
 DISASTER_PROVIDER_MAX_RESPONSE_BYTES=1000000
-RELIEFWEB_APP_NAME=(optional approved name)
+# Optional approved ReliefWeb application name. Leave unset to disable it.
+# RELIEFWEB_APP_NAME=
 ```
 
 Default tests use deterministic fixtures and do not require network access, Ollama, or

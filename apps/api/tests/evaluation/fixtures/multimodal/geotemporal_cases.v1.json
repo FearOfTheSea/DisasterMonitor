@@ -3,7 +3,7 @@
   "event": {
     "event_id": "fixture:event-japan-1",
     "provider_ids": ["fixture-provider:event-japan-1"],
-    "hazard": "earthquake",
+    "disaster": "earthquake",
     "country_code": "JPN",
     "event_time": "2026-08-05T12:00:00Z",
     "longitude": 137.0,
@@ -18,22 +18,22 @@
     "swapped": [[[35.0, 137.0], [35.2, 137.0], [35.2, 137.2], [35.0, 137.0]]]
   },
   "cases": [
-    {"case_id": "correct-post-event", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "associated", "expected_geography": true, "expected_time": true},
-    {"case_id": "correct-event-id", "capture": "2026-08-05T13:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "inside", "event_id_hint": "fixture-provider:event-japan-1", "expected_status": "associated", "expected_geography": true, "expected_time": true},
-    {"case_id": "nearby-simultaneous-disaster", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "far", "expected_status": "unmatched", "expected_geography": false, "expected_time": true},
-    {"case_id": "same-place-different-time", "capture": "2025-01-01T00:00:00Z", "role": "single_capture", "hazard": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": false},
-    {"case_id": "wrong-country", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "VNM", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": true},
-    {"case_id": "wrong-hazard", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "flood", "country": "JPN", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": true},
-    {"case_id": "adjacent-footprint", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "adjacent", "expected_status": "unmatched", "expected_geography": false, "expected_time": true},
-    {"case_id": "boundary-offset", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "near_boundary", "expected_status": "ambiguous", "expected_geography": false, "expected_time": true},
-    {"case_id": "missing-capture", "capture": null, "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
-    {"case_id": "missing-georeference", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": null, "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
-    {"case_id": "malformed-geometry", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "malformed", "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
-    {"case_id": "swapped-longitude-latitude", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "swapped", "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
-    {"case_id": "wrong-timezone-naive", "capture": "2026-08-05T14:00:00", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
-    {"case_id": "pre-post-inversion", "capture": "2026-08-05T14:00:00Z", "role": "pre_event", "hazard": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": false},
-    {"case_id": "stale-post-event", "capture": "2026-09-10T12:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": false},
-    {"case_id": "contradictory-event-id", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "earthquake", "country": "JPN", "footprint": "inside", "event_id_hint": "fixture:other-event", "expected_status": "unmatched", "expected_geography": true, "expected_time": true},
-    {"case_id": "metadata-wins-over-visual-similarity", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "hazard": "flood", "country": "VNM", "footprint": "far", "event_id_hint": "fixture:lookalike-event", "expected_status": "unmatched", "expected_geography": false, "expected_time": true}
+    {"case_id": "correct-post-event", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "associated", "expected_geography": true, "expected_time": true},
+    {"case_id": "correct-event-id", "capture": "2026-08-05T13:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "inside", "event_id_hint": "fixture-provider:event-japan-1", "expected_status": "associated", "expected_geography": true, "expected_time": true},
+    {"case_id": "nearby-simultaneous-disaster", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "far", "expected_status": "unmatched", "expected_geography": false, "expected_time": true},
+    {"case_id": "same-place-different-time", "capture": "2025-01-01T00:00:00Z", "role": "single_capture", "disaster": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": false},
+    {"case_id": "wrong-country", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "VNM", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": true},
+    {"case_id": "wrong-disaster", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "flood", "country": "JPN", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": true},
+    {"case_id": "adjacent-footprint", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "adjacent", "expected_status": "unmatched", "expected_geography": false, "expected_time": true},
+    {"case_id": "boundary-offset", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "near_boundary", "expected_status": "ambiguous", "expected_geography": false, "expected_time": true},
+    {"case_id": "missing-capture", "capture": null, "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
+    {"case_id": "missing-georeference", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": null, "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
+    {"case_id": "malformed-geometry", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "malformed", "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
+    {"case_id": "swapped-longitude-latitude", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "swapped", "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
+    {"case_id": "wrong-timezone-naive", "capture": "2026-08-05T14:00:00", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "orphaned", "expected_geography": null, "expected_time": null},
+    {"case_id": "pre-post-inversion", "capture": "2026-08-05T14:00:00Z", "role": "pre_event", "disaster": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": false},
+    {"case_id": "stale-post-event", "capture": "2026-09-10T12:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "inside", "expected_status": "unmatched", "expected_geography": true, "expected_time": false},
+    {"case_id": "contradictory-event-id", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "earthquake", "country": "JPN", "footprint": "inside", "event_id_hint": "fixture:other-event", "expected_status": "unmatched", "expected_geography": true, "expected_time": true},
+    {"case_id": "metadata-wins-over-visual-similarity", "capture": "2026-08-05T14:00:00Z", "role": "post_event", "disaster": "flood", "country": "VNM", "footprint": "far", "event_id_hint": "fixture:lookalike-event", "expected_status": "unmatched", "expected_geography": false, "expected_time": true}
   ]
 }

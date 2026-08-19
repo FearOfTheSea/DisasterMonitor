@@ -1,8 +1,8 @@
-"""Hazard-specific deterministic report section profiles."""
+"""Disaster-specific deterministic report section profiles."""
 
 from dataclasses import dataclass
 
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,17 +45,17 @@ EARTHQUAKE_REPORT_PROFILE = ReportProfile(
     _HUMAN,
     _PHYSICAL | {"fires", "landslides"},
     _RESPONSE,
-    secondary_title="Tsunami and secondary hazards",
-    secondary_categories=frozenset({"tsunami", "fires", "landslides"}),
+    secondary_title="Secondary impacts",
+    secondary_categories=frozenset({"fires", "landslides"}),
     secondary_missing=(
-        "No verified tsunami, fire, or landslide impact was found in the retrieved "
+        "No verified fire or landslide impact was found in the retrieved "
         "reports. A warning or advisory alone would not establish damage."
     ),
 )
 
 
-def report_profile_for(hazard: Hazard) -> ReportProfile:
+def report_profile_for(disaster: Disaster) -> ReportProfile:
     """Return a dedicated profile or the conservative generic profile."""
-    if hazard == Hazard.EARTHQUAKE:
+    if disaster == Disaster.EARTHQUAKE:
         return EARTHQUAKE_REPORT_PROFILE
     return GENERIC_REPORT_PROFILE

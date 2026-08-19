@@ -23,7 +23,7 @@ describe('OperationsPanel', () => {
   beforeEach(() => {
     vi.mocked(fetchProviderFreshness).mockResolvedValue([
       {
-        source_id: 'nchmf-vietnam-warnings',
+        source_id: 'global-warnings-vietnam-warnings',
         state: 'fresh',
         last_attempt_at: null,
         last_success_at: '2026-08-13T08:00:00Z',
@@ -37,7 +37,7 @@ describe('OperationsPanel', () => {
     vi.mocked(fetchEvidenceHistory).mockResolvedValue([
       {
         snapshot_id: 'source-snapshot:1',
-        source_id: 'nchmf-vietnam-warnings',
+        source_id: 'global-warnings-vietnam-warnings',
         provider_revision: 'warning-1',
         retrieved_at: '2026-08-13T08:00:00Z',
         published_at: '2026-08-13T08:00:00Z',
@@ -46,7 +46,7 @@ describe('OperationsPanel', () => {
         content_type: 'application/rss+xml',
         payload_sha256: `sha256:${'a'.repeat(64)}`,
         payload_size_bytes: 20,
-        rights_id: 'nchmf-rss-terms-2026-08',
+        rights_id: 'global-warnings-rss-terms-2026-08',
         content_available: true,
         content_deleted_at: null,
         content_deletion_reason: null,
@@ -93,7 +93,9 @@ describe('OperationsPanel', () => {
     const user = userEvent.setup();
     render(<OperationsPanel evidenceStateVersion="world-state:1" onClose={vi.fn()} />);
 
-    expect(await screen.findAllByText('nchmf-vietnam-warnings')).toHaveLength(2);
+    expect(await screen.findAllByText('global-warnings-vietnam-warnings')).toHaveLength(
+      2,
+    );
     expect(screen.getByText('242 active countries')).toBeInTheDocument();
     expect(screen.getByText('Content retained')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Update countries now' }));

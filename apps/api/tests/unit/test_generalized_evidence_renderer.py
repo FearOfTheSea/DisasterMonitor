@@ -10,10 +10,10 @@ from disaster_monitor.application.services.evidence_reconciliation import (
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
+    Disaster,
     DisasterEvent,
     EventMeasurement,
     FactStatus,
-    Hazard,
     MeasurementKind,
     ReportedFact,
     SituationReport,
@@ -51,11 +51,11 @@ def _source(
     )
 
 
-def _event(hazard: Hazard = Hazard.EARTHQUAKE) -> DisasterEvent:
+def _event(disaster: Disaster = Disaster.EARTHQUAKE) -> DisasterEvent:
     source = _source("USGS", SourceAuthority.SCIENTIFIC_AUTHORITY)
     return DisasterEvent(
         "usgs:target",
-        hazard,
+        disaster,
         "Sucre, Venezuela",
         VENEZUELA,
         NOW - timedelta(hours=2),
@@ -63,13 +63,13 @@ def _event(hazard: Hazard = Hazard.EARTHQUAKE) -> DisasterEvent:
         geometry=point_event_geometry(10.4, -63.5, source),
         measurements=(
             (EventMeasurement(MeasurementKind.MAGNITUDE, 6.2, source=source),)
-            if hazard == Hazard.EARTHQUAKE
+            if disaster == Disaster.EARTHQUAKE
             else ()
         ),
     )
 
 
-def test_country_neutral_correlation_uses_hazard_and_country_code() -> None:
+def test_country_neutral_correlation_uses_disaster_and_country_code() -> None:
     event = _event()
     report = SituationReport(
         _source("Authority", SourceAuthority.NATIONAL_AUTHORITY),
@@ -78,7 +78,7 @@ def test_country_neutral_correlation_uses_hazard_and_country_code() -> None:
         locations=("Sucre",),
         countries=("Venezuela",),
         country_codes=("VEN",),
-        hazard=Hazard.EARTHQUAKE,
+        disaster=Disaster.EARTHQUAKE,
     )
 
     assert correlate_situation_report(report, event) == CorrelationStatus.MATCHED
@@ -90,7 +90,7 @@ def test_country_neutral_correlation_uses_hazard_and_country_code() -> None:
                 reported_event_time=event.event_time,
                 locations=("Sucre",),
                 country_codes=("JPN",),
-                hazard=Hazard.EARTHQUAKE,
+                disaster=Disaster.EARTHQUAKE,
             ),
             event,
         )
@@ -104,7 +104,7 @@ def test_country_neutral_correlation_uses_hazard_and_country_code() -> None:
                 reported_event_time=event.event_time,
                 locations=("Sucre",),
                 country_codes=("VEN",),
-                hazard=Hazard.FLOOD,
+                disaster=Disaster.FLOOD,
             ),
             event,
         )
@@ -114,7 +114,7 @@ def test_country_neutral_correlation_uses_hazard_and_country_code() -> None:
 
 def test_typed_authority_outranks_newer_secondary_fact() -> None:
     event = _event()
-    query = DisasterQuery(Hazard.EARTHQUAKE, VENEZUELA, "recent", ("damage",))
+    query = DisasterQuery(Disaster.EARTHQUAKE, VENEZUELA, "recent", ("damage",))
     official = _source(
         "National authority", SourceAuthority.NATIONAL_AUTHORITY, age=timedelta(hours=2)
     )
@@ -137,7 +137,7 @@ def test_typed_authority_outranks_newer_secondary_fact() -> None:
             ),
             event_id=event.event_id,
             country_codes=("VEN",),
-            hazard=Hazard.EARTHQUAKE,
+            disaster=Disaster.EARTHQUAKE,
         )
 
     packet = build_evidence_packet(
@@ -152,11 +152,11 @@ def test_typed_authority_outranks_newer_secondary_fact() -> None:
     assert packet.facts[0].source.authority == SourceAuthority.NATIONAL_AUTHORITY
 
 
-def test_generic_renderer_uses_selected_hazard_and_country_without_japan_prose() -> (
+def test_generic_renderer_uses_selected_disaster_and_country_without_japan_prose() -> (
     None
 ):
-    event = _event(Hazard.FLOOD)
-    query = DisasterQuery(Hazard.FLOOD, VENEZUELA, "recent", ("latest",))
+    event = _event(Disaster.FLOOD)
+    query = DisasterQuery(Disaster.FLOOD, VENEZUELA, "recent", ("latest",))
     packet = EvidencePacket(
         query,
         event,
@@ -175,4 +175,4 @@ def test_generic_renderer_uses_selected_hazard_and_country_without_japan_prose()
     assert "Venezuela" in message
     assert "Japan" not in message
     assert "earthquake" not in message
-    assert all(section.title != "Tsunami and secondary hazards" for section in sections)
+    assert all(section.title != "Secondary impacts" for section in sections)

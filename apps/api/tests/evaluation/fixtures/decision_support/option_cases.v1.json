@@ -3,7 +3,7 @@
   "cases": [
     {
       "id": "quiet-flood-gap",
-      "hazard": "flood",
+      "disaster": "flood",
       "country_code": "VNM",
       "facts": [],
       "expected_options": [
@@ -13,7 +13,7 @@
     },
     {
       "id": "moderate-earthquake-resolved-zero",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 5.2,
       "facts": [
@@ -31,7 +31,7 @@
     },
     {
       "id": "critical-fatalities",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 6.1,
       "facts": [
@@ -47,7 +47,7 @@
     },
     {
       "id": "critical-major-magnitude",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "VNM",
       "magnitude": 7.2,
       "facts": [],
@@ -59,7 +59,7 @@
     },
     {
       "id": "high-active-warning",
-      "hazard": "flood",
+      "disaster": "flood",
       "country_code": "VEN",
       "facts": [{ "category": "warnings", "value": "Active flood warning" }],
       "expected_options": [
@@ -70,7 +70,7 @@
     },
     {
       "id": "moderate-injuries",
-      "hazard": "wildfire",
+      "disaster": "wildfire",
       "country_code": "VEN",
       "facts": [{ "category": "injuries", "value": "5" }],
       "expected_options": [
@@ -81,7 +81,7 @@
     },
     {
       "id": "severe-damage-review",
-      "hazard": "landslide",
+      "disaster": "landslide",
       "country_code": "VNM",
       "facts": [
         { "category": "physical_damage", "value": "Widespread major damage" },
@@ -96,7 +96,7 @@
     },
     {
       "id": "evacuation-impact",
-      "hazard": "tropical_cyclone",
+      "disaster": "tropical_cyclone",
       "country_code": "JPN",
       "facts": [{ "category": "evacuations", "value": "2500" }],
       "expected_options": [
@@ -108,7 +108,7 @@
     },
     {
       "id": "conflicting-fatalities",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 5.8,
       "reports": [
@@ -131,7 +131,7 @@
     },
     {
       "id": "missing-people-review",
-      "hazard": "flood",
+      "disaster": "flood",
       "country_code": "VNM",
       "facts": [{ "category": "missing", "value": "4" }],
       "expected_options": [

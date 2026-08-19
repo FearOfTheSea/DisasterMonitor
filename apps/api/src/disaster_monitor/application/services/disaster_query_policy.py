@@ -1,24 +1,24 @@
-"""Hazard-owned parsing for discriminators beyond neutral geography/time."""
+"""Disaster-owned parsing for discriminators beyond neutral geography/time."""
 
 import re
 from typing import Protocol
 
 from disaster_monitor.application.disaster import EventDiscriminator
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
 
-class HazardQueryPolicy(Protocol):
+class DisasterQueryPolicy(Protocol):
     def discriminators(self, text: str) -> tuple[EventDiscriminator, ...]: ...
 
 
-class DefaultHazardQueryPolicy:
+class DefaultDisasterQueryPolicy:
     def discriminators(self, text: str) -> tuple[EventDiscriminator, ...]:
         return ()
 
 
-class EarthquakeQueryPolicy(DefaultHazardQueryPolicy):
+class EarthquakeQueryPolicy(DefaultDisasterQueryPolicy):
     _MAGNITUDE = re.compile(r"\b(?:magnitude|mag\.?|m)\s*([0-9]+(?:\.[0-9]+)?)\b", re.I)
-    _EVENT_ID = re.compile(r"\b(?:us\d{6,}|jma[:_-]?[A-Za-z0-9_-]+)\b", re.I)
+    _EVENT_ID = re.compile(r"\bus\d{6,}\b", re.I)
 
     def discriminators(self, text: str) -> tuple[EventDiscriminator, ...]:
         values: list[EventDiscriminator] = []
@@ -31,14 +31,14 @@ class EarthquakeQueryPolicy(DefaultHazardQueryPolicy):
         return tuple(values)
 
 
-class HazardQueryPolicyRegistry:
-    def __init__(self, policies: dict[Hazard, HazardQueryPolicy]) -> None:
+class DisasterQueryPolicyRegistry:
+    def __init__(self, policies: dict[Disaster, DisasterQueryPolicy]) -> None:
         self._policies = dict(policies)
-        self._default = DefaultHazardQueryPolicy()
+        self._default = DefaultDisasterQueryPolicy()
 
-    def for_hazard(self, hazard: Hazard) -> HazardQueryPolicy:
-        return self._policies.get(hazard, self._default)
+    def for_disaster(self, disaster: Disaster) -> DisasterQueryPolicy:
+        return self._policies.get(disaster, self._default)
 
 
-def default_hazard_query_policies() -> HazardQueryPolicyRegistry:
-    return HazardQueryPolicyRegistry({Hazard.EARTHQUAKE: EarthquakeQueryPolicy()})
+def default_disaster_query_policies() -> DisasterQueryPolicyRegistry:
+    return DisasterQueryPolicyRegistry({Disaster.EARTHQUAKE: EarthquakeQueryPolicy()})

@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS normalized_observation (
 
 CREATE TABLE IF NOT EXISTS physical_event (
     physical_event_id text PRIMARY KEY,
-    hazard text NOT NULL,
+    disaster text NOT NULL,
     country_code char(3) NOT NULL,
     representative_geometry geometry(Geometry, 4326),
     created_at timestamptz NOT NULL DEFAULT now()

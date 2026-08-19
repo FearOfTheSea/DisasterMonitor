@@ -8,7 +8,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.evaluation.reproducibility import (
     ReproducibilityError,
     canonical_json_sha256,
@@ -78,7 +78,7 @@ class Episode:
     """Runtime-safe benchmark episode with hidden label paths removed."""
 
     episode_id: str
-    hazard: Hazard
+    disaster: Disaster
     country_code: str
     start: datetime
     end: datetime
@@ -290,10 +290,10 @@ def replay_result_payload(result: ReplayResult) -> dict[str, Any]:
 def _load_episode(root: Path, raw: dict[str, Any], *, verify_payloads: bool) -> Episode:
     episode_id = _required_text(raw, "episode_id")
     try:
-        hazard = Hazard(_required_text(raw, "hazard"))
+        disaster = Disaster(_required_text(raw, "disaster"))
     except ValueError as error:
         raise DisasterAgentBenchError(
-            f"Episode {episode_id} has invalid hazard"
+            f"Episode {episode_id} has invalid disaster"
         ) from error
     country_code = _required_text(raw, "country_code")
     if len(country_code) != 3 or not country_code.isalpha():
@@ -346,7 +346,7 @@ def _load_episode(root: Path, raw: dict[str, Any], *, verify_payloads: bool) -> 
         snapshots.append(snapshot)
     return Episode(
         episode_id=episode_id,
-        hazard=hazard,
+        disaster=disaster,
         country_code=country_code.upper(),
         start=start,
         end=end,

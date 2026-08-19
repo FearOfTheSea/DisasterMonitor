@@ -3,9 +3,9 @@
 Disaster Monitor can add a small contextual photo gallery after its deterministic
 workflow has selected a physical event. The current target is three photos. Each item
 shows its source, caption, publication or capture date, credit, content role, rights
-status, and event-association status. The design is hazard-neutral: the same service
-accepts a typed `Hazard` and contains terms and display roles for every recognized
-hazard, although executable event-provider coverage still determines which requests
+status, and event-association status. The design is disaster-neutral: the same service
+accepts a typed `Disaster` and contains terms and display roles for every recognized
+disaster, although executable event-provider coverage still determines which requests
 can reach it.
 
 This feature is presentation media, not disaster evidence. A photo cannot select an
@@ -43,7 +43,7 @@ The application derives `MediaEventContext` only from the selected event. It che
 - article publication from one day before through 30 days after the event, and no
   future publication beyond the current clock tolerance;
 - the same bounds for capture time when the source provides it;
-- the selected hazard in the article title or selected image caption;
+- the selected disaster in the article title or selected image caption;
 - the selected country, or event-location terms for worldwide/offshore results, in
   that same primary metadata;
 - any explicit year against the selected event year;
@@ -55,7 +55,7 @@ A candidate that fails any gate is rejected before presentation. In particular, 
 plausibly captioned photo from an older unrelated disaster fails the date or explicit-
 year gate. Page boilerplate and surrounding search text cannot repair a mismatch in the
 article title and selected image caption. An exact event identifier is reported as
-`exact_event_link`; otherwise matching date, hazard, and geography is transparently
+`exact_event_link`; otherwise matching date, disaster, and geography is transparently
 reported as `corroborated` rather than verified.
 
 Pixels are not used to establish event identity. Metadata can still be wrong, so the UI

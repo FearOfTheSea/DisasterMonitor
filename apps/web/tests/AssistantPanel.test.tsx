@@ -117,8 +117,8 @@ describe('AssistantPanel', () => {
               ],
               sources: [
                 {
-                  source_id: 'jma-rolling-earthquakes',
-                  publisher: 'JMA',
+                  source_id: 'global-catalog-rolling-earthquakes',
+                  publisher: 'Global Catalog',
                   title: 'Earthquake fixture',
                   canonical_url: 'https://example.test/event',
                   published_at: '2026-08-05T11:00:00Z',
@@ -128,15 +128,15 @@ describe('AssistantPanel', () => {
               investigation: {
                 status: 'partial',
                 task_summary: 'Latest earthquake in Japan',
-                hazard: 'earthquake',
+                disaster: 'earthquake',
                 country: 'JPN',
                 information_needs: ['event_overview'],
                 output_modalities: ['text'],
                 actions: [
-                  'Selected JMA and USGS event sources.',
+                  'Selected Global Catalog and USGS event sources.',
                   'Selected the Ishikawa event.',
                 ],
-                source_ids: ['jma-rolling-earthquakes', 'usgs-earthquakes'],
+                source_ids: ['global-catalog-rolling-earthquakes', 'usgs-earthquakes'],
                 evidence_count: 1,
                 capability_gaps: [
                   'Trusted disaster-image retrieval is not implemented.',
@@ -195,7 +195,7 @@ describe('AssistantPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Situation source unavailable.')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /JMA: Earthquake fixture/ }),
+      screen.getByRole('link', { name: /Global Catalog: Earthquake fixture/ }),
     ).toHaveAttribute('href', 'https://example.test/event');
     expect(screen.getByText(/Retrieved:/)).toBeInTheDocument();
     expect(screen.getByText('Investigation details')).toBeInTheDocument();
@@ -300,11 +300,11 @@ describe('AssistantPanel', () => {
                     association_status: 'corroborated',
                     association_rule_ids: [
                       'media.association.publication_window',
-                      'media.association.hazard_text',
+                      'media.association.disaster_text',
                       'media.association.country_text',
                     ],
                     association_detail:
-                      'Publication time, hazard, and selected-event geography agree.',
+                      'Publication time, disaster, and selected-event geography agree.',
                     uncertainty: 'Source-associated preview, not a verified fact.',
                     content_sha256: 'b'.repeat(64),
                     width: 1200,

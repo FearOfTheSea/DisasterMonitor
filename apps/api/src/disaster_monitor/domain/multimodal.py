@@ -188,7 +188,7 @@ class MultimodalAsset:
     width: int | None
     height: int | None
     footprint: GeoPolygon | None
-    declared_hazard: StrEnum | None
+    declared_disaster: StrEnum | None
     declared_country_code: str | None
     capture_role: CaptureRole
     processing_level: str | None
@@ -223,7 +223,7 @@ class AssetEventAssociation:
     status: EventAssociationStatus
     geography_match: bool | None
     time_match: bool | None
-    hazard_match: bool | None
+    disaster_match: bool | None
     country_match: bool | None
     event_id_match: bool | None
     distance_km: float | None

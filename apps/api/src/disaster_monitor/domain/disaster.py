@@ -6,11 +6,10 @@ from enum import StrEnum
 from math import isfinite
 
 
-class Hazard(StrEnum):
-    """Disaster hazards recognized by deterministic request parsing."""
+class Disaster(StrEnum):
+    """Disasters recognized by deterministic request parsing."""
 
     EARTHQUAKE = "earthquake"
-    TSUNAMI = "tsunami"
     FLOOD = "flood"
     WILDFIRE = "wildfire"
     LANDSLIDE = "landslide"
@@ -296,7 +295,7 @@ class SourceReference:
 
 
 class MeasurementKind(StrEnum):
-    """Known source-reported measurements shared by hazard policies."""
+    """Known source-reported measurements shared by disaster policies."""
 
     MAGNITUDE = "magnitude"
     INTENSITY = "intensity"
@@ -409,7 +408,7 @@ class DisasterEvent:
     """A normalized source-backed disaster event."""
 
     event_id: str
-    hazard: Hazard
+    disaster: Disaster
     location: str
     country: Country
     event_time: datetime
@@ -464,8 +463,8 @@ class EarthquakeEvent(DisasterEvent):
     sequence_id: str | None = None
 
     def __post_init__(self) -> None:
-        if self.hazard is not Hazard.EARTHQUAKE:
-            raise ValueError("EarthquakeEvent requires the earthquake hazard.")
+        if self.disaster is not Disaster.EARTHQUAKE:
+            raise ValueError("EarthquakeEvent requires the earthquake disaster.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -541,7 +540,7 @@ class SituationReport:
     locations: tuple[str, ...] = ()
     countries: tuple[str, ...] = ()
     country_codes: tuple[str, ...] = ()
-    hazard: Hazard | None = None
+    disaster: Disaster | None = None
     measurements: tuple[EventMeasurement, ...] = ()
     provider_event_ids: tuple[str, ...] = ()
 

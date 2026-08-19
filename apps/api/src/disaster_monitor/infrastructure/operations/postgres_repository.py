@@ -264,14 +264,14 @@ class PostgresOperationalRepository:
                     await cursor.execute(
                         """
                         INSERT INTO physical_event(
-                            physical_event_id, hazard, country_code,
+                            physical_event_id, disaster, country_code,
                             representative_geometry, created_at
                         ) VALUES (%s, %s, %s, NULL, %s)
                         ON CONFLICT (physical_event_id) DO NOTHING
                         """,
                         (
                             event.physical_event_id,
-                            event.hazard,
+                            event.disaster,
                             event.country_code,
                             event.created_at,
                         ),
@@ -280,7 +280,7 @@ class PostgresOperationalRepository:
                     await cursor.execute(
                         """
                         INSERT INTO physical_event(
-                            physical_event_id, hazard, country_code,
+                            physical_event_id, disaster, country_code,
                             representative_geometry, created_at
                         ) VALUES (
                             %s, %s, %s,
@@ -290,7 +290,7 @@ class PostgresOperationalRepository:
                         """,
                         (
                             event.physical_event_id,
-                            event.hazard,
+                            event.disaster,
                             event.country_code,
                             event.longitude,
                             event.latitude,

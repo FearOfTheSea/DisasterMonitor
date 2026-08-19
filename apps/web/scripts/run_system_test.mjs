@@ -72,7 +72,7 @@ try {
   await page.getByText(/37\.02,\s*137\.01/).waitFor();
   await page.getByRole('heading', { name: 'Situation summary' }).waitFor();
   await page.getByText('Buildings damaged: 4.').first().waitFor();
-  await page.getByRole('link', { name: /ReliefWeb fixture/ }).waitFor();
+  await page.getByRole('link', { name: /Global Reports fixture/ }).waitFor();
   await page.getByText('Investigation details').click();
   await page.getByText(/Selected the source-backed event/).waitFor();
   for (const sentinel of [

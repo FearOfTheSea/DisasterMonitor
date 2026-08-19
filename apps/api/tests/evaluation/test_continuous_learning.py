@@ -617,7 +617,7 @@ def _unchanged_production_inputs() -> tuple[LearningTrajectory, ...]:
     all_claims = ("fatalities", "injuries", "missing", "evacuations")
     routine_case = {
         "id": "cl-c-production-routine",
-        "hazard": "earthquake",
+        "disaster": "earthquake",
         "country_code": "JPN",
         "magnitude": 4.2,
         "reports": [
@@ -645,7 +645,7 @@ def _unchanged_production_inputs() -> tuple[LearningTrajectory, ...]:
     }
     conflict_case = {
         "id": "cl-c-production-strong-conflict",
-        "hazard": "earthquake",
+        "disaster": "earthquake",
         "country_code": "JPN",
         "magnitude": 4.2,
         "reports": [

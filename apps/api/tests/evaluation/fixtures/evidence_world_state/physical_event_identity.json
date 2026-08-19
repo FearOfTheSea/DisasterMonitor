@@ -6,24 +6,24 @@
       "id": "historical-2024-noto-mainshock",
       "kind": "historical_replay",
       "provenance": [
-        "https://www.jma.go.jp/jma/menu/20240101_noto_jishin.html",
+        "https://www.global-catalog.go.jp/global-catalog/menu/20240101_noto_jishin.html",
         "https://earthquake.usgs.gov/earthquakes/eventpage/us6000m0xl"
       ],
       "observations": [
-        {"id": "noto-jma", "source_id": "jma-rolling-earthquakes", "event_id": "jma:20240101161000", "event_time": "2024-01-01T07:10:00Z", "canonical_url": "https://www.jma.go.jp/jma/menu/20240101_noto_jishin.html", "lat": 37.5, "lon": 137.3, "magnitude": 7.6},
+        {"id": "noto-global-catalog", "source_id": "global-catalog-rolling-earthquakes", "event_id": "global-catalog:20240101161000", "event_time": "2024-01-01T07:10:00Z", "canonical_url": "https://www.global-catalog.go.jp/global-catalog/menu/20240101_noto_jishin.html", "lat": 37.5, "lon": 137.3, "magnitude": 7.6},
         {"id": "noto-usgs", "source_id": "usgs-earthquakes", "event_id": "usgs:us6000m0xl", "event_time": "2024-01-01T07:10:09Z", "canonical_url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000m0xl", "lat": 37.487, "lon": 137.271, "magnitude": 7.5}
       ],
-      "groups": [["noto-jma", "noto-usgs"]],
+      "groups": [["noto-global-catalog", "noto-usgs"]],
       "ambiguous_assignments": [],
       "resolution_ambiguous": false
     },
     {
       "id": "cross-provider-match",
       "observations": [
-        {"id": "jma", "source_id": "jma-events", "event_id": "jma:match", "seconds": 0, "lat": 37.0, "lon": 137.0, "magnitude": 6.1},
+        {"id": "global-catalog", "source_id": "global-catalog-events", "event_id": "global-catalog:match", "seconds": 0, "lat": 37.0, "lon": 137.0, "magnitude": 6.1},
         {"id": "usgs", "source_id": "usgs-events", "event_id": "usgs:match", "seconds": 20, "lat": 37.02, "lon": 137.01, "magnitude": 6.0}
       ],
-      "groups": [["jma", "usgs"]],
+      "groups": [["global-catalog", "usgs"]],
       "ambiguous_assignments": [],
       "resolution_ambiguous": false
     },
@@ -40,8 +40,8 @@
     {
       "id": "missing-coordinates-shared-qualified-id",
       "observations": [
-        {"id": "rolling", "source_id": "jma-rolling", "event_id": "jma:shared", "seconds": 0, "lat": null, "lon": null, "magnitude": 6.0},
-        {"id": "durable", "source_id": "jma-durable", "event_id": "durable:1", "provider_ids": ["jma:shared"], "seconds": 0, "lat": null, "lon": null, "magnitude": 6.0}
+        {"id": "rolling", "source_id": "global-catalog-rolling", "event_id": "global-catalog:shared", "seconds": 0, "lat": null, "lon": null, "magnitude": 6.0},
+        {"id": "durable", "source_id": "global-catalog-durable", "event_id": "durable:1", "provider_ids": ["global-catalog:shared"], "seconds": 0, "lat": null, "lon": null, "magnitude": 6.0}
       ],
       "groups": [["rolling", "durable"]],
       "ambiguous_assignments": [],
@@ -119,10 +119,10 @@
       "resolution_ambiguous": true
     },
     {
-      "id": "cross-hazard-collision",
+      "id": "cross-disaster-collision",
       "observations": [
-        {"id": "earthquake", "source_id": "shared-source", "event_id": "shared:event", "hazard": "earthquake", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": 6.0},
-        {"id": "flood", "source_id": "shared-source", "event_id": "shared:event", "hazard": "flood", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": null}
+        {"id": "earthquake", "source_id": "shared-source", "event_id": "shared:event", "disaster": "earthquake", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": 6.0},
+        {"id": "flood", "source_id": "shared-source", "event_id": "shared:event", "disaster": "flood", "seconds": 0, "lat": 35.0, "lon": 135.0, "magnitude": null}
       ],
       "groups": [["earthquake"], ["flood"]],
       "ambiguous_assignments": [],

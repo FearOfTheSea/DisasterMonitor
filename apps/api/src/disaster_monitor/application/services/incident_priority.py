@@ -7,12 +7,12 @@ from typing import Protocol
 
 from disaster_monitor.domain.disaster import (
     ClaimEvidenceState,
+    Disaster,
     DisasterEvent,
     EvidenceAvailability,
     EvidenceDisposition,
     EvidenceFreshness,
     EvidenceWorldState,
-    Hazard,
     IncidentPriority,
     IncidentPriorityAssessment,
     IncidentPrioritySignal,
@@ -137,7 +137,7 @@ class IncidentPriorityRanker:
             floor = _max_priority(floor, priority_floor)
 
         magnitude = _numeric_measurement(event, MeasurementKind.MAGNITUDE)
-        if event.hazard == Hazard.EARTHQUAKE and magnitude is not None:
+        if event.disaster == Disaster.EARTHQUAKE and magnitude is not None:
             if magnitude >= 7:
                 add(
                     "tr.priority.earthquake_magnitude_critical",
@@ -393,7 +393,7 @@ class IncidentPriorityRanker:
             category = current.fact.category.casefold()
             value = current.fact.value
             evidence_ids = (current.observation_id,)
-            if category in {"warning", "warnings", "tsunami_status"}:
+            if category in {"warning", "warnings"}:
                 if _ACTIVE_WARNING.search(value) and not _NEGATED_WARNING.search(value):
                     add_signal(
                         "tr.priority.active_official_warning",

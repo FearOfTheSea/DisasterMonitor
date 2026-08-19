@@ -57,9 +57,9 @@ from disaster_monitor.application.services.source_consistency import (
 )
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     DisasterEvent,
     GeographicArea,
-    Hazard,
     SourceReference,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
@@ -115,12 +115,12 @@ def test_plan_validation_rejects_unknown_tools_and_invalid_dependencies() -> Non
 @pytest.mark.asyncio
 async def test_tool_execution_enforces_call_budget() -> None:
     country = Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1), "UTC")
-    query = DisasterQuery(Hazard.FLOOD, country, "recent", ("latest",))
+    query = DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",))
     task = ValidatedDisasterTask(
         "test",
         TaskKind.INVESTIGATION,
         True,
-        Hazard.FLOOD,
+        Disaster.FLOOD,
         country,
         query=query,
     )
@@ -145,12 +145,12 @@ async def test_tool_execution_enforces_call_budget() -> None:
 @pytest.mark.asyncio
 async def test_skipped_plan_steps_keep_distinct_purpose_in_actions() -> None:
     country = Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1), "UTC")
-    query = DisasterQuery(Hazard.FLOOD, country, "recent", ("latest",))
+    query = DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",))
     task = ValidatedDisasterTask(
         "Latest flood in Testland",
         TaskKind.INVESTIGATION,
         True,
-        Hazard.FLOOD,
+        Disaster.FLOOD,
         country,
         query=query,
     )
@@ -216,9 +216,7 @@ class EmptySituationProvider:
 
 
 @pytest.mark.asyncio
-async def test_new_country_and_hazard_provider_is_discovered_without_agent_branch() -> (
-    None
-):
+async def test_new_country_and_disaster_provider_is_discovered_without_agent_branch():
     country = Country("TST", "Testland", (), GeographicArea(0, 10, 0, 10), "UTC")
     source = SourceReference(
         "testland-floods",
@@ -230,7 +228,7 @@ async def test_new_country_and_hazard_provider_is_discovered_without_agent_branc
         NOW,
     )
     event = DisasterEvent(
-        "test:flood-1", Hazard.FLOOD, "Test City", country, NOW, source
+        "test:flood-1", Disaster.FLOOD, "Test City", country, NOW, source
     )
     provider = NewFloodProvider(event)
     registration = ProviderRegistration(
@@ -238,7 +236,7 @@ async def test_new_country_and_hazard_provider_is_discovered_without_agent_branc
         provider,
         ProviderCapabilities(
             frozenset({ProviderRole.EVENT_DISCOVERY}),
-            frozenset({Hazard.FLOOD}),
+            frozenset({Disaster.FLOOD}),
             frozenset({"TST"}),
         ),
         source_id="testland-floods",
@@ -252,7 +250,7 @@ async def test_new_country_and_hazard_provider_is_discovered_without_agent_branc
         "Testland",
         "national_authority",
         (SourceInformationRole.EVENT_DISCOVERY,),
-        (Hazard.FLOOD,),
+        (Disaster.FLOOD,),
         ("TST",),
         ("en",),
         "test",
@@ -266,12 +264,12 @@ async def test_new_country_and_hazard_provider_is_discovered_without_agent_branc
         "implemented",
         (GeographicScope.COUNTRY,),
     )
-    query = DisasterQuery(Hazard.FLOOD, country, "recent", ("latest",))
+    query = DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",))
     task = ValidatedDisasterTask(
         "Latest flood in Testland",
         TaskKind.INVESTIGATION,
         True,
-        Hazard.FLOOD,
+        Disaster.FLOOD,
         country,
         information_needs=(InformationNeed.EVENT_OVERVIEW,),
         output_modalities=(OutputModality.TEXT,),
@@ -320,8 +318,8 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     japan = catalog.get_by_alpha3("JPN")
     assert japan is not None
     source = SourceReference(
-        "jma-rolling-earthquakes",
-        "JMA",
+        "global-catalog-rolling-earthquakes",
+        "Global Catalog",
         "Event",
         "https://example.test/event",
         NOW,
@@ -329,20 +327,25 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
         NOW,
     )
     event = DisasterEvent(
-        "jma:fallback", Hazard.EARTHQUAKE, "Ishikawa, Japan", japan, NOW, source
+        "global-catalog:fallback",
+        Disaster.EARTHQUAKE,
+        "Ishikawa, Japan",
+        japan,
+        NOW,
+        source,
     )
     provider = NewFloodProvider(event)
     registry = ProviderRegistry(
         (
             ProviderRegistration(
-                "JMA rolling earthquake",
+                "Global Catalog rolling earthquake",
                 provider,
                 ProviderCapabilities(
                     frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    frozenset({Hazard.EARTHQUAKE}),
+                    frozenset({Disaster.EARTHQUAKE}),
                     frozenset({"JPN"}),
                 ),
-                source_id="jma-rolling-earthquakes",
+                source_id="global-catalog-rolling-earthquakes",
                 event_provider=provider,
             ),
         )
@@ -420,15 +423,8 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
 
     assert {item.source_id for item in catalog.sources()} == {
         "gdacs-tropical-cyclones",
-        "jma-rolling-earthquakes",
-        "jma-significant-earthquakes",
-        "usgs-earthquakes",
-        "fdma-situation-reports",
-        "jma-tsunami-status",
         "reliefweb-situation-reports",
-        "nchmf-vietnam-warnings",
-        "nasa-firms-active-fire",
-        "copernicus-gfm-vietnam",
+        "usgs-earthquakes",
     }
     assert all(
         item.implementation_status == "implemented" for item in catalog.sources()
@@ -438,17 +434,13 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
         and SourceInformationRole.MAP_LAYERS not in item.information_roles
         for item in catalog.sources()
     )
-    reliefweb = StaticSourceCatalog({"reliefweb-situation-reports": True}).get(
-        "reliefweb-situation-reports"
-    )
-    assert reliefweb is not None and reliefweb.configured
 
 
 def test_provider_source_consistency_detects_missing_metadata() -> None:
     country = Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1), "UTC")
     event = DisasterEvent(
         "test:event",
-        Hazard.FLOOD,
+        Disaster.FLOOD,
         "Testland",
         country,
         NOW,
@@ -469,7 +461,7 @@ def test_provider_source_consistency_detects_missing_metadata() -> None:
                 NewFloodProvider(event),
                 ProviderCapabilities(
                     frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    frozenset({Hazard.FLOOD}),
+                    frozenset({Disaster.FLOOD}),
                     frozenset({"TST"}),
                 ),
                 source_id="not-in-catalog",

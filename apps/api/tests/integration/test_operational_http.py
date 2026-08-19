@@ -74,16 +74,16 @@ async def test_operational_status_history_and_attributed_review(tmp_path: Path) 
         repository, FilesystemBlobStore(tmp_path / "blobs")
     ).persist(
         AcquiredSourcePayload(
-            source_id="nchmf-vietnam-warnings",
-            canonical_request_identity="request:nchmf-vietnam-warnings:test",
-            provider_revision="warning-1",
+            source_id="usgs-earthquakes",
+            canonical_request_identity="request:usgs-earthquakes:test",
+            provider_revision="catalog-1",
             content=b"bounded warning",
-            content_type="application/rss+xml",
+            content_type="application/geo+json",
             response_status=200,
             retrieved_at=NOW,
             published_at=NOW,
             observed_at=None,
-            rights_id="nchmf-rss-terms-2026-08",
+            rights_id="usgs-terms-2026-08",
         )
     )
     world_state = WorldStateVersionRecord(
@@ -140,9 +140,9 @@ async def test_operational_status_history_and_attributed_review(tmp_path: Path) 
         )
 
     assert providers.status_code == 200
-    assert len(providers.json()) == 9
+    assert len(providers.json()) == 2
     by_source = {item["source_id"]: item for item in providers.json()}
-    assert by_source["nchmf-vietnam-warnings"]["last_success_at"] is not None
+    assert by_source["usgs-earthquakes"]["last_success_at"] is not None
     assert history.status_code == 200
     assert history.json()[0]["snapshot_id"] == snapshot.snapshot_id
     assert "blob_uri" not in history.json()[0]

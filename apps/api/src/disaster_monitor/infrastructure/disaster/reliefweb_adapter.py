@@ -16,10 +16,10 @@ from disaster_monitor.application.services.evidence_reconciliation import (
     sanitize_provider_text,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventMeasurement,
     FactStatus,
-    Hazard,
     MeasurementKind,
     ReportedFact,
     SituationReport,
@@ -54,13 +54,12 @@ _NUMBER_WORDS = {
     "nine": "9",
     "ten": "10",
 }
-_RELIEFWEB_HAZARDS = {
-    Hazard.EARTHQUAKE: "Earthquake",
-    Hazard.TSUNAMI: "Tsunami",
-    Hazard.FLOOD: "Flood",
-    Hazard.WILDFIRE: "Wild Fire",
-    Hazard.LANDSLIDE: "Land Slide",
-    Hazard.TROPICAL_CYCLONE: "Tropical Cyclone",
+_RELIEFWEB_DISASTERS = {
+    Disaster.EARTHQUAKE: "Earthquake",
+    Disaster.FLOOD: "Flood",
+    Disaster.WILDFIRE: "Wild Fire",
+    Disaster.LANDSLIDE: "Land Slide",
+    Disaster.TROPICAL_CYCLONE: "Tropical Cyclone",
 }
 
 
@@ -83,7 +82,7 @@ def build_reliefweb_params(
     Event location is deliberately not sent as a free-text query. ReliefWeb's
     query parser treats whitespace-separated terms as required when the
     operator is ``AND``; requiring every selected-provider location token
-    makes otherwise relevant country/hazard reports disappear. Event-specific
+    makes otherwise relevant country/disaster reports disappear. Event-specific
     correlation remains application-owned after retrieval.
     """
     fields = (
@@ -107,7 +106,7 @@ def build_reliefweb_params(
         "filter[conditions][0][field]": "country.name",
         "filter[conditions][0][value]": query.country.canonical_name,
         "filter[conditions][1][field]": "disaster_type.name",
-        "filter[conditions][1][value]": _RELIEFWEB_HAZARDS[query.hazard],
+        "filter[conditions][1][value]": _RELIEFWEB_DISASTERS[query.disaster],
         "filter[conditions][2][field]": "date.created",
         "filter[conditions][2][value][from]": _reliefweb_datetime(start),
         "filter[conditions][2][value][to]": _reliefweb_datetime(end),
@@ -291,7 +290,7 @@ class ReliefWebSituationAdapter:
             source_id=self.source_id,
             parameters={
                 "country": query.country.alpha3_code,
-                "hazard": query.hazard.value,
+                "disaster": query.disaster.value,
                 "event": event.event_id,
             },
             rights_id="reliefweb-api-partner-rights-2026-08",
@@ -372,7 +371,7 @@ class ReliefWebSituationAdapter:
                 reported_event_time=reported_event_time,
                 locations=locations,
                 countries=countries,
-                hazard=query.hazard,
+                disaster=query.disaster,
                 measurements=(
                     (
                         EventMeasurement(

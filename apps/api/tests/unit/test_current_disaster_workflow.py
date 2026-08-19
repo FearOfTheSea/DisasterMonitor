@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -24,20 +24,17 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRole,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     EarthquakeEvent,
     EventMeasurement,
     EvidenceAvailability,
     EvidenceDisposition,
     FactStatus,
-    Hazard,
     MeasurementKind,
     ReportedFact,
     SituationReport,
     SourceReference,
     point_event_geometry,
-)
-from disaster_monitor.infrastructure.disaster.jma_adapter import (
-    _normalize_jma_timestamp,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -55,12 +52,12 @@ def _injected_capabilities() -> tuple[ProviderCapabilities, ProviderCapabilities
     return (
         ProviderCapabilities(
             frozenset({ProviderRole.EVENT_DISCOVERY}),
-            frozenset({Hazard.EARTHQUAKE}),
+            frozenset({Disaster.EARTHQUAKE}),
             None,
         ),
         ProviderCapabilities(
             frozenset({ProviderRole.SITUATION_EVIDENCE}),
-            frozenset({Hazard.EARTHQUAKE}),
+            frozenset({Disaster.EARTHQUAKE}),
             None,
         ),
     )
@@ -105,10 +102,10 @@ def event(
     longitude: float = 139.0,
 ) -> EarthquakeEvent:
     event_time = NOW - timedelta(hours=hours_old)
-    source_reference = source("JMA", f"Event {event_id}")
+    source_reference = source("Global Catalog", f"Event {event_id}")
     return EarthquakeEvent(
         event_id=event_id,
-        hazard=Hazard.EARTHQUAKE,
+        disaster=Disaster.EARTHQUAKE,
         location="Honshu, Japan",
         country=JAPAN,
         event_time=event_time,
@@ -119,7 +116,7 @@ def event(
                 MeasurementKind.MAGNITUDE, magnitude, source=source_reference
             ),
             EventMeasurement(
-                MeasurementKind.INTENSITY, "JMA 5+", source=source_reference
+                MeasurementKind.INTENSITY, "Global Catalog 5+", source=source_reference
             ),
             EventMeasurement(MeasurementKind.DEPTH, 18, "km", source=source_reference),
             EventMeasurement(
@@ -135,7 +132,7 @@ def event(
 
 def query() -> DisasterQuery:
     return DisasterQuery(
-        hazard=Hazard.EARTHQUAKE,
+        disaster=Disaster.EARTHQUAKE,
         country=JAPAN,
         time_intent="recent",
         focus=("damage", "latest developments"),
@@ -187,7 +184,7 @@ def test_exact_target_is_current_disaster_and_query_is_normalized() -> None:
 
     assert classification.request_type == RequestType.CURRENT_DISASTER
     assert extracted is not None
-    assert extracted.hazard == "earthquake"
+    assert extracted.disaster == "earthquake"
     assert extracted.geography == "Japan"
     assert extracted.time_intent == "recent"
     assert extracted.focus == ("damage", "latest developments")
@@ -205,13 +202,13 @@ def test_recent_event_selection_marks_unrelated_equal_candidates_ambiguous() -> 
 
 def test_evidence_reconciliation_replaces_older_secondary_and_keeps_conflict() -> None:
     official_old = source(
-        "JMA", "Older official", published_at=NOW - timedelta(hours=6)
+        "Global Catalog", "Older official", published_at=NOW - timedelta(hours=6)
     )
     official_new = source(
-        "JMA", "Newer official", published_at=NOW - timedelta(minutes=15)
+        "Global Catalog", "Newer official", published_at=NOW - timedelta(minutes=15)
     )
     secondary = source(
-        "ReliefWeb", "Secondary", published_at=NOW - timedelta(minutes=30)
+        "Global Reports", "Secondary", published_at=NOW - timedelta(minutes=30)
     )
     reports = (
         SituationReport(
@@ -250,7 +247,7 @@ def test_evidence_reconciliation_replaces_older_secondary_and_keeps_conflict() -
 
 
 def test_missing_is_not_zero_and_instruction_like_text_is_removed() -> None:
-    report_source = source("ReliefWeb", "Situation")
+    report_source = source("Global Reports", "Situation")
     packet = build_evidence_packet(
         query(),
         event("mainshock"),
@@ -282,7 +279,7 @@ def test_duplicate_syndicated_narratives_are_collapsed_and_stale_data_is_labelle
     None
 ):
     old = source(
-        "ReliefWeb",
+        "Global Reports",
         "Old source",
         published_at=NOW - timedelta(days=2),
         url="https://example.test/old",
@@ -315,7 +312,7 @@ def test_duplicate_syndicated_narratives_are_collapsed_and_stale_data_is_labelle
 
 @pytest.mark.asyncio
 async def test_service_returns_source_backed_fallback() -> None:
-    report_source = source("ReliefWeb", "Damage update")
+    report_source = source("Global Reports", "Damage update")
     service = CurrentDisasterReportService(
         FakeEventProvider((event("mainshock"),)),
         FakeSituationProvider(
@@ -364,7 +361,4 @@ async def test_service_keeps_partial_result_and_surfaces_provider_failure() -> N
 def test_timestamp_normalization_keeps_distinct_source_time_semantics() -> None:
     assert normalize_timestamp(1_754_402_400_000) == datetime(
         2025, 8, 5, 14, 0, tzinfo=UTC
-    )
-    assert _normalize_jma_timestamp("20260805163828") == datetime(
-        2026, 8, 5, 16, 38, 28, tzinfo=timezone(timedelta(hours=9))
     )

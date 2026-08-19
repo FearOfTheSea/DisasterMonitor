@@ -34,7 +34,7 @@ class StructuredAgentModel:
         allowed_modalities = ", ".join(item.value for item in OutputModality)
         prompt = (
             "Return one JSON object only. Required keys: disaster_related (boolean), "
-            "current_or_event_specific (boolean), hazard_mentions (string array), "
+            "current_or_event_specific (boolean), disaster_mentions (string array), "
             "place_mentions (string array), time_expression (string or null), "
             "information_needs (array), output_modalities (array), "
             "event_discriminators (string array), ambiguities (string array), "
@@ -127,7 +127,7 @@ class StructuredAgentModel:
         required = {
             "disaster_related",
             "current_or_event_specific",
-            "hazard_mentions",
+            "disaster_mentions",
             "place_mentions",
             "time_expression",
             "information_needs",
@@ -146,7 +146,7 @@ class StructuredAgentModel:
         return DisasterTaskDraft(
             disaster_related=payload["disaster_related"],
             current_or_event_specific=payload["current_or_event_specific"],
-            hazard_mentions=_strings(payload["hazard_mentions"]),
+            disaster_mentions=_strings(payload["disaster_mentions"]),
             place_mentions=_strings(payload["place_mentions"]),
             time_expression=_optional_text(payload["time_expression"]),
             information_needs=needs,

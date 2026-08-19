@@ -11,14 +11,14 @@ from disaster_monitor.application.disaster import (
     RequestClassification,
     RequestType,
 )
-from disaster_monitor.application.hazard_aliases import aliases_for
+from disaster_monitor.application.disaster_aliases import aliases_for
 from disaster_monitor.application.ports.geography import CountryCatalog
-from disaster_monitor.application.services.hazard_query_policy import (
-    HazardQueryPolicyRegistry,
-    default_hazard_query_policies,
+from disaster_monitor.application.services.disaster_query_policy import (
+    DisasterQueryPolicyRegistry,
+    default_disaster_query_policies,
 )
 from disaster_monitor.application.services.prompt_preparation import normalize_question
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
 _CURRENT_TERMS = re.compile(
     r"\b(?:recent|latest|current|today|now|news|update|updates|developments|"
@@ -29,8 +29,8 @@ _MAP_TERMS = re.compile(
     r"\b(?:map|location|where|coordinate|latitude|longitude|zoom|visible)\w*\b",
     re.IGNORECASE,
 )
-_HAZARD_ALIASES: dict[Hazard, tuple[str, ...]] = {
-    Hazard.EARTHQUAKE: (
+_DISASTER_ALIASES: dict[Disaster, tuple[str, ...]] = {
+    Disaster.EARTHQUAKE: (
         "earthquake",
         "earthquakes",
         "quake",
@@ -40,8 +40,7 @@ _HAZARD_ALIASES: dict[Hazard, tuple[str, ...]] = {
         "động đất",
         "地震",
     ),
-    Hazard.TSUNAMI: ("tsunami", "tsunamis", "sóng thần", "津波"),
-    Hazard.FLOOD: (
+    Disaster.FLOOD: (
         "flood",
         "floods",
         "flooding",
@@ -50,7 +49,7 @@ _HAZARD_ALIASES: dict[Hazard, tuple[str, ...]] = {
         "lũ lụt",
         "洪水",
     ),
-    Hazard.WILDFIRE: (
+    Disaster.WILDFIRE: (
         "wildfire",
         "wildfires",
         "forest fire",
@@ -59,14 +58,14 @@ _HAZARD_ALIASES: dict[Hazard, tuple[str, ...]] = {
         "cháy rừng",
         "山火事",
     ),
-    Hazard.LANDSLIDE: (
+    Disaster.LANDSLIDE: (
         "landslide",
         "landslides",
         "deslizamiento de tierra",
         "sạt lở đất",
         "地滑り",
     ),
-    Hazard.TROPICAL_CYCLONE: (
+    Disaster.TROPICAL_CYCLONE: (
         "typhoon",
         "typhoons",
         "hurricane",
@@ -171,32 +170,32 @@ def _extract_coordinates(text: str) -> tuple[float | None, float | None]:
 
 
 class DisasterQueryParser:
-    """Parse hazard/country intent once without provider or model decisions."""
+    """Parse disaster/country intent once without provider or model decisions."""
 
     def __init__(
         self,
         country_catalog: CountryCatalog,
-        hazard_policies: HazardQueryPolicyRegistry | None = None,
+        disaster_policies: DisasterQueryPolicyRegistry | None = None,
     ) -> None:
         self._country_catalog = country_catalog
-        self._hazard_policies = hazard_policies or default_hazard_query_policies()
+        self._disaster_policies = disaster_policies or default_disaster_query_policies()
 
     def parse(self, text: str) -> DisasterQueryParseResult:
         normalized = normalize_question(text)
-        hazards = tuple(
-            hazard
-            for hazard, aliases in _HAZARD_ALIASES.items()
+        disasters = tuple(
+            disaster
+            for disaster, aliases in _DISASTER_ALIASES.items()
             if any(
                 _matches_alias(normalized, alias)
-                for alias in (aliases_for(hazard) or aliases)
+                for alias in (aliases_for(disaster) or aliases)
             )
         )
-        if not hazards:
-            return DisasterQueryParseResult(QueryParseStatus.NO_HAZARD)
-        if len(hazards) > 1:
+        if not disasters:
+            return DisasterQueryParseResult(QueryParseStatus.NO_DISASTER)
+        if len(disasters) > 1:
             return DisasterQueryParseResult(
-                QueryParseStatus.MULTIPLE_HAZARDS,
-                detail="More than one hazard was recognized.",
+                QueryParseStatus.MULTIPLE_DISASTERS,
+                detail="More than one disaster was recognized.",
             )
         countries = self._country_catalog.find_mentions(normalized)
         if not countries:
@@ -233,7 +232,7 @@ class DisasterQueryParser:
         )
         city_match = re.search(r"\b([A-Z][a-z]+)\s+City\b", normalized)
         query = DisasterQuery(
-            hazard=hazards[0],
+            disaster=disasters[0],
             country=country,
             time_intent="specified" if date_range else "recent",
             focus=("damage", "latest developments"),
@@ -243,8 +242,8 @@ class DisasterQueryParser:
             city=city_match.group(1) if city_match else None,
             latitude=coordinates[0],
             longitude=coordinates[1],
-            event_discriminators=self._hazard_policies.for_hazard(
-                hazards[0]
+            event_discriminators=self._disaster_policies.for_disaster(
+                disasters[0]
             ).discriminators(normalized),
         )
         return DisasterQueryParseResult(QueryParseStatus.MATCHED, query=query)
@@ -275,7 +274,7 @@ class DisasterQueryParser:
             )
         if result.status in {
             QueryParseStatus.MULTIPLE_COUNTRIES,
-            QueryParseStatus.MULTIPLE_HAZARDS,
+            QueryParseStatus.MULTIPLE_DISASTERS,
             QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
         }:
             return RequestClassification(

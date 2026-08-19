@@ -10,8 +10,8 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRole,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
-    Hazard,
     SituationReport,
     SourceReference,
 )
@@ -30,8 +30,8 @@ VENEZUELA = CATALOG.get_by_alpha3("VEN")
 assert JAPAN is not None and VENEZUELA is not None
 
 
-def _query(hazard: Hazard, country=JAPAN) -> DisasterQuery:
-    return DisasterQuery(hazard, country, "recent", ("latest developments",))
+def _query(disaster: Disaster, country=JAPAN) -> DisasterQuery:
+    return DisasterQuery(disaster, country, "recent", ("latest developments",))
 
 
 class RecordingEventProvider:
@@ -55,7 +55,7 @@ class RecordingEventProvider:
             (
                 DisasterEvent(
                     f"{self.provider_name}:event",
-                    query.hazard,
+                    query.disaster,
                     query.country.canonical_name,
                     query.country,
                     now,
@@ -66,7 +66,7 @@ class RecordingEventProvider:
 
 
 class RecordingSituationProvider:
-    provider_name = "FDMA"
+    provider_name = "Global Situation"
 
     def __init__(self) -> None:
         self.queries: list[DisasterQuery] = []
@@ -83,30 +83,30 @@ class RecordingSituationProvider:
 
 
 def _registry():
-    jma = RecordingEventProvider("JMA", "jma-events")
+    global_catalog = RecordingEventProvider("Global Catalog", "global-catalog-events")
     usgs = RecordingEventProvider("USGS", "usgs-events")
-    fdma = RecordingSituationProvider()
+    global_situation = RecordingSituationProvider()
     event_japan = ProviderCapabilities(
         frozenset({ProviderRole.EVENT_DISCOVERY}),
-        frozenset({Hazard.EARTHQUAKE}),
+        frozenset({Disaster.EARTHQUAKE}),
         frozenset({"JPN"}),
     )
     registry = ProviderRegistry(
         (
             ProviderRegistration(
-                "JMA",
-                jma,
+                "Global Catalog",
+                global_catalog,
                 event_japan,
-                source_id="jma-events",
+                source_id="global-catalog-events",
                 allowed_hosts=frozenset({"example.test"}),
-                event_provider=jma,
+                event_provider=global_catalog,
             ),
             ProviderRegistration(
                 "USGS",
                 usgs,
                 ProviderCapabilities(
                     frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    frozenset({Hazard.EARTHQUAKE}),
+                    frozenset({Disaster.EARTHQUAKE}),
                     None,
                 ),
                 source_id="usgs-events",
@@ -114,76 +114,76 @@ def _registry():
                 event_provider=usgs,
             ),
             ProviderRegistration(
-                "FDMA",
-                fdma,
+                "Global Situation",
+                global_situation,
                 ProviderCapabilities(
                     frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    frozenset({Hazard.EARTHQUAKE}),
+                    frozenset({Disaster.EARTHQUAKE}),
                     frozenset({"JPN"}),
                 ),
-                source_id="fdma-reports",
+                source_id="global-situation-reports",
                 allowed_hosts=frozenset({"example.test"}),
-                situation_provider=fdma,
+                situation_provider=global_situation,
             ),
             ProviderRegistration(
-                "ReliefWeb",
+                "Global Reports",
                 object(),
                 ProviderCapabilities(
                     frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    frozenset(Hazard),
+                    frozenset(Disaster),
                     None,
                     requires_configuration=True,
                 ),
-                source_id="reliefweb-reports",
+                source_id="global-reports-reports",
                 configured=False,
                 allowed_hosts=frozenset({"example.test"}),
-                situation_provider=fdma,
+                situation_provider=global_situation,
             ),
         )
     )
-    return registry, jma, usgs, fdma
+    return registry, global_catalog, usgs, global_situation
 
 
 @pytest.mark.asyncio
 async def test_capabilities_include_japan_providers_and_exclude_them_abroad() -> None:
-    registry, jma, usgs, fdma = _registry()
+    registry, global_catalog, usgs, global_situation = _registry()
     events = CompositeDisasterEventProvider(registry)
     situations = CompositeSituationReportProvider(registry)
 
-    japan_query = _query(Hazard.EARTHQUAKE)
+    japan_query = _query(Disaster.EARTHQUAKE)
     japan_batch = await events.find_recent_events(japan_query, now=NOW)
     await situations.get_situation_reports(japan_batch.records[0], japan_query, now=NOW)
-    assert jma.queries == [japan_query]
+    assert global_catalog.queries == [japan_query]
     assert usgs.queries == [japan_query]
-    assert fdma.queries == [japan_query]
+    assert global_situation.queries == [japan_query]
 
-    venezuela_query = _query(Hazard.EARTHQUAKE, VENEZUELA)
+    venezuela_query = _query(Disaster.EARTHQUAKE, VENEZUELA)
     foreign_batch = await events.find_recent_events(venezuela_query, now=NOW)
     await situations.get_situation_reports(
         foreign_batch.records[0], venezuela_query, now=NOW
     )
-    assert jma.queries == [japan_query]
+    assert global_catalog.queries == [japan_query]
     assert usgs.queries == [japan_query, venezuela_query]
-    assert fdma.queries == [japan_query]
+    assert global_situation.queries == [japan_query]
 
 
 @pytest.mark.asyncio
-async def test_unsupported_hazard_invokes_no_earthquake_event_provider() -> None:
-    registry, jma, usgs, _fdma = _registry()
+async def test_unsupported_disaster_invokes_no_earthquake_event_provider() -> None:
+    registry, global_catalog, usgs, _global_situation = _registry()
     result = await CompositeDisasterEventProvider(registry).find_recent_events(
-        _query(Hazard.WILDFIRE), now=NOW
+        _query(Disaster.WILDFIRE), now=NOW
     )
 
     assert result.records == ()
-    assert jma.queries == []
+    assert global_catalog.queries == []
     assert usgs.queries == []
 
 
-def test_disabled_reliefweb_is_a_configuration_limitation() -> None:
-    registry, _jma, _usgs, _fdma = _registry()
+def test_disabled_global_reports_is_a_configuration_limitation() -> None:
+    registry, _global_catalog, _usgs, _global_situation = _registry()
     selection = registry.select(
-        _query(Hazard.EARTHQUAKE), ProviderRole.SITUATION_EVIDENCE
+        _query(Disaster.EARTHQUAKE), ProviderRole.SITUATION_EVIDENCE
     )
 
-    assert [item.name for item in selection.registrations] == ["FDMA"]
-    assert selection.unavailable_configuration == ("ReliefWeb",)
+    assert [item.name for item in selection.registrations] == ["Global Situation"]
+    assert selection.unavailable_configuration == ("Global Reports",)

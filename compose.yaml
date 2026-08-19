@@ -47,9 +47,6 @@ services:
       OPERATIONAL_AUTO_MIGRATE: "false"
       COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
       COUNTRY_CATALOG_AUTOMATIC_UPDATES: "true"
-      FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
-      GFM_ACCESS_TOKEN: ${GFM_ACCESS_TOKEN:-}
-      GFM_USER_ID: ${GFM_USER_ID:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -103,9 +100,6 @@ services:
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
       COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
-      FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
-      GFM_ACCESS_TOKEN: ${GFM_ACCESS_TOKEN:-}
-      GFM_USER_ID: ${GFM_USER_ID:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

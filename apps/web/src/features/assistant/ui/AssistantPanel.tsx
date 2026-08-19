@@ -477,7 +477,7 @@ export function AssistantPanel({
       <div className="availability-note">
         Source-backed current disaster reports are available for recognized requests;
         unsupported coverage is reported explicitly. Selected events can include bounded
-        source-photo previews when date, hazard, geography, credit, and source policy
+        source-photo previews when date, disaster, geography, credit, and source policy
         agree. Operator-supplied imagery remains a separate analytical path.
       </div>
       <div className="message-list" aria-live="polite">

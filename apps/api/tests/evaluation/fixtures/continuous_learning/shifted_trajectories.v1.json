@@ -3,8 +3,8 @@
   "dataset_version": "dm-shifted-trajectories-2026-08-v1",
   "groups": [
     {
-      "id_prefix": "shift-new-hazard",
-      "family": "new_hazard",
+      "id_prefix": "shift-new-disaster",
+      "family": "new_disaster",
       "partition": "test",
       "count": 8,
       "signals": {
@@ -18,7 +18,7 @@
       "critical_safety_pass": true,
       "unsafe_focuses": [],
       "ungrounded_focuses": [],
-      "provenance_prefix": "shift-source:new-hazard"
+      "provenance_prefix": "shift-source:new-disaster"
     },
     {
       "id_prefix": "shift-language",

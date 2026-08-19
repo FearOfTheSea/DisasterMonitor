@@ -21,7 +21,7 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.application.services.source_consistency import (
     validate_provider_source_consistency,
 )
-from disaster_monitor.domain.disaster import Country, GeographicArea, Hazard
+from disaster_monitor.domain.disaster import Country, Disaster, GeographicArea
 
 
 @dataclass(frozen=True)
@@ -61,7 +61,7 @@ def event_descriptor() -> SourceDescriptor:
         jurisdiction="Testland",
         authority_level="national_authority",
         information_roles=(SourceInformationRole.EVENT_DISCOVERY,),
-        supported_hazards=(Hazard.EARTHQUAKE,),
+        supported_disasters=(Disaster.EARTHQUAKE,),
         country_codes=("TST",),
         geographic_scopes=(GeographicScope.COUNTRY,),
         supported_languages=("en",),
@@ -81,7 +81,7 @@ def event_descriptor() -> SourceDescriptor:
 def registration(
     *,
     roles: frozenset[ProviderRole] = frozenset({ProviderRole.EVENT_DISCOVERY}),
-    hazards: frozenset[Hazard] = frozenset({Hazard.EARTHQUAKE}),
+    disasters: frozenset[Disaster] = frozenset({Disaster.EARTHQUAKE}),
     countries: frozenset[str] | None = frozenset({"TST"}),
     requires_configuration: bool = False,
     allowed_hosts: frozenset[str] = frozenset({"events.example"}),
@@ -91,7 +91,7 @@ def registration(
         FakeProvider("test-events", allowed_hosts),
         ProviderCapabilities(
             roles,
-            hazards,
+            disasters,
             countries,
             requires_configuration=requires_configuration,
         ),
@@ -117,14 +117,14 @@ def validate(descriptor: SourceDescriptor, provider: ProviderRegistration) -> No
     )
 
 
-def test_rejects_catalog_hazard_and_country_overclaims() -> None:
+def test_rejects_catalog_disaster_and_country_overclaims() -> None:
     descriptor = event_descriptor()
 
-    with pytest.raises(ValueError, match="Hazard capability drift"):
+    with pytest.raises(ValueError, match="Disaster capability drift"):
         validate(
             replace(
                 descriptor,
-                supported_hazards=(Hazard.EARTHQUAKE, Hazard.FLOOD),
+                supported_disasters=(Disaster.EARTHQUAKE, Disaster.FLOOD),
             ),
             registration(),
         )
@@ -158,7 +158,7 @@ def test_rejects_roles_without_typed_executable_ports() -> None:
             FakeProvider("test-events", frozenset({"events.example"})),
             ProviderCapabilities(
                 frozenset({ProviderRole.EVENT_DISCOVERY}),
-                frozenset({Hazard.EARTHQUAKE}),
+                frozenset({Disaster.EARTHQUAKE}),
                 frozenset({"TST"}),
             ),
         )
@@ -171,7 +171,7 @@ def test_worldwide_only_and_mixed_scope_ports_do_not_form_a_cartesian_product() 
         provider,
         ProviderCapabilities(
             frozenset({ProviderRole.EVENT_DISCOVERY}),
-            frozenset({Hazard.FLOOD}),
+            frozenset({Disaster.FLOOD}),
             None,
             geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
             event_scopes=frozenset({GeographicScope.WORLDWIDE}),
@@ -179,13 +179,13 @@ def test_worldwide_only_and_mixed_scope_ports_do_not_form_a_cartesian_product() 
         worldwide_provider=provider,
     )
     country_query = DisasterQuery(
-        Hazard.FLOOD,
+        Disaster.FLOOD,
         Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1)),
         "recent",
         (),
     )
     assert worldwide_only.capabilities.supports(
-        WorldwideDisasterQuery(Hazard.FLOOD), ProviderRole.EVENT_DISCOVERY
+        WorldwideDisasterQuery(Disaster.FLOOD), ProviderRole.EVENT_DISCOVERY
     )
     assert not worldwide_only.capabilities.supports(
         country_query, ProviderRole.EVENT_DISCOVERY
@@ -196,7 +196,7 @@ def test_worldwide_only_and_mixed_scope_ports_do_not_form_a_cartesian_product() 
         provider,
         ProviderCapabilities(
             frozenset({ProviderRole.EVENT_DISCOVERY, ProviderRole.SITUATION_EVIDENCE}),
-            frozenset({Hazard.FLOOD}),
+            frozenset({Disaster.FLOOD}),
             None,
             geographic_scopes=frozenset(
                 {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
@@ -208,10 +208,10 @@ def test_worldwide_only_and_mixed_scope_ports_do_not_form_a_cartesian_product() 
         worldwide_provider=provider,
     )
     assert mixed.capabilities.supports(
-        WorldwideDisasterQuery(Hazard.FLOOD), ProviderRole.EVENT_DISCOVERY
+        WorldwideDisasterQuery(Disaster.FLOOD), ProviderRole.EVENT_DISCOVERY
     )
     assert not mixed.capabilities.supports(
-        WorldwideDisasterQuery(Hazard.FLOOD), ProviderRole.SITUATION_EVIDENCE
+        WorldwideDisasterQuery(Disaster.FLOOD), ProviderRole.SITUATION_EVIDENCE
     )
     with pytest.raises(ValueError, match="without a worldwide port"):
         ProviderRegistration(
@@ -219,7 +219,7 @@ def test_worldwide_only_and_mixed_scope_ports_do_not_form_a_cartesian_product() 
             FakeProvider("test-events", frozenset({"events.example"})),
             ProviderCapabilities(
                 frozenset({ProviderRole.EVENT_DISCOVERY}),
-                frozenset({Hazard.EARTHQUAKE}),
+                frozenset({Disaster.EARTHQUAKE}),
                 None,
                 geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
                 event_scopes=frozenset({GeographicScope.WORLDWIDE}),

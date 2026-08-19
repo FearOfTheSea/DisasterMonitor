@@ -3,7 +3,7 @@
   "cases": [
     {
       "id": "confirmed-positive",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [{ "category": "injuries", "value": "12", "status": "confirmed" }],
@@ -15,7 +15,7 @@
     },
     {
       "id": "confirmed-zero",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [{ "category": "injuries", "value": "0", "status": "confirmed" }],
@@ -27,7 +27,7 @@
     },
     {
       "id": "preliminary-positive",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [{ "category": "injuries", "value": "12", "status": "preliminary" }],
@@ -39,7 +39,7 @@
     },
     {
       "id": "preliminary-zero",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [{ "category": "injuries", "value": "0", "status": "preliminary" }],
@@ -51,7 +51,7 @@
     },
     {
       "id": "source-estimated-positive",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [{ "category": "injuries", "value": "12", "status": "estimated" }],
@@ -63,7 +63,7 @@
     },
     {
       "id": "disputed-positive",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [{ "category": "injuries", "value": "12", "status": "disputed" }],
@@ -75,7 +75,7 @@
     },
     {
       "id": "unknown-excluded",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [{ "category": "injuries", "value": "unknown", "status": "unknown" }],
@@ -87,7 +87,7 @@
     },
     {
       "id": "confirmed-preliminary-conflict",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "reports": [
@@ -113,7 +113,7 @@
     },
     {
       "id": "confirmed-estimated-conflict",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "reports": [
@@ -139,7 +139,7 @@
     },
     {
       "id": "stale-confirmed-positive",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "reports": [
@@ -157,7 +157,7 @@
     },
     {
       "id": "estimated-only",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [{ "category": "fatalities", "value": "3", "status": "estimated" }],
@@ -169,7 +169,7 @@
     },
     {
       "id": "missing-evidence",
-      "hazard": "earthquake",
+      "disaster": "earthquake",
       "country_code": "JPN",
       "magnitude": 4.2,
       "facts": [],

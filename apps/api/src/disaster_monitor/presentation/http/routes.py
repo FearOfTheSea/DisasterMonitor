@@ -124,15 +124,8 @@ def get_country_catalog_automation(request: Request) -> CountryCatalogUpdateAuto
 
 
 _FRESHNESS_EXPECTATIONS = {
-    "jma-rolling-earthquakes": timedelta(minutes=15),
-    "jma-significant-earthquakes": timedelta(hours=24),
     "usgs-earthquakes": timedelta(minutes=15),
-    "fdma-situation-reports": timedelta(hours=6),
-    "jma-tsunami-status": timedelta(minutes=15),
-    "reliefweb-situation-reports": timedelta(hours=6),
-    "nchmf-vietnam-warnings": timedelta(hours=1),
-    "nasa-firms-active-fire": timedelta(hours=3),
-    "copernicus-gfm-vietnam": timedelta(hours=1),
+    "gdacs-tropical-cyclones": timedelta(hours=1),
 }
 
 
@@ -403,7 +396,7 @@ async def assistant(
         else InvestigationResponse(
             status=result.investigation.status,
             task_summary=result.investigation.task_summary,
-            hazard=result.investigation.hazard,
+            disaster=result.investigation.disaster,
             country=result.investigation.country,
             information_needs=list(result.investigation.information_needs),
             output_modalities=list(result.investigation.output_modalities),
@@ -504,7 +497,7 @@ async def assistant(
             if selected_event is None
             else SelectedEventResponse(
                 event_id=selected_event.event_id,
-                hazard=selected_event.hazard,
+                disaster=selected_event.disaster,
                 location=selected_event.location,
                 event_time=selected_event.event_time,
                 geometry=_event_geometry_response(selected_event.geometry),
@@ -677,7 +670,7 @@ def _asset_input(item: MultimodalAssetRequest) -> AssetAdmissionInput:
             )
         ),
         footprint_crs=footprint.crs if footprint else "EPSG:4326",
-        declared_hazard=item.declared_hazard,
+        declared_disaster=item.declared_disaster,
         declared_country_code=item.declared_country_code,
         capture_role=item.capture_role,
         canonical_url=item.canonical_url,

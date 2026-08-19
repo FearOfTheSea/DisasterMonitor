@@ -1,108 +1,14 @@
 {
   "countries": ["JPN", "VNM", "VEN"],
-  "hazards": [
-    "earthquake",
-    "tsunami",
-    "flood",
-    "wildfire",
-    "landslide",
-    "tropical_cyclone"
-  ],
+  "disasters": ["earthquake", "tropical_cyclone"],
   "roles": ["event_discovery", "situation_evidence"],
   "non_empty": [
-    {
-      "country": "JPN",
-      "hazard": "earthquake",
-      "role": "event_discovery",
-      "source_ids": [
-        "jma-rolling-earthquakes",
-        "jma-significant-earthquakes",
-        "usgs-earthquakes"
-      ]
-    },
-    {
-      "country": "JPN",
-      "hazard": "earthquake",
-      "role": "situation_evidence",
-      "source_ids": ["fdma-situation-reports", "jma-tsunami-status"]
-    },
-    {
-      "country": "VNM",
-      "hazard": "earthquake",
-      "role": "event_discovery",
-      "source_ids": ["usgs-earthquakes"]
-    },
-    {
-      "country": "VNM",
-      "hazard": "flood",
-      "role": "event_discovery",
-      "source_ids": ["nchmf-vietnam-warnings"]
-    },
-    {
-      "country": "VNM",
-      "hazard": "flood",
-      "role": "situation_evidence",
-      "source_ids": ["nchmf-vietnam-warnings"]
-    },
-    {
-      "country": "VNM",
-      "hazard": "landslide",
-      "role": "event_discovery",
-      "source_ids": ["nchmf-vietnam-warnings"]
-    },
-    {
-      "country": "VNM",
-      "hazard": "landslide",
-      "role": "situation_evidence",
-      "source_ids": ["nchmf-vietnam-warnings"]
-    },
-    {
-      "country": "VNM",
-      "hazard": "tropical_cyclone",
-      "role": "event_discovery",
-      "source_ids": ["nchmf-vietnam-warnings", "gdacs-tropical-cyclones"]
-    },
-    {
-      "country": "VNM",
-      "hazard": "tropical_cyclone",
-      "role": "situation_evidence",
-      "source_ids": ["nchmf-vietnam-warnings"]
-    },
-    {
-      "country": "JPN",
-      "hazard": "tropical_cyclone",
-      "role": "event_discovery",
-      "source_ids": ["gdacs-tropical-cyclones"]
-    },
-    {
-      "country": "VEN",
-      "hazard": "tropical_cyclone",
-      "role": "event_discovery",
-      "source_ids": ["gdacs-tropical-cyclones"]
-    },
-    {
-      "country": "VEN",
-      "hazard": "earthquake",
-      "role": "event_discovery",
-      "source_ids": ["usgs-earthquakes"]
-    }
+    {"country": "JPN", "disaster": "earthquake", "role": "event_discovery", "source_ids": ["usgs-earthquakes"]},
+    {"country": "VNM", "disaster": "earthquake", "role": "event_discovery", "source_ids": ["usgs-earthquakes"]},
+    {"country": "VEN", "disaster": "earthquake", "role": "event_discovery", "source_ids": ["usgs-earthquakes"]},
+    {"country": "JPN", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]},
+    {"country": "VNM", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]},
+    {"country": "VEN", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]}
   ],
-  "event_conditioned": [
-    {
-      "country": "JPN",
-      "hazard": "earthquake",
-      "event_source_id": "jma-rolling-earthquakes",
-      "event_id": "jma:fixture",
-      "provider_ids": ["jma:fixture"],
-      "source_ids": ["fdma-situation-reports", "jma-tsunami-status"]
-    },
-    {
-      "country": "JPN",
-      "hazard": "earthquake",
-      "event_source_id": "usgs-earthquakes",
-      "event_id": "usgs:fixture",
-      "provider_ids": ["usgs:fixture"],
-      "source_ids": ["fdma-situation-reports"]
-    }
-  ]
+  "event_conditioned": []
 }

@@ -44,7 +44,7 @@
               "event-observation:001",
               "observation:fatalities:001"
             ],
-            "source_ids": ["usgs-earthquakes", "fdma-situation-reports"]
+            "source_ids": ["usgs-earthquakes", "global-situation-situation-reports"]
           }
         ],
         "requested_permissions": [
@@ -72,7 +72,7 @@
               "event-observation:001",
               "observation:fatalities:001"
             ],
-            "source_ids": ["usgs-earthquakes", "fdma-situation-reports"]
+            "source_ids": ["usgs-earthquakes", "global-situation-situation-reports"]
           }
         ],
         "requested_permissions": [

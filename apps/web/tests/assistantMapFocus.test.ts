@@ -24,20 +24,20 @@ const baseReport: NonNullable<ConversationMessage['report']> = {
 };
 
 const selectedEvent = {
-  event_id: 'jma:fixture-event',
-  hazard: 'earthquake',
+  event_id: 'global-catalog:fixture-event',
+  disaster: 'earthquake',
   location: 'Ishikawa, Japan',
   event_time: '2026-08-05T11:00:00Z',
   geometry: {
     kind: 'point' as const,
     coordinates: [{ latitude: 37, longitude: 137 }],
-    source_id: 'jma-rolling-earthquakes',
+    source_id: 'global-catalog-rolling-earthquakes',
   },
   measurements: [],
   geography_status: 'in_country',
   source: {
-    source_id: 'jma-rolling-earthquakes',
-    publisher: 'JMA',
+    source_id: 'global-catalog-rolling-earthquakes',
+    publisher: 'Global Catalog',
     title: 'Earthquake fixture',
     canonical_url: 'https://example.test/event',
     retrieved_at: '2026-08-05T12:00:00Z',
@@ -74,7 +74,7 @@ describe('assistantMapAreaOfInterest', () => {
         investigation: {
           status: 'completed',
           task_summary: 'Current flood information in Vietnam',
-          hazard: 'flood',
+          disaster: 'flood',
           country: 'Vietnam',
           information_needs: [],
           output_modalities: [],
@@ -154,7 +154,7 @@ describe('assistantMapAreaOfInterest', () => {
         investigation: {
           status: 'completed',
           task_summary: 'Current earthquake information in Japan',
-          hazard: 'earthquake',
+          disaster: 'earthquake',
           country: 'JPN',
           information_needs: [],
           output_modalities: [],
@@ -168,7 +168,7 @@ describe('assistantMapAreaOfInterest', () => {
     ]);
 
     expect(result).toEqual({
-      id: 'assistant-1:event:jma:fixture-event',
+      id: 'assistant-1:event:global-catalog:fixture-event',
       bounds: [137, 37, 137, 37],
     });
   });
@@ -187,7 +187,7 @@ describe('assistantMapAreaOfInterest', () => {
         investigation: {
           status: 'completed',
           task_summary: 'Current earthquake information in Japan',
-          hazard: 'earthquake',
+          disaster: 'earthquake',
           country: ' japan ',
           information_needs: [],
           output_modalities: [],
@@ -232,7 +232,7 @@ describe('assistantMapAreaOfInterest', () => {
         investigation: {
           status: 'completed',
           task_summary: 'Current earthquake information in Japan',
-          hazard: 'earthquake',
+          disaster: 'earthquake',
           country: 'Japan',
           information_needs: [],
           output_modalities: [],

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from disaster_monitor.application.agent.models import SourceInformationRole
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
 
 class CandidateSourceStatus(StrEnum):
@@ -18,7 +18,7 @@ class CandidateSourceSubmission:
     display_name: str
     homepage_url: str
     content_signals: tuple[str, ...]
-    hazards: tuple[Hazard, ...]
+    disasters: tuple[Disaster, ...]
     country_codes: tuple[str, ...] | None = None
     claimed_organization: str = ""
     claimed_domain: str | None = None

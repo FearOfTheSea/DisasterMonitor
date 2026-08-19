@@ -15,9 +15,9 @@ from disaster_monitor.application.services.worldwide_disaster_policy import (
     DefaultWorldwideDisasterPolicy,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventGeographyStatus,
-    Hazard,
     MeasurementKind,
     SourceAuthority,
 )
@@ -66,7 +66,7 @@ def client_for(
 def country_query(country_code: str) -> DisasterQuery:
     country = StaticCountryCatalog().get_by_alpha3(country_code)
     assert country is not None
-    return DisasterQuery(Hazard.TROPICAL_CYCLONE, country, "recent", ("latest",))
+    return DisasterQuery(Disaster.TROPICAL_CYCLONE, country, "recent", ("latest",))
 
 
 def country_payload(
@@ -108,7 +108,7 @@ async def test_gdacs_translates_fixed_search_fixture_with_provenance() -> None:
     )
 
     result = await adapter.find_worldwide_events(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE), now=NOW
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
     )
 
     event = result.records[0]
@@ -121,12 +121,12 @@ async def test_gdacs_translates_fixed_search_fixture_with_provenance() -> None:
         datetime(2026, 8, 13, 3, tzinfo=UTC),
     ]
     latest = DefaultWorldwideDisasterPolicy().select(
-        result.records, WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE)
+        result.records, WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE)
     )
     assert latest is not None
     assert latest.event_id == "gdacs:tc:1001304"
     assert latest.event_time == datetime(2026, 8, 13, 3, tzinfo=UTC)
-    assert event.hazard is Hazard.TROPICAL_CYCLONE
+    assert event.disaster is Disaster.TROPICAL_CYCLONE
     assert event.location == "United States"
     assert event.event_time == datetime(2026, 8, 12, 15, tzinfo=UTC)
     assert event.provider_ids == ("gdacs:tc:1001303", "gdacs:tc:1001303:24")
@@ -156,7 +156,7 @@ async def test_gdacs_query_is_tropical_cyclone_only_and_bounded() -> None:
     adapter = GdacsTropicalCycloneAdapter(client=client)
 
     result = await adapter.find_worldwide_events(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE, time_window_days=5, limit=7),
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE, time_window_days=5, limit=7),
         now=NOW,
     )
     params = dict(requests[0].url.params.multi_items())
@@ -170,10 +170,10 @@ async def test_gdacs_query_is_tropical_cyclone_only_and_bounded() -> None:
     }
     assert result.records
 
-    wrong_hazard = await adapter.find_worldwide_events(
-        WorldwideDisasterQuery(Hazard.EARTHQUAKE), now=NOW
+    wrong_disaster = await adapter.find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.EARTHQUAKE), now=NOW
     )
-    assert wrong_hazard.records == ()
+    assert wrong_disaster.records == ()
     assert len(requests) == 1
     await client.aclose()
 
@@ -261,7 +261,7 @@ async def test_gdacs_worldwide_query_keeps_multicountry_event_worldwide() -> Non
     adapter = GdacsTropicalCycloneAdapter(client=client)
 
     result = await adapter.find_worldwide_events(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE), now=NOW
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
     )
 
     assert len(result.records) == 1
@@ -349,7 +349,7 @@ async def test_gdacs_keeps_valid_records_when_one_record_is_malformed() -> None:
     client = client_for(payload, requests)
 
     result = await GdacsTropicalCycloneAdapter(client=client).find_worldwide_events(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE), now=NOW
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
     )
 
     assert len(result.records) == 2
@@ -371,7 +371,7 @@ async def test_gdacs_does_not_fallback_to_end_time_without_onset() -> None:
     client = client_for(payload, requests)
 
     result = await GdacsTropicalCycloneAdapter(client=client).find_worldwide_events(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE), now=NOW
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
     )
 
     assert [event.event_id for event in result.records] == ["gdacs:tc:1001304"]
@@ -386,7 +386,7 @@ async def test_gdacs_rejects_malformed_top_level_response() -> None:
 
     with pytest.raises(DisasterProviderResponseError):
         await GdacsTropicalCycloneAdapter(client=client).find_worldwide_events(
-            WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE), now=NOW
+            WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
         )
     await client.aclose()
 
@@ -407,7 +407,7 @@ async def test_gdacs_replaces_untrusted_event_url_with_approved_source_url() -> 
     client = client_for(payload, requests)
 
     result = await GdacsTropicalCycloneAdapter(client=client).find_worldwide_events(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE), now=NOW
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
     )
 
     assert result.records[0].source.canonical_url == (
@@ -423,7 +423,7 @@ async def test_gdacs_empty_result_is_explicit() -> None:
     client = client_for({"type": "FeatureCollection", "features": []}, requests)
 
     result = await GdacsTropicalCycloneAdapter(client=client).find_worldwide_events(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE), now=NOW
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
     )
 
     assert result.records == ()

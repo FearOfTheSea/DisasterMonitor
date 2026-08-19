@@ -3,7 +3,7 @@
 Disaster Monitor has a bounded, local-first multimodal path for operator-supplied PNG
 or JPEG images. It does not retrieve analytical imagery. An API caller may attach at most three
 images, each no larger than 5 MB, to `POST /api/v1/assistant` as base64 plus explicit
-source attribution, capture time, WGS84 footprint, hazard, country, and capture role.
+source attribution, capture time, WGS84 footprint, disaster, country, and capture role.
 URLs and filesystem paths are not accepted as image inputs.
 
 The separate [event-associated source-media](event-media.md) path may retrieve bounded
@@ -22,7 +22,7 @@ georeference creates an orphan. Malformed geometry, naive timestamps, invalid co
 codes, and unsupported media are rejected. Orphaned, ambiguous, and unmatched assets
 cannot be sent to visual analysis.
 
-`MultimodalEventAssociator` uses only trusted metadata. It compares typed hazard and
+`MultimodalEventAssociator` uses only trusted metadata. It compares typed disaster and
 country, event identifiers when supplied, capture-role time windows, and a validated
 WGS84 footprint against the selected physical event. Image pixels and model output do
 not influence event association. A near-boundary result remains ambiguous rather than

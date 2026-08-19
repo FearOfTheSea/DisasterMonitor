@@ -86,5 +86,5 @@ Earth's country label point; it is a deterministic calendar default, not proof t
 country has only one timezone.
 
 Global country parsing does not imply global disaster evidence. Provider registration
-still controls every hazard-country-role combination. Unsupported combinations remain
+still controls every disaster-country-role combination. Unsupported combinations remain
 explicitly coverage-unavailable and cannot fall back to model-generated live claims.

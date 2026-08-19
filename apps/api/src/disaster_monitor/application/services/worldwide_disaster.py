@@ -101,7 +101,7 @@ class WorldwideDisasterReportService:
             event_actions.append(
                 f"Queried worldwide event provider {registration.name}."
             )
-        policy = self._policies.for_hazard(query.hazard)
+        policy = self._policies.for_disaster(query.disaster)
         selected = policy.select(tuple(accepted), query)
         if selected is None:
             return _failed_report(
@@ -112,7 +112,7 @@ class WorldwideDisasterReportService:
             )
         summary = SelectedEventSummary(
             event_id=selected.event_id,
-            hazard=selected.hazard,
+            disaster=selected.disaster,
             location=selected.location,
             event_time=selected.event_time,
             geometry=selected.geometry,

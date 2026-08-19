@@ -52,7 +52,7 @@ class DecisionOptionGenerator:
     ) -> DecisionSupportArtifact:
         event = state.physical_event.event
         event_detail = (
-            f"The selected source-backed {event.hazard.value} event occurred at "
+            f"The selected source-backed {event.disaster.value} event occurred at "
             f"{event.location} at {event.event_time.isoformat()}."
         )
         if event.measurements:

@@ -104,7 +104,7 @@ def _validated_sample(raw: dict[str, Any], root: Path) -> dict[str, Any]:
         "attribution",
         "captured_at",
         "capture_role",
-        "hazard",
+        "disaster",
         "country_code",
         "footprint",
         "event",

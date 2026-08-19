@@ -20,8 +20,8 @@ from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     EventMeasurement,
-    Hazard,
     MeasurementKind,
     SourceAuthority,
     SourceReference,
@@ -46,7 +46,7 @@ def _event(
     )
     return WorldwideDisasterEvent(
         event_id=f"usgs:{event_id}",
-        hazard=Hazard.EARTHQUAKE,
+        disaster=Disaster.EARTHQUAKE,
         location=f"Location {event_id}",
         event_time=event_time,
         source=source,
@@ -101,7 +101,7 @@ def _service(
                     provider,
                     ProviderCapabilities(
                         roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                        hazards=frozenset({records[0].hazard}),
+                        disasters=frozenset({records[0].disaster}),
                         country_codes=None,
                         geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
                         event_scopes=frozenset({GeographicScope.WORLDWIDE}),
@@ -125,10 +125,10 @@ async def test_worldwide_report_selects_latest_or_strongest_deterministically() 
     newer = _event("newer", event_time=NOW - timedelta(hours=1), magnitude=5.0)
     service = _service((older_stronger, newer))
 
-    latest = await service.execute(WorldwideDisasterQuery(Hazard.EARTHQUAKE))
+    latest = await service.execute(WorldwideDisasterQuery(Disaster.EARTHQUAKE))
     strongest = await service.execute(
         WorldwideDisasterQuery(
-            Hazard.EARTHQUAKE,
+            Disaster.EARTHQUAKE,
             selection_intent=WorldwideSelectionIntent.STRONGEST,
         ),
     )
@@ -152,7 +152,7 @@ async def test_strongest_query_requests_a_non_recent_bounded_dataset() -> None:
 
     report = await service.execute(
         WorldwideDisasterQuery(
-            Hazard.EARTHQUAKE,
+            Disaster.EARTHQUAKE,
             selection_intent=WorldwideSelectionIntent.STRONGEST,
         )
     )
@@ -168,7 +168,7 @@ async def test_multiple_worldwide_providers_are_aggregated_deterministically() -
     provider = FakeGlobalProvider((older, newer))
     capabilities = ProviderCapabilities(
         roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-        hazards=frozenset({Hazard.EARTHQUAKE}),
+        disasters=frozenset({Disaster.EARTHQUAKE}),
         country_codes=None,
         geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
         event_scopes=frozenset({GeographicScope.WORLDWIDE}),
@@ -188,7 +188,7 @@ async def test_multiple_worldwide_providers_are_aggregated_deterministically() -
     )
 
     report = await WorldwideDisasterReportService(registry, clock=lambda: NOW).execute(
-        WorldwideDisasterQuery(Hazard.EARTHQUAKE)
+        WorldwideDisasterQuery(Disaster.EARTHQUAKE)
     )
 
     assert len(provider.queries) == 2
@@ -201,7 +201,7 @@ async def test_worldwide_report_fails_closed_for_unapproved_source_host() -> Non
     invalid = _event("invalid", event_time=NOW, magnitude=6.0, host="evil.test")
 
     report = await _service((invalid,)).execute(
-        WorldwideDisasterQuery(Hazard.EARTHQUAKE)
+        WorldwideDisasterQuery(Disaster.EARTHQUAKE)
     )
 
     assert report.response_type == "current_disaster_worldwide_verification_failed"
@@ -215,14 +215,14 @@ async def test_worldwide_non_earthquake_event_needs_no_earthquake_measurements()
 ):
     flood = replace(
         _event("flood", event_time=NOW, magnitude=5.0),
-        hazard=Hazard.FLOOD,
+        disaster=Disaster.FLOOD,
         geometry=None,
         measurements=(),
     )
 
-    report = await _service((flood,)).execute(WorldwideDisasterQuery(Hazard.FLOOD))
+    report = await _service((flood,)).execute(WorldwideDisasterQuery(Disaster.FLOOD))
 
     assert report.response_type == "current_disaster_worldwide"
     assert report.selected_event is not None
     assert report.selected_event.event_id == flood.event_id
-    assert report.selected_event.hazard is Hazard.FLOOD
+    assert report.selected_event.disaster is Disaster.FLOOD

@@ -30,9 +30,9 @@ from disaster_monitor.application.services.multimodal_state import (
 from disaster_monitor.application.services.visual_analysis import VisualAnalysisService
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     DisasterEvent,
     GeographicArea,
-    Hazard,
     PhysicalEventIdentity,
     SourceReference,
     point_event_geometry,
@@ -443,7 +443,7 @@ def _validate_sample(root: Path, sample: dict[str, Any]) -> None:
         "attribution",
         "captured_at",
         "capture_role",
-        "hazard",
+        "disaster",
         "country_code",
         "footprint",
         "event",
@@ -485,11 +485,11 @@ def _validate_sample(root: Path, sample: dict[str, Any]) -> None:
             raise MultimodalReleaseError(f"locked sample event is missing {field}")
     _aware_datetime(event["event_time"])
     try:
-        Hazard(str(sample["hazard"]))
+        Disaster(str(sample["disaster"]))
         CaptureRole(str(sample["capture_role"]))
     except ValueError as error:
         raise MultimodalReleaseError(
-            "locked sample has invalid hazard or capture role"
+            "locked sample has invalid disaster or capture role"
         ) from error
     if (
         sample["task"] == "damage_classification"
@@ -528,7 +528,7 @@ def _admission_input(root: Path, sample: dict[str, Any]) -> AssetAdmissionInput:
         attribution=str(sample["attribution"]),
         captured_at=_aware_datetime(sample.get("captured_at"), allow_none=True),
         footprint_coordinates=coordinates,
-        declared_hazard=Hazard(str(sample["hazard"])),
+        declared_disaster=Disaster(str(sample["disaster"])),
         declared_country_code=str(sample["country_code"]),
         capture_role=CaptureRole(str(sample["capture_role"])),
         dataset_id=str(sample["source_id"]),
@@ -563,7 +563,7 @@ def _physical_event(sample: dict[str, Any], now: datetime) -> PhysicalEventIdent
     )
     event = DisasterEvent(
         event_id=str(event_item["event_id"]),
-        hazard=Hazard(str(event_item.get("hazard", sample["hazard"]))),
+        disaster=Disaster(str(event_item.get("disaster", sample["disaster"]))),
         location="Locked multimodal evaluation footprint",
         country=country,
         event_time=event_time,
@@ -575,7 +575,7 @@ def _physical_event(sample: dict[str, Any], now: datetime) -> PhysicalEventIdent
     )
     return (
         default_event_policy_registry()
-        .for_hazard(event.hazard)
+        .for_disaster(event.disaster)
         .identify((event,))
         .physical_events[0]
     )

@@ -15,7 +15,6 @@ _SITUATION_INFORMATION_ROLES = frozenset(
         SourceInformationRole.INFRASTRUCTURE_STATUS,
         SourceInformationRole.EMERGENCY_RESPONSE,
         SourceInformationRole.HUMANITARIAN_REPORTING,
-        SourceInformationRole.TSUNAMI_STATUS,
         SourceInformationRole.SATELLITE_OBSERVATION,
         SourceInformationRole.ANALYTICAL_MODEL,
     }
@@ -51,9 +50,9 @@ def validate_provider_source_consistency(
             raise ValueError(
                 f"Configuration-requirement drift for provider {registration.name}."
             )
-        if frozenset(descriptor.supported_hazards) != capabilities.hazards:
+        if frozenset(descriptor.supported_disasters) != capabilities.disasters:
             raise ValueError(
-                f"Hazard capability drift for provider {registration.name}."
+                f"Disaster capability drift for provider {registration.name}."
             )
         if frozenset(descriptor.geographic_scopes) != capabilities.geographic_scopes:
             raise ValueError(

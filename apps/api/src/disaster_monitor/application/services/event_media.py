@@ -19,15 +19,14 @@ from disaster_monitor.application.ports.event_media import (
     EventMediaProvider,
     MediaAssetStore,
 )
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 
-_HAZARD_TERMS: dict[Hazard, tuple[str, ...]] = {
-    Hazard.EARTHQUAKE: ("earthquake", "quake", "tremor"),
-    Hazard.TSUNAMI: ("tsunami",),
-    Hazard.FLOOD: ("flood", "flooding", "inundation"),
-    Hazard.WILDFIRE: ("wildfire", "bushfire", "forest fire"),
-    Hazard.LANDSLIDE: ("landslide", "mudslide", "debris flow"),
-    Hazard.TROPICAL_CYCLONE: (
+_DISASTER_TERMS: dict[Disaster, tuple[str, ...]] = {
+    Disaster.EARTHQUAKE: ("earthquake", "quake", "tremor"),
+    Disaster.FLOOD: ("flood", "flooding", "inundation"),
+    Disaster.WILDFIRE: ("wildfire", "bushfire", "forest fire"),
+    Disaster.LANDSLIDE: ("landslide", "mudslide", "debris flow"),
+    Disaster.TROPICAL_CYCLONE: (
         "tropical cyclone",
         "cyclone",
         "hurricane",
@@ -104,12 +103,12 @@ class EventMediaAssociationPolicy:
         )
         context_text = _normalized(candidate.context_text)
         text = f"{primary_text} {context_text}".strip()
-        hazard_terms = tuple(
-            _normalized(item) for item in _HAZARD_TERMS[context.hazard]
+        disaster_terms = tuple(
+            _normalized(item) for item in _DISASTER_TERMS[context.disaster]
         )
-        if not any(_contains_term(primary_text, term) for term in hazard_terms):
-            return self._rejected(candidate, "media.association.hazard_missing")
-        rules.append("media.association.hazard_text")
+        if not any(_contains_term(primary_text, term) for term in disaster_terms):
+            return self._rejected(candidate, "media.association.disaster_missing")
+        rules.append("media.association.disaster_text")
 
         country_terms = tuple(
             _normalized(item)
@@ -157,7 +156,7 @@ class EventMediaAssociationPolicy:
             (
                 "The source metadata explicitly names the selected provider event."
                 if exact
-                else "Publication time, hazard, and selected-event geography agree."
+                else "Publication time, disaster, and selected-event geography agree."
             ),
         )
 

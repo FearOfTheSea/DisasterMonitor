@@ -35,11 +35,11 @@ from disaster_monitor.application.services.worldwide_disaster import (
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     EventCoordinate,
     EventGeometry,
     EventGeometryKind,
     GeographicArea,
-    Hazard,
     SituationReport,
     SourceReference,
     point_event_geometry,
@@ -72,7 +72,7 @@ class SyntheticWorldwideProvider:
                 SituationReport(
                     source=event.source,
                     narrative="Worldwide flood situation evidence.",
-                    hazard=query.hazard,
+                    disaster=query.disaster,
                 ),
             )
         )
@@ -95,7 +95,7 @@ def _event() -> WorldwideDisasterEvent:
     )
     return WorldwideDisasterEvent(
         event_id="flood-1",
-        hazard=Hazard.FLOOD,
+        disaster=Disaster.FLOOD,
         location="Pacific basin",
         event_time=NOW,
         source=source,
@@ -111,7 +111,7 @@ def _registry(provider: object) -> ProviderRegistry:
                 provider,
                 ProviderCapabilities(
                     roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    hazards=frozenset({Hazard.FLOOD}),
+                    disasters=frozenset({Disaster.FLOOD}),
                     country_codes=None,
                     geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
                     event_scopes=frozenset({GeographicScope.WORLDWIDE}),
@@ -126,7 +126,7 @@ def _registry(provider: object) -> ProviderRegistry:
 
 
 @pytest.mark.asyncio
-async def test_synthetic_worldwide_hazard_uses_the_neutral_agent_path() -> None:
+async def test_synthetic_worldwide_disaster_uses_the_neutral_agent_path() -> None:
     provider = SyntheticWorldwideProvider(_event())
     registry = _registry(provider)
     report_service = WorldwideDisasterReportService(registry, clock=lambda: NOW)
@@ -142,13 +142,13 @@ async def test_synthetic_worldwide_hazard_uses_the_neutral_agent_path() -> None:
         "Any flood news worldwide?", conversation_id="test-session"
     )
 
-    assert provider.queries == [WorldwideDisasterQuery(Hazard.FLOOD)]
+    assert provider.queries == [WorldwideDisasterQuery(Disaster.FLOOD)]
     assert answer.selected_event is not None
-    assert answer.selected_event.hazard is Hazard.FLOOD
+    assert answer.selected_event.disaster is Disaster.FLOOD
     assert answer.selected_event.geography_status.value == "worldwide"
     assert answer.investigation is not None
     assert answer.investigation.geographic_scope == "worldwide"
-    assert answer.investigation.hazard == "flood"
+    assert answer.investigation.disaster == "flood"
 
 
 @pytest.mark.asyncio
@@ -157,7 +157,7 @@ async def test_worldwide_runtime_translates_report_status_and_capabilities() -> 
     report_service = WorldwideDisasterReportService(
         _registry(provider), clock=lambda: NOW
     )
-    report = await report_service.execute(WorldwideDisasterQuery(Hazard.FLOOD))
+    report = await report_service.execute(WorldwideDisasterQuery(Disaster.FLOOD))
     result = replace(
         report,
         partial=False,
@@ -205,7 +205,7 @@ async def test_worldwide_completeness_changes_when_situation_capability_executes
                             ProviderRole.SITUATION_EVIDENCE,
                         }
                     ),
-                    hazards=frozenset({Hazard.FLOOD}),
+                    disasters=frozenset({Disaster.FLOOD}),
                     country_codes=None,
                     geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
                     event_scopes=frozenset({GeographicScope.WORLDWIDE}),
@@ -219,7 +219,7 @@ async def test_worldwide_completeness_changes_when_situation_capability_executes
         )
     )
     report = await WorldwideDisasterReportService(registry, clock=lambda: NOW).execute(
-        WorldwideDisasterQuery(Hazard.FLOOD)
+        WorldwideDisasterQuery(Disaster.FLOOD)
     )
 
     assert not report.partial
@@ -230,16 +230,16 @@ async def test_worldwide_completeness_changes_when_situation_capability_executes
 def test_country_codes_none_does_not_authorize_worldwide_queries() -> None:
     capabilities = ProviderCapabilities(
         roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-        hazards=frozenset({Hazard.FLOOD}),
+        disasters=frozenset({Disaster.FLOOD}),
         country_codes=None,
     )
     country = Country("THA", "Thailand", (), GeographicArea(-1, 1, -1, 1))
     assert capabilities.supports(
-        DisasterQuery(Hazard.FLOOD, country, "recent", ("latest",)),
+        DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",)),
         ProviderRole.EVENT_DISCOVERY,
     )
     assert not capabilities.supports(
-        WorldwideDisasterQuery(Hazard.FLOOD), ProviderRole.EVENT_DISCOVERY
+        WorldwideDisasterQuery(Disaster.FLOOD), ProviderRole.EVENT_DISCOVERY
     )
 
 
@@ -258,7 +258,7 @@ def test_worldwide_area_geometry_is_accepted_without_a_fabricated_point() -> Non
 
     accepted = validate_worldwide_event_evidence(
         area_event,
-        WorldwideDisasterQuery(Hazard.FLOOD),
+        WorldwideDisasterQuery(Disaster.FLOOD),
         source_id="synthetic-floods",
         allowed_hosts=frozenset({"floods.example"}),
     )
@@ -280,4 +280,4 @@ def test_worldwide_task_scope_is_explicit_before_provider_selection() -> None:
     assert task.geographic_scope is GeographicScope.WORLDWIDE
     assert task.country is None
     assert task.query is None
-    assert task.worldwide_query == WorldwideDisasterQuery(Hazard.FLOOD)
+    assert task.worldwide_query == WorldwideDisasterQuery(Disaster.FLOOD)

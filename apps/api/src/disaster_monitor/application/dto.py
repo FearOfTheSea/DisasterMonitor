@@ -20,7 +20,7 @@ class InvestigationSummary:
 
     status: str
     task_summary: str
-    hazard: str | None
+    disaster: str | None
     country: str | None
     information_needs: tuple[str, ...]
     output_modalities: tuple[str, ...]

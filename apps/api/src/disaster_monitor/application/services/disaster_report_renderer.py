@@ -1,4 +1,4 @@
-"""Hazard-neutral deterministic rendering of normalized evidence."""
+"""Disaster-neutral deterministic rendering of normalized evidence."""
 
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -53,20 +53,20 @@ def _event_summary(packet: EvidencePacket) -> str:
 
 
 class DisasterReportRenderer:
-    """Render only normalized facts using a hazard-selected report profile."""
+    """Render only normalized facts using a disaster-selected report profile."""
 
     def render(
         self,
         packet: EvidencePacket,
         profile: ReportProfile | None = None,
     ) -> tuple[str, tuple[ReportSection, ...]]:
-        profile = profile or report_profile_for(packet.query.hazard)
+        profile = profile or report_profile_for(packet.query.disaster)
         human_lines = _fact_lines(packet.facts, profile.human_categories)
         physical_lines = _fact_lines(packet.facts, profile.physical_categories)
         response_lines = _fact_lines(packet.facts, profile.response_categories)
         narrative_lines = [f"- {narrative}" for narrative in packet.narratives]
         summary = (
-            f"The selected source-backed {packet.query.hazard.value} event is "
+            f"The selected source-backed {packet.query.disaster.value} event is "
             f"{packet.event.event_id}. Retrieved evidence covers "
             f"{_event_summary(packet)}. The report separates confirmed, preliminary, "
             "estimated, disputed, and unavailable information."

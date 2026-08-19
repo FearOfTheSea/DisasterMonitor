@@ -28,9 +28,9 @@ from disaster_monitor.application.services.retention import (
     SnapshotRetentionPolicy,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     FactStatus,
-    Hazard,
     ReportedFact,
     SituationReport,
     SourceReference,
@@ -42,7 +42,6 @@ from disaster_monitor.domain.operations import (
     OperatorActionRecord,
     OperatorDecision,
 )
-from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -58,7 +57,7 @@ NOW = datetime(2026, 8, 13, 3, tzinfo=UTC)
 
 
 class FakeAcquirer:
-    def __init__(self, source_id: str = "nchmf-flood-rss") -> None:
+    def __init__(self, source_id: str = "global-test-source") -> None:
         self.source_id = source_id
         self.calls = 0
 
@@ -74,7 +73,7 @@ class FakeAcquirer:
             retrieved_at=NOW,
             published_at=NOW - timedelta(minutes=5),
             observed_at=None,
-            rights_id="nchmf-rss-terms-2026-08",
+            rights_id="global-test-terms",
         )
 
 
@@ -85,9 +84,9 @@ async def test_worker_is_at_least_once_and_snapshot_persistence_is_idempotent(
     repository = InMemoryOperationalRepository()
     blobs = FilesystemBlobStore(tmp_path / "blobs")
     persistence = SnapshotPersistenceService(repository, blobs)
-    request = canonical_request_identity("nchmf-flood-rss", {"feed": "flood"})
+    request = canonical_request_identity("global-test-source", {"feed": "flood"})
     job = scheduled_job(
-        source_id="nchmf-flood-rss",
+        source_id="global-test-source",
         request_identity=request,
         scheduled_for=NOW,
     )
@@ -95,7 +94,7 @@ async def test_worker_is_at_least_once_and_snapshot_persistence_is_idempotent(
     worker = IngestionWorker(
         repository,
         persistence,
-        {"nchmf-flood-rss": acquirer},
+        {"global-test-source": acquirer},
         clock=lambda: NOW,
     )
 
@@ -112,7 +111,7 @@ async def test_worker_is_at_least_once_and_snapshot_persistence_is_idempotent(
     assert len(repository.snapshot_records) == 1
     assert duplicate.payload_sha256.startswith("sha256:")
     assert duplicate.idempotency_key == snapshot_idempotency_key(
-        "nchmf-flood-rss", request, "bulletin-17"
+        "global-test-source", request, "bulletin-17"
     )
     assert len(list((tmp_path / "blobs").rglob("*.bin"))) == 1
 
@@ -157,22 +156,22 @@ async def test_freshness_exposes_stale_and_never_ingested_states(
     persistence = SnapshotPersistenceService(
         repository, FilesystemBlobStore(tmp_path / "blobs")
     )
-    payload = await FakeAcquirer().acquire("request:nchmf-flood-rss:test")
+    payload = await FakeAcquirer().acquire("request:global-test-source:test")
     await persistence.persist(payload)
 
     status = await repository.freshness(
         now=NOW + timedelta(hours=7),
         expectations={
-            "nchmf-flood-rss": timedelta(hours=6),
-            "nasa-firms-active-fire": timedelta(hours=3),
+            "global-test-source": timedelta(hours=6),
+            "global-test-secondary": timedelta(hours=3),
         },
     )
 
     by_source = {item.source_id: item for item in status}
-    assert by_source["nchmf-flood-rss"].state == FreshnessState.STALE
-    assert by_source["nchmf-flood-rss"].age_seconds == 7 * 3600 + 5 * 60
-    assert by_source["nasa-firms-active-fire"].state == (FreshnessState.NEVER_INGESTED)
-    assert by_source["nasa-firms-active-fire"].age_seconds is None
+    assert by_source["global-test-source"].state == FreshnessState.STALE
+    assert by_source["global-test-source"].age_seconds == 7 * 3600 + 5 * 60
+    assert by_source["global-test-secondary"].state == (FreshnessState.NEVER_INGESTED)
+    assert by_source["global-test-secondary"].age_seconds is None
 
 
 @pytest.mark.asyncio
@@ -186,10 +185,10 @@ async def test_observations_require_snapshot_lineage_and_actions_create_public_a
                 NormalizedObservationRecord(
                     observation_id="observation:missing",
                     snapshot_id="snapshot:missing",
-                    source_id="nchmf-flood-rss",
+                    source_id="global-test-source",
                     observation_type="official_warning",
                     effective_at=NOW,
-                    parser_version="nchmf-rss-v1",
+                    parser_version="global-test-v1",
                     canonical_json="{}",
                 ),
             )
@@ -235,18 +234,18 @@ async def test_evidence_state_persists_only_with_snapshot_lineage(
     country = StaticCountryCatalog().get_by_alpha3("VNM")
     assert country is not None
     source = SourceReference(
-        "nchmf-flood-rss",
-        "NCHMF",
+        "global-test-source",
+        "Global Warnings",
         "Flood bulletin",
-        "https://nchmf.gov.vn/example",
+        "https://global-warnings.gov.vn/example",
         NOW,
         NOW,
         NOW,
         snapshot_id=snapshot.snapshot_id,
     )
     event = DisasterEvent(
-        "nchmf:event",
-        Hazard.FLOOD,
+        "global-warnings:event",
+        Disaster.FLOOD,
         "Vietnam",
         country,
         NOW,
@@ -277,10 +276,10 @@ async def test_evidence_state_persists_only_with_snapshot_lineage(
     assert len(repository.event_links) == 2
 
     missing_source = SourceReference(
-        "nchmf-flood-rss",
-        "NCHMF",
+        "global-test-source",
+        "Global Warnings",
         "Uncaptured bulletin",
-        "https://nchmf.gov.vn/uncaptured",
+        "https://global-warnings.gov.vn/uncaptured",
         NOW,
         NOW,
         NOW,
@@ -313,16 +312,16 @@ async def test_scheduler_and_worker_are_duplicate_safe_and_bounded() -> None:
     country = StaticCountryCatalog().get_by_alpha3("VNM")
     assert country is not None
     query = DisasterQuery(
-        Hazard.FLOOD,
+        Disaster.FLOOD,
         country,
         "scheduled",
         ("event_overview",),
         time_window_days=7,
     )
     task = ScheduledInvestigation(
-        "nchmf-vietnam-warnings",
+        "global-test-source",
         canonical_request_identity(
-            "nchmf-vietnam-warnings", {"hazard": "flood", "country": "VNM"}
+            "global-test-source", {"disaster": "flood", "country": "VNM"}
         ),
         query,
         timedelta(minutes=30),
@@ -336,7 +335,7 @@ async def test_scheduler_and_worker_are_duplicate_safe_and_bounded() -> None:
 
         async def execute(self, query: DisasterQuery):
             self.calls += 1
-            assert query.hazard == Hazard.FLOOD
+            assert query.disaster == Disaster.FLOOD
             return object()
 
     investigator = Investigator()
@@ -376,11 +375,5 @@ async def test_retention_deletes_content_but_preserves_provenance(
     assert not list((tmp_path / "blobs").rglob("*.bin"))
 
 
-def test_scheduled_runtime_excludes_unconfigured_credentialed_sources() -> None:
-    without_firms = scheduled_investigations(Settings(_env_file=None))
-    with_firms = scheduled_investigations(
-        Settings(_env_file=None, firms_map_key="reviewed-map-key")
-    )
-
-    assert all(item.source_id != "nasa-firms-active-fire" for item in without_firms)
-    assert any(item.source_id == "nasa-firms-active-fire" for item in with_firms)
+def test_scheduled_runtime_has_no_country_scoped_jobs() -> None:
+    assert scheduled_investigations() == ()

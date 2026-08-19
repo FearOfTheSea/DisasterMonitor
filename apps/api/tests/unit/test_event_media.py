@@ -14,18 +14,18 @@ from disaster_monitor.application.services.event_media import (
     DisasterMediaService,
     EventMediaAssociationPolicy,
 )
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.media.memory_store import InMemoryMediaAssetStore
 
 NOW = datetime(2026, 8, 15, 12, tzinfo=UTC)
 EVENT_TIME = datetime(2026, 8, 10, 5, 54, tzinfo=UTC)
 
 
-def _context(hazard: Hazard = Hazard.EARTHQUAKE) -> MediaEventContext:
+def _context(disaster: Disaster = Disaster.EARTHQUAKE) -> MediaEventContext:
     return MediaEventContext(
         event_id="us6000tjl2",
         physical_event_id="physical-event:colombia-2026",
-        hazard=hazard,
+        disaster=disaster,
         location="5 km S of San José del Palmar, Colombia",
         event_time=EVENT_TIME,
         provider_ids=("us6000tjl2",),
@@ -66,20 +66,19 @@ def _candidate(
 
 
 @pytest.mark.parametrize(
-    ("hazard", "term"),
+    ("disaster", "term"),
     (
-        (Hazard.EARTHQUAKE, "earthquake"),
-        (Hazard.TSUNAMI, "tsunami"),
-        (Hazard.FLOOD, "flooding"),
-        (Hazard.WILDFIRE, "wildfire"),
-        (Hazard.LANDSLIDE, "landslide"),
-        (Hazard.TROPICAL_CYCLONE, "typhoon"),
+        (Disaster.EARTHQUAKE, "earthquake"),
+        (Disaster.FLOOD, "flooding"),
+        (Disaster.WILDFIRE, "wildfire"),
+        (Disaster.LANDSLIDE, "landslide"),
+        (Disaster.TROPICAL_CYCLONE, "typhoon"),
     ),
 )
-def test_association_policy_is_hazard_neutral(hazard: Hazard, term: str) -> None:
-    context = _context(hazard)
+def test_association_policy_is_disaster_neutral(disaster: Disaster, term: str) -> None:
+    context = _context(disaster)
     candidate = _candidate(
-        hazard.value,
+        disaster.value,
         title=f"Colombia {term} response",
         caption=f"Emergency teams respond to the {term} in Colombia.",
     )
@@ -87,7 +86,7 @@ def test_association_policy_is_hazard_neutral(hazard: Hazard, term: str) -> None
     result = EventMediaAssociationPolicy().assess(candidate, context, now=NOW)
 
     assert result.status == MediaAssociationStatus.CORROBORATED
-    assert "media.association.hazard_text" in result.rule_ids
+    assert "media.association.disaster_text" in result.rule_ids
     assert "media.association.country_text" in result.rule_ids
 
 

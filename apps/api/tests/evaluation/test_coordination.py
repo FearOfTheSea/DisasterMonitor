@@ -485,7 +485,7 @@ def _multimodal_state(state, case_id: str) -> MultimodalEvidenceState:
         width=1,
         height=1,
         footprint=None,
-        declared_hazard=state.physical_event.event.hazard,
+        declared_disaster=state.physical_event.event.disaster,
         declared_country_code=state.physical_event.event.country.alpha3_code,
         capture_role=CaptureRole.SINGLE_CAPTURE,
         processing_level="raw",

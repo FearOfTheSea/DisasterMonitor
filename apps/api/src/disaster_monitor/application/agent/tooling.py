@@ -174,7 +174,7 @@ class _BaseTool:
 class ListSourcesForTaskTool(_BaseTool):
     description = ToolDescription(
         "list_sources_for_task",
-        "Match maintained source intelligence to the validated hazard, country, "
+        "Match maintained source intelligence to the validated disaster, country, "
         "and roles.",
         ("validated_task",),
         (),
@@ -185,7 +185,7 @@ class ListSourcesForTaskTool(_BaseTool):
 
     async def execute(self, state: AgentExecutionState) -> str:
         task = state.task
-        if task.query is None or task.hazard is None or task.country is None:
+        if task.query is None or task.disaster is None or task.country is None:
             raise ValueError("Source selection requires a canonical disaster query.")
         configured: list[str] = []
         unconfigured: list[str] = []
@@ -203,7 +203,7 @@ class ListSourcesForTaskTool(_BaseTool):
         catalog_matches = {
             source.source_id
             for source in self.dependencies.source_catalog.sources()
-            if task.hazard in source.supported_hazards
+            if task.disaster in source.supported_disasters
             and (
                 source.country_codes is None
                 or task.country.alpha3_code in source.country_codes
@@ -283,7 +283,7 @@ class FindDisasterEventTool(_BaseTool):
         )
         if not selection.registrations:
             state.capability_gaps.append(
-                "No event-discovery provider supports this hazard and country."
+                "No event-discovery provider supports this disaster and country."
             )
             return "No event-discovery provider is available for the validated task."
         try:
@@ -294,13 +294,13 @@ class FindDisasterEventTool(_BaseTool):
         except Exception:
             state.workspace.event_batch = ProviderBatch()
             state.warnings.append(
-                f"A {task.query.hazard.value} event source could not be reached or "
+                f"A {task.query.disaster.value} event source could not be reached or "
                 "returned invalid data."
             )
         state.warnings.extend(
             issue.message for issue in state.workspace.event_batch.issues
         )
-        policy = self.dependencies.event_policies.for_hazard(task.query.hazard)
+        policy = self.dependencies.event_policies.for_disaster(task.query.disaster)
         resolution = policy.resolve(
             state.workspace.event_batch.records,
             task.query,
@@ -562,9 +562,9 @@ def compose_report(
         coverage_unavailable = bool(state.capability_gaps)
         if state.workspace.event_batch is not None:
             coverage_unavailable = False
-        if coverage_unavailable and task.hazard and task.country:
+        if coverage_unavailable and task.disaster and task.country:
             detail = (
-                f"I recognized a request for current {task.hazard.value} information "
+                f"I recognized a request for current {task.disaster.value} information "
                 f"in {task.country.canonical_name}, but no configured source-backed "
                 "event provider supports this combination. No live factual claim is "
                 "being made."
@@ -575,7 +575,7 @@ def compose_report(
             )
             detail = task.detail or (
                 f"I could not verify a matching recent "
-                f"{task.hazard.value if task.hazard else 'disaster'} event in "
+                f"{task.disaster.value if task.disaster else 'disaster'} event in "
                 f"{country_name} from the configured sources."
             )
         section = ReportSection("Situation summary", detail)
@@ -680,7 +680,7 @@ def compose_report(
         response_type="current_disaster",
         selected_event=SelectedEventSummary(
             event_id=packet.event.event_id,
-            hazard=packet.event.hazard,
+            disaster=packet.event.disaster,
             location=packet.event.location,
             event_time=packet.event.event_time,
             geometry=packet.event.geometry,

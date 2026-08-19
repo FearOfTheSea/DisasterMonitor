@@ -6,12 +6,12 @@ from enum import StrEnum
 
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     DisasterEvent,
     EventGeographyStatus,
     EventGeometry,
     EventMeasurement,
     EvidenceWorldState,
-    Hazard,
     ReportedFact,
     SourceReference,
 )
@@ -30,9 +30,9 @@ class QueryParseStatus(StrEnum):
     """Deterministic outcomes from disaster intent parsing."""
 
     MATCHED = "matched"
-    NO_HAZARD = "no_hazard"
+    NO_DISASTER = "no_disaster"
     NO_COUNTRY = "no_country"
-    MULTIPLE_HAZARDS = "multiple_hazards"
+    MULTIPLE_DISASTERS = "multiple_disasters"
     MULTIPLE_COUNTRIES = "multiple_countries"
     DATE_TIMEZONE_UNAVAILABLE = "date_timezone_unavailable"
 
@@ -45,7 +45,7 @@ class GeographicScope(StrEnum):
 
 
 class WorldwideSelectionIntent(StrEnum):
-    """Neutral ranking intent interpreted by the hazard policy."""
+    """Neutral ranking intent interpreted by the disaster policy."""
 
     LATEST = "latest"
     STRONGEST = "strongest"
@@ -53,7 +53,7 @@ class WorldwideSelectionIntent(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class EventDiscriminator:
-    """Neutral key/value discriminator interpreted by hazard-owned policies."""
+    """Neutral key/value discriminator interpreted by disaster-owned policies."""
 
     kind: str
     value: str
@@ -63,7 +63,7 @@ class EventDiscriminator:
 class WorldwideDisasterQuery:
     """Bounded worldwide lookup with no invented country identity."""
 
-    hazard: Hazard
+    disaster: Disaster
     selection_intent: WorldwideSelectionIntent = WorldwideSelectionIntent.LATEST
     time_window_days: int = 30
     limit: int = 50
@@ -73,7 +73,7 @@ class WorldwideDisasterQuery:
 class DisasterQuery:
     """Normalized user intent for a bounded current-disaster lookup."""
 
-    hazard: Hazard
+    disaster: Disaster
     country: Country
     time_intent: str
     focus: tuple[str, ...]
@@ -108,7 +108,7 @@ class WorldwideDisasterEvent:
     """Source-backed event discovered without assigning it to a country."""
 
     event_id: str
-    hazard: Hazard
+    disaster: Disaster
     location: str
     event_time: datetime
     source: SourceReference
@@ -187,7 +187,7 @@ class SelectedEventSummary:
     """Stable event metadata exposed at the API boundary."""
 
     event_id: str
-    hazard: Hazard
+    disaster: Disaster
     location: str
     event_time: datetime
     geometry: EventGeometry | None

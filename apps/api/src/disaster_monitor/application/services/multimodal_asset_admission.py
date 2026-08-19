@@ -89,8 +89,8 @@ class MultimodalAssetAdmissionService:
         elif captured_at.tzinfo is None:
             reasons.append("capture_time_requires_timezone")
             rejected = True
-        if item.declared_hazard is None:
-            reasons.append("missing_declared_hazard")
+        if item.declared_disaster is None:
+            reasons.append("missing_declared_disaster")
         country_code = (item.declared_country_code or "").strip().upper() or None
         if country_code is None:
             reasons.append("missing_declared_country")
@@ -125,7 +125,7 @@ class MultimodalAssetAdmissionService:
         orphan_reasons = {
             "missing_georeference",
             "missing_capture_time",
-            "missing_declared_hazard",
+            "missing_declared_disaster",
             "missing_declared_country",
             "derived_asset_missing_processing_level",
             "derived_asset_missing_parent_lineage",
@@ -160,7 +160,7 @@ class MultimodalAssetAdmissionService:
                 source.dataset_id or "",
                 source.license_name or "",
                 captured_material,
-                item.declared_hazard.value if item.declared_hazard else "unknown",
+                item.declared_disaster.value if item.declared_disaster else "unknown",
                 country_code or "unknown",
                 item.capture_role.value,
                 footprint_material,
@@ -185,7 +185,7 @@ class MultimodalAssetAdmissionService:
             width=width,
             height=height,
             footprint=footprint,
-            declared_hazard=item.declared_hazard,
+            declared_disaster=item.declared_disaster,
             declared_country_code=country_code,
             capture_role=item.capture_role,
             processing_level=item.processing_level,

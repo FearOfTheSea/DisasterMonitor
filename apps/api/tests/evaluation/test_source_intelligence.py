@@ -28,10 +28,10 @@ from disaster_monitor.application.source_intelligence import (
 )
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     DisasterEvent,
     EventMeasurement,
     FactStatus,
-    Hazard,
     MeasurementKind,
     ReportedFact,
     SituationReport,
@@ -93,9 +93,9 @@ def _load(name: str) -> dict[str, object]:
 
 
 def _query(
-    hazard: Hazard = Hazard.EARTHQUAKE, country: Country = JAPAN
+    disaster: Disaster = Disaster.EARTHQUAKE, country: Country = JAPAN
 ) -> DisasterQuery:
-    return DisasterQuery(hazard, country, "recent", ("latest developments",))
+    return DisasterQuery(disaster, country, "recent", ("latest developments",))
 
 
 def _source(
@@ -123,14 +123,14 @@ def _event(
     *,
     host: str = "example.test",
     event_id: str = "fixture:event",
-    hazard: Hazard = Hazard.EARTHQUAKE,
+    disaster: Disaster = Disaster.EARTHQUAKE,
     country: Country = JAPAN,
     provider_ids: tuple[str, ...] = (),
 ) -> DisasterEvent:
     source = _source(source_id, host=host)
     return DisasterEvent(
         event_id,
-        hazard,
+        disaster,
         country.canonical_name,
         country,
         NOW - timedelta(minutes=5),
@@ -145,15 +145,13 @@ def _event(
 async def test_si_a_release_gate() -> None:
     fixture = _load("coverage_matrix.json")
     countries = cast(list[str], fixture["countries"])
-    hazards = cast(list[str], fixture["hazards"])
+    disasters = cast(list[str], fixture["disasters"])
     roles = cast(list[str], fixture["roles"])
     overrides = {
-        (item["country"], item["hazard"], item["role"]): tuple(item["source_ids"])
+        (item["country"], item["disaster"], item["role"]): tuple(item["source_ids"])
         for item in cast(list[dict[str, object]], fixture["non_empty"])
     }
-    service = build_current_disaster_report(
-        Settings(reliefweb_app_name=None), COUNTRIES
-    )
+    service = build_current_disaster_report(Settings(_env_file=None), COUNTRIES)
     registry = service.provider_registry
     catalog = service.source_catalog
     routing_passed = 0
@@ -161,15 +159,15 @@ async def test_si_a_release_gate() -> None:
     for country_code in countries:
         country = COUNTRIES.get_by_alpha3(country_code)
         assert country is not None
-        for hazard_name in hazards:
-            query = _query(Hazard(hazard_name), country)
+        for disaster_name in disasters:
+            query = _query(Disaster(disaster_name), country)
             for role_name in roles:
                 role = ProviderRole(role_name)
                 actual = tuple(
                     item.source_id
                     for item in registry.select(query, role).registrations
                 )
-                expected = overrides.get((country_code, hazard_name, role_name), ())
+                expected = overrides.get((country_code, disaster_name, role_name), ())
                 routing_total += 1
                 routing_passed += actual == expected
     for item in cast(list[dict[str, object]], fixture["event_conditioned"]):
@@ -188,7 +186,7 @@ async def test_si_a_release_gate() -> None:
         actual = tuple(
             registration.source_id
             for registration in registry.select(
-                _query(Hazard(cast(str, item["hazard"])), country),
+                _query(Disaster(cast(str, item["disaster"])), country),
                 ProviderRole.SITUATION_EVIDENCE,
                 event=event,
             ).registrations
@@ -220,7 +218,7 @@ async def test_si_a_release_gate() -> None:
             )
             country = COUNTRIES.get_by_alpha3(country_code)
             assert country is not None
-            query = _query(descriptor.supported_hazards[0], country)
+            query = _query(descriptor.supported_disasters[0], country)
             host = descriptor.allowed_hosts[0]
             try:
                 if ProviderRole.EVENT_DISCOVERY in registration.capabilities.roles:
@@ -228,7 +226,7 @@ async def test_si_a_release_gate() -> None:
                         _event(
                             descriptor.source_id,
                             host=host,
-                            hazard=query.hazard,
+                            disaster=query.disaster,
                             country=country,
                         ),
                         query,
@@ -240,7 +238,7 @@ async def test_si_a_release_gate() -> None:
                         SituationReport(
                             _source(descriptor.source_id, host=host),
                             "Validated provider fixture.",
-                            hazard=query.hazard,
+                            disaster=query.disaster,
                             country_codes=(country.alpha3_code,),
                         ),
                         query,
@@ -283,7 +281,7 @@ def _run_schema_mutations() -> tuple[int, int]:
     valid = _event("approved-events")
     wrong_country = replace(valid, country=VENEZUELA)
     naive = replace(valid, event_time=valid.event_time.replace(tzinfo=None))
-    string_hazard = replace(valid, hazard=cast(Hazard, "earthquake"))
+    string_disaster = replace(valid, disaster=cast(Disaster, "earthquake"))
     string_authority_source = replace(
         _source("approved-events"),
         authority=cast(SourceAuthority, "national_authority"),
@@ -296,8 +294,8 @@ def _run_schema_mutations() -> tuple[int, int]:
         object(),
         replace(valid, source=_source("wrong-events")),
         replace(valid, source=_source("approved-events", host="evil.test")),
-        replace(valid, hazard=Hazard.FLOOD),
-        string_hazard,
+        replace(valid, disaster=Disaster.FLOOD),
+        string_disaster,
         wrong_country,
         replace(valid, country=cast(Country, object())),
         naive,
@@ -314,8 +312,8 @@ def _run_schema_mutations() -> tuple[int, int]:
         SituationReport(wrong_report_source, "wrong source"),
         SituationReport(
             approved_report_source,
-            "wrong hazard",
-            hazard=Hazard.FLOOD,
+            "wrong disaster",
+            disaster=Disaster.FLOOD,
         ),
         SituationReport(
             approved_report_source,
@@ -401,7 +399,7 @@ class _EpisodeProvider:
                 _event(
                     self.source_id,
                     event_id=f"{self.source_id}:event",
-                    hazard=query.hazard,
+                    disaster=query.disaster,
                     country=query.country,
                 ),
             )
@@ -415,7 +413,7 @@ def _episode_registry(primary: str, secondary: str) -> ProviderRegistry:
     )
     capabilities = ProviderCapabilities(
         frozenset({ProviderRole.EVENT_DISCOVERY}),
-        frozenset({Hazard.EARTHQUAKE}),
+        frozenset({Disaster.EARTHQUAKE}),
         frozenset({"JPN"}),
     )
     return ProviderRegistry(
@@ -564,7 +562,9 @@ def test_si_c_release_gate() -> None:
                     "" if item.get("empty_identity") else candidate_id,
                     f"{item['url']}?variant={variant}",
                     tuple(cast(list[str], item["signals"])),
-                    tuple(Hazard(value) for value in cast(list[str], item["hazards"])),
+                    tuple(
+                        Disaster(value) for value in cast(list[str], item["disasters"])
+                    ),
                     (
                         None
                         if item["countries"] is None

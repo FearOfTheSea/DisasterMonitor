@@ -110,7 +110,7 @@ class InvestigationResponse(BaseModel):
 
     status: str
     task_summary: str
-    hazard: str | None = None
+    disaster: str | None = None
     country: str | None = None
     information_needs: list[str] = Field(default_factory=list)
     output_modalities: list[str] = Field(default_factory=list)
@@ -217,7 +217,7 @@ class EventGeometryResponse(BaseModel):
 
 
 class EventMeasurementResponse(BaseModel):
-    """Hazard-neutral event measurement."""
+    """Disaster-neutral event measurement."""
 
     kind: MeasurementKind
     value: float | str
@@ -229,7 +229,7 @@ class SelectedEventResponse(BaseModel):
     """The specific event covered by a current-disaster report."""
 
     event_id: str
-    hazard: str
+    disaster: str
     location: str
     event_time: datetime
     geometry: EventGeometryResponse | None = None

@@ -23,7 +23,7 @@ from disaster_monitor.domain.disaster import (  # noqa: E402
     DisasterEvent,
     EventMeasurement,
     FactStatus,
-    Hazard,
+    Disaster,
     MeasurementKind,
     ReportedFact,
     SituationReport,
@@ -62,11 +62,11 @@ class FakeSystemModel:
 
 class FakeSystemEventProvider:
     async def find_recent_events(self, _query, *, now):
-        jma_source = SourceReference(
-            source_id="system-jma-events",
-            publisher="JMA fixture",
-            title="Deterministic JMA Japan earthquake event",
-            canonical_url="https://example.test/system-jma-event",
+        usgs_history_source = SourceReference(
+            source_id="system-usgs-events",
+            publisher="USGS fixture",
+            title="Deterministic USGS Japan earthquake history event",
+            canonical_url="https://example.test/system-usgs-history-event",
             published_at=TARGET_TIME,
             updated_at=now - timedelta(minutes=10),
             retrieved_at=now,
@@ -101,36 +101,36 @@ class FakeSystemEventProvider:
         return ProviderBatch(
             (
                 DisasterEvent(
-                    event_id="jma:system-fixture",
-                    hazard=Hazard.EARTHQUAKE,
+                    event_id="usgs:history-system-fixture",
+                    disaster=Disaster.EARTHQUAKE,
                     location="Ishikawa, Japan",
                     country=JAPAN,
                     event_time=TARGET_TIME,
-                    source=jma_source,
-                    geometry=point_event_geometry(37.0, 137.0, jma_source),
+                    source=usgs_history_source,
+                    geometry=point_event_geometry(37.0, 137.0, usgs_history_source),
                     measurements=(
                         EventMeasurement(
-                            MeasurementKind.MAGNITUDE, 6.0, source=jma_source
+                            MeasurementKind.MAGNITUDE, 6.0, source=usgs_history_source
                         ),
                         EventMeasurement(
                             MeasurementKind.INTENSITY,
-                            "JMA 6-",
-                            source=jma_source,
+                            "USGS intensity 6-",
+                            source=usgs_history_source,
                         ),
                         EventMeasurement(
-                            MeasurementKind.DEPTH, 12, "km", source=jma_source
+                            MeasurementKind.DEPTH, 12, "km", source=usgs_history_source
                         ),
                         EventMeasurement(
                             MeasurementKind.PROVIDER_SIGNIFICANCE,
                             400,
-                            source=jma_source,
+                            source=usgs_history_source,
                         ),
                     ),
-                    provider_ids=("jma:system-fixture",),
+                    provider_ids=("usgs:history-system-fixture",),
                 ),
                 DisasterEvent(
                     event_id="usgs:system-fixture",
-                    hazard=Hazard.EARTHQUAKE,
+                    disaster=Disaster.EARTHQUAKE,
                     location="Ishikawa, Japan",
                     country=JAPAN,
                     event_time=TARGET_TIME + timedelta(seconds=20),
@@ -153,7 +153,7 @@ class FakeSystemEventProvider:
                 ),
                 DisasterEvent(
                     event_id="usgs:unrelated",
-                    hazard=Hazard.EARTHQUAKE,
+                    disaster=Disaster.EARTHQUAKE,
                     location="Tokyo, Japan",
                     country=JAPAN,
                     event_time=datetime(2026, 8, 5, 23, 15, tzinfo=UTC),
@@ -173,7 +173,7 @@ class FakeSystemEventProvider:
                 ),
                 DisasterEvent(
                     event_id="usgs:venezuela-decoy",
-                    hazard=Hazard.EARTHQUAKE,
+                    disaster=Disaster.EARTHQUAKE,
                     location="Sucre, Venezuela",
                     country=VENEZUELA,
                     event_time=datetime(2026, 8, 6, 1, 45, tzinfo=UTC),
@@ -199,7 +199,7 @@ class FakeSystemSituationProvider:
     async def get_situation_reports(self, event, _query, *, now):
         source = SourceReference(
             source_id="system-situation-reports",
-            publisher="ReliefWeb fixture",
+            publisher="Global situation fixture",
             title="Deterministic situation update",
             canonical_url="https://example.test/system-situation",
             published_at=now - timedelta(minutes=5),
@@ -235,38 +235,6 @@ class FakeSystemSituationProvider:
                         ),
                     ),
                     event_id=event.event_id,
-                ),
-                SituationReport(
-                    source=SourceReference(
-                        source_id="system-tsunami-status",
-                        publisher="JMA tsunami fixture",
-                        title="Official tsunami status for system event",
-                        canonical_url="https://example.test/system-tsunami",
-                        published_at=now - timedelta(minutes=4),
-                        updated_at=now - timedelta(minutes=3),
-                        retrieved_at=now,
-                    ),
-                    narrative="No tsunami warning was issued for the selected event.",
-                    facts=(
-                        ReportedFact(
-                            category="tsunami",
-                            label="Tsunami status",
-                            value="No tsunami warning issued",
-                            status=FactStatus.CONFIRMED,
-                            source=SourceReference(
-                                source_id="system-tsunami-status",
-                                publisher="JMA tsunami fixture",
-                                title="Official tsunami status for system event",
-                                canonical_url="https://example.test/system-tsunami",
-                                published_at=now - timedelta(minutes=4),
-                                updated_at=now - timedelta(minutes=3),
-                                retrieved_at=now,
-                            ),
-                            event_id="jma:system-fixture",
-                            claim_id="tsunami-status",
-                        ),
-                    ),
-                    event_id="jma:system-fixture",
                 ),
                 SituationReport(
                     source=source,

@@ -7,11 +7,20 @@
       "display_name": "GDACS tropical-cyclone event discovery",
       "jurisdiction": "global disaster alert and coordination system",
       "authority_level": "secondary",
-      "information_roles": ["event_discovery"],
-      "supported_hazards": ["tropical_cyclone"],
+      "information_roles": [
+        "event_discovery"
+      ],
+      "supported_disasters": [
+        "tropical_cyclone"
+      ],
       "country_codes": null,
-      "geographic_scopes": ["country", "worldwide"],
-      "supported_languages": ["en"],
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
       "endpoint_kind": "official_geojson_api",
       "requires_configuration": false,
       "configured": true,
@@ -22,54 +31,14 @@
         "This source provides event discovery only; it is not a national warning, impact report, casualty source, or current-news source.",
         "GDACS alert and model output does not establish local warnings, impacts, casualties, or national totals."
       ],
-      "registered_tool_names": ["find_disaster_event"],
+      "registered_tool_names": [
+        "find_disaster_event"
+      ],
       "provider_registration_name": "GDACS tropical cyclones",
       "implementation_status": "implemented",
-      "allowed_hosts": ["www.gdacs.org"]
-    },
-    {
-      "source_id": "jma-rolling-earthquakes",
-      "organization_name": "Japan Meteorological Agency",
-      "display_name": "JMA rolling earthquake information",
-      "jurisdiction": "Japan",
-      "authority_level": "national_authority",
-      "information_roles": ["event_discovery", "scientific_event_verification"],
-      "supported_hazards": ["earthquake"],
-      "country_codes": ["JPN"],
-      "geographic_scopes": ["country"],
-      "supported_languages": ["ja", "en"],
-      "endpoint_kind": "official_json_feed",
-      "requires_configuration": false,
-      "configured": true,
-      "expected_freshness": "rolling feed; exact latency is unknown",
-      "attribution_guidance": "Attribute earthquake records to JMA.",
-      "limitations": ["The rolling list has a bounded retention window."],
-      "registered_tool_names": ["find_disaster_event"],
-      "provider_registration_name": "JMA rolling earthquake",
-      "implementation_status": "implemented",
-      "allowed_hosts": ["www.jma.go.jp"]
-    },
-    {
-      "source_id": "jma-significant-earthquakes",
-      "organization_name": "Japan Meteorological Agency",
-      "display_name": "JMA significant earthquake history",
-      "jurisdiction": "Japan",
-      "authority_level": "national_authority",
-      "information_roles": ["event_discovery", "scientific_event_verification"],
-      "supported_hazards": ["earthquake"],
-      "country_codes": ["JPN"],
-      "geographic_scopes": ["country"],
-      "supported_languages": ["ja"],
-      "endpoint_kind": "official_html_history",
-      "requires_configuration": false,
-      "configured": true,
-      "expected_freshness": "retained warning history; exact latency is unknown",
-      "attribution_guidance": "Attribute warning-history records to JMA.",
-      "limitations": ["Only significant events retained by the JMA history are covered."],
-      "registered_tool_names": ["find_disaster_event"],
-      "provider_registration_name": "JMA significant earthquake",
-      "implementation_status": "implemented",
-      "allowed_hosts": ["www.data.jma.go.jp"]
+      "allowed_hosts": [
+        "www.gdacs.org"
+      ]
     },
     {
       "source_id": "usgs-earthquakes",
@@ -77,140 +46,37 @@
       "display_name": "USGS earthquake catalog",
       "jurisdiction": "global scientific catalog",
       "authority_level": "scientific_authority",
-      "information_roles": ["event_discovery", "scientific_event_verification"],
-      "supported_hazards": ["earthquake"],
+      "information_roles": [
+        "event_discovery",
+        "scientific_event_verification"
+      ],
+      "supported_disasters": [
+        "earthquake"
+      ],
       "country_codes": null,
-      "geographic_scopes": ["country", "worldwide"],
-      "supported_languages": ["en"],
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
       "endpoint_kind": "official_geojson_api",
       "requires_configuration": false,
       "configured": true,
       "expected_freshness": "near-real-time catalog; exact latency is unknown",
       "attribution_guidance": "Attribute scientific earthquake records to USGS.",
-      "limitations": ["Country membership uses packaged bounds and simplified polygons."],
-      "registered_tool_names": ["find_disaster_event"],
+      "limitations": [
+        "Country membership uses packaged bounds and simplified polygons."
+      ],
+      "registered_tool_names": [
+        "find_disaster_event"
+      ],
       "provider_registration_name": "USGS",
       "implementation_status": "implemented",
-      "allowed_hosts": ["earthquake.usgs.gov"]
-    },
-    {
-      "source_id": "fdma-situation-reports",
-      "organization_name": "Fire and Disaster Management Agency of Japan",
-      "display_name": "FDMA situation reports",
-      "jurisdiction": "Japan",
-      "authority_level": "national_authority",
-      "information_roles": ["casualty_reporting", "physical_damage", "infrastructure_status", "emergency_response"],
-      "supported_hazards": ["earthquake"],
-      "country_codes": ["JPN"],
-      "geographic_scopes": ["country"],
-      "supported_languages": ["ja"],
-      "endpoint_kind": "official_html_and_pdf_reports",
-      "requires_configuration": false,
-      "configured": true,
-      "expected_freshness": "publication based; exact cadence is unknown",
-      "attribution_guidance": "Attribute reported impacts to FDMA and retain publication time.",
-      "limitations": ["Only extractable text and recognized report layouts are supported."],
-      "registered_tool_names": ["retrieve_situation_evidence"],
-      "provider_registration_name": "FDMA",
-      "implementation_status": "implemented",
-      "allowed_hosts": ["www.fdma.go.jp"]
-    },
-    {
-      "source_id": "jma-tsunami-status",
-      "organization_name": "Japan Meteorological Agency",
-      "display_name": "JMA tsunami status",
-      "jurisdiction": "Japan",
-      "authority_level": "national_authority",
-      "information_roles": ["official_warning", "tsunami_status"],
-      "supported_hazards": ["earthquake"],
-      "country_codes": ["JPN"],
-      "geographic_scopes": ["country"],
-      "supported_languages": ["ja", "en"],
-      "endpoint_kind": "official_json_feed",
-      "requires_configuration": false,
-      "configured": true,
-      "expected_freshness": "bulletin feed; exact latency is unknown",
-      "attribution_guidance": "Attribute bulletin status to JMA.",
-      "limitations": ["Requires a selected event with a JMA identifier; no bulletin is neutral."],
-      "registered_tool_names": ["retrieve_situation_evidence"],
-      "provider_registration_name": "JMA tsunami status",
-      "implementation_status": "implemented",
-      "allowed_hosts": ["www.jma.go.jp"]
-    },
-    {
-      "source_id": "nchmf-vietnam-warnings",
-      "organization_name": "Vietnam National Center for Hydro-Meteorological Forecasting",
-      "display_name": "NCHMF official Vietnam warning RSS",
-      "jurisdiction": "Vietnam",
-      "authority_level": "national_authority",
-      "information_roles": ["event_discovery", "official_warning"],
-      "supported_hazards": ["flood", "landslide", "tropical_cyclone"],
-      "country_codes": ["VNM"],
-      "geographic_scopes": ["country"],
-      "supported_languages": ["vi", "en"],
-      "endpoint_kind": "official_rss_feed",
-      "requires_configuration": false,
-      "configured": true,
-      "expected_freshness": "publication based; feed cadence varies by hazard",
-      "attribution_guidance": "Attribute warning headlines to NCHMF and do not infer unreported impacts.",
-      "limitations": [
-        "RSS items can contain only a headline and publication time.",
-        "Published reuse terms permit individuals/nonprofits but allow withdrawal; production rights review remains required."
-      ],
-      "registered_tool_names": ["find_disaster_event", "retrieve_situation_evidence"],
-      "provider_registration_name": "NCHMF Vietnam warnings",
-      "implementation_status": "implemented",
-      "allowed_hosts": ["nchmf.gov.vn"]
-    },
-    {
-      "source_id": "nasa-firms-active-fire",
-      "organization_name": "NASA Fire Information for Resource Management System",
-      "display_name": "NASA FIRMS active-fire observations",
-      "jurisdiction": "global satellite observation",
-      "authority_level": "scientific_authority",
-      "information_roles": ["event_discovery", "satellite_observation"],
-      "supported_hazards": ["wildfire"],
-      "country_codes": null,
-      "geographic_scopes": ["country"],
-      "supported_languages": ["en"],
-      "endpoint_kind": "official_csv_api",
-      "requires_configuration": true,
-      "configured": false,
-      "expected_freshness": "near-real-time satellite product; source-specific latency applies",
-      "attribution_guidance": "Identify records as NASA FIRMS satellite detections, not official wildfire incidents.",
-      "limitations": [
-        "A NASA FIRMS map key is required.",
-        "Active-fire detections do not establish incident boundaries, impacts, or official declarations."
-      ],
-      "registered_tool_names": ["find_disaster_event", "retrieve_situation_evidence"],
-      "provider_registration_name": "NASA FIRMS active fire",
-      "implementation_status": "implemented",
-      "allowed_hosts": ["firms.modaps.eosdis.nasa.gov"]
-    },
-    {
-      "source_id": "copernicus-gfm-vietnam",
-      "organization_name": "Copernicus Emergency Management Service",
-      "display_name": "Copernicus GFM Vietnam product notifications",
-      "jurisdiction": "owner-configured Vietnam areas of interest",
-      "authority_level": "scientific_authority",
-      "information_roles": ["event_discovery", "analytical_model"],
-      "supported_hazards": ["flood"],
-      "country_codes": ["VNM"],
-      "geographic_scopes": ["country"],
-      "supported_languages": ["en"],
-      "endpoint_kind": "authenticated_official_json_api",
-      "requires_configuration": true,
-      "configured": false,
-      "expected_freshness": "satellite product notification; acquisition and product latency apply",
-      "attribution_guidance": "Present as a Copernicus satellite-derived analytical product, never a national warning.",
-      "limitations": [
-        "Requires a GFM token, user ID, and reviewed Vietnam-only areas of interest.",
-        "Notification availability does not itself quantify flood extent or impacts."
-      ],
-      "registered_tool_names": ["find_disaster_event", "retrieve_situation_evidence"],
-      "provider_registration_name": "Copernicus GFM Vietnam notifications",
-      "implementation_status": "implemented",
-      "allowed_hosts": ["api.gfm.eodc.eu"]
+      "allowed_hosts": [
+        "earthquake.usgs.gov"
+      ]
     },
     {
       "source_id": "reliefweb-situation-reports",
@@ -218,21 +84,45 @@
       "display_name": "ReliefWeb supplementary situation reports",
       "jurisdiction": "global humanitarian aggregation",
       "authority_level": "humanitarian_aggregator",
-      "information_roles": ["humanitarian_situation_reporting", "casualty_reporting", "physical_damage", "emergency_response"],
-      "supported_hazards": ["earthquake", "tsunami", "flood", "wildfire", "landslide", "tropical_cyclone"],
+      "information_roles": [
+        "humanitarian_situation_reporting",
+        "casualty_reporting",
+        "physical_damage",
+        "emergency_response"
+      ],
+      "supported_disasters": [
+        "earthquake",
+        "flood",
+        "wildfire",
+        "landslide",
+        "tropical_cyclone"
+      ],
       "country_codes": null,
-      "geographic_scopes": ["country"],
-      "supported_languages": ["en"],
+      "geographic_scopes": [
+        "country"
+      ],
+      "supported_languages": [
+        "en"
+      ],
       "endpoint_kind": "curated_json_api",
       "requires_configuration": true,
       "configured": false,
       "expected_freshness": "report publication based; exact latency is unknown",
       "attribution_guidance": "Present as supplementary preliminary reporting, not an official national total.",
-      "limitations": ["Not an event-verification source.", "Provider-local IDs are not comparable to JMA or USGS IDs."],
-      "registered_tool_names": ["retrieve_situation_evidence"],
+      "limitations": [
+        "Not an event-verification source.",
+        "Provider-local IDs are not comparable to event-provider IDs."
+      ],
+      "registered_tool_names": [
+        "retrieve_situation_evidence"
+      ],
       "provider_registration_name": "ReliefWeb",
       "implementation_status": "implemented",
-      "allowed_hosts": ["api.reliefweb.int", "reliefweb.int", "www.reliefweb.int"]
+      "allowed_hosts": [
+        "api.reliefweb.int",
+        "reliefweb.int",
+        "www.reliefweb.int"
+      ]
     }
   ]
 }

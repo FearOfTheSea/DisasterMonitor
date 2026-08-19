@@ -136,7 +136,7 @@ def _stage_locked_slice(tmp_path: Path) -> tuple[Path, Path, dict[str, DamageLev
             "attribution": f"Locked {family} evaluator fixture",
             "captured_at": captured_at,
             "capture_role": "post_event",
-            "hazard": "earthquake",
+            "disaster": "earthquake",
             "country_code": country,
             "footprint": footprint,
             "event": {
@@ -145,7 +145,7 @@ def _stage_locked_slice(tmp_path: Path) -> tuple[Path, Path, dict[str, DamageLev
                 "longitude": 137.0,
                 "latitude": 35.0,
                 "country_code": event_country,
-                "hazard": "earthquake",
+                "disaster": "earthquake",
             },
             "expected_association": expected_association,
             "expected_geography_match": expected_geography,

@@ -23,9 +23,9 @@ from disaster_monitor.domain.decision import (
 )
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     DisasterEvent,
     EvidenceWorldState,
-    Hazard,
     HypothesisArtifact,
     IncidentPriorityAssessment,
     InternalTriageDecision,
@@ -111,7 +111,6 @@ class SourceInformationRole(StrEnum):
     INFRASTRUCTURE_STATUS = "infrastructure_status"
     EMERGENCY_RESPONSE = "emergency_response"
     HUMANITARIAN_REPORTING = "humanitarian_situation_reporting"
-    TSUNAMI_STATUS = "tsunami_status"
     SATELLITE_OBSERVATION = "satellite_observation"
     ANALYTICAL_MODEL = "analytical_model"
     IMAGERY = "imagery"
@@ -122,7 +121,7 @@ class SourceInformationRole(StrEnum):
 class DisasterTaskDraft:
     disaster_related: bool
     current_or_event_specific: bool
-    hazard_mentions: tuple[str, ...] = ()
+    disaster_mentions: tuple[str, ...] = ()
     place_mentions: tuple[str, ...] = ()
     time_expression: str | None = None
     information_needs: tuple[str, ...] = ()
@@ -137,7 +136,7 @@ class ValidatedDisasterTask:
     question: str
     kind: TaskKind
     requires_evidence: bool
-    hazard: Hazard | None = None
+    disaster: Disaster | None = None
     country: Country | None = None
     geographic_scope: GeographicScope = GeographicScope.COUNTRY
     unresolved_place: str | None = None
@@ -248,7 +247,7 @@ class SourceDescriptor:
     jurisdiction: str
     authority_level: str
     information_roles: tuple[SourceInformationRole, ...]
-    supported_hazards: tuple[Hazard, ...]
+    supported_disasters: tuple[Disaster, ...]
     country_codes: tuple[str, ...] | None
     supported_languages: tuple[str, ...]
     endpoint_kind: str

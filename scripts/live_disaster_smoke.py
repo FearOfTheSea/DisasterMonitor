@@ -73,8 +73,6 @@ async def main() -> None:
                     situation_provider.last_record_counts,
                     situation_provider.last_diagnostics,
                 )
-                if not settings.reliefweb_app_name:
-                    print("- ReliefWeb: skipped (not configured)")
         finally:
             await service.aclose()
         print(f"question={question}")

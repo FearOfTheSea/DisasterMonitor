@@ -29,11 +29,11 @@ from disaster_monitor.application.services.hypothesis_reasoning import (
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
+    Disaster,
     DisasterEvent,
     EarthquakeEvent,
     EventMeasurement,
     FactStatus,
-    Hazard,
     HypothesisArtifact,
     HypothesisTruthStatus,
     MeasurementKind,
@@ -89,7 +89,10 @@ def _event(item: dict[str, object]) -> DisasterEvent:
     )
     event_type = (
         EarthquakeEvent
-        if (Hazard(cast(str, item.get("hazard", "earthquake"))) is Hazard.EARTHQUAKE)
+        if (
+            Disaster(cast(str, item.get("disaster", "earthquake")))
+            is Disaster.EARTHQUAKE
+        )
         else DisasterEvent
     )
     geometry = (
@@ -99,7 +102,7 @@ def _event(item: dict[str, object]) -> DisasterEvent:
     )
     return event_type(
         event_id=cast(str, item["event_id"]),
-        hazard=Hazard(cast(str, item.get("hazard", "earthquake"))),
+        disaster=Disaster(cast(str, item.get("disaster", "earthquake"))),
         location=f"Fixture location {observation_id}",
         country=country,
         event_time=event_time,
@@ -164,11 +167,11 @@ def test_ew_a_release_gate() -> None:
                 expected_groups, predicted_groups
             )
             query_country = events[0].country
-            query_hazard = events[0].hazard
+            query_disaster = events[0].disaster
             resolution = policy.resolve(
                 tuple(ordered),
                 DisasterQuery(
-                    query_hazard,
+                    query_disaster,
                     query_country,
                     "recent",
                     ("latest",),
@@ -193,7 +196,7 @@ def test_ew_a_release_gate() -> None:
                 expected_snapshot = snapshot
             assert snapshot == expected_snapshot, episode["id"]
             cross_scope_merges = sum(
-                len({item.hazard for item in physical.observations}) > 1
+                len({item.disaster for item in physical.observations}) > 1
                 or len({item.country.alpha3_code for item in physical.observations}) > 1
                 for physical in identity.physical_events
             )
@@ -267,7 +270,7 @@ def _temporal_report(item: dict[str, object]) -> SituationReport:
         for fact in cast(list[dict[str, object]], item["facts"])
     )
     correlation = item.get("correlation")
-    hazard = item.get("hazard")
+    disaster = item.get("disaster")
     return SituationReport(
         source=source,
         narrative=cast(str, item.get("narrative", f"Fixture report {report_id}.")),
@@ -278,7 +281,7 @@ def _temporal_report(item: dict[str, object]) -> SituationReport:
             if correlation is not None
             else None
         ),
-        hazard=Hazard(cast(str, hazard)) if hazard is not None else None,
+        disaster=Disaster(cast(str, disaster)) if disaster is not None else None,
     )
 
 
@@ -297,7 +300,7 @@ def _temporal_event() -> DisasterEvent:
     )
     return DisasterEvent(
         "fixture:event",
-        Hazard.EARTHQUAKE,
+        Disaster.EARTHQUAKE,
         "Fixture location, Japan",
         japan,
         NOW - timedelta(hours=3),
@@ -311,7 +314,7 @@ def test_ew_b_release_gate() -> None:
     fixture = _load("temporal_evidence.json")
     permutation_count = cast(int, fixture["permutations_per_episode"])
     event = _temporal_event()
-    query = DisasterQuery(event.hazard, event.country, "recent", ("latest",))
+    query = DisasterQuery(event.disaster, event.country, "recent", ("latest",))
     disposition_counts: dict[str, tuple[int, int]] = {}
     freshness_counts: dict[str, tuple[int, int]] = {}
     missingness_counts: dict[str, tuple[int, int]] = {}
@@ -498,7 +501,7 @@ def _hypothesis_report(item: dict[str, object], *, variant: int) -> SituationRep
 def test_ew_c_release_gate() -> None:
     fixture = _load("hypothesis_outcomes.json")
     event = _temporal_event()
-    query = DisasterQuery(event.hazard, event.country, "recent", ("latest",))
+    query = DisasterQuery(event.disaster, event.country, "recent", ("latest",))
     generator = HypothesisGenerator()
     predictions: list[float] = []
     outcomes: list[int] = []
@@ -583,7 +586,7 @@ def test_ew_c_evaluator_rejects_miscalibration_and_observation_promotion() -> No
     state = (
         EvidenceReconciler()
         .build(
-            DisasterQuery(event.hazard, event.country, "recent", ("latest",)),
+            DisasterQuery(event.disaster, event.country, "recent", ("latest",)),
             event,
             (),
             warnings=(),

@@ -17,11 +17,11 @@ from disaster_monitor.application.services.evidence_reconciliation import (
     normalize_timestamp,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventGeographyStatus,
     EventGeometry,
     EventMeasurement,
-    Hazard,
     MeasurementKind,
     SourceAuthority,
     SourceReference,
@@ -188,7 +188,7 @@ class GdacsTropicalCycloneAdapter:
         if country_query is None:
             event: WorldwideDisasterEvent | DisasterEvent = WorldwideDisasterEvent(
                 event_id=event_id,
-                hazard=Hazard.TROPICAL_CYCLONE,
+                disaster=Disaster.TROPICAL_CYCLONE,
                 location=location,
                 event_time=event_time,
                 source=source,
@@ -227,7 +227,7 @@ class GdacsTropicalCycloneAdapter:
                 return None, (_country_projection_unusable(index),)
             event = DisasterEvent(
                 event_id=event_id,
-                hazard=Hazard.TROPICAL_CYCLONE,
+                disaster=Disaster.TROPICAL_CYCLONE,
                 location=location,
                 country=country_query.country,
                 event_time=event_time,
@@ -350,7 +350,7 @@ class GdacsTropicalCycloneAdapter:
     ) -> ProviderBatch[WorldwideDisasterEvent]:
         if not isinstance(query, WorldwideDisasterQuery):
             return ProviderBatch()
-        if query.hazard is not Hazard.TROPICAL_CYCLONE or query.limit <= 0:
+        if query.disaster is not Disaster.TROPICAL_CYCLONE or query.limit <= 0:
             return ProviderBatch()
         result = await self._fetch_events(query, now=now)
         return ProviderBatch(
@@ -367,7 +367,7 @@ class GdacsTropicalCycloneAdapter:
     ) -> ProviderBatch[DisasterEvent]:
         if not isinstance(query, DisasterQuery):
             return ProviderBatch()
-        if query.hazard is not Hazard.TROPICAL_CYCLONE:
+        if query.disaster is not Disaster.TROPICAL_CYCLONE:
             return ProviderBatch()
         if (
             self._geography is None
@@ -375,7 +375,7 @@ class GdacsTropicalCycloneAdapter:
         ):
             return ProviderBatch(issues=(_country_projection_unusable(-1),))
         worldwide_query = WorldwideDisasterQuery(
-            hazard=query.hazard,
+            disaster=query.disaster,
             time_window_days=query.time_window_days,
         )
         result = await self._fetch_events(worldwide_query, now=now, country_query=query)

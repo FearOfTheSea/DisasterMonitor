@@ -1,4 +1,4 @@
-"""Hazard policies for worldwide normalization and event selection."""
+"""Disaster policies for worldwide normalization and event selection."""
 
 import re
 from datetime import UTC, datetime
@@ -9,7 +9,7 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterQuery,
     WorldwideSelectionIntent,
 )
-from disaster_monitor.domain.disaster import Hazard, MeasurementKind
+from disaster_monitor.domain.disaster import Disaster, MeasurementKind
 
 
 def _measurement(
@@ -22,7 +22,7 @@ def _measurement(
 
 
 class WorldwideDisasterPolicy(Protocol):
-    """Hazard-owned worldwide query and selection semantics."""
+    """Disaster-owned worldwide query and selection semantics."""
 
     def selection_for(self, question: str) -> WorldwideSelectionIntent: ...
 
@@ -42,7 +42,7 @@ class WorldwideDisasterPolicy(Protocol):
 
 
 class DefaultWorldwideDisasterPolicy:
-    """Shared latest-event behavior for hazards without special ranking rules."""
+    """Shared latest-event behavior for disasters without special ranking rules."""
 
     def selection_for(self, question: str) -> WorldwideSelectionIntent:
         return WorldwideSelectionIntent.LATEST
@@ -63,7 +63,7 @@ class DefaultWorldwideDisasterPolicy:
     ) -> str:
         return (
             f"{event.source.publisher} reports the latest matching worldwide "
-            f"{query.hazard.value} event as "
+            f"{query.disaster.value} event as "
             f"{event.event_id}: {event.location}; event time "
             f"{_utc_text(event.event_time)}."
         )
@@ -149,19 +149,19 @@ class EarthquakeWorldwideDisasterPolicy(DefaultWorldwideDisasterPolicy):
 
 
 class WorldwideDisasterPolicyRegistry:
-    """Resolve a hazard to its worldwide policy without branching in orchestration."""
+    """Resolve a disaster to its worldwide policy without branching in orchestration."""
 
-    def __init__(self, policies: dict[Hazard, WorldwideDisasterPolicy]) -> None:
+    def __init__(self, policies: dict[Disaster, WorldwideDisasterPolicy]) -> None:
         self._policies = dict(policies)
         self._default = DefaultWorldwideDisasterPolicy()
 
-    def for_hazard(self, hazard: Hazard) -> WorldwideDisasterPolicy:
-        return self._policies.get(hazard, self._default)
+    def for_disaster(self, disaster: Disaster) -> WorldwideDisasterPolicy:
+        return self._policies.get(disaster, self._default)
 
 
 def default_worldwide_disaster_policy_registry() -> WorldwideDisasterPolicyRegistry:
     return WorldwideDisasterPolicyRegistry(
-        {Hazard.EARTHQUAKE: EarthquakeWorldwideDisasterPolicy()}
+        {Disaster.EARTHQUAKE: EarthquakeWorldwideDisasterPolicy()}
     )
 
 

@@ -136,7 +136,7 @@ class PhysicalEventRecord:
     """Durable representative identity for a conservatively resolved event."""
 
     physical_event_id: str
-    hazard: str
+    disaster: str
     country_code: str
     latitude: float | None
     longitude: float | None

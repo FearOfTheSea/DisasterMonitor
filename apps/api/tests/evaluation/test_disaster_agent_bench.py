@@ -25,11 +25,11 @@ def _write_json(path: Path, value: dict) -> None:
 
 
 def _locked_bundle(tmp_path: Path) -> tuple[Path, Path]:
-    rights = tmp_path / "rights" / "nchmf.json"
+    rights = tmp_path / "rights" / "global-warnings.json"
     _write_json(
         rights,
         {
-            "source_id": "nchmf-rss",
+            "source_id": "global-warnings-rss",
             "use_basis": "test-fixture-only",
             "redistribution": "not-applicable",
         },
@@ -46,7 +46,7 @@ def _locked_bundle(tmp_path: Path) -> tuple[Path, Path]:
         "snapshots": [
             {
                 "snapshot_id": "snapshot-late-retrieval",
-                "source_id": "nchmf-rss",
+                "source_id": "global-warnings-rss",
                 "provider_record_id": "bulletin-1",
                 "retrieved_at": "2026-08-02T03:00:00+00:00",
                 "published_at": "2026-08-02T01:00:00+00:00",
@@ -55,12 +55,12 @@ def _locked_bundle(tmp_path: Path) -> tuple[Path, Path]:
                 "payload_relpath": "payloads/revision-1.xml",
                 "payload_sha256": file_sha256(first_payload),
                 "content_type": "application/xml",
-                "parser_version": "nchmf-rss-v1",
-                "rights_ref": "rights/nchmf.json",
+                "parser_version": "global-warnings-rss-v1",
+                "rights_ref": "rights/global-warnings.json",
             },
             {
                 "snapshot_id": "snapshot-early-retrieval",
-                "source_id": "nchmf-rss",
+                "source_id": "global-warnings-rss",
                 "provider_record_id": "bulletin-1",
                 "retrieved_at": "2026-08-02T02:00:00+00:00",
                 "published_at": "2026-08-02T02:30:00+00:00",
@@ -69,8 +69,8 @@ def _locked_bundle(tmp_path: Path) -> tuple[Path, Path]:
                 "payload_relpath": "payloads/revision-2.xml",
                 "payload_sha256": file_sha256(second_payload),
                 "content_type": "application/xml",
-                "parser_version": "nchmf-rss-v1",
-                "rights_ref": "rights/nchmf.json",
+                "parser_version": "global-warnings-rss-v1",
+                "rights_ref": "rights/global-warnings.json",
             },
         ],
     }
@@ -80,7 +80,7 @@ def _locked_bundle(tmp_path: Path) -> tuple[Path, Path]:
     _write_json(hidden, {"episode_id": "vnm-flood-1", "outcome": "hidden"})
     episode = {
         "episode_id": "vnm-flood-1",
-        "hazard": "flood",
+        "disaster": "flood",
         "country_code": "VNM",
         "time_window": {
             "start": "2026-08-02T00:00:00+00:00",

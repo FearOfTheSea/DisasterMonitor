@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.domain.multimodal import CaptureRole
 
 
@@ -27,7 +27,7 @@ class MultimodalAssetRequest(BaseModel):
     attribution: Annotated[str, Field(min_length=1, max_length=500)]
     captured_at: datetime | None = None
     footprint: FootprintRequest | None = None
-    declared_hazard: Hazard | None = None
+    declared_disaster: Disaster | None = None
     declared_country_code: Annotated[str | None, Field(pattern=r"^[A-Za-z]{3}$")] = None
     capture_role: CaptureRole = CaptureRole.UNKNOWN
     canonical_url: Annotated[str | None, Field(max_length=2_000)] = None
@@ -83,7 +83,7 @@ class MultimodalAssetResponse(BaseModel):
     width: int | None = None
     height: int | None = None
     footprint: PolygonGeometryResponse | None = None
-    declared_hazard: str | None = None
+    declared_disaster: str | None = None
     declared_country_code: str | None = None
     capture_role: str
     processing_level: str | None = None
@@ -100,7 +100,7 @@ class AssetEventAssociationResponse(BaseModel):
     status: str
     geography_match: bool | None = None
     time_match: bool | None = None
-    hazard_match: bool | None = None
+    disaster_match: bool | None = None
     country_match: bool | None = None
     event_id_match: bool | None = None
     distance_km: float | None = None

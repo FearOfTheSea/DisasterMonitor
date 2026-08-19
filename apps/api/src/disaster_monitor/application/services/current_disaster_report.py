@@ -139,12 +139,12 @@ class CurrentDisasterReportService:
     async def execute(self, query: DisasterQuery) -> DisasterReport:
         task = ValidatedDisasterTask(
             question=(
-                f"Current {query.hazard.value} information in "
+                f"Current {query.disaster.value} information in "
                 f"{query.country.canonical_name}"
             ),
             kind=TaskKind.INVESTIGATION,
             requires_evidence=True,
-            hazard=query.hazard,
+            disaster=query.disaster,
             country=query.country,
             date_from=query.date_from,
             date_to=query.date_to,

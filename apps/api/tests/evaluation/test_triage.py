@@ -23,13 +23,13 @@ from disaster_monitor.application.services.incident_priority import (
 )
 from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventAssignmentStatus,
     EventMeasurement,
     EvidenceDisposition,
     EvidenceFreshness,
     FactStatus,
-    Hazard,
     IncidentPriority,
     InternalTriageAction,
     MeasurementKind,
@@ -127,7 +127,7 @@ def test_tr_a_is_deterministic_across_order_and_repeated_runs() -> None:
 
 def _priority_state(item: dict[str, object]):
     case_id = str(item["id"])
-    hazard = Hazard(str(item["hazard"]))
+    disaster = Disaster(str(item["disaster"]))
     country = COUNTRIES.get_by_alpha3(str(item["country_code"]))
     assert country is not None
     event_time = datetime.fromisoformat(
@@ -145,7 +145,7 @@ def _priority_state(item: dict[str, object]):
     )
     event = DisasterEvent(
         event_id=case_id,
-        hazard=hazard,
+        disaster=disaster,
         location=country.canonical_name,
         country=country,
         event_time=event_time,
@@ -180,7 +180,7 @@ def _priority_state(item: dict[str, object]):
     )
     identity = (
         default_event_policy_registry()
-        .for_hazard(hazard)
+        .for_disaster(disaster)
         .identify((event,))
         .physical_events[0]
     )
@@ -216,7 +216,7 @@ def _priority_state(item: dict[str, object]):
                 narrative="Frozen priority episode.",
                 facts=facts,
                 event_id=case_id,
-                hazard=hazard,
+                disaster=disaster,
                 country_codes=(country.alpha3_code,),
             ),
         )
@@ -302,7 +302,7 @@ def test_tr_b_scope_parity_and_uncertainty_escalation() -> None:
 
     base = {
         "id": "uncertainty-comparison",
-        "hazard": "earthquake",
+        "disaster": "earthquake",
         "country_code": "VEN",
         "magnitude": 5.2,
     }
@@ -340,7 +340,7 @@ def test_tr_b_explicit_no_impact_and_irrelevant_operational_language(
         _priority_state(
             {
                 "id": "operational-no-impact",
-                "hazard": "flood",
+                "disaster": "flood",
                 "country_code": "JPN",
                 "facts": [{"category": "infrastructure", "value": statement}],
             }
@@ -372,7 +372,7 @@ def test_tr_b_material_impact_survives_operational_and_mixed_language(
         _priority_state(
             {
                 "id": "operational-impact",
-                "hazard": "flood",
+                "disaster": "flood",
                 "country_code": "JPN",
                 "facts": [{"category": "infrastructure", "value": statement}],
             }
@@ -407,7 +407,7 @@ def test_tr_b_ambiguous_operational_language_fails_toward_review(
         _priority_state(
             {
                 "id": "operational-ambiguous",
-                "hazard": "flood",
+                "disaster": "flood",
                 "country_code": "JPN",
                 "facts": [{"category": "infrastructure", "value": statement}],
             }
@@ -426,7 +426,7 @@ def test_tr_b_ambiguous_operational_language_fails_toward_review(
 def test_tr_b_missing_stale_conflicting_and_ambiguous_evidence_are_monotonic() -> None:
     base = {
         "id": "uncertainty-monotonic-base",
-        "hazard": "earthquake",
+        "disaster": "earthquake",
         "country_code": "JPN",
         "magnitude": 5.2,
         "facts": [{"category": "fatalities", "value": "0"}],
@@ -605,7 +605,7 @@ def test_tr_c_rollback_disables_autonomy_without_suppressing_incidents() -> None
 def test_tr_c_domain_rejects_critical_autonomy_escalation_bypass() -> None:
     case = {
         "id": "domain-guard-low",
-        "hazard": "flood",
+        "disaster": "flood",
         "country_code": "JPN",
         "facts": [],
     }

@@ -1,4 +1,4 @@
-"""Application-owned, hazard-selectable situation/event correlation policies."""
+"""Application-owned, disaster-selectable situation/event correlation policies."""
 
 import re
 from dataclasses import dataclass
@@ -6,8 +6,8 @@ from typing import Protocol
 
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
+    Disaster,
     DisasterEvent,
-    Hazard,
     MeasurementKind,
     SituationReport,
 )
@@ -63,7 +63,7 @@ def correlation_signals(
 def correlate_situation_report(
     report: SituationReport, event: DisasterEvent
 ) -> CorrelationStatus:
-    """Apply only hazard-neutral correlation signals."""
+    """Apply only disaster-neutral correlation signals."""
     event_ids = {event.event_id.lower(), *(item.lower() for item in event.provider_ids)}
     report_ids = {
         item.lower() for item in (report.event_id, *report.provider_event_ids) if item
@@ -78,7 +78,7 @@ def correlate_situation_report(
         return CorrelationStatus.MATCHED
     if comparable_pairs:
         return CorrelationStatus.UNMATCHED
-    if report.hazard is not None and report.hazard != event.hazard:
+    if report.disaster is not None and report.disaster != event.disaster:
         return CorrelationStatus.UNMATCHED
     if report.country_codes and event.country.alpha3_code not in {
         code.upper() for code in report.country_codes
@@ -157,15 +157,15 @@ class EarthquakeEvidenceCorrelationPolicy(DefaultEvidenceCorrelationPolicy):
 
 
 class EvidenceCorrelationPolicies:
-    def __init__(self, policies: dict[Hazard, EvidenceCorrelationPolicy]) -> None:
+    def __init__(self, policies: dict[Disaster, EvidenceCorrelationPolicy]) -> None:
         self._policies = dict(policies)
         self._default = DefaultEvidenceCorrelationPolicy()
 
-    def for_hazard(self, hazard: Hazard) -> EvidenceCorrelationPolicy:
-        return self._policies.get(hazard, self._default)
+    def for_disaster(self, disaster: Disaster) -> EvidenceCorrelationPolicy:
+        return self._policies.get(disaster, self._default)
 
 
 def default_evidence_correlation_policies() -> EvidenceCorrelationPolicies:
     return EvidenceCorrelationPolicies(
-        {Hazard.EARTHQUAKE: EarthquakeEvidenceCorrelationPolicy()}
+        {Disaster.EARTHQUAKE: EarthquakeEvidenceCorrelationPolicy()}
     )

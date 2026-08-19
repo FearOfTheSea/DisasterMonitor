@@ -1,4 +1,4 @@
-"""Hazard-specific event equivalence, ranking, and ambiguity policies."""
+"""Disaster-specific event equivalence, ranking, and ambiguity policies."""
 
 import re
 from collections import deque
@@ -10,13 +10,13 @@ from typing import Protocol
 
 from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EarthquakeEvent,
     EventAssignmentStatus,
     EventCoordinate,
     EventGeometryKind,
     EventObservationAssignment,
-    Hazard,
     MeasurementKind,
     PhysicalEventIdentity,
     PhysicalEventIdentityResult,
@@ -37,7 +37,7 @@ class EventResolution:
 
 
 class EventPolicy(Protocol):
-    """Hazard policy for real-world equivalence and event selection."""
+    """Disaster policy for real-world equivalence and event selection."""
 
     ambiguity_threshold: float
 
@@ -131,10 +131,7 @@ def _intensity_score(value: float | str | None) -> float:
     if not isinstance(value, str):
         return float(value)
     normalized = (
-        value.lower()
-        .replace("jma", "")
-        .translate(str.maketrans("０１２３４５６７", "01234567"))
-        .strip()
+        value.lower().translate(str.maketrans("０１２３４５６７", "01234567")).strip()
     )
     for token, score in (
         ("7", 7.0),
@@ -174,7 +171,7 @@ def event_observation_key(event: DisasterEvent) -> str:
         (
             event.source.source_id.lower(),
             event.event_id.lower(),
-            event.hazard.value,
+            event.disaster.value,
             event.country.alpha3_code.lower(),
             timestamp,
             event.location.casefold(),
@@ -188,7 +185,7 @@ def event_observation_key(event: DisasterEvent) -> str:
 
 def _event_order_key(event: DisasterEvent) -> tuple[str, str, str, str]:
     return (
-        event.hazard.value,
+        event.disaster.value,
         event.country.alpha3_code,
         event.event_time.astimezone(UTC).isoformat(),
         event_observation_key(event),
@@ -252,7 +249,7 @@ def _physical_event_id(events: tuple[DisasterEvent, ...]) -> str:
     material = "|".join(event_observation_key(event) for event in events)
     digest = sha256(material.encode("utf-8")).hexdigest()[:20]
     return (
-        f"physical-event:{first.hazard.value}:"
+        f"physical-event:{first.disaster.value}:"
         f"{first.country.alpha3_code.lower()}:{digest}"
     )
 
@@ -273,7 +270,7 @@ class BaseEventPolicy:
 
     def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
         if (
-            first.hazard != second.hazard
+            first.disaster != second.disaster
             or first.country.alpha3_code != second.country.alpha3_code
         ):
             return False
@@ -355,8 +352,8 @@ class BaseEventPolicy:
                         physical_event_id=physical_event_id,
                         status=status,
                         rationale=(
-                            "All observations in the cluster satisfy the hazard policy "
-                            "pairwise."
+                            "All observations in the cluster satisfy the "
+                            "disaster policy pairwise."
                             if len(group) > 1
                             else (
                                 "No equivalent observation was found."
@@ -401,7 +398,7 @@ class BaseEventPolicy:
         filtered = [
             event
             for event in candidates
-            if event.hazard == query.hazard
+            if event.disaster == query.disaster
             and event.country.alpha3_code == query.country.alpha3_code
             and window_start <= event.event_time <= window_end
             and (
@@ -542,7 +539,7 @@ class EarthquakeEventPolicy(BaseEventPolicy):
 
     def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
         if (
-            first.hazard != second.hazard
+            first.disaster != second.disaster
             or first.country.alpha3_code != second.country.alpha3_code
         ):
             return False
@@ -671,7 +668,7 @@ class EarthquakeEventPolicy(BaseEventPolicy):
 
 
 class DefaultEventPolicy(BaseEventPolicy):
-    """Conservative policy for hazards without dedicated equivalence rules."""
+    """Conservative policy for disasters without dedicated equivalence rules."""
 
     ambiguity_threshold = 6.0 * 3600
 
@@ -681,7 +678,7 @@ class DefaultEventPolicy(BaseEventPolicy):
     def describe_selection(self, query: DisasterQuery, ambiguous: bool) -> str:
         if ambiguous:
             return (
-                f"Multiple independent {query.hazard.value} events have similarly "
+                f"Multiple independent {query.disaster.value} events have similarly "
                 "recent source timestamps."
             )
         return "Selected the newest matching source-backed event."
@@ -709,21 +706,21 @@ class DefaultEventPolicy(BaseEventPolicy):
 
 
 class EventPolicyRegistry:
-    """Resolve a typed hazard to a dedicated or conservative event policy."""
+    """Resolve a typed disaster to a dedicated or conservative event policy."""
 
     def __init__(
-        self, policies: dict[Hazard, EventPolicy], default: EventPolicy
+        self, policies: dict[Disaster, EventPolicy], default: EventPolicy
     ) -> None:
         self._policies = dict(policies)
         self._default = default
 
-    def for_hazard(self, hazard: Hazard) -> EventPolicy:
-        return self._policies.get(hazard, self._default)
+    def for_disaster(self, disaster: Disaster) -> EventPolicy:
+        return self._policies.get(disaster, self._default)
 
 
 def default_event_policy_registry() -> EventPolicyRegistry:
     return EventPolicyRegistry(
-        {Hazard.EARTHQUAKE: EarthquakeEventPolicy()}, DefaultEventPolicy()
+        {Disaster.EARTHQUAKE: EarthquakeEventPolicy()}, DefaultEventPolicy()
     )
 
 
@@ -733,13 +730,13 @@ def resolve_recent_event(
     *,
     now: datetime,
 ) -> EventResolution:
-    """Compatibility entry point backed by the typed hazard policy registry."""
-    policy = default_event_policy_registry().for_hazard(query.hazard)
+    """Compatibility entry point backed by the typed disaster policy registry."""
+    policy = default_event_policy_registry().for_disaster(query.disaster)
     return policy.resolve(candidates, query, now=now)
 
 
 def cluster_physical_events(
-    events: tuple[DisasterEvent, ...], hazard: Hazard = Hazard.EARTHQUAKE
+    events: tuple[DisasterEvent, ...], disaster: Disaster = Disaster.EARTHQUAKE
 ) -> tuple[DisasterEvent, ...]:
-    """Cluster equivalent records using application-owned hazard policy."""
-    return default_event_policy_registry().for_hazard(hazard).cluster(events)
+    """Cluster equivalent records using application-owned disaster policy."""
+    return default_event_policy_registry().for_disaster(disaster).cluster(events)

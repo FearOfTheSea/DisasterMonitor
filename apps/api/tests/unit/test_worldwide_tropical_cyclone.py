@@ -29,10 +29,10 @@ from disaster_monitor.application.services.worldwide_disaster import (
 )
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     EventGeographyStatus,
     EventMeasurement,
     GeographicArea,
-    Hazard,
     MeasurementKind,
     SourceAuthority,
     SourceReference,
@@ -51,7 +51,7 @@ def test_latest_worldwide_tropical_cyclone_uses_existing_worldwide_query_path() 
     question = "What is the latest tropical cyclone worldwide?"
 
     query = worldwide_disaster_query(question)
-    assert query == WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE)
+    assert query == WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE)
 
     catalog = StaticCountryCatalog()
     task = validate_disaster_task(
@@ -70,7 +70,7 @@ def test_composition_registers_only_gdacs_for_worldwide_tropical_cyclones() -> N
     service = build_current_disaster_report(Settings())
 
     worldwide = service.provider_registry.select(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE),
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE),
         ProviderRole.EVENT_DISCOVERY,
     )
     assert [registration.name for registration in worldwide.registrations] == [
@@ -78,7 +78,7 @@ def test_composition_registers_only_gdacs_for_worldwide_tropical_cyclones() -> N
     ]
     registration = worldwide.registrations[0]
     assert registration.capabilities.roles == frozenset({ProviderRole.EVENT_DISCOVERY})
-    assert registration.capabilities.hazards == frozenset({Hazard.TROPICAL_CYCLONE})
+    assert registration.capabilities.disasters == frozenset({Disaster.TROPICAL_CYCLONE})
     assert registration.capabilities.country_codes is None
     assert registration.capabilities.geographic_scopes == frozenset(
         {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
@@ -106,7 +106,7 @@ def test_country_tropical_cyclone_queries_do_not_select_worldwide_gdacs() -> Non
     assert vietnam is not None
 
     country_query = DisasterQuery(
-        Hazard.TROPICAL_CYCLONE,
+        Disaster.TROPICAL_CYCLONE,
         vietnam,
         "recent",
         ("latest",),
@@ -116,7 +116,6 @@ def test_country_tropical_cyclone_queries_do_not_select_worldwide_gdacs() -> Non
     )
 
     assert [registration.name for registration in selection.registrations] == [
-        "NCHMF Vietnam warnings",
         "GDACS tropical cyclones",
     ]
 
@@ -137,7 +136,7 @@ def test_country_tropical_cyclone_selection_includes_gdacs_for_japan_and_korea()
     )
 
     for country in (japan, korea):
-        query = DisasterQuery(Hazard.TROPICAL_CYCLONE, country, "recent", ("latest",))
+        query = DisasterQuery(Disaster.TROPICAL_CYCLONE, country, "recent", ("latest",))
         selection = service.provider_registry.select(
             query, ProviderRole.EVENT_DISCOVERY
         )
@@ -146,11 +145,40 @@ def test_country_tropical_cyclone_selection_includes_gdacs_for_japan_and_korea()
         ]
 
 
+def test_reliefweb_is_optional_and_only_supports_named_country_situations() -> None:
+    catalog = StaticCountryCatalog()
+    japan = catalog.get_by_alpha3("JPN")
+    assert japan is not None
+    query = DisasterQuery(Disaster.EARTHQUAKE, japan, "recent", ("latest",))
+
+    disabled = build_current_disaster_report(
+        Settings(_env_file=None, reliefweb_app_name=None), catalog
+    )
+    unavailable = disabled.provider_registry.select(
+        query, ProviderRole.SITUATION_EVIDENCE
+    )
+    assert unavailable.registrations == ()
+    assert unavailable.unavailable_configuration == ("ReliefWeb",)
+    assert disabled.source_catalog.get("reliefweb-situation-reports") is not None
+    assert (
+        disabled.source_catalog.get("reliefweb-situation-reports").configured is False
+    )
+
+    enabled = build_current_disaster_report(
+        Settings(_env_file=None, reliefweb_app_name="approved-test"), catalog
+    )
+    available = enabled.provider_registry.select(query, ProviderRole.SITUATION_EVIDENCE)
+    assert [registration.name for registration in available.registrations] == [
+        "ReliefWeb"
+    ]
+    assert enabled.source_catalog.get("reliefweb-situation-reports").configured is True
+
+
 @pytest.mark.asyncio
 async def test_worldwide_missing_event_capability_names_discovery_role() -> None:
     report = await WorldwideDisasterReportService(
         ProviderRegistry(()), clock=lambda: NOW
-    ).execute(WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE))
+    ).execute(WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE))
 
     assert report.capability_gaps == ("Worldwide event discovery is unavailable.",)
 
@@ -184,7 +212,7 @@ def _event(event_id: str, event_time: datetime) -> WorldwideDisasterEvent:
     )
     return WorldwideDisasterEvent(
         event_id=f"gdacs:tc:{event_id}",
-        hazard=Hazard.TROPICAL_CYCLONE,
+        disaster=Disaster.TROPICAL_CYCLONE,
         location="Worldwide cyclone source location",
         event_time=event_time,
         source=source,
@@ -211,7 +239,7 @@ async def test_worldwide_report_selects_latest_gdacs_onset_and_is_partial() -> N
                 provider,
                 ProviderCapabilities(
                     roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    hazards=frozenset({Hazard.TROPICAL_CYCLONE}),
+                    disasters=frozenset({Disaster.TROPICAL_CYCLONE}),
                     country_codes=None,
                     geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
                     event_scopes=frozenset({GeographicScope.WORLDWIDE}),
@@ -224,7 +252,7 @@ async def test_worldwide_report_selects_latest_gdacs_onset_and_is_partial() -> N
     )
 
     report = await WorldwideDisasterReportService(registry, clock=lambda: NOW).execute(
-        WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE)
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE)
     )
 
     assert report.selected_event is not None
@@ -236,4 +264,4 @@ async def test_worldwide_report_selects_latest_gdacs_onset_and_is_partial() -> N
         "No worldwide situation-evidence capability is configured.",
     )
     assert report.termination_reason == "partial_worldwide_event_evidence"
-    assert provider.queries == [WorldwideDisasterQuery(Hazard.TROPICAL_CYCLONE)]
+    assert provider.queries == [WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE)]

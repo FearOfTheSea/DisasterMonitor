@@ -38,10 +38,10 @@ from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventMeasurement,
     FactStatus,
-    Hazard,
     MeasurementKind,
     ReportedFact,
     SituationReport,
@@ -69,12 +69,12 @@ def _injected_capabilities() -> tuple[ProviderCapabilities, ProviderCapabilities
     return (
         ProviderCapabilities(
             frozenset({ProviderRole.EVENT_DISCOVERY}),
-            frozenset({Hazard.EARTHQUAKE}),
+            frozenset({Disaster.EARTHQUAKE}),
             None,
         ),
         ProviderCapabilities(
             frozenset({ProviderRole.SITUATION_EVIDENCE}),
-            frozenset({Hazard.EARTHQUAKE}),
+            frozenset({Disaster.EARTHQUAKE}),
             None,
         ),
     )
@@ -100,16 +100,16 @@ def build_current_service(
 ):
     event_source = SourceReference(
         source_id="fixture-events",
-        publisher="JMA",
+        publisher="Global Catalog",
         title="Fixture earthquake",
-        canonical_url="https://example.test/jma-event",
+        canonical_url="https://example.test/global-catalog-event",
         published_at=NOW,
         updated_at=NOW,
         retrieved_at=NOW,
     )
     selected_event = DisasterEvent(
-        event_id="jma:fixture-event",
-        hazard=Hazard.EARTHQUAKE,
+        event_id="global-catalog:fixture-event",
+        disaster=Disaster.EARTHQUAKE,
         location="Ishikawa, Japan",
         country=JAPAN,
         event_time=datetime(2026, 8, 5, 10, 0, tzinfo=UTC),
@@ -117,7 +117,9 @@ def build_current_service(
         geometry=point_event_geometry(37.0, 137.0, event_source),
         measurements=(
             EventMeasurement(MeasurementKind.MAGNITUDE, 6.1, source=event_source),
-            EventMeasurement(MeasurementKind.INTENSITY, "JMA 6-", source=event_source),
+            EventMeasurement(
+                MeasurementKind.INTENSITY, "Global Catalog 6-", source=event_source
+            ),
             EventMeasurement(MeasurementKind.DEPTH, 12, "km", source=event_source),
         ),
     )
@@ -132,9 +134,9 @@ def build_current_service(
                 raise situation_error
             situation_source = SourceReference(
                 source_id="fixture-situation-reports",
-                publisher="ReliefWeb",
+                publisher="Global Reports",
                 title="Fixture situation update",
-                canonical_url="https://example.test/reliefweb-update",
+                canonical_url="https://example.test/global-reports-update",
                 published_at=NOW,
                 updated_at=NOW,
                 retrieved_at=NOW,
@@ -347,7 +349,7 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     body = response.json()
     assert response.status_code == 200
     assert body["response_type"] == "current_disaster"
-    assert body["selected_event"]["event_id"] == "jma:fixture-event"
+    assert body["selected_event"]["event_id"] == "global-catalog:fixture-event"
     assert body["selected_event"]["geography_status"] == "in_country"
     assert body["selected_event"]["geometry"] == {
         "kind": "point",
@@ -364,7 +366,7 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
         },
         {
             "kind": "intensity",
-            "value": "JMA 6-",
+            "value": "Global Catalog 6-",
             "unit": None,
             "source_id": "fixture-events",
         },
@@ -384,8 +386,11 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     assert "Situation summary" in body["message"]
     assert body["retrieval_time"] == NOW.isoformat().replace("+00:00", "Z")
     assert body["sources"][0]["source_id"] == "fixture-events"
-    assert body["sources"][0]["canonical_url"] == "https://example.test/jma-event"
-    assert any(source["publisher"] == "ReliefWeb" for source in body["sources"])
+    assert (
+        body["sources"][0]["canonical_url"]
+        == "https://example.test/global-catalog-event"
+    )
+    assert any(source["publisher"] == "Global Reports" for source in body["sources"])
     assert body["sections"]
 
 
@@ -418,7 +423,7 @@ async def test_earthquake_news_never_falls_through_to_general_model(
                 (
                     DisasterEvent(
                         event_id=f"fixture:{query.country.alpha3_code.lower()}",
-                        hazard=Hazard.EARTHQUAKE,
+                        disaster=Disaster.EARTHQUAKE,
                         location=query.country.canonical_name,
                         country=query.country,
                         event_time=now,
@@ -478,7 +483,7 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
                 (
                     WorldwideDisasterEvent(
                         event_id="usgs:global",
-                        hazard=Hazard.EARTHQUAKE,
+                        disaster=Disaster.EARTHQUAKE,
                         location="South Pacific Ocean",
                         event_time=now,
                         source=source,
@@ -507,7 +512,7 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
                     GlobalProvider(),
                     ProviderCapabilities(
                         roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                        hazards=frozenset({Hazard.EARTHQUAKE}),
+                        disasters=frozenset({Disaster.EARTHQUAKE}),
                         country_codes=None,
                         geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
                         event_scopes=frozenset({GeographicScope.WORLDWIDE}),
@@ -592,7 +597,7 @@ async def test_current_event_returns_three_typed_source_photos_and_serves_bytes(
 
     class Discovery:
         async def discover(self, context):
-            assert context.event_id == "jma:fixture-event"
+            assert context.event_id == "global-catalog:fixture-event"
             items = tuple(
                 DisasterMediaItem(
                     media_id=media_id,
@@ -613,7 +618,7 @@ async def test_current_event_returns_three_typed_source_photos_and_serves_bytes(
                     association_status=MediaAssociationStatus.CORROBORATED,
                     association_rule_ids=(
                         "media.association.publication_window",
-                        "media.association.hazard_text",
+                        "media.association.disaster_text",
                         "media.association.country_text",
                     ),
                     association_detail="Source metadata matches the selected event.",
@@ -649,7 +654,7 @@ async def test_current_event_returns_three_typed_source_photos_and_serves_bytes(
 
     body = response.json()
     assert response.status_code == 200
-    assert body["media_gallery"]["event_id"] == "jma:fixture-event"
+    assert body["media_gallery"]["event_id"] == "global-catalog:fixture-event"
     assert len(body["media_gallery"]["items"]) == 3
     assert body["media_gallery"]["rejected_count"] == 1
     assert body["media_gallery"]["items"][0]["image_url"].endswith(
@@ -676,16 +681,16 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
 
     target_source = SourceReference(
         source_id="fixture-events",
-        publisher="JMA",
+        publisher="Global Catalog",
         title="Ishikawa target event",
-        canonical_url="https://example.test/jma-ishikawa",
+        canonical_url="https://example.test/global-catalog-ishikawa",
         published_at=target_time,
         updated_at=target_time,
         retrieved_at=retrieval_time,
     )
     target_event = DisasterEvent(
-        event_id="jma:202608051430",
-        hazard=Hazard.EARTHQUAKE,
+        event_id="global-catalog:202608051430",
+        disaster=Disaster.EARTHQUAKE,
         location="Ishikawa, Japan",
         country=JAPAN,
         event_time=target_time,
@@ -693,9 +698,11 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
         geometry=point_event_geometry(37.0, 137.0, target_source),
         measurements=(
             EventMeasurement(MeasurementKind.MAGNITUDE, 6.1, source=target_source),
-            EventMeasurement(MeasurementKind.INTENSITY, "JMA 6-", source=target_source),
+            EventMeasurement(
+                MeasurementKind.INTENSITY, "Global Catalog 6-", source=target_source
+            ),
         ),
-        provider_ids=("jma:202608051430", "usgs:fixture-ishikawa"),
+        provider_ids=("global-catalog:202608051430", "usgs:fixture-ishikawa"),
     )
 
     class RecordingEventProvider:
@@ -705,7 +712,7 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
                 (
                     DisasterEvent(
                         event_id="usgs:venezuela-decoy",
-                        hazard=Hazard.EARTHQUAKE,
+                        disaster=Disaster.EARTHQUAKE,
                         location="Sucre, Venezuela",
                         country=VENEZUELA,
                         event_time=datetime(2026, 8, 5, 18, 0, tzinfo=UTC),
@@ -723,7 +730,7 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
                     ),
                     DisasterEvent(
                         event_id="usgs:tokyo-decoy",
-                        hazard=Hazard.EARTHQUAKE,
+                        disaster=Disaster.EARTHQUAKE,
                         location="Tokyo, Japan",
                         country=JAPAN,
                         event_time=datetime(2026, 8, 6, 1, 0, tzinfo=UTC),
@@ -748,9 +755,9 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
             received_situation_queries.append(query)
             source = SourceReference(
                 source_id="fixture-situation-reports",
-                publisher="FDMA",
+                publisher="Global Situation",
                 title="Ishikawa impact report",
-                canonical_url="https://example.test/fdma-ishikawa",
+                canonical_url="https://example.test/global-situation-ishikawa",
                 published_at=now,
                 updated_at=now,
                 retrieved_at=now,
@@ -806,7 +813,7 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
     assert body["response_type"] == "current_disaster"
     assert body["selected_event"]["location"] == "Ishikawa, Japan"
     assert body["selected_event"]["provider_ids"] == [
-        "jma:202608051430",
+        "global-catalog:202608051430",
         "usgs:fixture-ishikawa",
     ]
     assert "Buildings damaged: 4" in body["message"]
@@ -817,7 +824,7 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
     event_query = received_event_queries[0]
     situation_query = received_situation_queries[0]
     assert event_query is situation_query
-    assert event_query.hazard == "earthquake"
+    assert event_query.disaster == "earthquake"
     assert event_query.country_code == "JPN"
     assert event_query.geography == "Japan"
     assert event_query.date_from == datetime(2026, 8, 4, 15, 0, tzinfo=UTC)
@@ -883,7 +890,7 @@ async def test_current_disaster_is_honest_when_event_source_has_no_match() -> No
 
 
 @pytest.mark.asyncio
-async def test_recognized_unsupported_hazard_returns_coverage_unavailable() -> None:
+async def test_recognized_unsupported_disaster_returns_coverage_unavailable() -> None:
     model = FakeLanguageModel(error=AssertionError("model must not be called"))
     app = create_app(model=model)
 
@@ -1179,7 +1186,7 @@ async def test_image_request_runs_supported_text_path_and_reports_capability_gap
         )
 
     body = response.json()
-    assert body["selected_event"]["event_id"] == "jma:fixture-event"
+    assert body["selected_event"]["event_id"] == "global-catalog:fixture-event"
     assert body["investigation"]["output_modalities"] == ["text", "images"]
     assert any(
         "image" in gap.lower() for gap in body["investigation"]["capability_gaps"]
@@ -1223,7 +1230,7 @@ async def test_invalid_agent_model_output_uses_default_plan_not_general_model() 
 
     body = response.json()
     assert response.status_code == 200
-    assert body["selected_event"]["event_id"] == "jma:fixture-event"
+    assert body["selected_event"]["event_id"] == "global-catalog:fixture-event"
     assert len(body["investigation"]["actions"]) == 5
     assert agent_model.calls == 2
     assert general.requests == []
@@ -1309,7 +1316,7 @@ async def test_operator_image_crosses_real_http_boundary_into_typed_cop() -> Non
                                 ]
                             ],
                         },
-                        "declared_hazard": "earthquake",
+                        "declared_disaster": "earthquake",
                         "declared_country_code": "JPN",
                         "capture_role": "post_event",
                         "dataset_id": "http-integration-fixture",

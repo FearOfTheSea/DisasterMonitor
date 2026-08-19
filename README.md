@@ -14,7 +14,8 @@ facts. See [docs/agent-runtime.md](docs/agent-runtime.md).
 - Optional local Qwen text and vision adapters.
 - Deterministic request normalization, event selection, evidence reconciliation, and
   source-attributed reports.
-- JMA, USGS, FDMA, ReliefWeb, NCHMF, FIRMS, GFM, and explicitly registered CAP paths.
+- USGS and GDACS global disaster event adapters.
+- Optional ReliefWeb supplementary situation reports when configured.
 - Optional PostgreSQL/PostGIS history, snapshots, workers, freshness, reviews, and
   backup tooling.
 - Bounded multimodal observations, contextual event media, triage, decision support,

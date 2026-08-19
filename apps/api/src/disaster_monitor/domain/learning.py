@@ -25,7 +25,7 @@ class LearningReleaseStatus(StrEnum):
 
 
 class DriftType(StrEnum):
-    NEW_HAZARD = "new_hazard"
+    NEW_DISASTER = "new_disaster"
     LANGUAGE = "language"
     PROVIDER_SCHEMA = "provider_schema"
     SOURCE_LATENCY = "source_latency"
@@ -203,7 +203,7 @@ class DriftObservation:
     drift_type: DriftType
     expected_drift: bool
     severity: float
-    unknown_hazard: bool
+    unknown_disaster: bool
     unknown_language: bool
     unknown_provider_schema: bool
     source_latency_ratio: float

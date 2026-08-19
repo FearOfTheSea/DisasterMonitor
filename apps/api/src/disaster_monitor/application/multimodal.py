@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from disaster_monitor.domain.disaster import Hazard
+from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.domain.multimodal import (
     CaptureRole,
     DamageLevel,
@@ -21,7 +21,7 @@ class AssetAdmissionInput:
     captured_at: datetime | None = None
     footprint_coordinates: tuple[tuple[tuple[float, float], ...], ...] | None = None
     footprint_crs: str = "EPSG:4326"
-    declared_hazard: Hazard | None = None
+    declared_disaster: Disaster | None = None
     declared_country_code: str | None = None
     capture_role: CaptureRole = CaptureRole.UNKNOWN
     canonical_url: str | None = None

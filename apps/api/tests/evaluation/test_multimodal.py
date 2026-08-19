@@ -18,9 +18,9 @@ from disaster_monitor.application.services.multimodal_association import (
 )
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     DisasterEvent,
     GeographicArea,
-    Hazard,
     SourceReference,
     point_event_geometry,
 )
@@ -86,7 +86,7 @@ def _event(fixture: dict):
     )
     event = DisasterEvent(
         item["event_id"],
-        Hazard(item["hazard"]),
+        Disaster(item["disaster"]),
         "Fixture location",
         country,
         event_time,
@@ -96,7 +96,7 @@ def _event(fixture: dict):
     )
     return (
         default_event_policy_registry()
-        .for_hazard(event.hazard)
+        .for_disaster(event.disaster)
         .identify((event,))
         .physical_events[0]
     )
@@ -130,7 +130,7 @@ def _association_score() -> AssociationScore:
                         for ring in footprint
                     )
                 ),
-                declared_hazard=Hazard(case["hazard"]),
+                declared_disaster=Disaster(case["disaster"]),
                 declared_country_code=case["country"],
                 capture_role=CaptureRole(case["role"]),
                 processing_level="raw",

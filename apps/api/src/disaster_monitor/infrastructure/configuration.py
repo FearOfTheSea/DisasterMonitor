@@ -32,10 +32,6 @@ class Settings(BaseSettings):
         default=24_000_000, ge=3_000_000, le=100_000_000
     )
     reliefweb_app_name: str | None = None
-    firms_map_key: SecretStr | None = Field(default=None, repr=False)
-    firms_dataset: str = Field(default="VIIRS_NOAA20_NRT", min_length=1)
-    gfm_access_token: SecretStr | None = Field(default=None, repr=False)
-    gfm_user_id: str | None = None
     operational_database_url: SecretStr | None = Field(default=None, repr=False)
     operational_blob_root: Path = Path("data/operational/blobs")
     operational_auto_migrate: bool = True

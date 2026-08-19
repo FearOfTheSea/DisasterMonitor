@@ -31,10 +31,10 @@ from disaster_monitor.application.services.multimodal_state import (
 from disaster_monitor.application.services.visual_analysis import VisualAnalysisService
 from disaster_monitor.domain.disaster import (
     Country,
+    Disaster,
     DisasterEvent,
     EventMeasurement,
     GeographicArea,
-    Hazard,
     MeasurementKind,
     ReportedFact,
     SourceReference,
@@ -84,7 +84,7 @@ def _asset(**changes):
         "attribution": "Operator-provided xBD test crop",
         "captured_at": NOW + timedelta(hours=2),
         "footprint_coordinates": FOOTPRINT,
-        "declared_hazard": Hazard.EARTHQUAKE,
+        "declared_disaster": Disaster.EARTHQUAKE,
         "declared_country_code": "JPN",
         "capture_role": CaptureRole.POST_EVENT,
         "dataset_id": "unit-fixture-v1",
@@ -114,7 +114,7 @@ def _physical_event(*, event_time: datetime = NOW):
     )
     event = DisasterEvent(
         "test:event-1",
-        Hazard.EARTHQUAKE,
+        Disaster.EARTHQUAKE,
         "Central Japan",
         country,
         event_time,
@@ -125,7 +125,7 @@ def _physical_event(*, event_time: datetime = NOW):
     )
     return (
         default_event_policy_registry()
-        .for_hazard(Hazard.EARTHQUAKE)
+        .for_disaster(Disaster.EARTHQUAKE)
         .identify((event,))
         .physical_events[0]
     )
@@ -246,7 +246,7 @@ def test_missing_or_malformed_asset_metadata_cannot_become_analysis_eligible() -
             EventAssociationStatus.UNMATCHED,
         ),
         (
-            replace(_asset(), declared_hazard=Hazard.FLOOD),
+            replace(_asset(), declared_disaster=Disaster.FLOOD),
             EventAssociationStatus.UNMATCHED,
         ),
         (

@@ -2,11 +2,11 @@
 
 Configured supplementary humanitarian situation reporting from ReliefWeb. It is not
 event verification and not an official national-total source. Queries use normalized
-country, hazard, and bounded UTC ISO-8601 created dates; selected-event location and
-JMA/USGS IDs are not mandatory free-text terms because ReliefWeb's `AND` query parser
+country, disaster, and bounded UTC ISO-8601 created dates; selected-event location and
+event-provider IDs are not mandatory free-text terms because ReliefWeb's `AND` query parser
 would otherwise discard valid reports that use different place wording. Sanitized
 narrative and recognized facts remain preliminary humanitarian-aggregator evidence.
-ReliefWeb-local IDs are not compared with JMA/USGS IDs; correlation uses hazard, country,
+Provider-local IDs are not compared with event-provider IDs; correlation uses disaster, country,
 occurrence time, location, magnitude when present, and only comparable IDs. The adapter
 requests report identity, structured disaster metadata, primary country, classification,
 title, body, and publication fields. Explicit magnitudes in report narratives are retained
