@@ -28,6 +28,9 @@ from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
 )
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
+from disaster_monitor.application.services.active_incidents import (
+    ActiveIncidentsService,
+)
 from disaster_monitor.application.services.common_operational_picture import (
     CommonOperationalPictureBuilder,
 )
@@ -85,6 +88,7 @@ def create_app(
     worldwide_disaster_report: WorldwideDisasterReportService | None = None,
     event_media: EventMediaDiscovery | None = None,
     media_asset_store: MediaAssetStore | None = None,
+    active_incidents_service: ActiveIncidentsService | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -102,6 +106,9 @@ def create_app(
     )
     worldwide_report = worldwide_disaster_report or WorldwideDisasterReportService(
         disaster_report.provider_registry,
+    )
+    configured_active_incidents = active_incidents_service or ActiveIncidentsService(
+        disaster_report.provider_registry
     )
     query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
     source_catalog = build_source_catalog(app_settings)
@@ -218,6 +225,7 @@ def create_app(
     app.state.language_model = language_model
     app.state.current_disaster_report = disaster_report
     app.state.worldwide_disaster_report = worldwide_report
+    app.state.active_incidents_service = configured_active_incidents
     app.state.agent_model = configured_agent_model
     app.state.visual_analyzer = configured_visual_analyzer
     app.state.event_media = media_services.discovery

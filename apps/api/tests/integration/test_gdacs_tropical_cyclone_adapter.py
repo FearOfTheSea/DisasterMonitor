@@ -429,3 +429,17 @@ async def test_gdacs_empty_result_is_explicit() -> None:
     assert result.records == ()
     assert result.issues[0].reason_code == "empty_result"
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_no_content_is_a_successful_empty_result() -> None:
+    requests: list[httpx.Request] = []
+    client = client_for(b"", requests, status=204, content_type="")
+
+    result = await GdacsTropicalCycloneAdapter(client=client).find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
+    )
+
+    assert result.records == ()
+    assert [issue.reason_code for issue in result.issues] == ["empty_result"]
+    await client.aclose()

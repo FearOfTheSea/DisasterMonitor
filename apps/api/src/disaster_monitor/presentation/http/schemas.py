@@ -5,7 +5,12 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from disaster_monitor.domain.disaster import MeasurementKind
+from disaster_monitor.domain.disaster import (
+    Disaster,
+    MeasurementKind,
+    ProviderTier,
+    SourceAuthority,
+)
 from disaster_monitor.domain.operations import OperatorDecision
 from disaster_monitor.presentation.http.multimodal_schemas import (
     CommonOperationalPictureResponse,
@@ -237,6 +242,40 @@ class SelectedEventResponse(BaseModel):
     source: SourceResponse
     provider_ids: list[str] = Field(default_factory=list)
     geography_status: str
+
+
+class ActiveIncidentResponse(BaseModel):
+    """One worldwide event with exact provider evidence and authority."""
+
+    event_id: str
+    disaster: Disaster
+    location: str
+    event_time: datetime
+    geometry: EventGeometryResponse | None = None
+    measurements: list[EventMeasurementResponse] = Field(default_factory=list)
+    provider_ids: list[str] = Field(default_factory=list)
+    provider_tier: ProviderTier
+    source_authority: SourceAuthority
+    source: SourceResponse
+
+
+class DisasterIncidentCoverageResponse(BaseModel):
+    """Honest provider outcome for one supported disaster."""
+
+    disaster: Disaster
+    state: Literal["events_found", "no_matching_records", "degraded", "unavailable"]
+    incident_count: int
+    providers: list[str] = Field(default_factory=list)
+    detail: str
+
+
+class ActiveIncidentsSnapshotResponse(BaseModel):
+    """Bounded all-hazard discovery result for the monitoring surface."""
+
+    retrieved_at: datetime
+    incidents: list[ActiveIncidentResponse] = Field(default_factory=list)
+    coverage: list[DisasterIncidentCoverageResponse] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ReportSectionResponse(BaseModel):

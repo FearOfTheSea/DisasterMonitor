@@ -28,6 +28,32 @@ never dynamically imports or constructs providers.
 | Smithsonian / USGS Weekly Volcanic Activity Report | Primary | Event discovery | Volcanic eruption | Named countries and worldwide | Explicit WVAR eruptive-activity classification and day-precise start |
 | ReliefWeb                         | Secondary | Situation evidence | Earthquake, flood, wildfire, landslide, tropical cyclone, volcanic eruption | Named countries | `RELIEFWEB_APP_NAME` |
 
+## Active Incidents surface
+
+`GET /api/v1/incidents` exposes a non-LLM, provider-backed view across all six
+`Disaster` values. The initial page load uses a 7-day window and a limit of 10 records
+per disaster; callers may request 1-30 days and 1-20 records per disaster. Retrievals
+run concurrently, retain only admissible source evidence from the highest provider tier
+that returned usable records for each disaster, and sort the combined result newest
+first. The response preserves event and provider identifiers, provider tier, source
+authority, timestamps, measurements, canonical source links, and exact source-backed
+point, track, or area geometry.
+
+Coverage is reported independently for every disaster as `events_found`,
+`no_matching_records`, `degraded`, or `unavailable`. `no_matching_records` means the
+configured providers completed successfully without a usable match; it is not evidence
+that no event occurred. `degraded` keeps partial usable records while disclosing a
+provider or evidence-policy failure. `unavailable` means no configured worldwide event
+provider can execute for that disaster. Provider failures therefore do not erase
+healthy hazards or turn uncertainty into a factual incident claim.
+
+The sidebar and its permanent OpenLayers Active Incidents layer use only this response.
+Records without usable geometry remain visible in the list but are not mapped. The map
+does not infer a centroid, bounding box, polygon, severity, casualty count, impact, or
+warning. This surface is bounded event discovery, not complete global surveillance,
+continuous polling, incident management, or proof of current operational impact; the
+assistant and report-selection workflows remain separate.
+
 GFM provides primary global named-country and bounded countryless worldwide flood
 event discovery. USGS and GDACS provide global named-country and countryless worldwide
 event discovery for earthquakes and tropical cyclones. NASA EONET is a curated

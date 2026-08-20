@@ -17,6 +17,11 @@ import {
   copStyleSemantics,
   type CopAuthority,
 } from '@/features/map/model/copRenderPlan';
+import type {
+  ActiveIncidentMapFeature,
+  RenderableIncidentGeometry,
+} from '@/features/map/model/activeIncidentMap';
+import type { DisasterType } from '@/features/incidents/model/activeIncidents';
 import type { MapAreaBounds } from '@/features/map/model/assistantMapFocus';
 import type {
   CommonOperationalPicture,
@@ -40,8 +45,11 @@ type PendingArea = {
 
 export class OpenLayersMapAdapter {
   private readonly map: Map;
+  private readonly activeIncidentSource: VectorSource<Feature<Geometry>>;
+  private readonly activeIncidentLayer: VectorLayer<VectorSource<Feature<Geometry>>>;
   private copLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
   private pendingArea?: PendingArea;
+  private pendingIncidentId?: string;
 
   constructor(private readonly options: MapAdapterOptions) {
     const baseLayer = new TileLayer({ source: new OSM() });
@@ -56,18 +64,29 @@ export class OpenLayersMapAdapter {
       projection: 'EPSG:3857',
       constrainResolution: true,
     });
+    this.activeIncidentSource = new VectorSource<Feature<Geometry>>();
+    this.activeIncidentLayer = new VectorLayer({
+      source: this.activeIncidentSource,
+      style: (feature) => styleForActiveIncident(feature.get('disaster')),
+    });
+    this.activeIncidentLayer.set('dmLayerType', 'active-incidents');
     this.map = new Map({
       target: options.target,
-      layers: [baseLayer],
+      layers: [baseLayer, this.activeIncidentLayer],
       view,
     });
-    this.map.on('change:size', () => this.applyPendingArea());
+    this.map.on('change:size', () => {
+      this.applyPendingIncidentFocus();
+      this.applyPendingArea();
+    });
     view.on('change:center', () => this.reportView());
     view.on('change:resolution', () => this.reportView());
   }
 
   destroy(): void {
     this.pendingArea = undefined;
+    this.pendingIncidentId = undefined;
+    this.activeIncidentSource.clear();
     this.clearCommonOperationalPicture();
     this.map.setTarget(undefined);
   }
@@ -103,6 +122,27 @@ export class OpenLayersMapAdapter {
     }
   }
 
+  setActiveIncidents(incidents: readonly ActiveIncidentMapFeature[]): void {
+    this.activeIncidentSource.clear();
+    this.activeIncidentSource.addFeatures(
+      incidents.map(
+        (incident) =>
+          new Feature({
+            geometry: toActiveIncidentGeometry(incident.geometry),
+            incidentId: incident.incidentId,
+            disaster: incident.disaster,
+          }),
+      ),
+    );
+    this.applyPendingIncidentFocus();
+  }
+
+  focusActiveIncident(incidentId: string): void {
+    this.pendingIncidentId = incidentId;
+    this.map.updateSize();
+    this.applyPendingIncidentFocus();
+  }
+
   fitArea(bounds: MapAreaBounds, maxZoom = 10): void {
     if (!validAreaBounds(bounds) || !validMaxZoom(maxZoom)) {
       return;
@@ -133,6 +173,29 @@ export class OpenLayersMapAdapter {
       duration: reducedMotionPreferred() ? 0 : 400,
       padding: fitPadding(size),
       maxZoom,
+      size,
+    });
+  }
+
+  private applyPendingIncidentFocus(): void {
+    if (!this.pendingIncidentId) return;
+    const feature = this.activeIncidentSource
+      .getFeatures()
+      .find((item) => item.get('incidentId') === this.pendingIncidentId);
+    if (!feature) {
+      this.pendingIncidentId = undefined;
+      return;
+    }
+    const size = this.map.getSize();
+    const geometry = feature.getGeometry();
+    if (!size || size[0] <= 0 || size[1] <= 0 || !geometry) return;
+    this.pendingIncidentId = undefined;
+    const view = this.map.getView();
+    view.cancelAnimations();
+    view.fit(geometry.getExtent(), {
+      duration: reducedMotionPreferred() ? 0 : 400,
+      padding: fitPadding(size),
+      maxZoom: 9,
       size,
     });
   }
@@ -219,6 +282,15 @@ function toOpenLayersGeometry(geometry: CopGeometry): Geometry {
   );
 }
 
+function toActiveIncidentGeometry(geometry: RenderableIncidentGeometry): Geometry {
+  const coordinates = geometry.coordinates.map((point) =>
+    fromLonLat([point.longitude, point.latitude]),
+  );
+  if (geometry.kind === 'point') return new Point(coordinates[0]);
+  if (geometry.kind === 'track') return new LineString(coordinates);
+  return new Polygon([coordinates]);
+}
+
 function styleForAuthority(value: unknown): Style {
   const authority: CopAuthority =
     value === 'official_source' || value === 'source_supplied'
@@ -236,6 +308,31 @@ function styleForAuthority(value: unknown): Style {
       radius: authority === 'official_source' ? 7 : 6,
       fill: new Fill({ color: semantics.fillColor }),
       stroke: new Stroke({ color: semantics.strokeColor, width: 2 }),
+    }),
+  });
+}
+
+function styleForActiveIncident(value: unknown): Style {
+  const disaster = value as DisasterType;
+  const color =
+    disaster === 'earthquake'
+      ? '#9f1239'
+      : disaster === 'flood'
+        ? '#0369a1'
+        : disaster === 'wildfire'
+          ? '#c2410c'
+          : disaster === 'landslide'
+            ? '#854d0e'
+            : disaster === 'tropical_cyclone'
+              ? '#6d28d9'
+              : '#7f1d1d';
+  return new Style({
+    stroke: new Stroke({ color, width: 3 }),
+    fill: new Fill({ color: `${color}26` }),
+    image: new CircleStyle({
+      radius: 7,
+      fill: new Fill({ color }),
+      stroke: new Stroke({ color: '#ffffff', width: 2 }),
     }),
   });
 }

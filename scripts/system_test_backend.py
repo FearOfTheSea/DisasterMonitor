@@ -9,31 +9,46 @@ import uvicorn
 api_src = Path(__file__).resolve().parents[1] / "apps" / "api" / "src"
 sys.path.insert(0, str(api_src))
 
-from disaster_monitor.application.disaster import ProviderBatch  # noqa: E402
-from disaster_monitor.application.dto import (  # noqa: E402
+from disaster_monitor.application.disaster import (
+    GeographicScope,
+    ProviderBatch,
+    WorldwideDisasterEvent,
+)
+from disaster_monitor.application.dto import (
     ModelReadiness,
     ModelRequest,
     ModelResponse,
     ModelToolCall,
 )
-from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
+from disaster_monitor.application.services.active_incidents import (
+    ActiveIncidentsService,
+)
+from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
-from disaster_monitor.domain.disaster import (  # noqa: E402
+from disaster_monitor.application.services.provider_registry import (
+    ProviderCapabilities,
+    ProviderRegistration,
+    ProviderRegistry,
+    ProviderRole,
+)
+from disaster_monitor.domain.disaster import (
+    Disaster,
     DisasterEvent,
     EventMeasurement,
     FactStatus,
-    Disaster,
     MeasurementKind,
+    ProviderTier,
     ReportedFact,
     SituationReport,
+    SourceAuthority,
     SourceReference,
     point_event_geometry,
 )
-from disaster_monitor.infrastructure.geography.static_country_catalog import (  # noqa: E402
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
-from disaster_monitor.main import create_app  # noqa: E402
+from disaster_monitor.main import create_app
 
 NOW = datetime(2026, 8, 6, 3, 0, tzinfo=UTC)
 TARGET_TIME = datetime(2026, 8, 5, 14, 30, tzinfo=UTC)
@@ -206,6 +221,7 @@ class FakeSystemSituationProvider:
             updated_at=now - timedelta(minutes=2),
             retrieved_at=now,
         )
+
         return ProviderBatch(
             (
                 SituationReport(
@@ -265,13 +281,82 @@ class FakeSystemSituationProvider:
         )
 
 
+class FakeSystemWorldwideProvider:
+    source_id = "system-active-wildfires"
+    allowed_hosts = frozenset({"example.test"})
+
+    async def find_worldwide_events(self, query, *, now):
+        assert query.disaster is Disaster.WILDFIRE
+        source = SourceReference(
+            source_id=self.source_id,
+            publisher="Deterministic wildfire fixture",
+            title="Northern Honshu wildfire source record",
+            canonical_url="https://example.test/system-active-wildfire",
+            published_at=now - timedelta(hours=2),
+            updated_at=now - timedelta(minutes=20),
+            retrieved_at=now,
+            authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
+        )
+        return ProviderBatch(
+            (
+                WorldwideDisasterEvent(
+                    event_id="system-active-wildfire",
+                    disaster=Disaster.WILDFIRE,
+                    location="Northern Honshu wildfire fixture",
+                    event_time=now - timedelta(hours=2),
+                    source=source,
+                    geometry=point_event_geometry(38.25, 140.75, source),
+                    provider_ids=("system:active-wildfire",),
+                ),
+            )
+        )
+
+
+def build_system_active_incidents_service() -> ActiveIncidentsService:
+    provider = FakeSystemWorldwideProvider()
+    registry = ProviderRegistry(
+        (
+            ProviderRegistration(
+                "Deterministic wildfire fixture",
+                provider,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.WILDFIRE}),
+                    country_codes=None,
+                    geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                    event_scopes=frozenset({GeographicScope.WORLDWIDE}),
+                ),
+                tier=ProviderTier.PRIMARY,
+                source_id=provider.source_id,
+                allowed_hosts=provider.allowed_hosts,
+                worldwide_provider=provider,
+            ),
+        )
+    )
+    return ActiveIncidentsService(registry, clock=lambda: NOW)
+
+
 if __name__ == "__main__":
     uvicorn.run(
         create_app(
             model=FakeSystemModel(),
             current_disaster_report=CurrentDisasterReportService(
-                FakeSystemEventProvider(), FakeSystemSituationProvider()
+                FakeSystemEventProvider(),
+                FakeSystemSituationProvider(),
+                provider_capabilities=(
+                    ProviderCapabilities(
+                        frozenset({ProviderRole.EVENT_DISCOVERY}),
+                        frozenset({Disaster.EARTHQUAKE}),
+                        None,
+                    ),
+                    ProviderCapabilities(
+                        frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                        frozenset({Disaster.EARTHQUAKE}),
+                        None,
+                    ),
+                ),
             ),
+            active_incidents_service=build_system_active_incidents_service(),
         ),
         host="127.0.0.1",
         port=8787,

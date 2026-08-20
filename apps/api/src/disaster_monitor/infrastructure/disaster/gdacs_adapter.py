@@ -298,15 +298,21 @@ class GdacsTropicalCycloneAdapter:
             rights_id=_GDACS_RIGHTS_ID,
             retrieved_at=now,
         )
-        payload = await get_json(
-            self._client,
-            GDACS_SEARCH_URL,
-            allowed_hosts=self.allowed_hosts,
-            params=params,
-            max_bytes=self._max_response_bytes,
-            provider_name=self.provider_name,
-            capture=capture,
-        )
+        try:
+            payload = await get_json(
+                self._client,
+                GDACS_SEARCH_URL,
+                allowed_hosts=self.allowed_hosts,
+                params=params,
+                max_bytes=self._max_response_bytes,
+                provider_name=self.provider_name,
+                capture=capture,
+                accepted_content_types=frozenset({""}),
+            )
+        except DisasterProviderResponseError as error:
+            if error.failure.reason_code == "empty_result":
+                return ProviderBatch(issues=(_empty_result(),))
+            raise
         if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
             raise DisasterProviderResponseError(
                 "The GDACS response was not a GeoJSON FeatureCollection.",
@@ -336,13 +342,7 @@ class GdacsTropicalCycloneAdapter:
                 events.append(event)
             issues.extend(feature_issues)
         if not events and not issues and (country_query is None or not raw_features):
-            issues.append(
-                ProviderIssue(
-                    self.provider_name,
-                    f"{self.provider_name}: The provider returned no matching records.",
-                    reason_code="empty_result",
-                )
-            )
+            issues.append(_empty_result())
         return ProviderBatch(records=tuple(events), issues=tuple(issues))
 
     async def find_worldwide_events(
@@ -411,4 +411,13 @@ def _country_projection_unusable(index: int) -> ProviderIssue:
             if index < 0
             else f"feature[{index}] has no usable country projection"
         ),
+    )
+
+
+def _empty_result() -> ProviderIssue:
+    return ProviderIssue(
+        GdacsTropicalCycloneAdapter.provider_name,
+        f"{GdacsTropicalCycloneAdapter.provider_name}: The provider returned no "
+        "matching records.",
+        reason_code="empty_result",
     )

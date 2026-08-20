@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { AssistantPanel } from '@/features/assistant/ui/AssistantPanel';
 import { useAssistantConversation } from '@/features/assistant/hooks/useAssistantConversation';
+import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
+import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
 import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
@@ -13,8 +15,10 @@ import type { MapView } from '@/shared/types/assistant';
 export default function Home() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [operationsOpen, setOperationsOpen] = useState(false);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string>();
   const [mapView, setMapView] = useState<MapView>(DEFAULT_MAP_VIEW);
   const conversation = useAssistantConversation();
+  const activeIncidents = useActiveIncidents();
   const handleViewChange = useCallback((view: MapView) => setMapView(view), []);
   const areaOfInterest = useMemo(
     () => assistantMapAreaOfInterest(conversation.messages),
@@ -60,11 +64,21 @@ export default function Home() {
         </div>
       </header>
       <section className="workspace">
+        <ActiveIncidentsPanel
+          snapshot={activeIncidents.snapshot}
+          status={activeIncidents.status}
+          error={activeIncidents.error}
+          selectedIncidentId={selectedIncidentId}
+          onSelectIncident={setSelectedIncidentId}
+          onRefresh={activeIncidents.refresh}
+        />
         <div className="map-region">
           <DisasterMap
             onViewChange={handleViewChange}
             commonOperationalPicture={commonOperationalPicture}
             areaOfInterest={areaOfInterest}
+            activeIncidents={activeIncidents.snapshot?.incidents}
+            selectedIncidentId={selectedIncidentId}
           />
           <div className="map-overlay">
             OpenStreetMap base layer · {mapView.centerLatitude.toFixed(2)},{' '}

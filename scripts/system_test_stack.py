@@ -15,26 +15,26 @@ web_directory = script_directory.parent / "apps" / "web"
 sys.path.insert(0, str(api_src))
 sys.path.insert(0, str(script_directory))
 
-from system_test_backend import (  # noqa: E402
+from disaster_monitor.application.services.current_disaster_report import (
+    CurrentDisasterReportService,
+)
+from disaster_monitor.application.services.provider_registry import (
+    ProviderCapabilities,
+    ProviderRole,
+)
+from disaster_monitor.domain.disaster import Disaster
+from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.disaster.composite import (
+    CompositeDisasterEventProvider,
+)
+from disaster_monitor.main import create_app
+from system_test_backend import (
     NOW,
     FakeSystemEventProvider,
     FakeSystemModel,
     FakeSystemSituationProvider,
+    build_system_active_incidents_service,
 )
-
-from disaster_monitor.application.services.current_disaster_report import (  # noqa: E402
-    CurrentDisasterReportService,
-)
-from disaster_monitor.application.services.provider_registry import (  # noqa: E402
-    ProviderCapabilities,
-    ProviderRole,
-)
-from disaster_monitor.infrastructure.configuration import Settings  # noqa: E402
-from disaster_monitor.infrastructure.disaster.composite import (  # noqa: E402
-    CompositeDisasterEventProvider,
-)
-from disaster_monitor.domain.disaster import Disaster  # noqa: E402
-from disaster_monitor.main import create_app  # noqa: E402
 
 
 def main() -> int:
@@ -67,6 +67,7 @@ def main() -> int:
                     ),
                     clock=lambda: NOW,
                 ),
+                active_incidents_service=build_system_active_incidents_service(),
             ),
             host="127.0.0.1",
             port=8787,

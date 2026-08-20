@@ -9,8 +9,9 @@ facts. See [docs/agent-runtime.md](docs/agent-runtime.md).
 
 ## Included
 
-- Next.js/OpenLayers map and assistant UI with session-local conversation state.
-- FastAPI health, readiness, assistant, and operations endpoints.
+- Next.js/OpenLayers map with a default-visible, source-backed Active Incidents
+  sidebar plus an assistant UI with session-local conversation state.
+- FastAPI health, readiness, active-incidents, assistant, and operations endpoints.
 - Optional local Qwen text and vision adapters.
 - Deterministic request normalization, event selection, evidence reconciliation, and
   source-attributed reports.
@@ -88,7 +89,15 @@ Useful checks:
 ```powershell
 Invoke-RestMethod http://localhost:8001/api/v1/health
 Invoke-RestMethod http://localhost:8001/api/v1/ready
+Invoke-RestMethod 'http://localhost:8001/api/v1/incidents?time_window_days=7&limit_per_disaster=10'
 ```
+
+The incidents endpoint queries the registered worldwide event-discovery providers
+directly; it does not call Qwen. Its defaults are a 7-day window and at most 10
+records per disaster. Each of the six hazards has a separate coverage state so an
+upstream failure, unavailable provider, or successful empty result cannot be mistaken
+for proof that no disaster occurred. Map features are drawn only from source-backed
+point, track, or area geometry returned by the endpoint.
 
 ## Run with Compose
 
@@ -140,8 +149,10 @@ Playwright may need its browser installed once:
 npx playwright install chromium
 ```
 
-The optional live-provider smoke test is excluded from normal CI and checks only
-structural properties of changing live data:
+The optional live-provider smoke test is excluded from normal CI. It submits two
+natural-language named-country examples for every supported hazard, one worldwide
+question per hazard, and an all-hazard Active Incidents request while printing provider
+failures and coverage states:
 
 ```powershell
 uv run --project apps/api python scripts/live_disaster_smoke.py

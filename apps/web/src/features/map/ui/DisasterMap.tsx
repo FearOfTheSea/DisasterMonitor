@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import 'ol/ol.css';
 
 import { OpenLayersMapAdapter } from '@/features/map/adapters/openLayersMapAdapter';
+import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
 import type { AssistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
+import { activeIncidentMapFeatures } from '@/features/map/model/activeIncidentMap';
 import { copStyleSemantics } from '@/features/map/model/copRenderPlan';
 import { DEFAULT_MAP_VIEW } from '@/features/map/model/mapView';
 import type { CommonOperationalPicture, MapView } from '@/shared/types/assistant';
@@ -13,16 +15,24 @@ type DisasterMapProps = {
   onViewChange: (view: MapView) => void;
   commonOperationalPicture?: CommonOperationalPicture;
   areaOfInterest?: AssistantMapAreaOfInterest;
+  activeIncidents?: ActiveIncident[];
+  selectedIncidentId?: string;
 };
 
 export function DisasterMap({
   onViewChange,
   commonOperationalPicture,
   areaOfInterest,
+  activeIncidents = [],
+  selectedIncidentId,
 }: DisasterMapProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const adapter = useRef<OpenLayersMapAdapter | null>(null);
   const fittedAreaKey = useRef<string | undefined>(undefined);
+  const incidentFeatures = useMemo(
+    () => activeIncidentMapFeatures(activeIncidents),
+    [activeIncidents],
+  );
 
   useEffect(() => {
     if (!mapElement.current) {
@@ -43,6 +53,16 @@ export function DisasterMap({
   useEffect(() => {
     adapter.current?.setCommonOperationalPicture(commonOperationalPicture);
   }, [commonOperationalPicture]);
+
+  useEffect(() => {
+    adapter.current?.setActiveIncidents(incidentFeatures);
+  }, [incidentFeatures]);
+
+  useEffect(() => {
+    if (selectedIncidentId) {
+      adapter.current?.focusActiveIncident(selectedIncidentId);
+    }
+  }, [selectedIncidentId]);
 
   useEffect(() => {
     if (!areaOfInterest || !adapter.current) {

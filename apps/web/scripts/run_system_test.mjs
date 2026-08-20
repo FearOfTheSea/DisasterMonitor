@@ -48,6 +48,17 @@ try {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+  await page.getByLabel('Active incidents monitoring').waitFor();
+  await page
+    .getByText('Northern Honshu wildfire fixture', { exact: true })
+    .waitFor({ timeout: 30_000 });
+  if (await page.getByRole('heading', { name: 'Map assistant' }).count()) {
+    throw new Error('The assistant opened before the Active Incidents workflow.');
+  }
+  await page
+    .getByRole('button', { name: 'Focus Northern Honshu wildfire fixture on map' })
+    .click();
+  await page.getByText(/38\.25,\s*140\.75/).waitFor();
   await page.getByRole('button', { name: 'Open assistant' }).click();
   await page.getByLabel('Question').fill('Zoom into Japan.');
   const mapActionResponse = page.waitForResponse((response) =>
@@ -72,7 +83,7 @@ try {
   await page.getByText(/37\.02,\s*137\.01/).waitFor();
   await page.getByRole('heading', { name: 'Situation summary' }).waitFor();
   await page.getByText('Buildings damaged: 4.').first().waitFor();
-  await page.getByRole('link', { name: /Global Reports fixture/ }).waitFor();
+  await page.getByRole('link', { name: /Global situation fixture/ }).waitFor();
   await page.getByText('Investigation details').click();
   await page.getByText(/Selected the source-backed event/).waitFor();
   for (const sentinel of [
@@ -101,7 +112,9 @@ try {
     .first()
     .waitFor();
   await browser.close();
-  console.log('System test passed: agent map tool and source-backed report rendered.');
+  console.log(
+    'System test passed: Active Incidents map focus and the existing source-backed assistant workflow rendered.',
+  );
 } finally {
   stopStack();
 }

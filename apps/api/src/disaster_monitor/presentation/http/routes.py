@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from disaster_monitor.application.dto import ModelReadiness
 from disaster_monitor.application.media import DisasterMediaGallery
@@ -21,6 +21,10 @@ from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
+)
+from disaster_monitor.application.services.active_incidents import (
+    ActiveIncidentsQuery,
+    ActiveIncidentsService,
 )
 from disaster_monitor.application.services.operational_ingestion import (
     record_operator_review,
@@ -39,6 +43,8 @@ from disaster_monitor.presentation.http.multimodal_serialization import (
     multimodal_state_response,
 )
 from disaster_monitor.presentation.http.schemas import (
+    ActiveIncidentResponse,
+    ActiveIncidentsSnapshotResponse,
     AssistantRequest,
     AssistantResponse,
     CountryCatalogSourceResponse,
@@ -46,6 +52,7 @@ from disaster_monitor.presentation.http.schemas import (
     DecisionEstimateResponse,
     DecisionFactResponse,
     DecisionSupportResponse,
+    DisasterIncidentCoverageResponse,
     DisasterMediaGalleryResponse,
     DisasterMediaItemResponse,
     EventCoordinateResponse,
@@ -75,6 +82,11 @@ def get_answer_use_case(request: Request) -> AnswerMapQuestion:
 def get_language_model(request: Request) -> LanguageModel:
     """Retrieve the provider-neutral model port built by the composition root."""
     return cast(LanguageModel, request.app.state.language_model)
+
+
+def get_active_incidents_service(request: Request) -> ActiveIncidentsService:
+    """Retrieve the provider-backed incident discovery use case."""
+    return cast(ActiveIncidentsService, request.app.state.active_incidents_service)
 
 
 def _event_geometry_response(
@@ -133,6 +145,71 @@ _FRESHNESS_EXPECTATIONS = {
 async def health() -> HealthResponse:
     """Return liveness without contacting Ollama."""
     return HealthResponse(status="ok", service="disaster-monitor-api", version="0.1.0")
+
+
+@router.get(
+    "/incidents",
+    response_model=ActiveIncidentsSnapshotResponse,
+    tags=["incidents"],
+)
+async def active_incidents(
+    service: Annotated[ActiveIncidentsService, Depends(get_active_incidents_service)],
+    time_window_days: Annotated[int, Query(ge=1, le=30)] = 7,
+    limit_per_disaster: Annotated[int, Query(ge=1, le=20)] = 10,
+) -> ActiveIncidentsSnapshotResponse:
+    """Return bounded, source-backed worldwide events without model inference."""
+    snapshot = await service.execute(
+        ActiveIncidentsQuery(
+            time_window_days=time_window_days,
+            limit_per_disaster=limit_per_disaster,
+        )
+    )
+    return ActiveIncidentsSnapshotResponse(
+        retrieved_at=snapshot.retrieved_at,
+        incidents=[
+            ActiveIncidentResponse(
+                event_id=incident.event_id,
+                disaster=incident.disaster,
+                location=incident.location,
+                event_time=incident.event_time,
+                geometry=_event_geometry_response(incident.geometry),
+                measurements=[
+                    EventMeasurementResponse(
+                        kind=measurement.kind,
+                        value=measurement.value,
+                        unit=measurement.unit,
+                        source_id=measurement.source.source_id,
+                    )
+                    for measurement in incident.measurements
+                ],
+                provider_ids=list(incident.provider_ids),
+                provider_tier=incident.provider_tier,
+                source_authority=incident.source_authority,
+                source=SourceResponse(
+                    source_id=incident.source.source_id,
+                    publisher=incident.source.publisher,
+                    title=incident.source.title,
+                    canonical_url=incident.source.canonical_url,
+                    published_at=incident.source.published_at,
+                    updated_at=incident.source.updated_at,
+                    retrieved_at=incident.source.retrieved_at,
+                    snapshot_id=incident.source.snapshot_id,
+                ),
+            )
+            for incident in snapshot.incidents
+        ],
+        coverage=[
+            DisasterIncidentCoverageResponse(
+                disaster=item.disaster,
+                state=item.state.value,
+                incident_count=item.incident_count,
+                providers=list(item.providers),
+                detail=item.detail,
+            )
+            for item in snapshot.coverage
+        ],
+        warnings=list(snapshot.warnings),
+    )
 
 
 @router.get("/ready", response_model=ReadinessResponse, tags=["system"])
