@@ -162,6 +162,8 @@ button {
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
+  height: 100%;
+  max-height: calc(100vh - 67px);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -215,6 +217,7 @@ button {
 
 .active-incidents-scroll {
   display: grid;
+  flex: 1 1 auto;
   gap: 16px;
   min-height: 0;
   overflow-y: auto;
@@ -1092,6 +1095,7 @@ button {
   .active-incidents-panel {
     border-bottom: 1px solid var(--line);
     border-right: 0;
+    height: 100%;
   }
 
   .map-region,

@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 
 import type {
@@ -467,7 +467,17 @@ export function AssistantPanel({
   onDeleteConversation,
 }: AssistantPanelProps) {
   const [question, setQuestion] = useState('');
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const previousConversationId = useRef(conversationId);
   const isLoading = status === 'loading';
+
+  useEffect(() => {
+    if (previousConversationId.current && conversationId === null) {
+      composerRef.current?.scrollIntoView?.({ block: 'nearest' });
+      composerRef.current?.focus();
+    }
+    previousConversationId.current = conversationId;
+  }, [conversationId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -554,6 +564,7 @@ export function AssistantPanel({
         </label>
         <textarea
           id="assistant-question"
+          ref={composerRef}
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="Ask about the map or disaster monitoring…"

@@ -101,32 +101,35 @@ describe('AssistantPanel', () => {
     const onNewConversation = vi.fn();
     const onSelectConversation = vi.fn();
     const onDeleteConversation = vi.fn();
-    render(
-      <AssistantPanel
-        conversationId="conversation-1"
-        conversations={[
-          {
-            conversation_id: 'conversation-1',
-            created_at: '2026-08-21T10:00:00Z',
-            updated_at: '2026-08-21T10:01:00Z',
-            preview: 'Previous question',
-          },
-        ]}
-        messages={[{ id: 'm1', role: 'user', content: 'Previous question' }]}
-        status="idle"
-        error={null}
-        onSubmit={vi.fn()}
-        onClear={vi.fn()}
-        onNewConversation={onNewConversation}
-        onSelectConversation={onSelectConversation}
-        onDeleteConversation={onDeleteConversation}
-      />,
-    );
+    const props = {
+      conversationId: 'conversation-1' as string | null,
+      conversations: [
+        {
+          conversation_id: 'conversation-1',
+          created_at: '2026-08-21T10:00:00Z',
+          updated_at: '2026-08-21T10:01:00Z',
+          preview: 'Previous question',
+        },
+      ],
+      messages: [{ id: 'm1', role: 'user' as const, content: 'Previous question' }],
+      status: 'idle' as const,
+      error: null,
+      onSubmit: vi.fn(),
+      onClear: vi.fn(),
+      onNewConversation,
+      onSelectConversation,
+      onDeleteConversation,
+    };
+    const { rerender } = render(<AssistantPanel {...props} />);
 
     await user.selectOptions(screen.getByLabelText('Conversation'), '');
     await user.click(screen.getByRole('button', { name: 'Delete conversation' }));
     expect(onSelectConversation).toHaveBeenCalledWith(null);
     expect(onDeleteConversation).toHaveBeenCalledWith('conversation-1');
+
+    rerender(<AssistantPanel {...props} conversationId={null} />);
+    expect(screen.getByLabelText('Question')).toBeVisible();
+    expect(document.activeElement).toBe(screen.getByLabelText('Question'));
 
     await user.click(screen.getByRole('button', { name: 'New conversation' }));
     expect(onNewConversation).toHaveBeenCalledTimes(1);
