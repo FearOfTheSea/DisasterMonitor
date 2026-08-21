@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from disaster_monitor.application.disaster import GeographicScope
 from disaster_monitor.application.ports.agent_model import AgentModel
+from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.event_media import (
     EventMediaDiscovery,
     MediaAssetStore,
@@ -47,6 +48,12 @@ from disaster_monitor.application.services.source_consistency import (
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.conversations.memory_repository import (
+    InMemoryConversationRepository,
+)
+from disaster_monitor.infrastructure.conversations.postgres_repository import (
+    PostgresConversationRepository,
+)
 from disaster_monitor.infrastructure.disaster.cems_gfm_adapter import CemsGfmAdapter
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
@@ -166,6 +173,23 @@ def build_operational_services(
         configured_repository,
         persistence,
         OperationalEvidenceRecorder(configured_repository),
+    )
+
+
+def build_conversation_repository(
+    settings: Settings,
+    repository: ConversationStore | None = None,
+) -> ConversationStore:
+    """Build durable PostgreSQL conversations or the local fallback."""
+    if repository is not None:
+        return repository
+    dsn = (
+        settings.operational_database_url.get_secret_value()
+        if settings.operational_database_url is not None
+        else ""
+    )
+    return (
+        PostgresConversationRepository(dsn) if dsn else InMemoryConversationRepository()
     )
 
 

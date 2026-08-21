@@ -8,6 +8,27 @@ export type ConversationMessage = {
   report?: AssistantReport;
 };
 
+export type ConversationSummary = {
+  conversation_id: string;
+  created_at: string;
+  updated_at: string;
+  preview: string;
+};
+
+export type PersistedConversationMessage = {
+  id: string;
+  role: MessageRole;
+  content: string;
+  created_at: string;
+};
+
+export type PersistedConversation = {
+  conversation_id: string;
+  created_at: string;
+  updated_at: string;
+  messages: PersistedConversationMessage[];
+};
+
 export type MapView = {
   centerLatitude: number;
   centerLongitude: number;
@@ -421,11 +442,6 @@ export type CommonOperationalPicture = {
   updated_at: string;
   status: string;
   layers: CopLayer[];
-};
-
-export type ConversationState = {
-  conversationId: string | null;
-  messages: ConversationMessage[];
 };
 
 export type ConversationStatus = 'idle' | 'loading' | 'error';

@@ -113,3 +113,9 @@ Invalid provenance, privilege escalation, policy drift, conflicts, or budget ove
 Agent state is request-scoped.
 
 There is no persistent agent memory, continuous investigation loop, autonomous background monitoring, cross-request evidence recovery, or unrestricted self-modification.
+
+The assistant separately persists a durable textual conversation transcript for UI
+history. It stores message IDs, roles, text, and timestamps only. Historical text is
+not added to model prompts and does not restore agent state, evidence workspaces,
+reports, tool state, or multimodal state; every request still runs from its current
+question.

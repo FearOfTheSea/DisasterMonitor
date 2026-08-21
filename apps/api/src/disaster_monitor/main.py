@@ -17,6 +17,7 @@ from disaster_monitor.application.agent.multimodal_tools import (
 )
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.ports.agent_model import AgentModel
+from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.event_media import (
     EventMediaDiscovery,
     MediaAssetStore,
@@ -52,10 +53,14 @@ from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
+from disaster_monitor.application.use_cases.run_conversation_turn import (
+    RunConversationTurn,
+)
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.infrastructure.composition import (
     EventMediaServices,
     build_agent_model,
+    build_conversation_repository,
     build_country_catalog,
     build_country_catalog_automation,
     build_current_disaster_report,
@@ -89,6 +94,7 @@ def create_app(
     event_media: EventMediaDiscovery | None = None,
     media_asset_store: MediaAssetStore | None = None,
     active_incidents_service: ActiveIncidentsService | None = None,
+    conversation_repository: ConversationStore | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -98,6 +104,7 @@ def create_app(
         app_settings, country_catalog
     )
     operational = build_operational_services(app_settings, operational_repository)
+    conversations = build_conversation_repository(app_settings, conversation_repository)
     disaster_report = current_disaster_report or build_current_disaster_report(
         app_settings,
         country_catalog,
@@ -219,7 +226,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["DELETE", "GET", "POST"],
         allow_headers=["Content-Type"],
     )
     app.state.language_model = language_model
@@ -236,6 +243,10 @@ def create_app(
         query_parser,
         disaster_agent=disaster_agent,
     )
+    app.state.run_conversation_turn = RunConversationTurn(
+        app.state.answer_map_question, conversations
+    )
+    app.state.conversation_repository = conversations
     app.state.operational_repository = operational.repository
     app.state.country_catalog_automation = catalog_automation
     app.state.trusted_operator_identity_policy = TrustedOperatorIdentityPolicy(

@@ -664,6 +664,37 @@ button {
   margin-top: 5px;
 }
 
+.conversation-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.conversation-controls label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.conversation-controls select {
+  background: var(--surface);
+  border: 1px solid #c7d0de;
+  border-radius: 6px;
+  flex: 1 1 150px;
+  min-width: 0;
+  padding: 7px 8px;
+}
+
+.conversation-controls button {
+  background: transparent;
+  border: 1px solid #c7d0de;
+  border-radius: 6px;
+  color: var(--ink);
+  padding: 7px 8px;
+}
+
 .availability-note {
   background: var(--warning-bg);
   border-bottom: 1px solid #f2dfaa;

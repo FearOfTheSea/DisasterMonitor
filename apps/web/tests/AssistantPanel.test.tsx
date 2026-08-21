@@ -96,6 +96,42 @@ describe('AssistantPanel', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('local backend');
   });
 
+  it('selects previous conversations, starts new ones, and deletes the active one', async () => {
+    const user = userEvent.setup();
+    const onNewConversation = vi.fn();
+    const onSelectConversation = vi.fn();
+    const onDeleteConversation = vi.fn();
+    render(
+      <AssistantPanel
+        conversationId="conversation-1"
+        conversations={[
+          {
+            conversation_id: 'conversation-1',
+            created_at: '2026-08-21T10:00:00Z',
+            updated_at: '2026-08-21T10:01:00Z',
+            preview: 'Previous question',
+          },
+        ]}
+        messages={[{ id: 'm1', role: 'user', content: 'Previous question' }]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+        onNewConversation={onNewConversation}
+        onSelectConversation={onSelectConversation}
+        onDeleteConversation={onDeleteConversation}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText('Conversation'), '');
+    await user.click(screen.getByRole('button', { name: 'Delete conversation' }));
+    expect(onSelectConversation).toHaveBeenCalledWith(null);
+    expect(onDeleteConversation).toHaveBeenCalledWith('conversation-1');
+
+    await user.click(screen.getByRole('button', { name: 'New conversation' }));
+    expect(onNewConversation).toHaveBeenCalledTimes(1);
+  });
+
   it('renders structured report sections, warnings, links, and freshness', () => {
     render(
       <AssistantPanel

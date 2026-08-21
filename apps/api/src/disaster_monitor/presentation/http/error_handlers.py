@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from disaster_monitor.domain.errors import (
+    ConversationNotFoundError,
     InvalidQuestionError,
     ModelResponseError,
     ModelRuntimeError,
@@ -19,6 +20,15 @@ def register_error_handlers(app: FastAPI) -> None:
         _request: Request, error: InvalidQuestionError
     ) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(error)})
+
+    @app.exception_handler(ConversationNotFoundError)
+    async def handle_conversation_not_found(
+        _request: Request, _error: ConversationNotFoundError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "The requested conversation does not exist."},
+        )
 
     @app.exception_handler(ModelRuntimeError)
     async def handle_model_runtime_error(

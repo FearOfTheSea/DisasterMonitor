@@ -74,6 +74,33 @@ class AssistantResponse(BaseModel):
     media_gallery: "DisasterMediaGalleryResponse | None" = None
 
 
+class ConversationMessageResponse(BaseModel):
+    """Persisted text from one assistant conversation turn."""
+
+    id: str
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime
+
+
+class ConversationSummaryResponse(BaseModel):
+    """Bounded metadata used by the conversation picker."""
+
+    conversation_id: str
+    created_at: datetime
+    updated_at: datetime
+    preview: str
+
+
+class ConversationResponse(BaseModel):
+    """A durable conversation and its chronological text transcript."""
+
+    conversation_id: str
+    created_at: datetime
+    updated_at: datetime
+    messages: list[ConversationMessageResponse] = Field(default_factory=list)
+
+
 class DisasterMediaItemResponse(BaseModel):
     media_id: str
     image_url: str

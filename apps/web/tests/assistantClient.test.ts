@@ -10,6 +10,54 @@ import { commonOperationalPicture, multimodalState } from './fixtures/multimodal
 describe('AssistantClient', () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it('lists, loads, and deletes backend-owned conversations', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify([
+          {
+            conversation_id: 'conversation-1',
+            created_at: '2026-08-21T10:00:00Z',
+            updated_at: '2026-08-21T10:01:00Z',
+            preview: 'What happened?',
+          },
+        ]),
+        { status: 200 },
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          conversation_id: 'conversation-1',
+          created_at: '2026-08-21T10:00:00Z',
+          updated_at: '2026-08-21T10:01:00Z',
+          messages: [
+            {
+              id: 'message-1',
+              role: 'user',
+              content: 'What happened?',
+              created_at: '2026-08-21T10:00:00Z',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(client.listConversations()).resolves.toHaveLength(1);
+    await expect(client.getConversation('conversation-1')).resolves.toMatchObject({
+      messages: [{ content: 'What happened?' }],
+    });
+    await expect(client.deleteConversation('conversation-1')).resolves.toBeUndefined();
+
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ['http://localhost:8001/api/v1/conversations', 'GET'],
+      ['http://localhost:8001/api/v1/conversations/conversation-1', 'GET'],
+      ['http://localhost:8001/api/v1/conversations/conversation-1', 'DELETE'],
+    ]);
+  });
+
   it('posts the typed question and current map view', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

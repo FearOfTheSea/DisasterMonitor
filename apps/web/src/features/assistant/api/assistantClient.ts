@@ -2,6 +2,8 @@ import type {
   AssistantRequest,
   AssistantReport,
   AssistantResponse,
+  ConversationSummary,
+  PersistedConversation,
   MapView,
 } from '@/shared/types/assistant';
 import {
@@ -69,6 +71,112 @@ export class AssistantClient {
       );
     }
     return body;
+  }
+
+  async listConversations(): Promise<ConversationSummary[]> {
+    const body = await this.request('/conversations', 'GET', 'conversation list');
+    if (
+      !Array.isArray(body) ||
+      !body.every((item) => this.isConversationSummary(item))
+    ) {
+      throw new AssistantApiError(
+        'The API returned an invalid conversation list.',
+        502,
+      );
+    }
+    return body;
+  }
+
+  async getConversation(conversationId: string): Promise<PersistedConversation> {
+    const body = await this.request(
+      `/conversations/${encodeURIComponent(conversationId)}`,
+      'GET',
+      'conversation',
+    );
+    if (!this.isPersistedConversation(body)) {
+      throw new AssistantApiError('The API returned an invalid conversation.', 502);
+    }
+    return body;
+  }
+
+  async deleteConversation(conversationId: string): Promise<void> {
+    await this.request(
+      `/conversations/${encodeURIComponent(conversationId)}`,
+      'DELETE',
+      'conversation deletion',
+    );
+  }
+
+  private async request(
+    path: string,
+    method: 'GET' | 'DELETE',
+    resource: string,
+  ): Promise<unknown> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: method === 'GET' ? undefined : { 'Content-Type': 'application/json' },
+      });
+    } catch {
+      throw new AssistantApiError(
+        'The API could not be reached. Is the local backend running?',
+        0,
+      );
+    }
+
+    if (response.status === 204) {
+      return undefined;
+    }
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail =
+        body && typeof body === 'object' && 'detail' in body
+          ? String((body as { detail: unknown }).detail)
+          : `The ${resource} request failed.`;
+      throw new AssistantApiError(detail, response.status);
+    }
+    return body;
+  }
+
+  private isConversationSummary(value: unknown): value is ConversationSummary {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const item = value as Record<string, unknown>;
+    return (
+      typeof item.conversation_id === 'string' &&
+      typeof item.created_at === 'string' &&
+      typeof item.updated_at === 'string' &&
+      typeof item.preview === 'string'
+    );
+  }
+
+  private isPersistedConversation(value: unknown): value is PersistedConversation {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const item = value as Record<string, unknown>;
+    return (
+      typeof item.conversation_id === 'string' &&
+      typeof item.created_at === 'string' &&
+      typeof item.updated_at === 'string' &&
+      Array.isArray(item.messages) &&
+      item.messages.every((message) => this.isPersistedMessage(message))
+    );
+  }
+
+  private isPersistedMessage(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const item = value as Record<string, unknown>;
+    return (
+      typeof item.id === 'string' &&
+      (item.role === 'user' || item.role === 'assistant') &&
+      typeof item.content === 'string' &&
+      typeof item.created_at === 'string'
+    );
   }
 
   private isAssistantResponse(value: unknown): value is AssistantResponse {

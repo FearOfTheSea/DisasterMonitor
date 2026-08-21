@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from disaster_monitor.application.dto import ModelReadiness
 from disaster_monitor.application.media import DisasterMediaGallery
 from disaster_monitor.application.multimodal import AssetAdmissionInput
+from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.event_media import MediaAssetStore
 from disaster_monitor.application.ports.geography import (
     CountryCatalogUpdateAutomation,
@@ -29,7 +30,9 @@ from disaster_monitor.application.services.active_incidents import (
 from disaster_monitor.application.services.operational_ingestion import (
     record_operator_review,
 )
-from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
+from disaster_monitor.application.use_cases.run_conversation_turn import (
+    RunConversationTurn,
+)
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import EventGeometry
 from disaster_monitor.domain.models import MapNavigationAction, MapView
@@ -47,6 +50,9 @@ from disaster_monitor.presentation.http.schemas import (
     ActiveIncidentsSnapshotResponse,
     AssistantRequest,
     AssistantResponse,
+    ConversationMessageResponse,
+    ConversationResponse,
+    ConversationSummaryResponse,
     CountryCatalogSourceResponse,
     CountryCatalogUpdateResponse,
     DecisionEstimateResponse,
@@ -74,9 +80,14 @@ from disaster_monitor.presentation.http.schemas import (
 router = APIRouter()
 
 
-def get_answer_use_case(request: Request) -> AnswerMapQuestion:
-    """Retrieve the use case built by the composition root."""
-    return cast(AnswerMapQuestion, request.app.state.answer_map_question)
+def get_conversation_store(request: Request) -> ConversationStore:
+    """Retrieve the conversation repository built by the composition root."""
+    return cast(ConversationStore, request.app.state.conversation_repository)
+
+
+def get_conversation_turn(request: Request) -> RunConversationTurn:
+    """Retrieve the transcript-aware assistant use case."""
+    return cast(RunConversationTurn, request.app.state.run_conversation_turn)
 
 
 def get_language_model(request: Request) -> LanguageModel:
@@ -450,7 +461,7 @@ async def operator_action(
 async def assistant(
     body: AssistantRequest,
     http_request: Request,
-    use_case: Annotated[AnswerMapQuestion, Depends(get_answer_use_case)],
+    use_case: Annotated[RunConversationTurn, Depends(get_conversation_turn)],
 ) -> AssistantResponse:
     """Answer a map-related question through the application use case."""
     result = await use_case.execute(
@@ -627,6 +638,76 @@ async def assistant(
         common_operational_picture=cop_response(result.common_operational_picture),
         media_gallery=_media_gallery_response(result.media_gallery, http_request),
     )
+
+
+@router.get(
+    "/conversations",
+    response_model=list[ConversationSummaryResponse],
+    tags=["assistant"],
+)
+async def list_conversations(
+    repository: Annotated[ConversationStore, Depends(get_conversation_store)],
+) -> list[ConversationSummaryResponse]:
+    """List durable conversations from newest update to oldest."""
+    return [
+        ConversationSummaryResponse(
+            conversation_id=item.conversation_id,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            preview=item.preview,
+        )
+        for item in await repository.list()
+    ]
+
+
+@router.get(
+    "/conversations/{conversation_id}",
+    response_model=ConversationResponse,
+    tags=["assistant"],
+)
+async def get_conversation(
+    conversation_id: str,
+    repository: Annotated[ConversationStore, Depends(get_conversation_store)],
+) -> ConversationResponse:
+    """Return one stored transcript in chronological order."""
+    conversation = await repository.get(conversation_id)
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested conversation does not exist.",
+        )
+    return ConversationResponse(
+        conversation_id=conversation.conversation_id,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+        messages=[
+            ConversationMessageResponse(
+                id=message.message_id,
+                role=message.role.value,
+                content=message.content,
+                created_at=message.created_at,
+            )
+            for message in conversation.messages
+        ],
+    )
+
+
+@router.delete(
+    "/conversations/{conversation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["assistant"],
+)
+async def delete_conversation(
+    conversation_id: str,
+    repository: Annotated[ConversationStore, Depends(get_conversation_store)],
+) -> Response:
+    """Permanently remove a conversation and its cascade-owned messages."""
+    if not await repository.delete(conversation_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested conversation does not exist.",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _media_gallery_response(

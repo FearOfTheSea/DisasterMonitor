@@ -87,11 +87,16 @@ export default function Home() {
         </div>
         {assistantOpen && (
           <AssistantPanel
+            conversationId={conversation.conversationId}
+            conversations={conversation.conversations}
             messages={conversation.messages}
             status={conversation.status}
             error={conversation.error}
             onSubmit={(question) => conversation.submit(question, mapView)}
             onClear={conversation.clear}
+            onNewConversation={conversation.startNewConversation}
+            onSelectConversation={conversation.selectConversation}
+            onDeleteConversation={conversation.deleteConversation}
           />
         )}
         {operationsOpen && (

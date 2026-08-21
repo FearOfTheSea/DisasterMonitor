@@ -197,7 +197,6 @@ async def test_readiness_and_assistant_use_injected_fake_model() -> None:
             "/api/v1/assistant",
             json={
                 "question": "  What is this map for? ",
-                "conversation_id": "test-session",
                 "map_view": {
                     "center_latitude": 21.03,
                     "center_longitude": 105.85,
@@ -216,7 +215,7 @@ async def test_readiness_and_assistant_use_injected_fake_model() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "message": "The fake model can answer locally.",
-        "conversation_id": "test-session",
+        "conversation_id": response.json()["conversation_id"],
         "model": "fake-qwen",
     }
     assert "What is this map for?" in model.requests[0].messages[1].content
