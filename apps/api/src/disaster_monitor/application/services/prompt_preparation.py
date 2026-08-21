@@ -65,6 +65,7 @@ def prepare_model_request(
     question: MapQuestion,
     tools: tuple[ModelTool, ...] = (),
     conversation_history: tuple[ConversationMessage, ...] = (),
+    response_language: str | None = None,
 ) -> ModelRequest:
     """Build a bounded system, history, and current-user model request."""
     from disaster_monitor.application.services.conversation_context import (
@@ -85,13 +86,19 @@ def prepare_model_request(
         )
 
     user_prompt = f"User question: {question.text}\n{map_context}"
+    system_prompt = SYSTEM_PROMPT
+    if response_language:
+        system_prompt = (
+            f"{SYSTEM_PROMPT}\nRespond in language tag {response_language}. "
+            "This instruction is authoritative for the user-facing response."
+        )
     history_messages = select_bounded_history(
         conversation_history,
         conversation_id=question.conversation_id,
     )
     return ModelRequest(
         messages=(
-            ModelMessage(role="system", content=SYSTEM_PROMPT),
+            ModelMessage(role="system", content=system_prompt),
             *tuple(
                 ModelMessage(role=message.role.value, content=message.content)
                 for message in history_messages

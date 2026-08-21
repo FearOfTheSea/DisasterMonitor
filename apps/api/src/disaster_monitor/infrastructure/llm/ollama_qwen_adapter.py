@@ -41,7 +41,7 @@ class OllamaQwenAdapter:
             "stream": False,
             "think": False,
             "options": {
-                "num_predict": self._max_tokens,
+                "num_predict": request.max_tokens or self._max_tokens,
                 "temperature": 0.2,
             },
         }

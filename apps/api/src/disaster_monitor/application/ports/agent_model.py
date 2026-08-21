@@ -8,6 +8,7 @@ from disaster_monitor.application.agent.models import (
     InvestigationPlan,
     ValidatedDisasterTask,
 )
+from disaster_monitor.application.disaster import DisasterReport
 
 
 class AgentModelError(Exception):
@@ -16,6 +17,10 @@ class AgentModelError(Exception):
 
 class AgentModel(Protocol):
     async def interpret(self, question: str) -> DisasterTaskDraft: ...
+
+    async def localize_grounded_response(
+        self, report: DisasterReport, language: str
+    ) -> str: ...
 
     async def propose_plan(
         self, task: ValidatedDisasterTask, tool_descriptions: tuple[str, ...]

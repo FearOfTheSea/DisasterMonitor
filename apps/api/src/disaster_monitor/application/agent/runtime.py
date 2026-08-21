@@ -16,6 +16,7 @@ from disaster_monitor.application.agent.planning import (
 )
 from disaster_monitor.application.agent.task_normalization import (
     deterministic_task_draft,
+    is_obvious_non_disaster_map_question,
     validate_disaster_task,
 )
 from disaster_monitor.application.agent.tooling import ToolRegistry, execute_plan
@@ -54,7 +55,19 @@ class DisasterAgentRuntime:
         self, question: str, *, multimodal_assets: tuple[MultimodalAsset, ...] = ()
     ) -> AgentExecutionState:
         model_calls = 0
-        draft = deterministic_task_draft(question)
+        interpretation_failed = False
+        if self._agent_model is not None and not is_obvious_non_disaster_map_question(
+            question
+        ):
+            try:
+                draft = await self._agent_model.interpret(question)
+                if draft.canonical:
+                    model_calls += 1
+            except Exception:
+                interpretation_failed = True
+                draft = deterministic_task_draft(question)
+        else:
+            draft = deterministic_task_draft(question)
         task = validate_disaster_task(
             question,
             draft,
@@ -158,7 +171,11 @@ class DisasterAgentRuntime:
             state.warnings.append("The bounded investigation stopped safely.")
             return state
 
-        if self._agent_model is not None and state.model_call_count < MAX_MODEL_CALLS:
+        if (
+            self._agent_model is not None
+            and not interpretation_failed
+            and state.model_call_count < MAX_MODEL_CALLS
+        ):
             try:
                 review = await self._agent_model.review_progress(
                     task, tuple(state.completed_steps)

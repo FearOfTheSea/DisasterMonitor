@@ -129,6 +129,30 @@ class DisasterTaskDraft:
     event_discriminators: tuple[str, ...] = ()
     ambiguities: tuple[str, ...] = ()
     clarification_question: str | None = None
+    task_kind: TaskKind | None = None
+    disaster: Disaster | None = None
+    country_code: str | None = None
+    country_name: str | None = None
+    geographic_scope: GeographicScope | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    requested_response_language: str | None = None
+    response_language_explicit: bool = False
+    worldwide_selection: str | None = None
+    canonical: bool = False
+
+    def __post_init__(self) -> None:
+        if (
+            self.task_kind is not None
+            or self.disaster is not None
+            or self.country_code is not None
+            or self.country_name is not None
+            or self.geographic_scope is not None
+            or self.date_from is not None
+            or self.date_to is not None
+            or self.requested_response_language is not None
+        ):
+            object.__setattr__(self, "canonical", True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +173,8 @@ class ValidatedDisasterTask:
     detail: str | None = None
     query: DisasterQuery | None = None
     worldwide_query: WorldwideDisasterQuery | None = None
+    response_language: str | None = None
+    response_language_explicit: bool = False
 
 
 @dataclass(frozen=True, slots=True)

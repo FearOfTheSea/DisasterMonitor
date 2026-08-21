@@ -92,6 +92,7 @@ class ModelRequest:
 
     messages: tuple[ModelMessage, ...]
     tools: tuple[ModelTool, ...] = ()
+    max_tokens: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

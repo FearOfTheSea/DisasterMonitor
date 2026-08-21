@@ -165,6 +165,7 @@ def create_app(
         MapNavigationService(country_catalog),
         country_catalog,
         media_services.discovery,
+        agent_model=configured_agent_model,
     )
 
     @asynccontextmanager

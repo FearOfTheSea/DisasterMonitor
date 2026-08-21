@@ -1,5 +1,7 @@
 """Agent-first assistant use case and safe general-model delegation."""
 
+import re
+from dataclasses import replace
 from uuid import uuid4
 
 from disaster_monitor.application.agent.models import (
@@ -8,10 +10,15 @@ from disaster_monitor.application.agent.models import (
     TaskKind,
 )
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
-from disaster_monitor.application.disaster import GeographicScope, SelectedEventSummary
+from disaster_monitor.application.disaster import (
+    DisasterReport,
+    GeographicScope,
+    SelectedEventSummary,
+)
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
 from disaster_monitor.application.media import DisasterMediaGallery, MediaEventContext
 from disaster_monitor.application.multimodal import AssetAdmissionInput
+from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.event_media import EventMediaDiscovery
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.language_model import LanguageModel
@@ -43,6 +50,7 @@ class RunDisasterAgent:
         map_navigation: MapNavigationService | None = None,
         country_catalog: CountryCatalog | None = None,
         event_media: EventMediaDiscovery | None = None,
+        agent_model: AgentModel | None = None,
     ) -> None:
         self._runtime = runtime
         self._general_model = general_model
@@ -50,6 +58,7 @@ class RunDisasterAgent:
         self._map_navigation = map_navigation
         self._country_catalog = country_catalog
         self._event_media = event_media
+        self._agent_model = agent_model
 
     async def execute(
         self,
@@ -79,7 +88,11 @@ class RunDisasterAgent:
         )
         if state.task.kind in {TaskKind.NON_DISASTER, TaskKind.GENERAL_KNOWLEDGE}:
             return await self._general_answer(
-                resolved_question, conversation, map_view, conversation_history
+                resolved_question,
+                conversation,
+                map_view,
+                conversation_history,
+                response_language=state.task.response_language,
             )
         report = state.workspace.report
         if report is None:
@@ -106,6 +119,9 @@ class RunDisasterAgent:
                 partial=True,
                 investigation=_summary(state),
             )
+        report = await self._localize_grounded_report(
+            report, state.task.response_language
+        )
         media_gallery = await self._discover_media(
             report.selected_event,
             country=state.task.country,
@@ -182,12 +198,35 @@ class RunDisasterAgent:
         except Exception:
             return None
 
+    async def _localize_grounded_report(
+        self, report: DisasterReport, response_language: str | None
+    ) -> DisasterReport:
+        if not response_language or self._agent_model is None:
+            return report
+        localize = getattr(self._agent_model, "localize_grounded_response", None)
+        if localize is None:
+            return _localization_fallback(report)
+        for _ in range(3):
+            try:
+                localized = await localize(report, response_language)
+            except Exception:
+                continue
+            if (
+                isinstance(localized, str)
+                and localized.strip()
+                and _preserves_grounded_tokens(report.message, localized)
+            ):
+                return replace(report, message=localized.strip())
+        return _localization_fallback(report)
+
     async def _general_answer(
         self,
         question: str,
         conversation: str,
         map_view: MapView | None,
         conversation_history: tuple[ConversationMessage, ...],
+        *,
+        response_language: str | None = None,
     ) -> AssistantAnswer:
         request = prepare_model_request(
             MapQuestion(question, conversation, map_view),
@@ -197,6 +236,7 @@ class RunDisasterAgent:
                 else ()
             ),
             conversation_history=conversation_history,
+            response_language=response_language,
         )
         try:
             response = await self._general_model.generate(request)
@@ -226,6 +266,24 @@ class RunDisasterAgent:
             response.model,
             map_action=map_action,
         )
+
+
+def _preserves_grounded_tokens(original: str, localized: str) -> bool:
+    """Reject localization that drops URLs or source-backed numeric evidence."""
+    protected = re.findall(
+        r"https?://[^\s)]+|(?<![\w.])\d+(?:\.\d+)?(?![\w.])", original
+    )
+    return all(token in localized for token in protected)
+
+
+def _localization_fallback(report: DisasterReport) -> DisasterReport:
+    warning = (
+        "Grounded response localization was unavailable; the deterministic report "
+        "was preserved."
+    )
+    if warning in report.warnings:
+        return report
+    return replace(report, warnings=(*report.warnings, warning))
 
 
 def _conversation_id(value: str) -> str:

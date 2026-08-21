@@ -42,6 +42,27 @@ def valid_draft() -> dict[str, object]:
     }
 
 
+def canonical_draft() -> dict[str, object]:
+    return {
+        "task_kind": "investigation",
+        "disaster": "earthquake",
+        "country_code": "JPN",
+        "country_name": "Japan",
+        "geographic_scope": "country",
+        "place_mentions": ["Japan"],
+        "current_or_event_specific": True,
+        "date_from": None,
+        "date_to": None,
+        "information_needs": ["event_overview"],
+        "output_modalities": ["text"],
+        "event_discriminators": [],
+        "requested_response_language": "ja",
+        "response_language_explicit": False,
+        "worldwide_selection": None,
+        "clarification_question": None,
+    }
+
+
 @pytest.mark.asyncio
 async def test_agent_json_is_strictly_parsed() -> None:
     model = SequenceModel([json.dumps(valid_draft())])
@@ -73,3 +94,58 @@ async def test_agent_json_rejects_unknown_enums_and_fields_after_repair() -> Non
         await StructuredAgentModel(model).interpret("Latest earthquake in Japan")
 
     assert len(model.requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_agent_json_parses_canonical_semantics_and_response_language() -> None:
+    model = SequenceModel([json.dumps(canonical_draft())])
+
+    result = await StructuredAgentModel(model).interpret("日本語の質問")
+
+    assert result.canonical is True
+    assert result.disaster.value == "earthquake"
+    assert result.country_code == "JPN"
+    assert result.requested_response_language == "ja"
+
+
+@pytest.mark.asyncio
+async def test_agent_json_allows_null_scope_for_general_knowledge() -> None:
+    draft = canonical_draft()
+    draft.update(
+        {
+            "task_kind": "general_knowledge",
+            "disaster": None,
+            "country_code": None,
+            "country_name": None,
+            "geographic_scope": None,
+            "current_or_event_specific": False,
+            "information_needs": [],
+        }
+    )
+    model = SequenceModel([json.dumps(draft)])
+
+    result = await StructuredAgentModel(model).interpret("一般的な質問")
+
+    assert result.task_kind.value == "general_knowledge"
+    assert result.disaster is None
+    assert result.geographic_scope is None
+
+
+@pytest.mark.asyncio
+async def test_grounded_localization_is_a_separate_strict_operation() -> None:
+    model = SequenceModel(
+        [json.dumps({"message": "## 概要\n42 people. Source: https://example.test"})]
+    )
+    report = type(
+        "Report",
+        (),
+        {
+            "message": "## Summary\n42 people. Source: https://example.test",
+            "sections": (),
+        },
+    )()
+
+    result = await StructuredAgentModel(model).localize_grounded_response(report, "ja")
+
+    assert "42" in result
+    assert "https://example.test" in result
