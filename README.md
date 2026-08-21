@@ -60,11 +60,11 @@ Install Ollama from [ollama.com](https://ollama.com/), start it, and pull the co
 
 ```powershell
 ollama serve
-ollama pull qwen3:1.7b
+ollama pull qwen3:4b-instruct-2507-q4_K_M
 ollama list
 ```
 
-The backend defaults to `http://localhost:11434` and `qwen3:1.7b`. Copy `apps/api/.env.example` to `apps/api/.env` to override the model, timeout, or allowed origins. No API key is required.
+The backend defaults to `http://localhost:11434` and `qwen3:4b-instruct-2507-q4_K_M`. Copy `apps/api/.env.example` to `apps/api/.env` to override the model, timeout, or allowed origins. No API key is required.
 
 ## Run the applications independently
 
@@ -162,7 +162,7 @@ It was not run during the default offline verification.
 
 ## Optional real-Qwen smoke test
 
-After Ollama is running and `ollama pull qwen3:1.7b` completes:
+After Ollama is running and `ollama pull qwen3:4b-instruct-2507-q4_K_M` completes:
 
 ```powershell
 uv run --project apps/api python scripts/real_qwen_smoke.py

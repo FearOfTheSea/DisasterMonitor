@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     app_name: str = Field(default="Disaster Monitor API", min_length=1)
     allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     ollama_base_url: str = Field(default="http://localhost:11434", min_length=1)
-    ollama_model: str = Field(default="qwen3:1.7b", min_length=1)
+    ollama_model: str = Field(default="qwen3:4b-instruct-2507-q4_K_M", min_length=1)
     ollama_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
     ollama_max_tokens: int = Field(default=512, ge=32, le=4096)
     ollama_vision_model: str = Field(default="qwen3-vl:2b", min_length=1)
