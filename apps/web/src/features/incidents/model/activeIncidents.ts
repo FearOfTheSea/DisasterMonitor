@@ -36,6 +36,7 @@ export type IncidentGeometry = {
   coordinates: IncidentCoordinate[];
   description: string | null;
   source_id: string;
+  estimated: boolean;
 };
 
 export type IncidentMeasurement = {

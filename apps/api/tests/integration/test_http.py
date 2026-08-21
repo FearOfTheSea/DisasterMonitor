@@ -358,6 +358,7 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
         "coordinates": [{"latitude": 37.0, "longitude": 137.0}],
         "description": None,
         "source_id": "fixture-events",
+        "estimated": False,
     }
     assert body["selected_event"]["measurements"] == [
         {

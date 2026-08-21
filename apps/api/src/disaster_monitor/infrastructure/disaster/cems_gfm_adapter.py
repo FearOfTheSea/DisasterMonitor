@@ -24,9 +24,11 @@ from disaster_monitor.domain.disaster import (
     Country,
     Disaster,
     DisasterEvent,
+    EventCoordinate,
     EventGeographyStatus,
     SourceAuthority,
     SourceReference,
+    point_event_geometry,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
@@ -61,6 +63,7 @@ class _GfmCandidate:
     canonical_url: str
     asset_href: str
     geometry: dict[str, object]
+    tile_center: EventCoordinate
 
 
 def _text(value: object) -> str:
@@ -254,6 +257,7 @@ class CemsGfmAdapter:
 
         start, end = _time_window(query.time_window_days, now=now)
         records: dict[str, DisasterEvent | WorldwideDisasterEvent] = {}
+        representative_item_ids: dict[str, str] = {}
         issues: list[ProviderIssue] = []
         candidates: list[tuple[int, _GfmCandidate]] = []
         for index, raw_feature in enumerate(features[:_MAX_STAC_ITEMS]):
@@ -300,7 +304,13 @@ class CemsGfmAdapter:
                 snapshot_id=snapshot_id,
             )
             event_id = f"cems-gfm:sentinel-acquisition:{candidate.acquisition_id}"
-            provider_ids = (event_id, f"cems-gfm:item:{candidate.item_id}")
+            event_provider_ids = (event_id, f"cems-gfm:item:{candidate.item_id}")
+            event_geometry = point_event_geometry(
+                candidate.tile_center.latitude,
+                candidate.tile_center.longitude,
+                source,
+                estimated=True,
+            )
             if country is None:
                 event: DisasterEvent | WorldwideDisasterEvent = WorldwideDisasterEvent(
                     event_id=event_id,
@@ -308,7 +318,8 @@ class CemsGfmAdapter:
                     location=f"CEMS GFM acquisition {candidate.acquisition_id}",
                     event_time=candidate.event_time,
                     source=source,
-                    provider_ids=provider_ids,
+                    geometry=event_geometry,
+                    provider_ids=event_provider_ids,
                 )
             else:
                 event = DisasterEvent(
@@ -318,17 +329,32 @@ class CemsGfmAdapter:
                     country=country,
                     event_time=candidate.event_time,
                     source=source,
-                    provider_ids=provider_ids,
+                    geometry=event_geometry,
+                    provider_ids=event_provider_ids,
                     geography_status=EventGeographyStatus.IN_COUNTRY,
                 )
             existing = records.get(event_id)
             if existing is None:
                 records[event_id] = event
+                representative_item_ids[event_id] = candidate.item_id
             else:
-                records[event_id] = replace(
-                    existing,
-                    provider_ids=(*existing.provider_ids, *event.provider_ids[1:]),
+                coalesced_provider_ids: tuple[str, ...] = (
+                    *existing.provider_ids,
+                    *event.provider_ids[1:],
                 )
+                if candidate.item_id < representative_item_ids[event_id]:
+                    records[event_id] = replace(
+                        existing,
+                        source=source,
+                        geometry=event_geometry,
+                        provider_ids=coalesced_provider_ids,
+                    )
+                    representative_item_ids[event_id] = candidate.item_id
+                else:
+                    records[event_id] = replace(
+                        existing,
+                        provider_ids=coalesced_provider_ids,
+                    )
         return ProviderBatch(records=tuple(records.values()), issues=tuple(issues))
 
     async def _inspect_candidate(
@@ -438,6 +464,7 @@ class CemsGfmAdapter:
         if not item_id or not acquisition_id:
             raise ValueError("item or Sentinel acquisition identity is missing")
         geometry = _geometry(feature.get("geometry"), f"feature[{index}].geometry")
+        tile_center = _geometry_center(geometry, f"feature[{index}].geometry")
         assets = _mapping(feature.get("assets"), f"feature[{index}].assets")
         asset = _mapping(assets.get(_GFM_ASSET), f"asset {_GFM_ASSET}")
         asset_href = _text(asset.get("href"))
@@ -459,6 +486,7 @@ class CemsGfmAdapter:
             canonical_url=item_url,
             asset_href=asset_href,
             geometry=geometry,
+            tile_center=tile_center,
         )
 
     def _item_url(self, item_id: str, links: object) -> str:
@@ -491,6 +519,42 @@ def _geometry(value: object, label: str) -> dict[str, object]:
     if not isinstance(geometry.get("coordinates"), list):
         raise ValueError(f"{label} coordinates are missing")
     return geometry
+
+
+def _geometry_center(geometry: dict[str, object], label: str) -> EventCoordinate:
+    """Return the midpoint of a source footprint's WGS84 bounding extent."""
+    positions = _geometry_positions(geometry.get("coordinates"), label)
+    longitudes = [position[0] for position in positions]
+    latitudes = [position[1] for position in positions]
+    return EventCoordinate(
+        latitude=(min(latitudes) + max(latitudes)) / 2,
+        longitude=(min(longitudes) + max(longitudes)) / 2,
+    )
+
+
+def _geometry_positions(value: object, label: str) -> list[tuple[float, float]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{label} coordinates are malformed")
+    if (
+        len(value) >= 2
+        and isinstance(value[0], (int, float))
+        and not isinstance(value[0], bool)
+        and isinstance(value[1], (int, float))
+        and not isinstance(value[1], bool)
+        and isfinite(value[0])
+        and isfinite(value[1])
+    ):
+        longitude = float(value[0])
+        latitude = float(value[1])
+        if not -180 <= longitude <= 180 or not -90 <= latitude <= 90:
+            raise ValueError(f"{label} contains an out-of-range coordinate")
+        return [(longitude, latitude)]
+    positions: list[tuple[float, float]] = []
+    for item in value:
+        positions.extend(_geometry_positions(item, label))
+    if not positions:
+        raise ValueError(f"{label} coordinates are malformed")
+    return positions
 
 
 def _has_observed_flood_class_one(payload: object) -> bool:

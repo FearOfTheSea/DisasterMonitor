@@ -98,7 +98,13 @@ async def test_positive_clipped_observed_flood_extent_creates_one_acquisition_ev
         "cems-gfm:item:ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T3",
         "cems-gfm:item:ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T4",
     )
-    assert event.geometry is None
+    assert event.geometry is not None
+    assert event.geometry.kind.value == "point"
+    assert event.geometry.coordinates[0].latitude == 32.5
+    assert event.geometry.coordinates[0].longitude == 133.5
+    assert event.geometry.estimated is True
+    assert event.geometry.source.source_id == event.source.source_id
+    assert event.geometry.source.canonical_url == event.source.canonical_url
     assert event.geography_status is EventGeographyStatus.IN_COUNTRY
     assert event.source.source_id == "cems-gfm-floods"
     assert event.source.authority is SourceAuthority.SCIENTIFIC_AUTHORITY
@@ -167,7 +173,7 @@ async def test_stac_search_and_statistics_are_bounded_and_country_polygon_is_lon
 
 
 @pytest.mark.asyncio
-async def test_worldwide_scan_is_bounded_and_omits_tile_geometry():
+async def test_worldwide_scan_is_bounded_and_uses_tile_center_geometry():
     requests: list[httpx.Request] = []
     client = client_for(
         fixture("cems_gfm_stac_search.json"),
@@ -183,11 +189,48 @@ async def test_worldwide_scan_is_bounded_and_omits_tile_geometry():
 
     assert len(result.records) == 1
     event = result.records[0]
-    assert event.geometry is None
+    assert event.geometry is not None
+    assert event.geometry.coordinates[0].latitude == 32.5
+    assert event.geometry.coordinates[0].longitude == 133.5
+    assert event.geometry.estimated is True
     search = json.loads(requests[0].content)
     assert search["limit"] == 50
     assert search["bbox"] == [-180.0, -90.0, 180.0, 90.0]
     assert search["datetime"] == "2026-07-19T12:00:00Z/2026-08-18T12:00:00Z"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_coalesced_acquisition_uses_deterministic_tile_center() -> None:
+    payload = fixture("cems_gfm_stac_search.json")
+    features = payload["features"]
+    assert isinstance(features, list)
+    payload["features"] = list(reversed(features))
+    requests: list[httpx.Request] = []
+    client = client_for(
+        payload,
+        fixture("cems_gfm_flood_statistics.json"),
+        requests,
+    )
+    adapter = CemsGfmAdapter(
+        client=client,
+        geography=StaticCountryCatalog(),
+    )
+
+    result = await adapter.find_recent_events(country_query(), now=NOW)
+
+    assert len(result.records) == 1
+    event = result.records[0]
+    assert isinstance(event, DisasterEvent)
+    assert event.geometry is not None
+    assert event.geometry.coordinates[0].latitude == 32.5
+    assert event.geometry.coordinates[0].longitude == 133.5
+    assert event.source.canonical_url.endswith("E012N033T3")
+    assert event.provider_ids == (
+        event.event_id,
+        "cems-gfm:item:ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T4",
+        "cems-gfm:item:ENSEMBLE_FLOOD_20260818T014933_VV_AS020M_E012N033T3",
+    )
     await client.aclose()
 
 

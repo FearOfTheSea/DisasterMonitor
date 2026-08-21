@@ -152,6 +152,7 @@ export type EventGeometry = {
   coordinates: EventCoordinate[];
   description?: string | null;
   source_id: string;
+  estimated?: boolean;
 };
 
 export type SelectedEvent = {

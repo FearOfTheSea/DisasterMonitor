@@ -75,6 +75,7 @@ export default function Home() {
         <div className="map-region">
           <DisasterMap
             onViewChange={handleViewChange}
+            onSelectIncident={setSelectedIncidentId}
             commonOperationalPicture={commonOperationalPicture}
             areaOfInterest={areaOfInterest}
             activeIncidents={activeIncidents.snapshot?.incidents}

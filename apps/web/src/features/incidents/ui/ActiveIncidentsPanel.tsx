@@ -210,6 +210,11 @@ export function ActiveIncidentsPanel({
                       >
                         <span>{disasterLabel(incident.disaster)}</span>
                         <strong>{incident.location}</strong>
+                        {incident.geometry?.estimated && (
+                          <small className="incident-geometry-estimated">
+                            estimated
+                          </small>
+                        )}
                         <time dateTime={incident.event_time}>
                           {formatTime(incident.event_time)}
                         </time>

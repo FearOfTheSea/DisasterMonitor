@@ -13,10 +13,15 @@ scanning), and categorical statistics request flood class `1`.
 An item or its Sentinel-1 acquisition footprint is only a candidate. DisasterMonitor
 emits an event only when the clipped statistics contain a nonzero count for class 1,
 the GFM Observed Flood Extent. Country events retain official STAC provenance and
-are marked `IN_COUNTRY`; the event geometry is omitted because clipped summary
-statistics do not provide a flood perimeter. Equi7 tile identifiers are retained as
-provider IDs but are not treated as separate physical floods; records sharing the
-Sentinel acquisition identity are coalesced.
+are marked `IN_COUNTRY`; clipped summary statistics do not provide a flood perimeter.
+Emitted flood map points are explicitly estimated from the center of the retained
+CEMS GFM observation tile. They represent the center of that observation footprint,
+not an exact flood location, flood epicenter, or flood perimeter. Equi7 tile
+identifiers are retained as provider IDs but are not treated as separate physical
+floods; records sharing the Sentinel acquisition identity are coalesced. When
+multiple positive tiles share one acquisition, the lexicographically smallest
+STAC item ID supplies the deterministic representative point; all tile IDs remain
+attached as provider metadata.
 
 The source is event discovery only. It does not establish flood severity, damage,
 casualties, affected population, warnings, response status, or national totals.

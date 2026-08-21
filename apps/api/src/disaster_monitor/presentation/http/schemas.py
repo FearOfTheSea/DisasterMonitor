@@ -246,6 +246,7 @@ class EventGeometryResponse(BaseModel):
     coordinates: list[EventCoordinateResponse] = Field(default_factory=list)
     description: str | None = None
     source_id: str
+    estimated: bool = False
 
 
 class EventMeasurementResponse(BaseModel):

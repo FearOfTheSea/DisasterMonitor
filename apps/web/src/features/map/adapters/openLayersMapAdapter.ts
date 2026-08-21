@@ -33,6 +33,7 @@ type MapAdapterOptions = {
   target: HTMLElement;
   initialView: MapView;
   onViewChange: (view: MapView) => void;
+  onSelectIncident: (incidentId: string) => void;
 };
 
 const DEFAULT_FIT_PADDING = 56;
@@ -74,6 +75,17 @@ export class OpenLayersMapAdapter {
       target: options.target,
       layers: [baseLayer, this.activeIncidentLayer],
       view,
+    });
+    this.map.on('singleclick', (event) => {
+      const feature = this.map.forEachFeatureAtPixel(
+        event.pixel,
+        (candidate) => candidate,
+        { layerFilter: (layer) => layer === this.activeIncidentLayer },
+      );
+      const incidentId = feature?.get('incidentId');
+      if (typeof incidentId === 'string') {
+        options.onSelectIncident(incidentId);
+      }
     });
     this.map.on('change:size', () => {
       this.applyPendingIncidentFocus();

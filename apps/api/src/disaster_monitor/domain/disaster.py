@@ -365,8 +365,11 @@ class EventGeometry:
     source: SourceReference
     coordinates: tuple[EventCoordinate, ...] = ()
     description: str | None = None
+    estimated: bool = False
 
     def __post_init__(self) -> None:
+        if not isinstance(self.estimated, bool):
+            raise TypeError("Event geometry estimation metadata must be boolean.")
         if self.kind is EventGeometryKind.POINT and len(self.coordinates) != 1:
             raise ValueError("A point event geometry requires one coordinate.")
         if self.kind is EventGeometryKind.AREA and len(self.coordinates) < 3:
@@ -383,13 +386,18 @@ class EventGeometry:
 
 
 def point_event_geometry(
-    latitude: float, longitude: float, source: SourceReference
+    latitude: float,
+    longitude: float,
+    source: SourceReference,
+    *,
+    estimated: bool = False,
 ) -> EventGeometry:
     """Build point geometry without changing or deriving its coordinates."""
     return EventGeometry(
         kind=EventGeometryKind.POINT,
         source=source,
         coordinates=(EventCoordinate(latitude, longitude),),
+        estimated=estimated,
     )
 
 

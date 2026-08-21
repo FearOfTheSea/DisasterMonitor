@@ -28,6 +28,7 @@ const INCIDENT: ActiveIncident = {
     coordinates: [{ latitude: 10.5, longitude: 20.25 }],
     description: null,
     source_id: 'fixture-wildfires',
+    estimated: false,
   },
   measurements: [],
   provider_ids: ['fixture:fire-1'],
@@ -105,6 +106,33 @@ describe('ActiveIncidentsPanel', () => {
       screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
     );
     expect(onSelectIncident).toHaveBeenCalledWith('fire-1');
+  });
+
+  it('labels estimated geometry without adding a long explanation', () => {
+    const estimatedIncident: ActiveIncident = {
+      ...INCIDENT,
+      event_id: 'flood-1',
+      disaster: 'flood',
+      location: 'Japan',
+      geometry: {
+        kind: 'point',
+        coordinates: [{ latitude: 32.5, longitude: 133.5 }],
+        description: null,
+        source_id: 'cems-gfm-floods',
+        estimated: true,
+      },
+    };
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot([estimatedIncident])}
+        status="success"
+        selectedIncidentId={undefined}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('estimated')).toBeInTheDocument();
   });
 
   it('shows loading, failed, and successful-empty states honestly', () => {

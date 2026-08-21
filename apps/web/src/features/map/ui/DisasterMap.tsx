@@ -13,6 +13,7 @@ import type { CommonOperationalPicture, MapView } from '@/shared/types/assistant
 
 type DisasterMapProps = {
   onViewChange: (view: MapView) => void;
+  onSelectIncident: (incidentId: string) => void;
   commonOperationalPicture?: CommonOperationalPicture;
   areaOfInterest?: AssistantMapAreaOfInterest;
   activeIncidents?: ActiveIncident[];
@@ -21,6 +22,7 @@ type DisasterMapProps = {
 
 export function DisasterMap({
   onViewChange,
+  onSelectIncident,
   commonOperationalPicture,
   areaOfInterest,
   activeIncidents = [],
@@ -42,13 +44,14 @@ export function DisasterMap({
       target: mapElement.current,
       initialView: DEFAULT_MAP_VIEW,
       onViewChange,
+      onSelectIncident,
     });
     return () => {
       adapter.current?.destroy();
       adapter.current = null;
       fittedAreaKey.current = undefined;
     };
-  }, [onViewChange]);
+  }, [onSelectIncident, onViewChange]);
 
   useEffect(() => {
     adapter.current?.setCommonOperationalPicture(commonOperationalPicture);

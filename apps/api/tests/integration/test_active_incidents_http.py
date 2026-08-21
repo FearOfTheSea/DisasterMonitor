@@ -175,6 +175,7 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
             ],
             "description": None,
             "source_id": "fixture-wildfires",
+            "estimated": False,
         },
         "measurements": [],
         "provider_ids": ["fixture:fire-1"],

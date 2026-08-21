@@ -116,6 +116,7 @@ def _event_geometry_response(
         ],
         description=geometry.description,
         source_id=geometry.source.source_id,
+        estimated=geometry.estimated,
     )
 
 
