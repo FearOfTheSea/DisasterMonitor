@@ -18,6 +18,7 @@ from disaster_monitor.application.services.prompt_preparation import (
     prepare_model_request,
 )
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
+from disaster_monitor.domain.conversation import ConversationMessage
 from disaster_monitor.domain.errors import ModelResponseError, ModelRuntimeError
 from disaster_monitor.domain.models import MapQuestion, MapView
 
@@ -43,6 +44,7 @@ class AnswerMapQuestion:
         conversation_id: str | None = None,
         map_view: MapView | None = None,
         multimodal_inputs: tuple[AssetAdmissionInput, ...] = (),
+        conversation_history: tuple[ConversationMessage, ...] = (),
     ) -> AssistantAnswer:
         """Return a stable answer while keeping model details behind the port."""
         if self._disaster_agent is not None:
@@ -51,6 +53,7 @@ class AnswerMapQuestion:
                 conversation_id=conversation_id,
                 map_view=map_view,
                 multimodal_inputs=multimodal_inputs,
+                conversation_history=conversation_history,
             )
         normalized_question = normalize_question(question)
         normalized_conversation_id = normalize_conversation_id(conversation_id)
@@ -91,7 +94,8 @@ class AnswerMapQuestion:
                 text=normalized_question,
                 conversation_id=normalized_conversation_id,
                 map_view=map_view,
-            )
+            ),
+            conversation_history=conversation_history,
         )
         try:
             model_response = await self._language_model.generate(request)

@@ -15,6 +15,9 @@ from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.event_media import EventMediaDiscovery
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.services.conversation_context import (
+    resolve_disaster_follow_up,
+)
 from disaster_monitor.application.services.map_navigation import MapNavigationService
 from disaster_monitor.application.services.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
@@ -25,6 +28,7 @@ from disaster_monitor.application.services.prompt_preparation import (
     normalize_question,
     prepare_model_request,
 )
+from disaster_monitor.domain.conversation import ConversationMessage
 from disaster_monitor.domain.disaster import Country, EventGeometryKind
 from disaster_monitor.domain.errors import ModelResponseError, ModelRuntimeError
 from disaster_monitor.domain.models import MapQuestion, MapView
@@ -53,21 +57,30 @@ class RunDisasterAgent:
         conversation_id: str | None = None,
         map_view: MapView | None = None,
         multimodal_inputs: tuple[AssetAdmissionInput, ...] = (),
+        conversation_history: tuple[ConversationMessage, ...] = (),
     ) -> AssistantAnswer:
         normalized = normalize_question(question)
         conversation = normalize_conversation_id(conversation_id)
+        resolved_question = resolve_disaster_follow_up(
+            normalized,
+            conversation_history,
+            country_catalog=self._country_catalog,
+            conversation_id=conversation,
+        )
         assets = (
             self._asset_admission.admit_many(multimodal_inputs)
             if multimodal_inputs and self._asset_admission is not None
             else ()
         )
         state = (
-            await self._runtime.run(normalized, multimodal_assets=assets)
+            await self._runtime.run(resolved_question, multimodal_assets=assets)
             if assets
-            else await self._runtime.run(normalized)
+            else await self._runtime.run(resolved_question)
         )
         if state.task.kind in {TaskKind.NON_DISASTER, TaskKind.GENERAL_KNOWLEDGE}:
-            return await self._general_answer(normalized, conversation, map_view)
+            return await self._general_answer(
+                resolved_question, conversation, map_view, conversation_history
+            )
         report = state.workspace.report
         if report is None:
             message = state.task.detail or (
@@ -170,7 +183,11 @@ class RunDisasterAgent:
             return None
 
     async def _general_answer(
-        self, question: str, conversation: str, map_view: MapView | None
+        self,
+        question: str,
+        conversation: str,
+        map_view: MapView | None,
+        conversation_history: tuple[ConversationMessage, ...],
     ) -> AssistantAnswer:
         request = prepare_model_request(
             MapQuestion(question, conversation, map_view),
@@ -179,6 +196,7 @@ class RunDisasterAgent:
                 if self._map_navigation is not None
                 else ()
             ),
+            conversation_history=conversation_history,
         )
         try:
             response = await self._general_model.generate(request)

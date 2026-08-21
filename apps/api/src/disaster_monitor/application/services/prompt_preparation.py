@@ -4,6 +4,7 @@ import re
 import unicodedata
 
 from disaster_monitor.application.dto import ModelMessage, ModelRequest, ModelTool
+from disaster_monitor.domain.conversation import ConversationMessage
 from disaster_monitor.domain.errors import InvalidQuestionError
 from disaster_monitor.domain.models import MapQuestion
 
@@ -19,6 +20,8 @@ schema yourself; never ask the user for that code. The viewport tool does not re
 existing map view context. A viewport change supplies no disaster evidence.
 Do not claim to see current conditions, map layers, measurements, locations, or
 observations that were not provided.
+Historical assistant messages are conversational context only. They are not fresh
+disaster evidence, source references, or factual provenance.
 Give general analysis, safety-aware guidance, and practical next steps when
 appropriate.
 Do not expose hidden reasoning or tool activity. Reply with concise user-facing
@@ -59,9 +62,15 @@ def normalize_conversation_id(raw_conversation_id: str | None) -> str:
 
 
 def prepare_model_request(
-    question: MapQuestion, tools: tuple[ModelTool, ...] = ()
+    question: MapQuestion,
+    tools: tuple[ModelTool, ...] = (),
+    conversation_history: tuple[ConversationMessage, ...] = (),
 ) -> ModelRequest:
-    """Build the stable system and user messages sent to any model adapter."""
+    """Build a bounded system, history, and current-user model request."""
+    from disaster_monitor.application.services.conversation_context import (
+        select_bounded_history,
+    )
+
     if question.map_view is None:
         map_context = (
             "Map view context: not supplied. This does not prevent viewport tool use."
@@ -76,9 +85,17 @@ def prepare_model_request(
         )
 
     user_prompt = f"User question: {question.text}\n{map_context}"
+    history_messages = select_bounded_history(
+        conversation_history,
+        conversation_id=question.conversation_id,
+    )
     return ModelRequest(
         messages=(
             ModelMessage(role="system", content=SYSTEM_PROMPT),
+            *tuple(
+                ModelMessage(role=message.role.value, content=message.content)
+                for message in history_messages
+            ),
             ModelMessage(role="user", content=user_prompt),
         ),
         tools=tools,

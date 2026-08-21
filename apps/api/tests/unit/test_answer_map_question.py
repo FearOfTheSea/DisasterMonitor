@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from conftest import FakeLanguageModel
 
@@ -6,6 +8,10 @@ from disaster_monitor.application.services.prompt_preparation import (
     prepare_model_request,
 )
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
+from disaster_monitor.domain.conversation import (
+    ConversationMessage,
+    ConversationRole,
+)
 from disaster_monitor.domain.errors import InvalidQuestionError, ModelRuntimeError
 from disaster_monitor.domain.models import MapQuestion, MapView
 
@@ -49,6 +55,45 @@ def test_prompt_preparation_is_deterministic_without_map_context() -> None:
         "User question: Explain the map\nMap view context: not supplied. "
         "This does not prevent viewport tool use."
     )
+
+
+def test_prompt_preparation_orders_system_history_and_current_user() -> None:
+    history = (
+        ConversationMessage(
+            "m1",
+            "session",
+            ConversationRole.USER,
+            "First question?",
+            datetime.now(UTC),
+        ),
+        ConversationMessage(
+            "m2",
+            "session",
+            ConversationRole.ASSISTANT,
+            "First answer.",
+            datetime.now(UTC),
+        ),
+    )
+
+    request = prepare_model_request(
+        MapQuestion("Second question?", "session", MapView(1, 2, 3)),
+        conversation_history=history,
+    )
+
+    assert [message.role for message in request.messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert [message.content for message in request.messages[1:3]] == [
+        "First question?",
+        "First answer.",
+    ]
+    assert "Map view context" not in request.messages[1].content
+    assert "Map view context" not in request.messages[2].content
+    assert "center latitude 1.00000" in request.messages[3].content
+    assert "Second question?" in request.messages[3].content
 
 
 @pytest.mark.asyncio

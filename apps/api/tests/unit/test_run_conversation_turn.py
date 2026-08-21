@@ -15,9 +15,10 @@ from disaster_monitor.infrastructure.conversations.memory_repository import (
 class FakeAssistant:
     def __init__(self) -> None:
         self.questions: list[tuple[str, str]] = []
+        self.histories = []
 
     async def execute(self, question: str, *, conversation_id: str, **kwargs):
-        del kwargs
+        self.histories.append(kwargs["conversation_history"])
         self.questions.append((question, conversation_id))
         return AssistantAnswer(
             message=f"Answer to {question}",
@@ -45,6 +46,7 @@ async def test_missing_id_creates_conversation_and_appends_normalized_turn() -> 
         ("assistant", "Answer to What is here?"),
     ]
     assert assistant.questions == [("What is here?", result.conversation_id)]
+    assert assistant.histories == [()]
 
 
 @pytest.mark.asyncio
@@ -72,6 +74,12 @@ async def test_existing_id_is_reused_and_conversations_remain_isolated() -> None
     assert [message.content for message in second_conversation.messages] == [
         "Second question",
         "Answer to Second question",
+    ]
+    assert assistant.histories[0] == ()
+    assert assistant.histories[1] == ()
+    assert [message.content for message in assistant.histories[2]] == [
+        "First question",
+        "Answer to First question",
     ]
 
 

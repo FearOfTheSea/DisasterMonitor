@@ -46,8 +46,17 @@ async def test_conversation_http_lifecycle_and_assistant_persistence() -> None:
         "A persisted answer.",
     ]
     assert len(model.requests) == 2
-    assert all(len(request.messages) == 2 for request in model.requests)
-    assert "First question?" not in model.requests[1].messages[1].content
+    assert [message.role for message in model.requests[1].messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert [message.content for message in model.requests[1].messages[1:3]] == [
+        "First question?",
+        "A persisted answer.",
+    ]
+    assert "First question?" not in model.requests[1].messages[3].content
 
 
 @pytest.mark.asyncio

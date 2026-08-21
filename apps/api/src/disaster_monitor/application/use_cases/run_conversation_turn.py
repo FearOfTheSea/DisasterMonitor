@@ -22,7 +22,7 @@ from disaster_monitor.domain.models import MapView
 
 
 class RunConversationTurn:
-    """Save transcript text without adding history to model or agent requests."""
+    """Load, execute, and persist one conversation-scoped assistant turn."""
 
     def __init__(
         self,
@@ -44,6 +44,7 @@ class RunConversationTurn:
     ) -> AssistantAnswer:
         normalized_question = normalize_question(question)
         stored_conversation_id = self._conversation_id(conversation_id)
+        previous_messages: tuple[ConversationMessage, ...] = ()
         if conversation_id is None:
             now = self._clock()
             await self._conversations.create(
@@ -53,8 +54,11 @@ class RunConversationTurn:
                     updated_at=now,
                 )
             )
-        elif await self._conversations.get(stored_conversation_id) is None:
-            raise ConversationNotFoundError(stored_conversation_id)
+        else:
+            stored_conversation = await self._conversations.get(stored_conversation_id)
+            if stored_conversation is None:
+                raise ConversationNotFoundError(stored_conversation_id)
+            previous_messages = stored_conversation.messages
 
         await self._conversations.append(
             ConversationMessage(
@@ -70,6 +74,7 @@ class RunConversationTurn:
             conversation_id=stored_conversation_id,
             map_view=map_view,
             multimodal_inputs=multimodal_inputs,
+            conversation_history=previous_messages,
         )
         await self._conversations.append(
             ConversationMessage(
