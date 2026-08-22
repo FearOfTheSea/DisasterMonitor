@@ -117,7 +117,11 @@ export function OperationsPanel({
   }
 
   return (
-    <aside className="operations-panel" aria-label="Operational evidence status">
+    <aside
+      id="operations-panel"
+      className="operations-panel"
+      aria-label="Operational evidence status"
+    >
       <header className="operations-panel-header">
         <div>
           <h2>Evidence operations</h2>
@@ -128,8 +132,17 @@ export function OperationsPanel({
         </button>
       </header>
       <div className="operations-scroll">
-        {loading && <p role="status">Loading operational evidence…</p>}
-        {error && <div className="assistant-error">{error}</div>}
+        {loading && (
+          <div className="operations-loading" role="status">
+            <span className="loading-indicator" aria-hidden="true" />
+            <span>Loading operational evidence…</span>
+          </div>
+        )}
+        {error && (
+          <div className="assistant-error" role="alert">
+            {error}
+          </div>
+        )}
         <section className="operations-section">
           <div className="operations-heading">
             <h3>Country catalog automation</h3>
@@ -183,7 +196,7 @@ export function OperationsPanel({
                 <div>
                   <strong>{provider.source_id}</strong>
                   <span className={`freshness freshness-${provider.state}`}>
-                    {provider.state.replaceAll('_', ' ')}
+                    Status: {provider.state.replaceAll('_', ' ')}
                   </span>
                 </div>
                 <small>Evidence time: {formatTime(provider.effective_at)}</small>

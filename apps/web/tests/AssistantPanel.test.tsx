@@ -82,7 +82,7 @@ describe('AssistantPanel', () => {
         onClear={vi.fn()}
       />,
     );
-    expect(screen.getByText('Thinking locally…')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Thinking locally…');
 
     rerender(
       <AssistantPanel

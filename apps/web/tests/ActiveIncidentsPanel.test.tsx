@@ -77,7 +77,7 @@ describe('ActiveIncidentsPanel', () => {
       <ActiveIncidentsPanel
         snapshot={snapshot()}
         status="success"
-        selectedIncidentId={undefined}
+        selectedIncidentId="fire-1"
         onSelectIncident={onSelectIncident}
         onRefresh={vi.fn()}
       />,
@@ -97,6 +97,10 @@ describe('ActiveIncidentsPanel', () => {
     expect(screen.getByText('Fixture Fire Authority')).toBeInTheDocument();
     expect(screen.getByText('Primary tier')).toBeInTheDocument();
     expect(screen.getByText('Scientific authority')).toBeInTheDocument();
+    expect(screen.getByText('Selected')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
+    ).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText(/Source updated/)).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Fixture wildfire perimeter' }),

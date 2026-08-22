@@ -68,7 +68,11 @@ export class OpenLayersMapAdapter {
     this.activeIncidentSource = new VectorSource<Feature<Geometry>>();
     this.activeIncidentLayer = new VectorLayer({
       source: this.activeIncidentSource,
-      style: (feature) => styleForActiveIncident(feature.get('disaster')),
+      style: (feature) =>
+        styleForActiveIncident(
+          feature.get('disaster'),
+          feature.get('selected') === true,
+        ),
     });
     this.activeIncidentLayer.set('dmLayerType', 'active-incidents');
     this.map = new Map({
@@ -101,6 +105,10 @@ export class OpenLayersMapAdapter {
     this.activeIncidentSource.clear();
     this.clearCommonOperationalPicture();
     this.map.setTarget(undefined);
+  }
+
+  updateSize(): void {
+    this.map.updateSize();
   }
 
   setCommonOperationalPicture(cop?: CommonOperationalPicture): void {
@@ -147,6 +155,12 @@ export class OpenLayersMapAdapter {
       ),
     );
     this.applyPendingIncidentFocus();
+  }
+
+  setSelectedIncident(incidentId?: string): void {
+    for (const feature of this.activeIncidentSource.getFeatures()) {
+      feature.set('selected', feature.get('incidentId') === incidentId);
+    }
   }
 
   focusActiveIncident(incidentId: string): void {
@@ -324,7 +338,7 @@ function styleForAuthority(value: unknown): Style {
   });
 }
 
-function styleForActiveIncident(value: unknown): Style {
+function styleForActiveIncident(value: unknown, selected = false): Style {
   const disaster = value as DisasterType;
   const color =
     disaster === 'earthquake'
@@ -339,12 +353,12 @@ function styleForActiveIncident(value: unknown): Style {
               ? '#6d28d9'
               : '#7f1d1d';
   return new Style({
-    stroke: new Stroke({ color, width: 3 }),
+    stroke: new Stroke({ color, width: selected ? 5 : 3 }),
     fill: new Fill({ color: `${color}26` }),
     image: new CircleStyle({
-      radius: 7,
+      radius: selected ? 10 : 7,
       fill: new Fill({ color }),
-      stroke: new Stroke({ color: '#ffffff', width: 2 }),
+      stroke: new Stroke({ color: '#ffffff', width: selected ? 4 : 2 }),
     }),
   });
 }

@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Disaster Monitor',
-  description: 'A local-first map and disaster-monitoring assistant.',
+  description: 'A local-first disaster-monitoring and geospatial operations workspace.',
 };
 
 export default function RootLayout({

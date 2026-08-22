@@ -54,12 +54,26 @@ export function DisasterMap({
   }, [onSelectIncident, onViewChange]);
 
   useEffect(() => {
+    const target = mapElement.current;
+    if (!target || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(() => adapter.current?.updateSize());
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     adapter.current?.setCommonOperationalPicture(commonOperationalPicture);
   }, [commonOperationalPicture]);
 
   useEffect(() => {
     adapter.current?.setActiveIncidents(incidentFeatures);
   }, [incidentFeatures]);
+
+  useEffect(() => {
+    adapter.current?.setSelectedIncident(selectedIncidentId);
+  }, [selectedIncidentId]);
 
   useEffect(() => {
     if (selectedIncidentId) {

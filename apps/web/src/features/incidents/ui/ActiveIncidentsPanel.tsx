@@ -42,6 +42,96 @@ const AUTHORITY_LABELS: Record<IncidentSourceAuthority, string> = {
   secondary: 'Secondary authority',
 };
 
+function DisasterIcon({ disaster }: { disaster: DisasterType }) {
+  return (
+    <svg
+      className={`disaster-icon disaster-icon-${disaster}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {disaster === 'earthquake' && (
+        <path d="M2.5 13h4l1.8-6 3.4 11 2.3-8 1.8 3H21.5" />
+      )}
+      {disaster === 'flood' && (
+        <>
+          <path d="M2.5 8.5c2.3-2 4.7-2 7 0s4.7 2 7 0 4.7-2 7 0" />
+          <path d="M2.5 14.5c2.3-2 4.7-2 7 0s4.7 2 7 0 4.7-2 7 0" />
+          <path d="M2.5 20c2.3-2 4.7-2 7 0s4.7 2 7 0 4.7-2 7 0" />
+        </>
+      )}
+      {disaster === 'wildfire' && (
+        <path d="M13.5 2.5c.7 4-2.8 5.2-1.7 8.3.7-1.2 1.9-2 3.3-2.4 2.6 2.3 4 4.6 3.5 7.2-.6 3.3-3.3 5.9-6.8 5.9s-6.4-2.7-6.4-6.2c0-2.7 1.5-5 4.6-7.1-.2 2.1.4 3.5 1.6 4.2-.2-3.5.6-6.8 1.9-9.9Z" />
+      )}
+      {disaster === 'landslide' && (
+        <>
+          <path d="m2.5 19 6.7-12 4.1 7 2.1-3.5L21.5 19Z" />
+          <path d="m12.2 8.2 1.8-3M15.4 8.4l2.5-1M16.6 11.2l2.8.2" />
+        </>
+      )}
+      {disaster === 'tropical_cyclone' && (
+        <>
+          <path d="M19.8 7.5A8.3 8.3 0 0 0 5 8c1.7-1 4.3-1.2 6.2.3 1 .8 1.5 2.2 1.2 3.5" />
+          <path d="M4.2 16.5A8.3 8.3 0 0 0 19 16c-1.7 1-4.3 1.2-6.2-.3-1-.8-1.5-2.2-1.2-3.5" />
+          <circle cx="12" cy="12" r="1.5" />
+        </>
+      )}
+      {disaster === 'volcanic_eruption' && (
+        <>
+          <path d="m4 20 5.6-11h4.8L20 20Z" />
+          <path d="m9.6 9 2.4 3 2.4-3M8.5 5.5 7 3.5M12 5V2M15.5 5.5 17 3.5" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function CoverageStatusIcon({ state }: { state: IncidentCoverageState }) {
+  if (state === 'events_found') {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" />
+        <path d="m4.5 8.1 2.1 2.1 4.9-4.9" />
+      </svg>
+    );
+  }
+  if (state === 'no_matching_records') {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" />
+        <path d="M4.5 8h7" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 1.5 15 14H1Z" />
+      <path d="M8 5v4.5M8 12h.01" />
+    </svg>
+  );
+}
+
+function SelectedIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="7" />
+      <path d="m4.5 8.1 2.1 2.1 4.9-4.9" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="m6 3 5 5-5 5" />
+    </svg>
+  );
+}
+
 function formatTime(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
@@ -122,7 +212,10 @@ export function ActiveIncidentsPanel({
           </p>
         )}
         {status === 'loading' && !snapshot && (
-          <p role="status">Loading active incidents…</p>
+          <div className="incident-loading" role="status">
+            <span className="loading-indicator" aria-hidden="true" />
+            <span>Loading active incidents…</span>
+          </div>
         )}
         {error && (
           <div className="incident-error" role="alert">
@@ -143,10 +236,18 @@ export function ActiveIncidentsPanel({
               {DISASTERS.map((definition) => {
                 const coverage = coverageFor(snapshot, definition.value);
                 return (
-                  <article key={definition.value} data-testid="incident-coverage">
+                  <article
+                    key={definition.value}
+                    className={`coverage-item coverage-item-${coverage.state}`}
+                    data-testid="incident-coverage"
+                  >
                     <div>
-                      <strong>{definition.label}</strong>
+                      <strong>
+                        <DisasterIcon disaster={definition.value} />
+                        {definition.label}
+                      </strong>
                       <span className={`coverage-state coverage-${coverage.state}`}>
+                        <CoverageStatusIcon state={coverage.state} />
                         {COVERAGE_LABELS[coverage.state]}
                       </span>
                     </div>
@@ -196,11 +297,7 @@ export function ActiveIncidentsPanel({
                   return (
                     <article
                       key={`${incident.disaster}:${incident.event_id}`}
-                      className={
-                        selectedIncidentId === incident.event_id
-                          ? 'incident-card incident-card-selected'
-                          : 'incident-card'
-                      }
+                      className={`incident-card incident-card-${incident.disaster}${selectedIncidentId === incident.event_id ? ' incident-card-selected' : ''}`}
                     >
                       <button
                         type="button"
@@ -208,7 +305,21 @@ export function ActiveIncidentsPanel({
                         aria-pressed={selectedIncidentId === incident.event_id}
                         onClick={() => onSelectIncident(incident.event_id)}
                       >
-                        <span>{disasterLabel(incident.disaster)}</span>
+                        <span className="incident-card-heading">
+                          <span className="incident-disaster-label">
+                            <DisasterIcon disaster={incident.disaster} />
+                            {disasterLabel(incident.disaster)}
+                          </span>
+                          {selectedIncidentId === incident.event_id && (
+                            <span className="incident-selected-label">
+                              <SelectedIcon />
+                              Selected
+                            </span>
+                          )}
+                          <span className="incident-chevron">
+                            <ChevronIcon />
+                          </span>
+                        </span>
                         <strong>{incident.location}</strong>
                         {incident.geometry?.estimated && (
                           <small className="incident-geometry-estimated">

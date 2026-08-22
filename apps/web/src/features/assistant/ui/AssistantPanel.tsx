@@ -490,10 +490,16 @@ export function AssistantPanel({
   }
 
   return (
-    <aside className="assistant-panel" aria-label="Disaster Monitor assistant">
+    <aside
+      id="assistant-panel"
+      className="assistant-panel"
+      aria-label="Disaster Monitor assistant"
+    >
       <header className="assistant-panel-header">
-        <h2>Map assistant</h2>
-        <p>Agent-first routing with local Qwen and trusted source tools.</p>
+        <div className="panel-heading">
+          <h2>Map assistant</h2>
+          <p>Agent-first routing with local Qwen and trusted source tools.</p>
+        </div>
         <div className="conversation-controls">
           <label htmlFor="assistant-conversation">Conversation</label>
           <select
@@ -531,7 +537,13 @@ export function AssistantPanel({
       </div>
       <div className="message-list" aria-live="polite">
         {messages.length === 0 ? (
-          <p className="empty-state">Your conversation will appear here.</p>
+          <div className="empty-state">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M19 14.5a4 4 0 0 1-4 4H9l-5 3v-7a4 4 0 0 1-1-2.7V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4z" />
+            </svg>
+            <strong>No messages yet</strong>
+            <p>Your conversation will appear here.</p>
+          </div>
         ) : (
           messages.map((message) => (
             <div key={message.id} className={`message message-${message.role}`}>
@@ -547,7 +559,8 @@ export function AssistantPanel({
           ))
         )}
         {isLoading && (
-          <div className="message message-assistant">
+          <div className="message message-assistant message-loading" role="status">
+            <span className="loading-indicator" aria-hidden="true" />
             <span className="message-label">Assistant</span>
             Thinking locally…
           </div>

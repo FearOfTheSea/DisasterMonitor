@@ -11,6 +11,7 @@ const adapterMocks = vi.hoisted(() => ({
   onSelectIncident: undefined as ((incidentId: string) => void) | undefined,
   setActiveIncidents: vi.fn(),
   setCommonOperationalPicture: vi.fn(),
+  setSelectedIncident: vi.fn(),
 }));
 
 vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
@@ -24,6 +25,7 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
     focusActiveIncident = adapterMocks.focusActiveIncident;
     setActiveIncidents = adapterMocks.setActiveIncidents;
     setCommonOperationalPicture = adapterMocks.setCommonOperationalPicture;
+    setSelectedIncident = adapterMocks.setSelectedIncident;
   },
 }));
 
@@ -182,6 +184,7 @@ describe('DisasterMap assistant focus', () => {
       { incidentId: 'area-1', disaster: 'wildfire', geometry: areaGeometry },
     ]);
     expect(adapterMocks.focusActiveIncident).toHaveBeenCalledWith('area-1');
+    expect(adapterMocks.setSelectedIncident).toHaveBeenCalledWith('area-1');
   });
 
   it('selects the corresponding incident when a map feature is clicked', () => {

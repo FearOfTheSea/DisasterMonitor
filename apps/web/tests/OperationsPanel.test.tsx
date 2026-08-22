@@ -98,6 +98,7 @@ describe('OperationsPanel', () => {
     );
     expect(screen.getByText('242 active countries')).toBeInTheDocument();
     expect(screen.getByText('Content retained')).toBeInTheDocument();
+    expect(screen.getByText('Status: fresh')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Update countries now' }));
     expect(await screen.findByText('Promoted the latest catalog.')).toBeInTheDocument();
     expect(requestCountryCatalogUpdate).toHaveBeenCalledOnce();
