@@ -7,6 +7,15 @@ global eruption surveillance. It can omit routine long-running activity, and rap
 developing events can be fragmentary. Absence from WVAR does not prove that no
 eruption is occurring.
 
+Current-window discovery reads Smithsonian's official
+[WVAR RSS feed](https://volcano.si.edu/news/WeeklyVolcanoRSS.xml), which remains a
+machine-readable first-party resource when the human report page is protected by its
+web application firewall. Dated historical queries use the WVAR archive page because
+the RSS feed contains only the current report. The GVP WFS remains the source of
+reviewed volcano identity, geography, and day-precise eruption dates. If RSS is
+unavailable or malformed, the adapter may fall back to the human page; a failure of
+both paths is reported as degraded source coverage.
+
 ## Admission and time
 
 Only WVAR rows classified exactly as `New Eruptive Activity` or `Continuing Eruptive
@@ -16,12 +25,15 @@ treated as eruptions. Narrative words such as ash, lava, tremor, alert, or erupt
 not override the report-type gate.
 
 The event time is the physical eruption start, not the retrieval time, weekly report
-week, or publication time. A day-precise WVAR `Eruption Start Date` is preferred. If
-that is unavailable or qualified, a matching day-precise start from the GVP Holocene
-Eruptions WFS may be used. Qualified, uncertain, month-only, year-only, and otherwise
-ambiguous dates are not converted into exact timestamps. A source-backed calendar
-date is normalized to UTC midnight; that is date-granularity normalization, not an
-observed eruption clock time.
+week, or publication time. A day-precise WVAR `Eruption Start Date` from a historical
+page is preferred. The current RSS format omits that summary field, so a matching
+day-precise start from the GVP Holocene Eruptions WFS is required. For a continuing
+activity report, the latest unambiguous exact GVP start no later than the report week
+may be used; new activity still requires a start close enough to the report week to
+avoid attaching an unrelated older eruption. Qualified, uncertain, month-only,
+year-only, and otherwise ambiguous dates are not converted into exact timestamps. A
+source-backed calendar date is normalized to UTC midnight; that is date-granularity
+normalization, not an observed eruption clock time.
 
 ## Identity and geography
 

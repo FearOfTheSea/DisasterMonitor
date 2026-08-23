@@ -12,6 +12,7 @@ sys.path.insert(0, str(api_src))
 from disaster_monitor.application.disaster import (
     GeographicScope,
     ProviderBatch,
+    ProviderIssue,
     WorldwideDisasterEvent,
 )
 from disaster_monitor.application.dto import (
@@ -35,6 +36,9 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.domain.disaster import (
     Disaster,
     DisasterEvent,
+    EventCoordinate,
+    EventGeometry,
+    EventGeometryKind,
     EventMeasurement,
     FactStatus,
     MeasurementKind,
@@ -282,33 +286,103 @@ class FakeSystemSituationProvider:
 
 
 class FakeSystemWorldwideProvider:
-    source_id = "system-active-wildfires"
+    source_id = "system-active-incidents"
     allowed_hosts = frozenset({"example.test"})
 
     async def find_worldwide_events(self, query, *, now):
-        assert query.disaster is Disaster.WILDFIRE
+        event_id, location, age = {
+            Disaster.EARTHQUAKE: (
+                "system-active-earthquake",
+                "Aleutian earthquake fixture",
+                timedelta(minutes=30),
+            ),
+            Disaster.FLOOD: (
+                "system-active-flood",
+                "Lower Mekong flood fixture",
+                timedelta(minutes=40),
+            ),
+            Disaster.WILDFIRE: (
+                "system-active-wildfire",
+                "Equatorial wildfire perimeter fixture",
+                timedelta(minutes=50),
+            ),
+            Disaster.LANDSLIDE: (
+                "system-active-landslide",
+                "Taiwan landslide fixture",
+                timedelta(minutes=60),
+            ),
+            Disaster.TROPICAL_CYCLONE: (
+                "system-active-tropical-cyclone",
+                "Western Pacific cyclone track fixture",
+                timedelta(minutes=70),
+            ),
+            Disaster.VOLCANIC_ERUPTION: (
+                "system-active-volcanic-eruption",
+                "East African volcanic eruption fixture",
+                timedelta(minutes=80),
+            ),
+        }[query.disaster]
         source = SourceReference(
             source_id=self.source_id,
-            publisher="Deterministic wildfire fixture",
-            title="Northern Honshu wildfire source record",
-            canonical_url="https://example.test/system-active-wildfire",
-            published_at=now - timedelta(hours=2),
+            publisher="Deterministic six-hazard fixture",
+            title=f"{location} source record",
+            canonical_url=f"https://example.test/{event_id}",
+            published_at=now - age,
             updated_at=now - timedelta(minutes=20),
             retrieved_at=now,
             authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
         )
+        geometry = {
+            Disaster.EARTHQUAKE: point_event_geometry(52.0, -170.0, source),
+            Disaster.FLOOD: point_event_geometry(
+                15.0,
+                105.0,
+                source,
+                estimated=True,
+            ),
+            Disaster.WILDFIRE: EventGeometry(
+                kind=EventGeometryKind.AREA,
+                source=source,
+                coordinates=(
+                    EventCoordinate(-1.0, -121.0),
+                    EventCoordinate(1.0, -121.0),
+                    EventCoordinate(1.0, -119.0),
+                    EventCoordinate(-1.0, -119.0),
+                    EventCoordinate(-1.0, -121.0),
+                ),
+            ),
+            Disaster.LANDSLIDE: point_event_geometry(23.5, 121.0, source),
+            Disaster.TROPICAL_CYCLONE: EventGeometry(
+                kind=EventGeometryKind.TRACK,
+                source=source,
+                coordinates=(
+                    EventCoordinate(20.0, 145.0),
+                    EventCoordinate(20.0, 155.0),
+                ),
+            ),
+            Disaster.VOLCANIC_ERUPTION: point_event_geometry(-3.0, 36.0, source),
+        }[query.disaster]
         return ProviderBatch(
             (
                 WorldwideDisasterEvent(
-                    event_id="system-active-wildfire",
-                    disaster=Disaster.WILDFIRE,
-                    location="Northern Honshu wildfire fixture",
-                    event_time=now - timedelta(hours=2),
+                    event_id=event_id,
+                    disaster=query.disaster,
+                    location=location,
+                    event_time=now - age,
                     source=source,
-                    geometry=point_event_geometry(38.25, 140.75, source),
-                    provider_ids=("system:active-wildfire",),
+                    geometry=geometry,
+                    provider_ids=(f"system:{event_id}",),
+                ),
+            ),
+            issues=(
+                ProviderIssue(
+                    "Deterministic six-hazard fixture",
+                    "Flood fixture coverage is intentionally degraded.",
+                    reason_code="partial_fixture",
                 ),
             )
+            if query.disaster is Disaster.FLOOD
+            else (),
         )
 
 
@@ -317,11 +391,11 @@ def build_system_active_incidents_service() -> ActiveIncidentsService:
     registry = ProviderRegistry(
         (
             ProviderRegistration(
-                "Deterministic wildfire fixture",
+                "Deterministic six-hazard fixture",
                 provider,
                 ProviderCapabilities(
                     roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.WILDFIRE}),
+                    disasters=frozenset(Disaster),
                     country_codes=None,
                     geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
                     event_scopes=frozenset({GeographicScope.WORLDWIDE}),

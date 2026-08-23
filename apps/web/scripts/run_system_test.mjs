@@ -49,16 +49,71 @@ try {
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Active incidents monitoring').waitFor();
+  const incidentFixtures = [
+    {
+      coverageLabel: 'Earthquake',
+      location: 'Aleutian earthquake fixture',
+      focusedCoordinate: /52\.00,\s*-170\.00/,
+    },
+    {
+      coverageLabel: 'Flood',
+      location: 'Lower Mekong flood fixture',
+      focusedCoordinate: /15\.00,\s*105\.00/,
+      coverageState: 'Degraded',
+    },
+    {
+      coverageLabel: 'Wildfire',
+      location: 'Equatorial wildfire perimeter fixture',
+      focusedCoordinate: /0\.00,\s*-120\.00/,
+    },
+    {
+      coverageLabel: 'Landslide',
+      location: 'Taiwan landslide fixture',
+      focusedCoordinate: /23\.50,\s*121\.00/,
+    },
+    {
+      coverageLabel: 'Tropical cyclone',
+      location: 'Western Pacific cyclone track fixture',
+      focusedCoordinate: /20\.00,\s*150\.00/,
+    },
+    {
+      coverageLabel: 'Volcanic eruption',
+      location: 'East African volcanic eruption fixture',
+      focusedCoordinate: /-3\.00,\s*36\.00/,
+    },
+  ];
+  for (const fixture of incidentFixtures) {
+    await page
+      .getByText(fixture.location, { exact: true })
+      .waitFor({ timeout: 30_000 });
+    const coverage = page
+      .getByTestId('incident-coverage')
+      .filter({ hasText: fixture.coverageLabel });
+    await coverage.getByText(fixture.coverageLabel, { exact: true }).waitFor();
+    await coverage
+      .getByText(fixture.coverageState ?? 'Events found', { exact: true })
+      .waitFor();
+  }
   await page
-    .getByText('Northern Honshu wildfire fixture', { exact: true })
-    .waitFor({ timeout: 30_000 });
+    .getByRole('button', { name: 'Focus Lower Mekong flood fixture on map' })
+    .getByText('estimated', { exact: true })
+    .waitFor();
+  await page
+    .getByText('Flood fixture coverage is intentionally degraded.', { exact: true })
+    .waitFor();
   if (await page.getByRole('heading', { name: 'Map assistant' }).count()) {
     throw new Error('The assistant opened before the Active Incidents workflow.');
   }
-  await page
-    .getByRole('button', { name: 'Focus Northern Honshu wildfire fixture on map' })
-    .click();
-  await page.getByText(/38\.25,\s*140\.75/).waitFor();
+  for (const fixture of incidentFixtures) {
+    const button = page.getByRole('button', {
+      name: `Focus ${fixture.location} on map`,
+    });
+    await button.click();
+    await page.locator('.map-overlay').getByText(fixture.focusedCoordinate).waitFor();
+    if ((await button.getAttribute('aria-pressed')) !== 'true') {
+      throw new Error(`Incident selection did not remain on ${fixture.location}.`);
+    }
+  }
   await page.getByRole('button', { name: 'Open assistant' }).click();
   await page.getByLabel('Question').fill('Zoom into Japan.');
   const mapActionResponse = page.waitForResponse((response) =>
@@ -113,7 +168,7 @@ try {
     .waitFor();
   await browser.close();
   console.log(
-    'System test passed: Active Incidents map focus and the existing source-backed assistant workflow rendered.',
+    'System test passed: all six Active Incidents hazards focused their own geometry and the existing source-backed assistant workflow rendered.',
   );
 } finally {
   stopStack();

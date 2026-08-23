@@ -268,6 +268,11 @@ class BaseEventPolicy:
     def _merge_event(self, events: list[DisasterEvent]) -> DisasterEvent:
         return _merge_event(events)
 
+    def _matches_time_window(
+        self, event: DisasterEvent, window_start: datetime, window_end: datetime
+    ) -> bool:
+        return window_start <= event.event_time <= window_end
+
     def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
         if (
             first.disaster != second.disaster
@@ -400,7 +405,7 @@ class BaseEventPolicy:
             for event in candidates
             if event.disaster == query.disaster
             and event.country.alpha3_code == query.country.alpha3_code
-            and window_start <= event.event_time <= window_end
+            and self._matches_time_window(event, window_start, window_end)
             and (
                 query.discriminator("event_id") is None
                 or event.has_provider_id(query.discriminator("event_id") or "")
@@ -705,6 +710,37 @@ class DefaultEventPolicy(BaseEventPolicy):
         )
 
 
+class VolcanicEruptionEventPolicy(DefaultEventPolicy):
+    """Resolve ongoing WVAR eruptions by their current report publication."""
+
+    _WVAR_SOURCE_ID = "smithsonian-usgs-volcanic-activity"
+
+    def _wvar_observation_time(self, event: DisasterEvent) -> datetime | None:
+        if event.source.source_id != self._WVAR_SOURCE_ID:
+            return None
+        return event.source.updated_at or event.source.published_at
+
+    def _matches_time_window(
+        self, event: DisasterEvent, window_start: datetime, window_end: datetime
+    ) -> bool:
+        if super()._matches_time_window(event, window_start, window_end):
+            return True
+        observation_time = self._wvar_observation_time(event)
+        return bool(
+            observation_time is not None
+            and window_start <= observation_time <= window_end
+        )
+
+    def rank(self, event: DisasterEvent, query: DisasterQuery, now: datetime) -> float:
+        observation_time = self._wvar_observation_time(event)
+        return (observation_time or event.event_time).timestamp()
+
+    def describe_selection(self, query: DisasterQuery, ambiguous: bool) -> str:
+        if ambiguous:
+            return "Multiple current WVAR eruption reports have similar timestamps."
+        return "Selected the newest matching source-backed eruption report."
+
+
 class EventPolicyRegistry:
     """Resolve a typed disaster to a dedicated or conservative event policy."""
 
@@ -720,7 +756,11 @@ class EventPolicyRegistry:
 
 def default_event_policy_registry() -> EventPolicyRegistry:
     return EventPolicyRegistry(
-        {Disaster.EARTHQUAKE: EarthquakeEventPolicy()}, DefaultEventPolicy()
+        {
+            Disaster.EARTHQUAKE: EarthquakeEventPolicy(),
+            Disaster.VOLCANIC_ERUPTION: VolcanicEruptionEventPolicy(),
+        },
+        DefaultEventPolicy(),
     )
 
 

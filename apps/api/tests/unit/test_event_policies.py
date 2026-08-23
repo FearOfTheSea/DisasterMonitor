@@ -7,6 +7,7 @@ from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.application.services.event_resolution import (
     DefaultEventPolicy,
     EarthquakeEventPolicy,
+    default_event_policy_registry,
 )
 from disaster_monitor.domain.disaster import (
     Disaster,
@@ -164,6 +165,46 @@ def test_generic_policy_ignores_earthquake_measurements_when_ranking_floods() ->
     )
 
     assert resolution.selected == newer
+
+
+def test_volcanic_policy_accepts_current_wvar_observation_of_ongoing_eruption() -> None:
+    source = replace(
+        SOURCE,
+        source_id="smithsonian-usgs-volcanic-activity",
+        published_at=NOW - timedelta(hours=1),
+    )
+    event = _generic_event(
+        "gvp-eruption:22203",
+        disaster=Disaster.VOLCANIC_ERUPTION,
+        event_time=datetime(2017, 3, 25, tzinfo=UTC),
+    )
+    event = replace(event, source=source)
+    query = DisasterQuery(Disaster.VOLCANIC_ERUPTION, JAPAN, "current", ("latest",))
+
+    resolution = (
+        default_event_policy_registry()
+        .for_disaster(Disaster.VOLCANIC_ERUPTION)
+        .resolve((event,), query, now=NOW)
+    )
+
+    assert resolution.selected == event
+
+
+def test_volcanic_policy_does_not_refresh_old_events_from_unrelated_sources() -> None:
+    event = _generic_event(
+        "old-volcano",
+        disaster=Disaster.VOLCANIC_ERUPTION,
+        event_time=datetime(2017, 3, 25, tzinfo=UTC),
+    )
+    query = DisasterQuery(Disaster.VOLCANIC_ERUPTION, JAPAN, "current", ("latest",))
+
+    resolution = (
+        default_event_policy_registry()
+        .for_disaster(Disaster.VOLCANIC_ERUPTION)
+        .resolve((event,), query, now=NOW)
+    )
+
+    assert resolution.selected is None
 
 
 def test_earthquake_sequence_and_aftershock_policy_remains_disaster_specific() -> None:

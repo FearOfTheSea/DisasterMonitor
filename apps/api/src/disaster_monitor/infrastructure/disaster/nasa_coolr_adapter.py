@@ -37,11 +37,11 @@ from disaster_monitor.infrastructure.disaster.http import (
 )
 
 COOLR_QUERY_URL = (
-    "https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/"
+    "https://gis.earthdata.nasa.gov/gis01/rest/services/Landslides/"
     "COOLR_Reports_Points/FeatureServer/0/query"
 )
 _COOLR_FEATURE_URL = (
-    "https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/"
+    "https://gis.earthdata.nasa.gov/gis01/rest/services/Landslides/"
     "COOLR_Reports_Points/FeatureServer/0"
 )
 _COOLR_RIGHTS_ID = "nasa-coolr-report-catalog"

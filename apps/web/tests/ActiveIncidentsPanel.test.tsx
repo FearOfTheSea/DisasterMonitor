@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -63,7 +63,9 @@ function snapshot(incidents: ActiveIncident[] = [INCIDENT]): ActiveIncidentsSnap
       detail:
         disaster === 'wildfire'
           ? 'Usable wildfire records were retained after a provider issue.'
-          : 'No usable matching records were returned.',
+          : disaster === 'landslide'
+            ? 'No configured worldwide provider is available for landslides.'
+            : 'Configured providers returned no matching records; this is not evidence that no disaster occurred.',
     })),
     warnings: ['Fixture provider returned a partial response.'],
   };
@@ -90,6 +92,21 @@ describe('ActiveIncidentsPanel', () => {
     expect(screen.getByText('Degraded')).toBeInTheDocument();
     expect(screen.getByText('Unavailable')).toBeInTheDocument();
     expect(screen.getAllByText('No matching records')).toHaveLength(4);
+    const coverageItems = screen.getAllByTestId('incident-coverage');
+    expect(within(coverageItems[0]).getByText('Earthquake')).toBeInTheDocument();
+    expect(
+      within(coverageItems[0]).getByText('No matching records'),
+    ).toBeInTheDocument();
+    expect(coverageItems[0]).toHaveTextContent(
+      'this is not evidence that no disaster occurred',
+    );
+    expect(within(coverageItems[2]).getByText('Wildfire')).toBeInTheDocument();
+    expect(within(coverageItems[2]).getByText('Degraded')).toBeInTheDocument();
+    expect(coverageItems[2]).toHaveTextContent(
+      'Usable wildfire records were retained after a provider issue.',
+    );
+    expect(within(coverageItems[3]).getByText('Landslide')).toBeInTheDocument();
+    expect(within(coverageItems[3]).getByText('Unavailable')).toBeInTheDocument();
     expect(screen.getByText('Coverage is partial')).toBeInTheDocument();
     expect(
       screen.getByText('Fixture provider returned a partial response.'),

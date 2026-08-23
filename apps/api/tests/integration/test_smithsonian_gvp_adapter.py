@@ -44,6 +44,7 @@ def client_for(
     requests: list[httpx.Request],
     *,
     wvar: str | None = None,
+    rss: str | None = None,
     volcanoes: object | None = None,
     eruptions: object | None = None,
 ) -> httpx.AsyncClient:
@@ -56,6 +57,13 @@ def client_for(
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.url.host == "volcano.si.edu":
+            if request.url.path == "/news/WeeklyVolcanoRSS.xml":
+                return httpx.Response(
+                    200,
+                    headers={"content-type": "application/rss+xml; charset=utf-8"},
+                    content=(rss or "<rss><channel /></rss>").encode(),
+                    request=request,
+                )
             return httpx.Response(
                 200,
                 headers={"content-type": "text/html; charset=utf-8"},
@@ -74,6 +82,110 @@ def client_for(
         )
 
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def current_rss() -> str:
+    return """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Smithsonian / USGS Weekly Volcanic Activity Report</title>
+    <item>
+      <title>
+        Ahyi (United States) - Report for 13 August-19 August 2026 -
+        New Eruptive Activity
+      </title>
+      <link>https://volcano.si.edu/reports_weekly.cfm</link>
+      <guid>https://volcano.si.edu/reports_weekly.cfm#vn_999999</guid>
+      <pubDate>Thu, 20 Aug 2026 04:08:28 -0400</pubDate>
+    </item>
+    <item>
+      <title>
+        Suwanosejima (Japan) - Report for 13 August-19 August 2026 -
+        Continuing Eruptive Activity
+      </title>
+      <link>https://volcano.si.edu/reports_weekly.cfm</link>
+      <guid>https://volcano.si.edu/reports_weekly.cfm#vn_282030</guid>
+      <pubDate>Thu, 20 Aug 2026 04:08:28 -0400</pubDate>
+    </item>
+    <item>
+      <title>Asosan (Japan) - Report for 13 August-19 August 2026 - New Unrest</title>
+      <link>https://volcano.si.edu/reports_weekly.cfm</link>
+      <guid>https://volcano.si.edu/reports_weekly.cfm#vn_273083</guid>
+      <pubDate>Thu, 20 Aug 2026 04:08:28 -0400</pubDate>
+    </item>
+  </channel>
+</rss>"""
+
+
+@pytest.mark.asyncio
+async def test_current_discovery_uses_official_rss_and_ignores_normal_unrest() -> None:
+    requests: list[httpx.Request] = []
+    snapshots: list[object] = []
+
+    async def record(payload: object) -> object:
+        snapshots.append(payload)
+        return SimpleNamespace(snapshot_id=f"snapshot:{len(snapshots)}")
+
+    client = client_for(requests, rss=current_rss())
+    result = await SmithsonianGvpAdapter(
+        geography=StaticCountryCatalog(), client=client, snapshot_recorder=record
+    ).find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.VOLCANIC_ERUPTION, time_window_days=7),
+        now=datetime(2026, 8, 22, 12, tzinfo=UTC),
+    )
+
+    event = next(
+        item for item in result.records if item.event_id == "gvp-eruption:41235"
+    )
+    assert {item.event_id for item in result.records} == {
+        "gvp-eruption:41234",
+        "gvp-eruption:41235",
+    }
+    assert event.provider_ids == (
+        "gvp-volcano:999999",
+        "gvp-eruption:41235",
+        "wvar:rss:20260813:999999",
+    )
+    assert event.source.canonical_url == (
+        "https://volcano.si.edu/reports_weekly.cfm#vn_999999"
+    )
+    assert event.source.published_at == datetime(2026, 8, 20, 8, 8, 28, tzinfo=UTC)
+    assert requests[0].url.path == "/news/WeeklyVolcanoRSS.xml"
+    assert all(request.url.params.get("weekstart") is None for request in requests)
+    assert not any(
+        issue.reason_code == "non_eruptive_report_type" for issue in result.issues
+    )
+    assert len(snapshots) == 3
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_current_named_country_ignores_unrelated_feed_rows() -> None:
+    requests: list[httpx.Request] = []
+    client = client_for(requests, rss=current_rss())
+    country = StaticCountryCatalog().get_by_alpha3("JPN")
+    assert country is not None
+    result = await SmithsonianGvpAdapter(
+        geography=StaticCountryCatalog(), client=client
+    ).find_recent_events(
+        DisasterQuery(
+            Disaster.VOLCANIC_ERUPTION,
+            country,
+            "current",
+            ("latest developments",),
+        ),
+        now=datetime(2026, 8, 22, 12, tzinfo=UTC),
+    )
+
+    assert {item.event_id for item in result.records} == {"gvp-eruption:41234"}
+    assert not any(issue.reason_code == "country_mismatch" for issue in result.issues)
+    volcano_request = next(
+        item
+        for item in requests
+        if "Holocene_Volcanoes" in item.url.params.get("typeNames", "")
+    )
+    assert "999999" not in volcano_request.url.params.get("CQL_FILTER", "")
+    await client.aclose()
 
 
 @pytest.mark.asyncio
@@ -136,7 +248,8 @@ async def test_new_activity_uses_gvp_start_and_worldwide_is_countryless() -> Non
     assert event.event_time == datetime(2026, 7, 18, tzinfo=UTC)
     assert event.location.startswith("Ahyi")
     assert not hasattr(event, "country")
-    assert len(requests) == 3
+    assert len(requests) == 4
+    assert requests[0].url.path == "/news/WeeklyVolcanoRSS.xml"
     wfs_requests = [
         item for item in requests if item.url.host == "webservices.volcano.si.edu"
     ]
@@ -145,6 +258,12 @@ async def test_new_activity_uses_gvp_start_and_worldwide_is_countryless() -> Non
         request.url.params.get("outputFormat") == "application/json"
         for request in wfs_requests
     )
+    eruption_request = next(
+        item
+        for item in wfs_requests
+        if "Holocene_Eruptions" in item.url.params.get("typeNames", "")
+    )
+    assert eruption_request.url.params.get("count") == "2000"
     volcano_request = next(
         item
         for item in wfs_requests
@@ -178,7 +297,7 @@ async def test_unrest_other_unknown_and_malformed_rows_are_not_eruptions() -> No
         "gvp-eruption:41235",
     }
     reasons = {issue.reason_code for issue in result.issues}
-    assert "non_eruptive_report_type" in reasons
+    assert "non_eruptive_report_type" not in reasons
     assert "unsupported_report_type" in reasons
     assert "invalid_record" in reasons
     assert not any(
@@ -228,8 +347,13 @@ async def test_point_outside_polygon_requires_explicit_gvp_country_affiliation()
     properties = ahyi["properties"]
     assert isinstance(properties, dict)
     properties["Country"] = "Vanuatu"
+    wvar = (
+        (FIXTURES / "smithsonian_wvar_weekly.html")
+        .read_text(encoding="utf-8")
+        .replace("<td>United States</td>", "<td>Japan</td>", 1)
+    )
     requests: list[httpx.Request] = []
-    client = client_for(requests, volcanoes=volcanoes)
+    client = client_for(requests, wvar=wvar, volcanoes=volcanoes)
     adapter = SmithsonianGvpAdapter(geography=StaticCountryCatalog(), client=client)
 
     result = await adapter.find_recent_events(query(), now=NOW)

@@ -1,7 +1,7 @@
 # NASA COOLR Landslides
 
 DisasterMonitor uses NASA's [COOLR Reports Points FeatureServer
-layer](https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/COOLR_Reports_Points/FeatureServer/0/query)
+layer](https://gis.earthdata.nasa.gov/gis01/rest/services/Landslides/COOLR_Reports_Points/FeatureServer/0/query)
 as the one configured landslide event-discovery provider. The adapter uses the JSON
 FeatureServer query interface, a bounded standardized `event_date` predicate,
 `event_date DESC`, WGS84 point geometry, and a small result bound below ArcGIS's
