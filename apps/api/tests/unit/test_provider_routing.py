@@ -38,31 +38,51 @@ VENEZUELA = CATALOG.get_by_alpha3("VEN")
 assert JAPAN is not None and VENEZUELA is not None
 
 EXPECTED_EVENT_DISCOVERY_AUTHORITIES = {
-    Disaster.EARTHQUAKE: ("USGS", "usgs-earthquakes", ProviderTier.SECONDARY),
+    Disaster.EARTHQUAKE: (
+        ("EMSC SeismicPortal", "emsc-earthquakes", ProviderTier.SECONDARY),
+        ("USGS", "usgs-earthquakes", ProviderTier.SECONDARY),
+    ),
     Disaster.FLOOD: (
-        "CEMS Global Flood Monitoring (GFM)",
-        "cems-gfm-floods",
-        ProviderTier.PRIMARY,
+        (
+            "CEMS Global Flood Monitoring (GFM)",
+            "cems-gfm-floods",
+            ProviderTier.PRIMARY,
+        ),
+        ("GDACS floods", "gdacs-floods", ProviderTier.SECONDARY),
     ),
     Disaster.WILDFIRE: (
-        "NASA EONET Wildfires",
-        "nasa-eonet-wildfires",
-        ProviderTier.PRIMARY,
+        (
+            "NASA EONET Wildfires",
+            "nasa-eonet-wildfires",
+            ProviderTier.PRIMARY,
+        ),
+        ("GDACS wildfires", "gdacs-wildfires", ProviderTier.SECONDARY),
     ),
     Disaster.LANDSLIDE: (
-        "NASA COOLR Landslides",
-        "nasa-coolr-landslides",
-        ProviderTier.PRIMARY,
+        (
+            "NASA COOLR Landslides",
+            "nasa-coolr-landslides",
+            ProviderTier.PRIMARY,
+        ),
     ),
     Disaster.TROPICAL_CYCLONE: (
-        "GDACS tropical cyclones",
-        "gdacs-tropical-cyclones",
-        ProviderTier.SECONDARY,
+        (
+            "GDACS tropical cyclones",
+            "gdacs-tropical-cyclones",
+            ProviderTier.SECONDARY,
+        ),
     ),
     Disaster.VOLCANIC_ERUPTION: (
-        "Smithsonian / USGS Weekly Volcanic Activity Report",
-        "smithsonian-usgs-volcanic-activity",
-        ProviderTier.PRIMARY,
+        (
+            "Smithsonian / USGS Weekly Volcanic Activity Report",
+            "smithsonian-usgs-volcanic-activity",
+            ProviderTier.PRIMARY,
+        ),
+        (
+            "GDACS volcanic eruptions",
+            "gdacs-volcanic-eruptions",
+            ProviderTier.SECONDARY,
+        ),
     ),
 }
 
@@ -211,9 +231,7 @@ async def test_configured_registry_routes_all_recognized_disasters() -> None:
         registry = service._provider_registry  # noqa: SLF001
         assert set(EXPECTED_EVENT_DISCOVERY_AUTHORITIES) == set(Disaster)
         for disaster in Disaster:
-            expected_name, expected_source_id, expected_tier = (
-                EXPECTED_EVENT_DISCOVERY_AUTHORITIES[disaster]
-            )
+            expected = EXPECTED_EVENT_DISCOVERY_AUTHORITIES[disaster]
             for country in CATALOG.countries():
                 selection = registry.select(
                     _query(disaster, country), ProviderRole.EVENT_DISCOVERY
@@ -221,20 +239,25 @@ async def test_configured_registry_routes_all_recognized_disasters() -> None:
                 assert [
                     (item.name, item.source_id, item.tier)
                     for item in selection.registrations
-                ] == [(expected_name, expected_source_id, expected_tier)]
-                registration = selection.registrations[0]
-                assert GeographicScope.COUNTRY in registration.capabilities.event_scopes
-                assert registration.capabilities.country_codes is None
+                ] == list(expected)
+                assert all(
+                    GeographicScope.COUNTRY in registration.capabilities.event_scopes
+                    for registration in selection.registrations
+                )
+                assert all(
+                    registration.capabilities.country_codes is None
+                    for registration in selection.registrations
+                )
             worldwide = registry.select(
                 WorldwideDisasterQuery(disaster), ProviderRole.EVENT_DISCOVERY
             )
             assert [
                 (item.name, item.source_id, item.tier)
                 for item in worldwide.registrations
-            ] == [(expected_name, expected_source_id, expected_tier)]
-            assert (
-                GeographicScope.WORLDWIDE
-                in worldwide.registrations[0].capabilities.event_scopes
+            ] == list(expected)
+            assert all(
+                GeographicScope.WORLDWIDE in registration.capabilities.event_scopes
+                for registration in worldwide.registrations
             )
     finally:
         await service.aclose()
@@ -251,7 +274,7 @@ def test_disabled_global_reports_is_a_configuration_limitation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_gfm_is_routable_for_every_catalog_country() -> None:
+async def test_gfm_and_gdacs_floods_are_routable_for_every_catalog_country() -> None:
     service = build_current_disaster_report(Settings(), country_catalog=CATALOG)
     try:
         registry = service._provider_registry  # noqa: SLF001
@@ -260,7 +283,144 @@ async def test_gfm_is_routable_for_every_catalog_country() -> None:
                 _query(Disaster.FLOOD, country), ProviderRole.EVENT_DISCOVERY
             )
             assert [item.name for item in selection.registrations] == [
-                "CEMS Global Flood Monitoring (GFM)"
+                "CEMS Global Flood Monitoring (GFM)",
+                "GDACS floods",
             ]
+    finally:
+        await service.aclose()
+
+
+@pytest.mark.asyncio
+async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -> None:
+    disabled = build_current_disaster_report(
+        Settings(_env_file=None, nasa_firms_map_key=None), country_catalog=CATALOG
+    )
+    try:
+        registry = disabled._provider_registry  # noqa: SLF001
+        situation = registry.select(
+            _query(Disaster.WILDFIRE), ProviderRole.SITUATION_EVIDENCE
+        )
+        assert situation.registrations == ()
+        assert situation.unavailable_configuration == (
+            "NASA FIRMS observations",
+            "ReliefWeb",
+        )
+        assert all(
+            item.name != "NASA FIRMS observations"
+            for item in registry.select(
+                _query(Disaster.WILDFIRE), ProviderRole.EVENT_DISCOVERY
+            ).registrations
+        )
+        descriptor = disabled.source_catalog.get("nasa-firms-observations")
+        assert descriptor is not None
+        assert descriptor.configured is False
+    finally:
+        await disabled.aclose()
+
+    enabled = build_current_disaster_report(
+        Settings(_env_file=None, nasa_firms_map_key="configured-test-key"),
+        country_catalog=CATALOG,
+    )
+    try:
+        registry = enabled._provider_registry  # noqa: SLF001
+        situation = registry.select(
+            _query(Disaster.WILDFIRE), ProviderRole.SITUATION_EVIDENCE
+        )
+        assert [
+            (item.name, item.source_id, item.tier) for item in situation.registrations
+        ] == [
+            (
+                "NASA FIRMS observations",
+                "nasa-firms-observations",
+                ProviderTier.SECONDARY,
+            )
+        ]
+        registration = situation.registrations[0]
+        assert registration.capabilities.roles == frozenset(
+            {ProviderRole.SITUATION_EVIDENCE}
+        )
+        assert registration.capabilities.situation_scopes == frozenset(
+            {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+        )
+        assert enabled.source_catalog.get("nasa-firms-observations").configured is True
+    finally:
+        await enabled.aclose()
+
+
+@pytest.mark.asyncio
+async def test_copernicus_rapid_mapping_is_landslide_map_evidence_not_discovery() -> (
+    None
+):
+    service = build_current_disaster_report(
+        Settings(_env_file=None), country_catalog=CATALOG
+    )
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        country = registry.select(
+            _query(Disaster.LANDSLIDE), ProviderRole.SITUATION_EVIDENCE
+        )
+        worldwide = registry.select(
+            WorldwideDisasterQuery(Disaster.LANDSLIDE),
+            ProviderRole.SITUATION_EVIDENCE,
+        )
+
+        assert [
+            (item.name, item.source_id, item.tier) for item in country.registrations
+        ] == [
+            (
+                "Copernicus EMS Rapid Mapping landslides",
+                "copernicus-rapid-mapping-landslides",
+                ProviderTier.SECONDARY,
+            )
+        ]
+        assert country.unavailable_configuration == ("ReliefWeb",)
+        assert [item.name for item in worldwide.registrations] == [
+            "Copernicus EMS Rapid Mapping landslides"
+        ]
+        assert all(
+            item.name != "Copernicus EMS Rapid Mapping landslides"
+            for item in registry.select(
+                _query(Disaster.LANDSLIDE), ProviderRole.EVENT_DISCOVERY
+            ).registrations
+        )
+    finally:
+        await service.aclose()
+
+
+@pytest.mark.asyncio
+async def test_ibtracs_is_tropical_cyclone_track_reconciliation_not_discovery() -> None:
+    service = build_current_disaster_report(
+        Settings(_env_file=None), country_catalog=CATALOG
+    )
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        country = registry.select(
+            _query(Disaster.TROPICAL_CYCLONE), ProviderRole.SITUATION_EVIDENCE
+        )
+        worldwide = registry.select(
+            WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE),
+            ProviderRole.SITUATION_EVIDENCE,
+        )
+
+        assert [
+            (item.name, item.source_id, item.tier) for item in country.registrations
+        ] == [
+            (
+                "NOAA IBTrACS track reconciliation",
+                "noaa-ibtracs-tracks",
+                ProviderTier.SECONDARY,
+            )
+        ]
+        assert country.unavailable_configuration == ("ReliefWeb",)
+        assert [item.name for item in worldwide.registrations] == [
+            "NOAA IBTrACS track reconciliation"
+        ]
+        assert all(
+            item.name != "NOAA IBTrACS track reconciliation"
+            for item in registry.select(
+                _query(Disaster.TROPICAL_CYCLONE),
+                ProviderRole.EVENT_DISCOVERY,
+            ).registrations
+        )
     finally:
         await service.aclose()

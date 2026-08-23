@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [123.685, 13.257]},
+      "properties": {
+        "eventtype": "VO",
+        "eventid": 1000144,
+        "episodeid": 1,
+        "glide": "VO-2026-000115-PHL",
+        "eventname": "Mayon",
+        "name": "Eruption Mayon",
+        "description": "Eruption Mayon",
+        "url": {
+          "details": "https://www.gdacs.org/gdacsapi/api/events/geteventdata?eventtype=VO&eventid=1000144"
+        },
+        "alertlevel": "Orange",
+        "country": "Philippines",
+        "fromdate": "2026-07-16T01:59:00",
+        "todate": "2026-07-16T01:59:00",
+        "datemodified": "2026-07-16T08:01:21",
+        "iso3": "PHL",
+        "source": "TOKYO",
+        "sourceid": "",
+        "affectedcountries": [{"iso3": "PHL", "countryname": "Philippines"}]
+      }
+    }
+  ]
+}

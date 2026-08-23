@@ -1,0 +1,37 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "code": "EMSR751",
+      "name": "Mass movement in Campania Region, Italy",
+      "eventTime": "2024-08-27T12:00:00",
+      "activationTime": "2024-09-01T13:40:00",
+      "lastUpdate": "2024-09-03T10:15:00",
+      "category": "Mass movement",
+      "countries": [{"name": "Italy"}],
+      "centroid": "POINT (14.607 40.801)",
+      "aois": [
+        {
+          "name": "San Felice a Cancello",
+          "number": 1,
+          "products": [
+            {
+              "type": "REF",
+              "feasible": true,
+              "mapsCount": 1,
+              "version": {"status": "DELIVERED"}
+            },
+            {
+              "type": "GRA",
+              "feasible": true,
+              "mapsCount": 1,
+              "version": {"status": "DELIVERED"}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

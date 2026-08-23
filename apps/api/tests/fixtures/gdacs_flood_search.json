@@ -1,0 +1,29 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [102.5, 30.5]},
+      "properties": {
+        "eventtype": "FL",
+        "eventid": 1104081,
+        "episodeid": 10,
+        "glide": "FL-2026-000148-CHN",
+        "name": "Flood in China",
+        "description": "Flood in China",
+        "url": {
+          "details": "https://www.gdacs.org/gdacsapi/api/events/geteventdata?eventtype=FL&eventid=1104081"
+        },
+        "alertlevel": "Orange",
+        "country": "China",
+        "fromdate": "2026-07-31T01:00:00",
+        "todate": "2026-08-19T01:00:00",
+        "datemodified": "2026-08-20T09:16:19",
+        "iso3": "CHN",
+        "source": "GLOFAS",
+        "sourceid": "",
+        "affectedcountries": [{"iso3": "CHN", "countryname": "China"}]
+      }
+    }
+  ]
+}

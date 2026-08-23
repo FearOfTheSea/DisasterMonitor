@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     )
     event_media_blob_root: Path = Path("data/event-media/blobs")
     reliefweb_app_name: str | None = None
+    nasa_firms_map_key: SecretStr | None = Field(default=None, repr=False)
     operational_database_url: SecretStr | None = Field(default=None, repr=False)
     operational_blob_root: Path = Path("data/operational/blobs")
     operational_auto_migrate: bool = True

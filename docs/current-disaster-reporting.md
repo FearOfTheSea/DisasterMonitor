@@ -54,8 +54,20 @@ source authority, issue public warnings, or select events.
 
 ## Providers
 
-- USGS provides bounded named-country and worldwide earthquake discovery.
+- EMSC SeismicPortal and USGS provide bounded named-country and worldwide scientific
+  earthquake discovery. EMSC is secondary corroboration and can share an originating
+  network with USGS, so agreement is not automatically independent confirmation.
 - GDACS provides bounded named-country and worldwide tropical-cyclone discovery.
+- NOAA IBTrACS optionally reconciles one active track after a GDACS cyclone is selected.
+  It requires a unique non-generic name, onset, and track-proximity match, remains
+  provisional, and is not an independent live-event authority because its agency
+  inputs can overlap GDACS.
+- GDACS also provides secondary named-country and worldwide discovery for floods,
+  wildfires, and volcanic eruptions. Flood records retain GloFAS/FloodList lineage and
+  overlap the Copernicus/EC-JRC family used by GFM; wildfire records retain GWIS
+  lineage and are downstream of FIRMS; volcano records retain their VAAC label and are
+  downstream of VAA/Smithsonian reporting. Agreement within those families is not
+  treated as independent corroboration.
 - CEMS Global Flood Monitoring (GFM) provides primary bounded named-country and
   worldwide flood discovery after country-clipped or bounded-footprint Observed Flood
   Extent class-1 statistics confirm nonzero flood pixels.
@@ -64,10 +76,19 @@ source authority, issue public warnings, or select events.
   authority: EONET geometry and temporal extents can be approximate, its curation
   applies a material-size threshold, and it is not an official incident-perimeter
   source.
+- NASA FIRMS optionally adds aggregated VIIRS thermal-anomaly observations after a
+  wildfire with a source-backed point is selected. It requires `NASA_FIRMS_MAP_KEY`,
+  remains possible-correlation satellite evidence, and never discovers events or
+  creates one event per hotspot. Because GDACS WF is downstream of GWIS/FIRMS, the two
+  do not count as independent corroboration.
 - NASA COOLR Landslides provides primary bounded named-country and worldwide landslide
   event discovery from the COOLR report catalogue. Runtime evidence remains secondary;
   accepted reports are restricted to the documented GLC and LRC import classes, and
   the catalogue is not complete real-time surveillance.
+- Copernicus EMS Rapid Mapping adds sparse secondary landslide map evidence only after
+  selection. It requires an EMSR Mass movement activation plus conservative country,
+  time, centroid, and delivered feasible DEL/GRA checks. EMSN risk assessments and
+  activation-only claims are excluded.
 - Smithsonian/GVP provides bounded named-country and worldwide volcanic-eruption
   discovery from explicit WVAR eruptive-activity report types, with source-backed GVP
   identity and point geometry. It does not admit unrest or other observations and is
@@ -75,6 +96,12 @@ source authority, issue public warnings, or select events.
 - ReliefWeb is an optional, configured supplementary situation-evidence provider for
   named-country requests; without `RELIEFWEB_APP_NAME`, it remains unavailable and
   reports disclose that gap.
+
+NASA LHASA was evaluated but is not registered. Its semantics fit estimated
+`analytical_model` likelihood only, never confirmed occurrence, and the official
+machine-readable serving paths were unavailable or explicitly best-effort with frequent
+downtime during the 2026-08-24 check. The source playbook records the blocker and the
+smallest prerequisite for a future bounded integration.
 
 See [docs/sources](sources/) for source-specific limits and tests. Event-associated
 photos are a separate presentation feature documented in [event-media.md](event-media.md).
@@ -91,6 +118,8 @@ DISASTER_PROVIDER_TIMEOUT_SECONDS=10
 DISASTER_PROVIDER_MAX_RESPONSE_BYTES=1000000
 # Optional approved ReliefWeb application name. Leave unset to disable it.
 # RELIEFWEB_APP_NAME=
+# Optional free NASA FIRMS API map key. Leave unset to disable observations.
+# NASA_FIRMS_MAP_KEY=
 ```
 
 Default tests use deterministic fixtures and do not require network access, Ollama, or

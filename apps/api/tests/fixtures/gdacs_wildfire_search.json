@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-0.7181, 42.4725]},
+      "properties": {
+        "eventtype": "WF",
+        "eventid": 1030410,
+        "episodeid": 23,
+        "glide": "WF-2026-000154-ESP",
+        "name": "Forest fires in Spain",
+        "description": "Forest fires in Spain",
+        "url": {
+          "details": "https://www.gdacs.org/gdacsapi/api/events/geteventdata?eventtype=WF&eventid=1030410"
+        },
+        "alertlevel": "Orange",
+        "country": "Spain",
+        "fromdate": "2026-08-10T00:00:00",
+        "todate": "2026-08-17T00:00:00",
+        "datemodified": "2026-08-23T07:53:50",
+        "iso3": "ESP",
+        "source": "GWIS",
+        "sourceid": "",
+        "affectedcountries": [{"iso3": "ESP", "countryname": "Spain"}],
+        "severitydata": {
+          "severity": 19294.0,
+          "severitytext": "Orange impact for forestfire in 19294 ha",
+          "severityunit": "ha"
+        }
+      }
+    }
+  ]
+}

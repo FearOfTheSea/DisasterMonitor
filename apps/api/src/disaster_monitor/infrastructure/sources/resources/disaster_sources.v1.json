@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0",
+  "version": "2.6.0",
   "sources": [
     {
       "source_id": "cems-gfm-floods",
@@ -87,6 +87,34 @@
       ]
     },
     {
+      "source_id": "nasa-firms-observations",
+      "organization_name": "NASA Fire Information for Resource Management System",
+      "display_name": "NASA FIRMS event-associated thermal anomaly observations",
+      "jurisdiction": "global satellite fire and thermal anomaly observations",
+      "authority_level": "scientific_authority",
+      "information_roles": ["satellite_observation"],
+      "supported_disasters": ["wildfire"],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_configured_csv_area_api",
+      "requires_configuration": true,
+      "configured": false,
+      "expected_freshness": "VIIRS near-real-time observations are generally available within hours of satellite overpass; coverage has orbital, cloud, sensor, and processing gaps",
+      "attribution_guidance": "Attribute observations to NASA FIRMS and the VIIRS near-real-time product. Present detections only as possible nearby fire/thermal anomaly pixels associated after an event is selected, never as standalone wildfire events or perimeters.",
+      "limitations": [
+        "A free FIRMS MAP_KEY is required through NASA; the key is never exposed in source URLs, snapshot identities, or reports.",
+        "The adapter performs no event discovery and cannot create one event per hotspot. It runs only after a wildfire event with a source-backed point has been selected.",
+        "Detections within 50 km are aggregated into one possible-correlation observation report; pixels can represent other thermal sources and do not confirm identity, ignition, perimeter, size, impact, or containment.",
+        "VIIRS is not continuous surveillance; clouds, overpass timing, fire intensity, resolution, and processing can cause omissions or spatial overstatement.",
+        "GDACS wildfire events are downstream of GWIS, which uses NASA FIRMS detections; agreement between GDACS WF and FIRMS is not independent corroboration."
+      ],
+      "registered_tool_names": ["retrieve_situation_evidence"],
+      "provider_registration_name": "NASA FIRMS observations",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["firms.modaps.eosdis.nasa.gov"]
+    },
+    {
       "source_id": "nasa-coolr-landslides",
       "organization_name": "NASA Cooperative Open Online Landslide Repository",
       "display_name": "NASA COOLR landslide event discovery",
@@ -128,6 +156,35 @@
       ]
     },
     {
+      "source_id": "copernicus-rapid-mapping-landslides",
+      "organization_name": "Copernicus Emergency Management Service",
+      "display_name": "Copernicus EMS Rapid Mapping landslide map evidence",
+      "jurisdiction": "global on-demand emergency mapping",
+      "authority_level": "secondary",
+      "information_roles": ["map_layers"],
+      "supported_disasters": ["landslide"],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_public_rapid_mapping_json_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "on-demand activation and product delivery; coverage exists only where an authorised user requested Rapid Mapping",
+      "attribution_guidance": "Credit Copernicus Emergency Management Service Rapid Mapping and link the EMSR activation. Present only delivered feasible delineation or grading products as secondary map evidence associated with an already selected landslide event.",
+      "limitations": [
+        "This provider performs no event discovery. A Rapid Mapping activation is a response request and does not independently prove event identity or occurrence.",
+        "Only EMSR Rapid Mapping activations categorized as Mass movement can qualify; Risk and Recovery EMSN preparedness, risk, and recovery assessments are excluded.",
+        "An activation qualifies only after same-country, event-time-within-three-days, and centroid-within-100-km checks against a selected source-backed point, followed by a delivered feasible DEL or GRA product check.",
+        "Possible correlation is retained because Copernicus and NASA COOLR do not expose a shared stable event identifier through these integrations.",
+        "Delineation and grading products apply to requested Areas of Interest and do not establish complete event extent, unmapped impacts, casualties, warnings, response status, or national totals.",
+        "The category-filtered public API currently exposes a small set of mass-movement Rapid Mapping activations; absence is not evidence that no landslide occurred."
+      ],
+      "registered_tool_names": ["retrieve_situation_evidence"],
+      "provider_registration_name": "Copernicus EMS Rapid Mapping landslides",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["rapidmapping.emergency.copernicus.eu"]
+    },
+    {
       "source_id": "gdacs-tropical-cyclones",
       "organization_name": "Global Disaster Alert and Coordination System",
       "display_name": "GDACS tropical-cyclone event discovery",
@@ -164,6 +221,163 @@
       "implementation_status": "implemented",
       "allowed_hosts": [
         "www.gdacs.org"
+      ]
+    },
+    {
+      "source_id": "noaa-ibtracs-tracks",
+      "organization_name": "NOAA National Centers for Environmental Information",
+      "display_name": "NOAA IBTrACS active-track reconciliation",
+      "jurisdiction": "global merged tropical-cyclone best-track archive",
+      "authority_level": "scientific_authority",
+      "information_roles": [
+        "scientific_event_verification",
+        "map_layers"
+      ],
+      "supported_disasters": ["tropical_cyclone"],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_active_subset_csv_archive",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "IBTrACS v04r01 is updated about three times weekly; the active subset contains storms active within the recent archive window and provisional tracks can lag or change",
+      "attribution_guidance": "Credit NOAA NCEI IBTrACS v04r01 and retain the IBTrACS SID plus contributing agency and ATCF identifiers. Use the active subset only after a GDACS cyclone is selected and only for conservative track/identity reconciliation, never as live-event authority.",
+      "limitations": [
+        "IBTrACS is a merged retrospective and provisional best-track archive, not a live-event discovery, warning, forecast, impact, or emergency-response authority.",
+        "The adapter performs no event discovery and attaches a track only to a GDACS-selected cyclone when a non-generic storm name, track start within 36 hours, and a retained point within 500 km produce exactly one candidate.",
+        "The 500 km proximity bound accommodates update latency between the GDACS endpoint and the three-times-weekly active archive; name and start-time agreement are mandatory, and zero or multiple candidates fail closed.",
+        "Active-subset observations and identifiers are preliminary and can be revised when operational tracks become best tracks.",
+        "IBTrACS merges WMO RSMC, TCWC, JTWC, and other agency records. Those inputs can overlap the upstream agency used by GDACS, so agreement is not independent corroboration.",
+        "Wind, pressure, category, landfall, forecast, impact, casualty, warning, and response fields are not promoted by this integration."
+      ],
+      "registered_tool_names": ["retrieve_situation_evidence"],
+      "provider_registration_name": "NOAA IBTrACS track reconciliation",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.ncei.noaa.gov"]
+    },
+    {
+      "source_id": "gdacs-floods",
+      "organization_name": "Global Disaster Alert and Coordination System",
+      "display_name": "GDACS flood event discovery",
+      "jurisdiction": "global disaster alert and coordination system",
+      "authority_level": "secondary",
+      "information_roles": ["event_discovery"],
+      "supported_disasters": ["flood"],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_geojson_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "event and episode updates are source-dependent; GDACS currently incorporates reviewed GloFAS/FloodList and other authoritative or media-derived reporting",
+      "attribution_guidance": "Attribute the event to GDACS and retain the per-record GDACS source label such as GLOFAS. This is secondary event discovery, not a source for verified casualties, displacement, severity, national totals, or warnings.",
+      "limitations": [
+        "GDACS flood records are curated from GloFAS/FloodList, ECHO and other authoritative or media sources; they are not independent of the Copernicus/JRC source family.",
+        "CEMS GFM and GDACS FL use different products and semantics, but both sit within the Copernicus/EC-JRC ecosystem; agreement is not counted as fully independent corroboration.",
+        "The event-list point is a GDACS centroid, not an observed flood extent or official boundary.",
+        "GDACS alert levels and model-derived severity are not promoted into impact, casualty, warning, or national-total claims; only the alert label is retained as source-reported severity metadata.",
+        "A missing GDACS record is not evidence that no flood occurred."
+      ],
+      "registered_tool_names": ["find_disaster_event"],
+      "provider_registration_name": "GDACS floods",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.gdacs.org"]
+    },
+    {
+      "source_id": "gdacs-wildfires",
+      "organization_name": "Global Disaster Alert and Coordination System",
+      "display_name": "GDACS wildfire event discovery",
+      "jurisdiction": "global disaster alert and coordination system",
+      "authority_level": "secondary",
+      "information_roles": ["event_discovery"],
+      "supported_disasters": ["wildfire"],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_geojson_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "daily when GWIS receives sufficient MODIS/VIIRS imagery, with manual humanitarian-impact additions possible",
+      "attribution_guidance": "Attribute the event to GDACS and preserve GWIS as the upstream event source. This is secondary event discovery; GDACS/GWIS and direct FIRMS observations are not independent because GWIS uses NASA FIRMS active-fire detections.",
+      "limitations": [
+        "Automatic GDACS wildfire entry normally starts at 5,000 hectares; smaller humanitarian-impact events can be inserted manually, and homepage display applies a stricter filter.",
+        "GWIS derives near-real-time burnt-area products using MODIS and VIIRS active-fire detections supplied through NASA FIRMS.",
+        "The event-list point is a centroid, not an incident perimeter, ignition point, containment report, or one-hotspot event.",
+        "Alert level does not establish casualties, evacuations, damage, warnings, containment, or response status.",
+        "A missing GDACS record is not evidence that no wildfire occurred."
+      ],
+      "registered_tool_names": ["find_disaster_event"],
+      "provider_registration_name": "GDACS wildfires",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.gdacs.org"]
+    },
+    {
+      "source_id": "gdacs-volcanic-eruptions",
+      "organization_name": "Global Disaster Alert and Coordination System",
+      "display_name": "GDACS volcanic-eruption event discovery",
+      "jurisdiction": "global disaster alert and coordination system",
+      "authority_level": "secondary",
+      "information_roles": ["event_discovery"],
+      "supported_disasters": ["volcanic_eruption"],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_geojson_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "daily VAA monitoring plus weekly Smithsonian reporting and manual humanitarian-impact updates",
+      "attribution_guidance": "Attribute the event to GDACS and retain the record's VAAC source label. GDACS VO is secondary discovery/corroboration derived mainly from VAAs and Smithsonian weekly reports, not an independent eruption authority.",
+      "limitations": [
+        "GDACS volcano status depends mainly on Volcanic Ash Advisories and Smithsonian weekly reports; agreement with the directly ingested Smithsonian/USGS WVAR is not independent corroboration.",
+        "A VAA establishes an aviation ash advisory, while Smithsonian New Activity/Unrest can include significant activity that is not necessarily a newly confirmed eruption; only records GDACS publishes as VO eruption events are admitted as secondary discovery.",
+        "The event-list point is a volcano location, not an ash footprint, exclusion zone, or impact boundary.",
+        "GDACS alert level does not establish casualties, evacuations, local warnings, ash concentration, or response status.",
+        "A missing GDACS record is not evidence that no eruption occurred."
+      ],
+      "registered_tool_names": ["find_disaster_event"],
+      "provider_registration_name": "GDACS volcanic eruptions",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.gdacs.org"]
+    },
+    {
+      "source_id": "emsc-earthquakes",
+      "organization_name": "Euro-Mediterranean Seismological Centre",
+      "display_name": "EMSC SeismicPortal earthquake catalogue",
+      "jurisdiction": "global scientific earthquake catalogue",
+      "authority_level": "scientific_authority",
+      "information_roles": [
+        "event_discovery",
+        "scientific_event_verification"
+      ],
+      "supported_disasters": [
+        "earthquake"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_fdsn_event_geojson_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "near-real-time EMSC-RTS catalogue; event parameters can be revised as observations and analyses change",
+      "attribution_guidance": "Credit EMSC/CSEM and link the SeismicPortal event. Treat EMSC as scientific event discovery and corroboration, not as an emergency warning or independent confirmation when its preferred origin comes from the same contributing network as another catalogue record.",
+      "limitations": [
+        "The EMSC real-time catalogue can be incomplete, delayed, erroneous, or revised and is not emergency authority.",
+        "Preferred event parameters aggregate contributed seismological observations; matching EMSC and USGS records are not automatically independent corroboration.",
+        "Country membership is validated against maintained country geometry, with tightly bounded offshore association only when the source region explicitly names the country.",
+        "This integration admits hypocentre, depth, magnitude, identity, and catalogue update time only; felt reports, tsunami indications, impacts, casualties, and warnings are not promoted into event claims."
+      ],
+      "registered_tool_names": [
+        "find_disaster_event"
+      ],
+      "provider_registration_name": "EMSC SeismicPortal",
+      "implementation_status": "implemented",
+      "allowed_hosts": [
+        "www.seismicportal.eu"
       ]
     },
     {

@@ -582,7 +582,7 @@ def test_worldwide_task_scope_is_explicit_before_provider_selection() -> None:
 
 
 @pytest.mark.asyncio
-async def test_gfm_worldwide_capability_is_explicitly_bounded() -> None:
+async def test_flood_worldwide_capabilities_are_explicitly_bounded() -> None:
     service = build_current_disaster_report(Settings())
     try:
         selection = service._provider_registry.select(  # noqa: SLF001
@@ -590,7 +590,8 @@ async def test_gfm_worldwide_capability_is_explicitly_bounded() -> None:
             ProviderRole.EVENT_DISCOVERY,
         )
         assert [item.name for item in selection.registrations] == [
-            "CEMS Global Flood Monitoring (GFM)"
+            "CEMS Global Flood Monitoring (GFM)",
+            "GDACS floods",
         ]
         assert selection.registrations[0].tier.value == "primary"
         assert selection.registrations[0].capabilities.event_scopes == frozenset(

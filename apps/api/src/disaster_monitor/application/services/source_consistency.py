@@ -17,6 +17,7 @@ _SITUATION_INFORMATION_ROLES = frozenset(
         SourceInformationRole.HUMANITARIAN_REPORTING,
         SourceInformationRole.SATELLITE_OBSERVATION,
         SourceInformationRole.ANALYTICAL_MODEL,
+        SourceInformationRole.MAP_LAYERS,
     }
 )
 

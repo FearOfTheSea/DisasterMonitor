@@ -1,0 +1,60 @@
+{
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "code": "EMSR751",
+      "countries": ["Italy"],
+      "eventTime": "2024-08-27T12:00:00",
+      "name": "Mass movement in Campania Region, Italy",
+      "centroid": "POINT (14.607 40.801)",
+      "activationTime": "2024-09-01T13:40:00",
+      "category": "Mass movement",
+      "lastUpdate": "2024-09-03T10:15:00",
+      "closed": true,
+      "gdacsId": null,
+      "n_aois": 1,
+      "n_products": 2
+    },
+    {
+      "code": "EMSN999",
+      "countries": ["Italy"],
+      "eventTime": "2024-08-27T12:00:00",
+      "name": "Landslide risk assessment in Campania",
+      "centroid": "POINT (14.607 40.801)",
+      "activationTime": "2024-08-28T10:00:00",
+      "category": "Mass movement",
+      "lastUpdate": "2024-09-02T10:00:00",
+      "closed": true,
+      "n_aois": 1,
+      "n_products": 3
+    },
+    {
+      "code": "EMSR998",
+      "countries": ["Italy"],
+      "eventTime": "2024-08-27T12:00:00",
+      "name": "Distant mass movement in northern Italy",
+      "centroid": "POINT (9.190 45.464)",
+      "activationTime": "2024-08-28T10:00:00",
+      "category": "Mass movement",
+      "lastUpdate": "2024-09-02T10:00:00",
+      "closed": true,
+      "n_aois": 1,
+      "n_products": 3
+    },
+    {
+      "code": "EMSR997",
+      "countries": ["France"],
+      "eventTime": "2024-08-27T12:00:00",
+      "name": "Mass movement in France",
+      "centroid": "POINT (14.607 40.801)",
+      "activationTime": "2024-08-28T10:00:00",
+      "category": "Mass movement",
+      "lastUpdate": "2024-09-02T10:00:00",
+      "closed": true,
+      "n_aois": 1,
+      "n_products": 3
+    }
+  ]
+}

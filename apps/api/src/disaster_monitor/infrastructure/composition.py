@@ -60,15 +60,28 @@ from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
     CompositeSituationReportProvider,
 )
+from disaster_monitor.infrastructure.disaster.copernicus_ems_mapping_adapter import (
+    CopernicusRapidMappingAdapter,
+)
+from disaster_monitor.infrastructure.disaster.emsc_adapter import (
+    EmscEarthquakeAdapter,
+)
 from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
+    GdacsFloodAdapter,
     GdacsTropicalCycloneAdapter,
+    GdacsVolcanicEruptionAdapter,
+    GdacsWildfireAdapter,
 )
 from disaster_monitor.infrastructure.disaster.http import SourcePayloadRecorder
+from disaster_monitor.infrastructure.disaster.ibtracs_adapter import IbtracsTrackAdapter
 from disaster_monitor.infrastructure.disaster.nasa_coolr_adapter import (
     NasaCoolrLandslideAdapter,
 )
 from disaster_monitor.infrastructure.disaster.nasa_eonet_adapter import (
     NasaEonetWildfireAdapter,
+)
+from disaster_monitor.infrastructure.disaster.nasa_firms_adapter import (
+    NasaFirmsObservationAdapter,
 )
 from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
     ReliefWebSituationAdapter,
@@ -267,7 +280,22 @@ def build_source_catalog(settings: Settings | None = None) -> StaticSourceCatalo
         app_name
         and app_name not in {"disaster-monitor-local", "change-me", "your-app-name"}
     )
-    return StaticSourceCatalog({"reliefweb-situation-reports": configured})
+    firms_key = (
+        settings.nasa_firms_map_key.get_secret_value().strip()
+        if settings.nasa_firms_map_key is not None
+        else ""
+    )
+    firms_configured = (
+        len(firms_key) >= 8
+        and len(firms_key) <= 200
+        and all(character.isalnum() or character in "_-" for character in firms_key)
+    )
+    return StaticSourceCatalog(
+        {
+            "reliefweb-situation-reports": configured,
+            "nasa-firms-observations": firms_configured,
+        }
+    )
 
 
 def build_country_catalog(settings: Settings | None = None) -> StaticCountryCatalog:
@@ -321,7 +349,36 @@ def build_current_disaster_report(
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
+    emsc = EmscEarthquakeAdapter(
+        geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
     gdacs = GdacsTropicalCycloneAdapter(
+        geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    ibtracs = IbtracsTrackAdapter(
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    gdacs_floods = GdacsFloodAdapter(
+        geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    gdacs_wildfires = GdacsWildfireAdapter(
+        geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    gdacs_volcanoes = GdacsVolcanicEruptionAdapter(
         geography=geography,
         snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
@@ -339,8 +396,19 @@ def build_current_disaster_report(
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
     )
+    firms = NasaFirmsObservationAdapter(
+        map_key=settings.nasa_firms_map_key,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
     coolr = NasaCoolrLandslideAdapter(
         geography=geography,
+        snapshot_recorder=snapshot_recorder,
+        timeout_seconds=settings.disaster_provider_timeout_seconds,
+        max_response_bytes=settings.disaster_provider_max_response_bytes,
+    )
+    copernicus_mapping = CopernicusRapidMappingAdapter(
         snapshot_recorder=snapshot_recorder,
         timeout_seconds=settings.disaster_provider_timeout_seconds,
         max_response_bytes=settings.disaster_provider_max_response_bytes,
@@ -378,6 +446,46 @@ def build_current_disaster_report(
                 allowed_hosts=gfm.allowed_hosts,
                 event_provider=gfm,
                 worldwide_provider=gfm,
+            ),
+            ProviderRegistration(
+                "GDACS floods",
+                gdacs_floods,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.FLOOD}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.SECONDARY,
+                source_id="gdacs-floods",
+                allowed_hosts=gdacs_floods.allowed_hosts,
+                event_provider=gdacs_floods,
+                worldwide_provider=gdacs_floods,
+            ),
+            ProviderRegistration(
+                "EMSC SeismicPortal",
+                emsc,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.EARTHQUAKE}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.SECONDARY,
+                source_id="emsc-earthquakes",
+                allowed_hosts=emsc.allowed_hosts,
+                event_provider=emsc,
+                worldwide_provider=emsc,
             ),
             ProviderRegistration(
                 "USGS",
@@ -420,6 +528,48 @@ def build_current_disaster_report(
                 worldwide_provider=eonet,
             ),
             ProviderRegistration(
+                "GDACS wildfires",
+                gdacs_wildfires,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.WILDFIRE}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.SECONDARY,
+                source_id="gdacs-wildfires",
+                allowed_hosts=gdacs_wildfires.allowed_hosts,
+                event_provider=gdacs_wildfires,
+                worldwide_provider=gdacs_wildfires,
+            ),
+            ProviderRegistration(
+                "NASA FIRMS observations",
+                firms,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                    disasters=frozenset({Disaster.WILDFIRE}),
+                    country_codes=None,
+                    requires_configuration=True,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    situation_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.SECONDARY,
+                source_id="nasa-firms-observations",
+                configured=firms.configured,
+                allowed_hosts=firms.allowed_hosts,
+                situation_provider=firms,
+                worldwide_situation_provider=firms,
+            ),
+            ProviderRegistration(
                 "NASA COOLR Landslides",
                 coolr,
                 ProviderCapabilities(
@@ -438,6 +588,26 @@ def build_current_disaster_report(
                 allowed_hosts=coolr.allowed_hosts,
                 event_provider=coolr,
                 worldwide_provider=coolr,
+            ),
+            ProviderRegistration(
+                "Copernicus EMS Rapid Mapping landslides",
+                copernicus_mapping,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                    disasters=frozenset({Disaster.LANDSLIDE}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    situation_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.SECONDARY,
+                source_id="copernicus-rapid-mapping-landslides",
+                allowed_hosts=copernicus_mapping.allowed_hosts,
+                situation_provider=copernicus_mapping,
+                worldwide_situation_provider=copernicus_mapping,
             ),
             ProviderRegistration(
                 "GDACS tropical cyclones",
@@ -460,6 +630,26 @@ def build_current_disaster_report(
                 worldwide_provider=gdacs,
             ),
             ProviderRegistration(
+                "NOAA IBTrACS track reconciliation",
+                ibtracs,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                    disasters=frozenset({Disaster.TROPICAL_CYCLONE}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    situation_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.SECONDARY,
+                source_id="noaa-ibtracs-tracks",
+                allowed_hosts=ibtracs.allowed_hosts,
+                situation_provider=ibtracs,
+                worldwide_situation_provider=ibtracs,
+            ),
+            ProviderRegistration(
                 "Smithsonian / USGS Weekly Volcanic Activity Report",
                 smithsonian_gvp,
                 ProviderCapabilities(
@@ -478,6 +668,26 @@ def build_current_disaster_report(
                 allowed_hosts=smithsonian_gvp.allowed_hosts,
                 event_provider=smithsonian_gvp,
                 worldwide_provider=smithsonian_gvp,
+            ),
+            ProviderRegistration(
+                "GDACS volcanic eruptions",
+                gdacs_volcanoes,
+                ProviderCapabilities(
+                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    disasters=frozenset({Disaster.VOLCANIC_ERUPTION}),
+                    country_codes=None,
+                    geographic_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                    event_scopes=frozenset(
+                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
+                    ),
+                ),
+                tier=ProviderTier.SECONDARY,
+                source_id="gdacs-volcanic-eruptions",
+                allowed_hosts=gdacs_volcanoes.allowed_hosts,
+                event_provider=gdacs_volcanoes,
+                worldwide_provider=gdacs_volcanoes,
             ),
             ProviderRegistration(
                 "ReliefWeb",

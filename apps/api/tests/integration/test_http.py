@@ -903,7 +903,8 @@ async def test_recognized_wildfire_has_a_source_backed_event_path() -> None:
             ProviderRole.EVENT_DISCOVERY,
         )
         assert [(item.name, item.source_id) for item in selection.registrations] == [
-            ("NASA EONET Wildfires", "nasa-eonet-wildfires")
+            ("NASA EONET Wildfires", "nasa-eonet-wildfires"),
+            ("GDACS wildfires", "gdacs-wildfires"),
         ]
     finally:
         await service.aclose()

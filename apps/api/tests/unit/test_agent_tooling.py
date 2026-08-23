@@ -423,9 +423,16 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
 
     assert {item.source_id for item in catalog.sources()} == {
         "cems-gfm-floods",
+        "copernicus-rapid-mapping-landslides",
+        "emsc-earthquakes",
+        "gdacs-floods",
         "gdacs-tropical-cyclones",
+        "gdacs-volcanic-eruptions",
+        "gdacs-wildfires",
         "nasa-coolr-landslides",
         "nasa-eonet-wildfires",
+        "nasa-firms-observations",
+        "noaa-ibtracs-tracks",
         "reliefweb-situation-reports",
         "smithsonian-usgs-volcanic-activity",
         "usgs-earthquakes",
@@ -435,7 +442,6 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
     )
     assert all(
         SourceInformationRole.IMAGERY not in item.information_roles
-        and SourceInformationRole.MAP_LAYERS not in item.information_roles
         for item in catalog.sources()
     )
 

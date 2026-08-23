@@ -275,6 +275,50 @@ def test_accepts_matching_situation_source_metadata() -> None:
     validate(descriptor, provider)
 
 
+def test_accepts_map_layers_as_typed_situation_evidence() -> None:
+    descriptor = replace(
+        event_descriptor(),
+        information_roles=(SourceInformationRole.MAP_LAYERS,),
+        registered_tool_names=("retrieve_situation_evidence",),
+    )
+    provider = registration(roles=frozenset({ProviderRole.SITUATION_EVIDENCE}))
+
+    validate(descriptor, provider)
+
+
+def test_packaged_copernicus_rapid_mapping_metadata_is_map_evidence_only() -> None:
+    descriptor = StaticSourceCatalog().get("copernicus-rapid-mapping-landslides")
+
+    assert descriptor is not None
+    assert descriptor.provider_registration_name == (
+        "Copernicus EMS Rapid Mapping landslides"
+    )
+    assert descriptor.information_roles == (SourceInformationRole.MAP_LAYERS,)
+    assert descriptor.supported_disasters == (Disaster.LANDSLIDE,)
+    assert descriptor.registered_tool_names == ("retrieve_situation_evidence",)
+    assert descriptor.authority_level == "secondary"
+    assert any("Risk and Recovery" in item for item in descriptor.limitations)
+    assert any("identity" in item for item in descriptor.limitations)
+
+
+def test_packaged_ibtracs_metadata_is_track_reconciliation_only() -> None:
+    descriptor = StaticSourceCatalog().get("noaa-ibtracs-tracks")
+
+    assert descriptor is not None
+    assert descriptor.provider_registration_name == (
+        "NOAA IBTrACS track reconciliation"
+    )
+    assert set(descriptor.information_roles) == {
+        SourceInformationRole.SCIENTIFIC_EVENT_VERIFICATION,
+        SourceInformationRole.MAP_LAYERS,
+    }
+    assert descriptor.supported_disasters == (Disaster.TROPICAL_CYCLONE,)
+    assert descriptor.registered_tool_names == ("retrieve_situation_evidence",)
+    assert descriptor.authority_level == "scientific_authority"
+    assert any("not a live-event" in item for item in descriptor.limitations)
+    assert any("not independent" in item for item in descriptor.limitations)
+
+
 def test_packaged_gfm_source_metadata_declares_the_registered_authorities() -> None:
     descriptor = StaticSourceCatalog().get("cems-gfm-floods")
 

@@ -278,6 +278,28 @@ async def test_gfm_is_the_sole_primary_flood_event_discovery_authority() -> None
 
 
 @pytest.mark.asyncio
+async def test_emsc_is_secondary_scientific_earthquake_coverage() -> None:
+    service = build_current_disaster_report(Settings())
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        registrations = registry.select(
+            DisasterQuery(
+                Disaster.EARTHQUAKE,
+                JAPAN,
+                "recent",
+                ("latest",),
+            ),
+            ProviderRole.EVENT_DISCOVERY,
+        ).registrations
+        assert [(item.name, item.source_id, item.tier) for item in registrations] == [
+            ("EMSC SeismicPortal", "emsc-earthquakes", ProviderTier.SECONDARY),
+            ("USGS", "usgs-earthquakes", ProviderTier.SECONDARY),
+        ]
+    finally:
+        await service.aclose()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("disaster", "provider_name", "source_id"),
     (
@@ -330,6 +352,40 @@ async def test_smithsonian_is_the_sole_primary_volcanic_event_authority() -> Non
         )
         assert registration.allowed_hosts == frozenset(
             {"volcano.si.edu", "webservices.volcano.si.edu"}
+        )
+    finally:
+        await service.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("disaster", "provider_name", "source_id"),
+    (
+        (Disaster.FLOOD, "GDACS floods", "gdacs-floods"),
+        (Disaster.WILDFIRE, "GDACS wildfires", "gdacs-wildfires"),
+        (
+            Disaster.VOLCANIC_ERUPTION,
+            "GDACS volcanic eruptions",
+            "gdacs-volcanic-eruptions",
+        ),
+    ),
+)
+async def test_gdacs_discovery_is_secondary_for_non_cyclone_events(
+    disaster: Disaster, provider_name: str, source_id: str
+) -> None:
+    service = build_current_disaster_report(Settings())
+    try:
+        registry = service._provider_registry  # noqa: SLF001
+        matching = [
+            item
+            for item in registry.registrations
+            if disaster in item.capabilities.disasters and item.source_id == source_id
+        ]
+        assert [(item.name, item.tier) for item in matching] == [
+            (provider_name, ProviderTier.SECONDARY)
+        ]
+        assert matching[0].capabilities.event_scopes == frozenset(
+            {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
         )
     finally:
         await service.aclose()
