@@ -14,6 +14,7 @@ from disaster_monitor.application.ports.event_media import (
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
+from disaster_monitor.application.satellite_imagery import SatelliteImageryService
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -99,6 +100,11 @@ from disaster_monitor.infrastructure.operations.memory_repository import (
 )
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
+)
+from disaster_monitor.infrastructure.satellite_imagery.providers import (
+    NasaGibsImageryProvider,
+    PlanetImageryProvider,
+    SentinelHubImageryProvider,
 )
 from disaster_monitor.infrastructure.sources.static_source_catalog import (
     StaticSourceCatalog,
@@ -215,6 +221,37 @@ def build_visual_analyzer(settings: Settings) -> VisualAnalyzer:
         base_url=settings.ollama_base_url,
         timeout_seconds=settings.ollama_vision_timeout_seconds,
         max_tokens=settings.ollama_vision_max_tokens,
+    )
+
+
+def build_satellite_imagery_service(settings: Settings) -> SatelliteImageryService:
+    """Construct the direct GIBS catalog and fixed protected tile adapters."""
+    sentinel_instance_id = (
+        settings.copernicus_sentinel_hub_instance_id.get_secret_value()
+        if settings.copernicus_sentinel_hub_instance_id is not None
+        else None
+    )
+    planet_api_key = (
+        settings.planet_api_key.get_secret_value()
+        if settings.planet_api_key is not None
+        else None
+    )
+    return SatelliteImageryService(
+        (
+            NasaGibsImageryProvider(),
+            SentinelHubImageryProvider(
+                instance_id=sentinel_instance_id,
+                layer_id=settings.copernicus_sentinel_hub_layer_id,
+                timeout_seconds=settings.disaster_provider_timeout_seconds,
+                maximum_response_bytes=(settings.disaster_provider_max_response_bytes),
+            ),
+            PlanetImageryProvider(
+                api_key=planet_api_key,
+                mosaic_name=settings.planet_mosaic_name,
+                timeout_seconds=settings.disaster_provider_timeout_seconds,
+                maximum_response_bytes=(settings.disaster_provider_max_response_bytes),
+            ),
+        )
     )
 
 

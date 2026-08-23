@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     disaster_provider_max_response_bytes: int = Field(
         default=1_000_000, ge=10_000, le=5_000_000
     )
+    copernicus_sentinel_hub_instance_id: SecretStr | None = Field(
+        default=None, repr=False
+    )
+    copernicus_sentinel_hub_layer_id: str = Field(
+        default="TRUE_COLOR", pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    planet_api_key: SecretStr | None = Field(default=None, repr=False)
+    planet_mosaic_name: str | None = Field(default=None, max_length=200)
     event_media_enabled: bool = True
     event_media_target_count: int = Field(default=3, ge=1, le=6)
     event_media_candidate_limit: int = Field(default=12, ge=3, le=30)

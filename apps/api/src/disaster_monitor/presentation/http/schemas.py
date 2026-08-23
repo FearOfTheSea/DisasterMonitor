@@ -344,6 +344,27 @@ class ProviderFreshnessResponse(BaseModel):
     latest_error_code: str | None = None
 
 
+class SatelliteImageryProductResponse(BaseModel):
+    """Credential-free capabilities for one map imagery source."""
+
+    source_id: str
+    display_name: str
+    provider_id: str
+    provider_name: str
+    temporal_mode: Literal["daily", "subdaily", "fixed"]
+    temporal_step_minutes: int | None = None
+    attribution: str
+    maximum_useful_zoom: int
+    access_mode: Literal["direct_gibs", "api"]
+    available: bool
+
+
+class SatelliteImageryCatalogResponse(BaseModel):
+    """Selectable satellite sources without upstream addresses or secrets."""
+
+    products: list[SatelliteImageryProductResponse]
+
+
 class CountryCatalogSourceResponse(BaseModel):
     """Immutable upstream revision admitted to the active catalog."""
 

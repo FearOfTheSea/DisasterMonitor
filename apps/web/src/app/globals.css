@@ -245,6 +245,96 @@ summary:focus-visible {
   width: 100%;
 }
 
+.satellite-controls {
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+  display: grid;
+  font-size: 0.7rem;
+  gap: 8px;
+  margin: 0;
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: min(320px, calc(100% - 28px));
+  z-index: 5;
+}
+
+.satellite-controls legend {
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 0 5px;
+}
+
+.satellite-controls-heading,
+.satellite-toggle,
+.satellite-controls label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.satellite-controls-heading {
+  justify-content: space-between;
+}
+
+.satellite-toggle span,
+.satellite-controls label > span:first-child {
+  color: var(--ink-soft);
+  font-weight: 650;
+}
+
+.satellite-controls label:not(.satellite-toggle) {
+  display: grid;
+  grid-template-columns: minmax(92px, auto) minmax(0, 1fr) auto;
+}
+
+.satellite-controls select,
+.satellite-controls input[type='date'],
+.satellite-controls input[type='datetime-local'] {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  min-width: 0;
+  padding: 5px 6px;
+  width: 100%;
+}
+
+.satellite-controls select {
+  grid-column: 1 / -1;
+}
+
+.satellite-controls input[type='range'] {
+  accent-color: var(--accent);
+  min-width: 0;
+  width: 100%;
+}
+
+.satellite-controls output,
+.satellite-fixed-time,
+.satellite-source-details {
+  color: var(--muted);
+}
+
+.satellite-source-details {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 3px;
+  line-height: 1.35;
+  padding-top: 7px;
+}
+
+.satellite-source-details strong {
+  color: var(--ink-soft);
+}
+
 .map-overlay {
   align-items: center;
   background: rgba(255, 255, 255, 0.96);
@@ -258,7 +348,7 @@ summary:focus-visible {
   gap: 5px;
   left: 54px;
   line-height: 1.3;
-  max-width: calc(100% - 72px);
+  max-width: calc(100% - 390px);
   padding: 8px 10px;
   position: absolute;
   top: 14px;
@@ -1696,6 +1786,12 @@ summary:focus-visible {
     max-width: calc(100% - 28px);
     right: auto;
     top: 14px;
+  }
+
+  .satellite-controls {
+    max-height: calc(100% - 122px);
+    right: 12px;
+    top: 104px;
   }
 
   .map-region .ol-zoom {

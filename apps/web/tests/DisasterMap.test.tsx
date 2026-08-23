@@ -1,5 +1,6 @@
-import { render } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
@@ -11,8 +12,23 @@ const adapterMocks = vi.hoisted(() => ({
   onSelectIncident: undefined as ((incidentId: string) => void) | undefined,
   setActiveIncidents: vi.fn(),
   setCommonOperationalPicture: vi.fn(),
+  setSatelliteImagery: vi.fn(),
+  setSatelliteOpacity: vi.fn(),
   setSelectedIncident: vi.fn(),
 }));
+
+const satelliteClientMocks = vi.hoisted(() => ({
+  fetchCatalog: vi.fn(),
+}));
+
+vi.mock('@/features/map/api/satelliteImageryClient', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@/features/map/api/satelliteImageryClient')>();
+  return {
+    ...original,
+    fetchSatelliteImageryCatalog: satelliteClientMocks.fetchCatalog,
+  };
+});
 
 vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
   OpenLayersMapAdapter: class {
@@ -25,12 +41,28 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
     focusActiveIncident = adapterMocks.focusActiveIncident;
     setActiveIncidents = adapterMocks.setActiveIncidents;
     setCommonOperationalPicture = adapterMocks.setCommonOperationalPicture;
+    setSatelliteImagery = adapterMocks.setSatelliteImagery;
+    setSatelliteOpacity = adapterMocks.setSatelliteOpacity;
     setSelectedIncident = adapterMocks.setSelectedIncident;
   },
 }));
 
 describe('DisasterMap assistant focus', () => {
-  beforeEach(() => vi.clearAllMocks());
+  afterEach(cleanup);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    satelliteClientMocks.fetchCatalog.mockResolvedValue([
+      { sourceId: 'nasa-viirs-snpp-true-color', available: true },
+      { sourceId: 'nasa-modis-terra-true-color', available: true },
+      { sourceId: 'nasa-modis-aqua-true-color', available: true },
+      { sourceId: 'nasa-goes-east-geocolor', available: true },
+      { sourceId: 'nasa-goes-west-geocolor', available: true },
+      { sourceId: 'nasa-himawari-9-visible', available: true },
+      { sourceId: 'copernicus-sentinel-2-true-color', available: false },
+      { sourceId: 'planet-configured-mosaic', available: false },
+    ]);
+  });
 
   it('fits each logical area once and refits when its bounds change', () => {
     const onViewChange = vi.fn();
@@ -194,5 +226,74 @@ describe('DisasterMap assistant focus', () => {
     adapterMocks.onSelectIncident?.('flood-1');
 
     expect(onSelectIncident).toHaveBeenCalledWith('flood-1');
+  });
+
+  it('switches the one satellite layer and preserves daily versus UTC controls', async () => {
+    const user = userEvent.setup();
+    render(<DisasterMap onViewChange={vi.fn()} onSelectIncident={vi.fn()} />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
+    await waitFor(() =>
+      expect(adapterMocks.setSatelliteImagery).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          sourceId: 'nasa-viirs-snpp-true-color',
+          url: expect.stringContaining('VIIRS_SNPP_CorrectedReflectance_TrueColor'),
+        }),
+      ),
+    );
+    expect(screen.getByLabelText('Observation date')).toHaveAttribute('type', 'date');
+
+    await user.selectOptions(
+      screen.getByLabelText('Satellite source'),
+      'nasa-goes-east-geocolor',
+    );
+    const utcInput = screen.getByLabelText('Observation date/time (UTC)');
+    expect(utcInput).toHaveAttribute('type', 'datetime-local');
+    expect(utcInput).toHaveAttribute('step', '600');
+    fireEvent.change(utcInput, { target: { value: '2026-08-20T12:20' } });
+    await waitFor(() =>
+      expect(adapterMocks.setSatelliteImagery).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          sourceId: 'nasa-goes-east-geocolor',
+          url: expect.stringContaining('2026-08-20T12:20:00Z'),
+        }),
+      ),
+    );
+
+    const activeLayers = adapterMocks.setSatelliteImagery.mock.calls
+      .map(([configuration]) => configuration)
+      .filter(Boolean);
+    expect(activeLayers.at(-1)).toMatchObject({ sourceId: 'nasa-goes-east-geocolor' });
+    expect(screen.getByText(/Imagery is not live/i)).toBeVisible();
+    expect(screen.getByText(/Requested observation:/i)).toHaveTextContent(
+      '2026-08-20T12:20:00Z',
+    );
+  });
+
+  it('updates imagery opacity and turns the satellite layer off', async () => {
+    const user = userEvent.setup();
+    render(<DisasterMap onViewChange={vi.fn()} onSelectIncident={vi.fn()} />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
+    fireEvent.change(screen.getByLabelText('Satellite opacity'), {
+      target: { value: '0.4' },
+    });
+    expect(adapterMocks.setSatelliteOpacity).toHaveBeenLastCalledWith(0.4);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
+    expect(adapterMocks.setSatelliteImagery).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('disables unavailable credentialed provider options without failing the map', async () => {
+    render(<DisasterMap onViewChange={vi.fn()} onSelectIncident={vi.fn()} />);
+
+    await waitFor(() => expect(satelliteClientMocks.fetchCatalog).toHaveBeenCalled());
+    expect(
+      screen.getByRole('option', { name: 'Copernicus Sentinel-2 True Color' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('option', { name: 'Planet configured mosaic' }),
+    ).toBeDisabled();
+    expect(screen.getByLabelText('Interactive map')).toBeInTheDocument();
   });
 });

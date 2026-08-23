@@ -29,6 +29,7 @@ from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
 )
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
+from disaster_monitor.application.satellite_imagery import SatelliteImageryService
 from disaster_monitor.application.services.active_incidents import (
     ActiveIncidentsService,
 )
@@ -68,6 +69,7 @@ from disaster_monitor.infrastructure.composition import (
     build_event_media_services,
     build_language_model,
     build_operational_services,
+    build_satellite_imagery_service,
     build_source_catalog,
     build_visual_analyzer,
 )
@@ -95,6 +97,7 @@ def create_app(
     media_asset_store: MediaAssetStore | None = None,
     active_incidents_service: ActiveIncidentsService | None = None,
     conversation_repository: ConversationStore | None = None,
+    satellite_imagery_service: SatelliteImageryService | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -125,6 +128,9 @@ def create_app(
         else (build_agent_model(app_settings) if model is None else None)
     )
     configured_visual_analyzer = visual_analyzer or build_visual_analyzer(app_settings)
+    configured_satellite_imagery = (
+        satellite_imagery_service or build_satellite_imagery_service(app_settings)
+    )
 
     def clock() -> datetime:
         return datetime.now(UTC)
@@ -192,6 +198,7 @@ def create_app(
         close_media = getattr(app.state.event_media, "aclose", None)
         if close_media is not None:
             await close_media()
+        await app.state.satellite_imagery_service.aclose()
 
     app = FastAPI(
         title=app_settings.app_name,
@@ -238,6 +245,7 @@ def create_app(
     app.state.visual_analyzer = configured_visual_analyzer
     app.state.event_media = media_services.discovery
     app.state.media_asset_store = media_services.store
+    app.state.satellite_imagery_service = configured_satellite_imagery
     app.state.answer_map_question = AnswerMapQuestion(
         language_model,
         disaster_report,

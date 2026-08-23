@@ -9,6 +9,7 @@ import Point from 'ol/geom/Point';
 import Polygon from 'ol/geom/Polygon';
 import OSM from 'ol/source/OSM';
 import VectorSource from 'ol/source/Vector';
+import XYZ from 'ol/source/XYZ';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 
@@ -36,6 +37,14 @@ type MapAdapterOptions = {
   onSelectIncident: (incidentId: string) => void;
 };
 
+export type SatelliteLayerConfiguration = {
+  sourceId: string;
+  url: string;
+  attribution: string;
+  maximumUsefulZoom: number;
+  opacity: number;
+};
+
 const DEFAULT_FIT_PADDING = 56;
 const WEB_MERCATOR_MAX_LATITUDE = 85.0511287798066;
 
@@ -48,12 +57,15 @@ export class OpenLayersMapAdapter {
   private readonly map: Map;
   private readonly activeIncidentSource: VectorSource<Feature<Geometry>>;
   private readonly activeIncidentLayer: VectorLayer<VectorSource<Feature<Geometry>>>;
+  private satelliteLayer?: TileLayer<XYZ>;
   private copLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
   private pendingArea?: PendingArea;
   private pendingIncidentId?: string;
 
   constructor(private readonly options: MapAdapterOptions) {
     const baseLayer = new TileLayer({ source: new OSM() });
+    baseLayer.set('dmLayerType', 'base');
+    baseLayer.setZIndex(0);
     const view = new View({
       center: fromLonLat([
         options.initialView.centerLongitude,
@@ -75,6 +87,7 @@ export class OpenLayersMapAdapter {
         ),
     });
     this.activeIncidentLayer.set('dmLayerType', 'active-incidents');
+    this.activeIncidentLayer.setZIndex(10);
     this.map = new Map({
       target: options.target,
       layers: [baseLayer, this.activeIncidentLayer],
@@ -103,6 +116,7 @@ export class OpenLayersMapAdapter {
     this.pendingArea = undefined;
     this.pendingIncidentId = undefined;
     this.activeIncidentSource.clear();
+    this.clearSatelliteImagery();
     this.clearCommonOperationalPicture();
     this.map.setTarget(undefined);
   }
@@ -137,8 +151,35 @@ export class OpenLayersMapAdapter {
         style: (feature) => styleForAuthority(feature.get('authority')),
       });
       layer.set('dmCopId', cop.cop_id);
+      layer.set('dmLayerType', 'common-operational-picture');
+      layer.setZIndex(20);
       this.map.addLayer(layer);
       this.copLayers.push(layer);
+    }
+  }
+
+  setSatelliteImagery(configuration?: SatelliteLayerConfiguration): void {
+    this.clearSatelliteImagery();
+    if (!configuration) return;
+    const layer = new TileLayer({
+      opacity: validOpacity(configuration.opacity) ? configuration.opacity : 1,
+      source: new XYZ({
+        url: configuration.url,
+        attributions: configuration.attribution,
+        maxZoom: configuration.maximumUsefulZoom,
+        crossOrigin: 'anonymous',
+      }),
+    });
+    layer.set('dmLayerType', 'satellite-imagery');
+    layer.set('dmSatelliteSourceId', configuration.sourceId);
+    layer.setZIndex(1);
+    this.map.getLayers().insertAt(1, layer);
+    this.satelliteLayer = layer;
+  }
+
+  setSatelliteOpacity(opacity: number): void {
+    if (this.satelliteLayer && validOpacity(opacity)) {
+      this.satelliteLayer.setOpacity(opacity);
     }
   }
 
@@ -243,6 +284,15 @@ export class OpenLayersMapAdapter {
     for (const layer of this.copLayers) this.map.removeLayer(layer);
     this.copLayers = [];
   }
+
+  private clearSatelliteImagery(): void {
+    if (this.satelliteLayer) this.map.removeLayer(this.satelliteLayer);
+    this.satelliteLayer = undefined;
+  }
+}
+
+function validOpacity(opacity: number): boolean {
+  return Number.isFinite(opacity) && opacity >= 0 && opacity <= 1;
 }
 
 function validAreaBounds(bounds: MapAreaBounds): boolean {

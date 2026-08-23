@@ -23,6 +23,13 @@ from disaster_monitor.application.ports.operational_state import OperationalRepo
 from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
 )
+from disaster_monitor.application.ports.satellite_imagery import SatelliteTileRequest
+from disaster_monitor.application.satellite_imagery import (
+    SatelliteImageryInputError,
+    SatelliteImageryService,
+    SatelliteImageryUnavailableError,
+    SatelliteImageryUpstreamError,
+)
 from disaster_monitor.application.services.active_incidents import (
     ActiveIncidentsQuery,
     ActiveIncidentsService,
@@ -73,6 +80,8 @@ from disaster_monitor.presentation.http.schemas import (
     ProviderFreshnessResponse,
     ReadinessResponse,
     ReportSectionResponse,
+    SatelliteImageryCatalogResponse,
+    SatelliteImageryProductResponse,
     SelectedEventResponse,
     SourceResponse,
 )
@@ -98,6 +107,11 @@ def get_language_model(request: Request) -> LanguageModel:
 def get_active_incidents_service(request: Request) -> ActiveIncidentsService:
     """Retrieve the provider-backed incident discovery use case."""
     return cast(ActiveIncidentsService, request.app.state.active_incidents_service)
+
+
+def get_satellite_imagery_service(request: Request) -> SatelliteImageryService:
+    """Retrieve the validated imagery use case built by the composition root."""
+    return cast(SatelliteImageryService, request.app.state.satellite_imagery_service)
 
 
 def _event_geometry_response(
@@ -157,6 +171,66 @@ _FRESHNESS_EXPECTATIONS = {
 async def health() -> HealthResponse:
     """Return liveness without contacting Ollama."""
     return HealthResponse(status="ok", service="disaster-monitor-api", version="0.1.0")
+
+
+@router.get(
+    "/satellite-imagery",
+    response_model=SatelliteImageryCatalogResponse,
+    tags=["satellite-imagery"],
+)
+async def satellite_imagery_catalog(
+    service: Annotated[SatelliteImageryService, Depends(get_satellite_imagery_service)],
+) -> SatelliteImageryCatalogResponse:
+    """Return product capabilities and configuration availability without secrets."""
+    return SatelliteImageryCatalogResponse(
+        products=[
+            SatelliteImageryProductResponse(
+                source_id=product.source_id,
+                display_name=product.display_name,
+                provider_id=product.provider_id,
+                provider_name=product.provider_name,
+                temporal_mode=product.temporal_mode,
+                temporal_step_minutes=product.temporal_step_minutes,
+                attribution=product.attribution,
+                maximum_useful_zoom=product.maximum_useful_zoom,
+                access_mode=product.access_mode,
+                available=product.available,
+            )
+            for product in service.catalog()
+        ]
+    )
+
+
+@router.get(
+    "/satellite-imagery/tiles/{provider_id}/{source_id}/{z}/{x}/{y}",
+    tags=["satellite-imagery"],
+)
+async def satellite_imagery_tile(
+    provider_id: str,
+    source_id: str,
+    z: int,
+    x: int,
+    y: int,
+    service: Annotated[SatelliteImageryService, Depends(get_satellite_imagery_service)],
+    time: Annotated[str | None, Query(min_length=10, max_length=32)] = None,
+) -> Response:
+    """Fetch one validated protected tile from a fixed configured upstream."""
+    try:
+        tile = await service.fetch_tile(
+            SatelliteTileRequest(provider_id, source_id, z, x, y, time)
+        )
+    except SatelliteImageryInputError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except SatelliteImageryUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except SatelliteImageryUpstreamError as error:
+        status_code = 504 if error.reason_code == "timeout" else 502
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
+    return Response(
+        content=tile.content,
+        media_type=tile.media_type,
+        headers={"Cache-Control": "private, max-age=300"},
+    )
 
 
 @router.get(

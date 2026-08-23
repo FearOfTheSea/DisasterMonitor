@@ -11,6 +11,8 @@ facts. See [docs/agent-runtime.md](docs/agent-runtime.md).
 
 - Next.js/OpenLayers map with a default-visible, source-backed Active Incidents
   sidebar plus an assistant UI with session-local conversation state.
+- Selectable NASA GIBS satellite imagery plus optional server-proxied Copernicus
+  Sentinel-2 and one configured Planet mosaic.
 - FastAPI health, readiness, active-incidents, assistant, and operations endpoints.
 - Optional local Qwen text and vision adapters.
 - Deterministic request normalization, event selection, evidence reconciliation, and
@@ -31,10 +33,10 @@ Unsupported combinations and missing configuration are reported explicitly. See
 
 ## Deferred
 
-Live weather, geocoding, automatic imagery retrieval, broad news aggregation, hosted
-models, paid map services, production identity/TLS, cloud deployment, and consequential
-analytics remain deferred. External datasets, human evaluations, and pilot evidence
-remain release gates.
+Live weather, geocoding, dynamic satellite scene discovery, broad news aggregation,
+hosted models, production identity/TLS, cloud deployment, and consequential analytics
+remain deferred. External datasets, human evaluations, and pilot evidence remain
+release gates.
 
 ## Repository layout
 
@@ -90,6 +92,7 @@ Useful checks:
 Invoke-RestMethod http://localhost:8001/api/v1/health
 Invoke-RestMethod http://localhost:8001/api/v1/ready
 Invoke-RestMethod 'http://localhost:8001/api/v1/incidents?time_window_days=7&limit_per_disaster=10'
+Invoke-RestMethod http://localhost:8001/api/v1/satellite-imagery
 ```
 
 The incidents endpoint queries the registered worldwide event-discovery providers
@@ -98,6 +101,32 @@ records per disaster. Each of the six hazards has a separate coverage state so a
 upstream failure, unavailable provider, or successful empty result cannot be mistaken
 for proof that no disaster occurred. Map features are drawn only from source-backed
 point, track, or area geometry returned by the endpoint.
+
+### Optional protected satellite imagery
+
+NASA VIIRS, MODIS, GOES, and Himawari imagery loads directly from the public NASA
+GIBS Web Mercator service. Copernicus and Planet tiles always pass through the API so
+their credentials never enter browser configuration or returned tile URLs.
+
+To enable Sentinel-2, configure a Sentinel Hub WMS instance containing the named true
+color layer:
+
+```dotenv
+COPERNICUS_SENTINEL_HUB_INSTANCE_ID=your-private-instance-id
+COPERNICUS_SENTINEL_HUB_LAYER_ID=TRUE_COLOR
+```
+
+To enable Planet, configure one mosaic already accessible to the account:
+
+```dotenv
+PLANET_API_KEY=your-private-api-key
+PLANET_MOSAIC_NAME=your-accessible-mosaic-name
+```
+
+Keep these values in `apps/api/.env` or the server environment. Do not place them in
+`NEXT_PUBLIC_*` variables. When either provider is not configured, its map option is
+shown disabled. Planet support is intentionally limited to the configured mosaic; it
+does not discover PlanetScope scenes dynamically.
 
 ## Run with Compose
 
