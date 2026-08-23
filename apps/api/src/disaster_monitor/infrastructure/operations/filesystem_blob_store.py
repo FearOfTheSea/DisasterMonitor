@@ -14,10 +14,7 @@ class FilesystemBlobStore:
         self._root.mkdir(parents=True, exist_ok=True)
 
     def put(self, payload_sha256: str, content: bytes) -> str:
-        digest = payload_sha256.removeprefix("sha256:")
-        if len(digest) != 64:
-            raise ValueError("Blob key must be a SHA-256 checksum.")
-        destination = self._root / digest[:2] / digest[2:4] / f"{digest}.bin"
+        destination = self._path(payload_sha256)
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             if destination.read_bytes() != content:
@@ -25,6 +22,10 @@ class FilesystemBlobStore:
         else:
             destination.write_bytes(content)
         return destination.resolve().as_uri()
+
+    def get(self, payload_sha256: str) -> bytes | None:
+        source = self._path(payload_sha256)
+        return source.read_bytes() if source.is_file() else None
 
     def delete(self, blob_uri: str) -> None:
         parsed = urlparse(blob_uri)
@@ -38,3 +39,9 @@ class FilesystemBlobStore:
             raise ValueError("Blob deletion target escaped the configured root.")
         if candidate.is_file():
             candidate.unlink()
+
+    def _path(self, payload_sha256: str) -> Path:
+        digest = payload_sha256.removeprefix("sha256:")
+        if re.fullmatch(r"[a-f0-9]{64}", digest) is None:
+            raise ValueError("Blob key must be a lowercase SHA-256 checksum.")
+        return self._root / digest[:2] / digest[2:4] / f"{digest}.bin"

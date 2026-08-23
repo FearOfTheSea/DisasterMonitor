@@ -4,6 +4,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from disaster_monitor.application.assistant_message_payload import (
+    assistant_message_payload,
+)
 from disaster_monitor.application.dto import AssistantAnswer
 from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.conversation_store import ConversationStore
@@ -83,6 +86,7 @@ class RunConversationTurn:
                 role=ConversationRole.ASSISTANT,
                 content=result.message,
                 created_at=self._clock(),
+                assistant_payload=assistant_message_payload(result),
             )
         )
         return result

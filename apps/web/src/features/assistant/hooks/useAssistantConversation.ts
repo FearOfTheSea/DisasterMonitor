@@ -78,7 +78,20 @@ export function useAssistantConversation() {
         const loaded = await client.getConversation(selectedId);
         setConversationId(loaded.conversation_id);
         setMessages(
-          loaded.messages.map(({ id, role, content }) => ({ id, role, content })),
+          loaded.messages.map(({ id, role, content, assistant_response }) => {
+            const report = assistant_response
+              ? toAssistantReport(assistant_response)
+              : undefined;
+            return {
+              id,
+              role,
+              content,
+              ...(assistant_response?.map_action
+                ? { mapAction: assistant_response.map_action }
+                : {}),
+              ...(report ? { report } : {}),
+            };
+          }),
         );
         setStatus('idle');
       } catch (caught) {

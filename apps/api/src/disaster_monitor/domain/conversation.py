@@ -4,10 +4,22 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+type JsonValue = (
+    None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+)
+
 
 class ConversationRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
+
+
+@dataclass(frozen=True, slots=True)
+class AssistantMessagePayload:
+    """Versioned application response state retained with an assistant turn."""
+
+    schema_version: str
+    data: dict[str, JsonValue]
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +29,7 @@ class ConversationMessage:
     role: ConversationRole
     content: str
     created_at: datetime
+    assistant_payload: AssistantMessagePayload | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -20,6 +20,7 @@ export type PersistedConversationMessage = {
   role: MessageRole;
   content: string;
   created_at: string;
+  assistant_response?: AssistantResponse | null;
 };
 
 export type PersistedConversation = {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import Any, cast
 
@@ -9,6 +10,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from disaster_monitor.domain.conversation import (
+    AssistantMessagePayload,
     Conversation,
     ConversationMessage,
     ConversationRole,
@@ -53,7 +55,8 @@ class PostgresConversationRepository:
                     return None
                 await cursor.execute(
                     """
-                    SELECT message_id, conversation_id, role, content, created_at
+                    SELECT message_id, conversation_id, role, content, created_at,
+                           assistant_payload
                     FROM conversation_message
                     WHERE conversation_id=%s
                     ORDER BY created_at, message_id
@@ -119,8 +122,9 @@ class PostgresConversationRepository:
                 await cursor.execute(
                     """
                     INSERT INTO conversation_message(
-                        message_id, conversation_id, role, content, created_at
-                    ) VALUES (%s, %s, %s, %s, %s)
+                        message_id, conversation_id, role, content, created_at,
+                        assistant_payload
+                    ) VALUES (%s, %s, %s, %s, %s, %s::jsonb)
                     """,
                     (
                         message.message_id,
@@ -128,6 +132,18 @@ class PostgresConversationRepository:
                         message.role.value,
                         message.content,
                         created_at,
+                        (
+                            None
+                            if message.assistant_payload is None
+                            else json.dumps(
+                                {
+                                    "schema_version": (
+                                        message.assistant_payload.schema_version
+                                    ),
+                                    "data": message.assistant_payload.data,
+                                }
+                            )
+                        ),
                     ),
                 )
                 await cursor.execute(
@@ -158,4 +174,19 @@ def _message(row: dict[str, Any]) -> ConversationMessage:
         role=ConversationRole(str(row["role"])),
         content=str(row["content"]),
         created_at=cast(datetime, row["created_at"]),
+        assistant_payload=_assistant_payload(row.get("assistant_payload")),
     )
+
+
+def _assistant_payload(value: object) -> AssistantMessagePayload | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = json.loads(value)
+    if not isinstance(value, dict):
+        raise TypeError("Stored assistant payload must be a JSON object.")
+    schema_version = value.get("schema_version")
+    data = value.get("data")
+    if not isinstance(schema_version, str) or not isinstance(data, dict):
+        raise TypeError("Stored assistant payload envelope is malformed.")
+    return AssistantMessagePayload(schema_version, cast(dict[str, Any], data))

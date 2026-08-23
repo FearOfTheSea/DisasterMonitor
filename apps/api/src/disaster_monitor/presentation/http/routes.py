@@ -8,7 +8,10 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from disaster_monitor.application.dto import ModelReadiness
+from disaster_monitor.application.assistant_message_payload import (
+    assistant_answer_from_payload,
+)
+from disaster_monitor.application.dto import AssistantAnswer, ModelReadiness
 from disaster_monitor.application.media import DisasterMediaGallery
 from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.application.ports.conversation_store import ConversationStore
@@ -553,6 +556,12 @@ async def assistant(
         ),
         multimodal_inputs=tuple(_asset_input(item) for item in body.multimodal_assets),
     )
+    return _assistant_response(result, http_request)
+
+
+def _assistant_response(
+    result: AssistantAnswer, http_request: Request
+) -> AssistantResponse:
     investigation = (
         None
         if result.investigation is None
@@ -742,6 +751,7 @@ async def list_conversations(
 )
 async def get_conversation(
     conversation_id: str,
+    http_request: Request,
     repository: Annotated[ConversationStore, Depends(get_conversation_store)],
 ) -> ConversationResponse:
     """Return one stored transcript in chronological order."""
@@ -761,6 +771,16 @@ async def get_conversation(
                 role=message.role.value,
                 content=message.content,
                 created_at=message.created_at,
+                assistant_response=(
+                    _assistant_response(answer, http_request)
+                    if (
+                        answer := assistant_answer_from_payload(
+                            message.assistant_payload
+                        )
+                    )
+                    is not None
+                    else None
+                ),
             )
             for message in conversation.messages
         ],

@@ -37,6 +37,13 @@ describe('AssistantClient', () => {
               content: 'What happened?',
               created_at: '2026-08-21T10:00:00Z',
             },
+            {
+              id: 'message-2',
+              role: 'assistant',
+              content: 'A legacy answer.',
+              created_at: '2026-08-21T10:01:00Z',
+              assistant_response: null,
+            },
           ],
         }),
         { status: 200 },
@@ -47,7 +54,10 @@ describe('AssistantClient', () => {
 
     await expect(client.listConversations()).resolves.toHaveLength(1);
     await expect(client.getConversation('conversation-1')).resolves.toMatchObject({
-      messages: [{ content: 'What happened?' }],
+      messages: [
+        { content: 'What happened?' },
+        { content: 'A legacy answer.', assistant_response: null },
+      ],
     });
     await expect(client.deleteConversation('conversation-1')).resolves.toBeUndefined();
 

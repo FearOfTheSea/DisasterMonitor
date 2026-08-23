@@ -74,7 +74,9 @@ from disaster_monitor.infrastructure.composition import (
     build_visual_analyzer,
 )
 from disaster_monitor.infrastructure.configuration import Settings
-from disaster_monitor.infrastructure.media.memory_store import InMemoryMediaAssetStore
+from disaster_monitor.infrastructure.media.filesystem_store import (
+    FilesystemMediaAssetStore,
+)
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
 )
@@ -140,7 +142,11 @@ def create_app(
     else:
         media_services = EventMediaServices(
             event_media,
-            media_asset_store or InMemoryMediaAssetStore(),
+            media_asset_store
+            or FilesystemMediaAssetStore(
+                app_settings.event_media_blob_root,
+                maximum_bytes=app_settings.event_media_store_maximum_bytes,
+            ),
         )
 
     asset_admission = MultimodalAssetAdmissionService(clock=clock)

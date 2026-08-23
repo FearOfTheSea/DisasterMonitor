@@ -379,6 +379,50 @@ describe('AssistantPanel', () => {
     expect(screen.getByText(/1 rejected/)).toBeInTheDocument();
   });
 
+  it('surfaces zero-photo media diagnostics without rendering an image', () => {
+    render(
+      <AssistantPanel
+        messages={[
+          {
+            id: 'empty-media-report',
+            role: 'assistant',
+            content: 'The report remains available without photos.',
+            report: {
+              responseType: 'current_disaster',
+              warnings: [],
+              sections: [],
+              sources: [],
+              partial: false,
+              mediaGallery: {
+                event_id: 'event-1',
+                physical_event_id: 'physical-event-1',
+                generated_at: '2026-08-21T10:00:00Z',
+                rejected_count: 3,
+                provider_ids: ['fixture-media'],
+                warnings: [
+                  'No source-associated images met the event and media safety gates.',
+                ],
+                items: [],
+              },
+            },
+          },
+        ]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('0 shown · 3 rejected')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'No source-associated images met the event and media safety gates.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
   it('keeps source epistemic status distinct from DM analytical estimates', () => {
     render(
       <AssistantPanel

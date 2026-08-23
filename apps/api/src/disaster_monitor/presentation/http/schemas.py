@@ -75,12 +75,13 @@ class AssistantResponse(BaseModel):
 
 
 class ConversationMessageResponse(BaseModel):
-    """Persisted text from one assistant conversation turn."""
+    """Persisted turn with optional structured assistant response state."""
 
     id: str
     role: Literal["user", "assistant"]
     content: str
     created_at: datetime
+    assistant_response: AssistantResponse | None = None
 
 
 class ConversationSummaryResponse(BaseModel):

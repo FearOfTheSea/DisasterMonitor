@@ -171,11 +171,17 @@ export class AssistantClient {
       return false;
     }
     const item = value as Record<string, unknown>;
+    const assistantResponse = item.assistant_response;
     return (
       typeof item.id === 'string' &&
       (item.role === 'user' || item.role === 'assistant') &&
       typeof item.content === 'string' &&
-      typeof item.created_at === 'string'
+      typeof item.created_at === 'string' &&
+      (assistantResponse === undefined ||
+        assistantResponse === null ||
+        (item.role === 'assistant' &&
+          this.isAssistantResponse(assistantResponse) &&
+          assistantResponse.message === item.content))
     );
   }
 

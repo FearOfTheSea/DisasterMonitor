@@ -61,7 +61,9 @@ reported as `corroborated` rather than verified.
 Pixels are not used to establish event identity. Metadata can still be wrong, so the UI
 labels every item as contextual source media and exposes the association detail. The
 gallery fails soft: no or insufficient accepted photos leaves the source-backed text
-report intact and adds no factual claim.
+report intact and adds no factual claim. If discovery runs but accepts no photos, an
+empty gallery retains bounded provider, rejection-count, and warning diagnostics; it
+never presents rejected candidates as gallery items.
 
 ## Rights, storage, and configuration
 
@@ -70,9 +72,15 @@ credit found on the source page, and links back to that page. It does not invent
 license or claim reuse rights. Source-controlled previews remain subject to the source's
 terms and should be reviewed before production redistribution.
 
-Retrieved bytes are served through a same-origin API route from a bounded in-process
-store. They are content-checksummed, byte-limited, and evicted when the configured
-store budget is exceeded. They are not persisted and disappear on API restart.
+Retrieved bytes are served through a same-origin API route from a bounded,
+content-addressed filesystem store. Existing admitted assets are never evicted to make
+room for new ones, so gallery references retained by a conversation remain usable
+across API restarts for as long as the configured local data volume is retained. When
+the byte ceiling is reached, new media admission fails soft and the source-backed text
+report remains available. The store does not yet implement automated garbage
+collection when conversations are deleted.
+The Compose deployment mounts `EVENT_MEDIA_BLOB_ROOT` on its own named volume so
+container replacement does not invalidate persisted gallery references.
 
 The defaults require no new `.env` values:
 
@@ -82,6 +90,7 @@ EVENT_MEDIA_TARGET_COUNT=3
 EVENT_MEDIA_CANDIDATE_LIMIT=12
 EVENT_MEDIA_MAX_IMAGE_BYTES=3000000
 EVENT_MEDIA_STORE_MAXIMUM_BYTES=24000000
+EVENT_MEDIA_BLOB_ROOT=data/event-media/blobs
 ```
 
 Set `EVENT_MEDIA_ENABLED=false` to disable discovery. Provider timeouts and source-page

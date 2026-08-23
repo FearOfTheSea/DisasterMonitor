@@ -1,4 +1,6 @@
 from datetime import UTC, datetime
+from importlib import import_module
+from pathlib import Path
 
 import pytest
 
@@ -148,3 +150,71 @@ async def test_gallery_selects_three_and_never_fetches_injected_old_photo() -> N
     }
     assert "candidate:old-injected" not in provider.retrieved
     assert all(item.event_id == "us6000tjl2" for item in gallery.items)
+
+
+@pytest.mark.asyncio
+async def test_zero_accepted_images_return_bounded_diagnostics() -> None:
+    rejected = _candidate(
+        "unrelated",
+        title="Unrelated weather update",
+        caption="A routine weather scene in Colombia.",
+    )
+
+    class Provider:
+        provider_id = "fixture-media"
+
+        async def discover(self, context, *, now):
+            return (rejected,)
+
+        async def retrieve(self, candidate):
+            raise AssertionError("Rejected media must never be retrieved.")
+
+    gallery = await DisasterMediaService(
+        (Provider(),),
+        InMemoryMediaAssetStore(),
+        clock=lambda: NOW,
+    ).discover(_context())
+
+    assert gallery is not None
+    assert gallery.items == ()
+    assert gallery.rejected_count == 1
+    assert gallery.provider_ids == ("fixture-media",)
+    assert gallery.warnings == (
+        "No source-associated images met the event and media safety gates.",
+    )
+
+
+def test_filesystem_media_assets_survive_store_reconstruction(tmp_path: Path) -> None:
+    module = import_module("disaster_monitor.infrastructure.media.filesystem_store")
+    store_type = module.FilesystemMediaAssetStore
+    media = RetrievedMedia(
+        _candidate("durable"), b"durable-image-bytes", "image/png", 640, 360
+    )
+
+    stored = store_type(tmp_path / "event-media").put(media)
+    reloaded = store_type(tmp_path / "event-media").get(stored.media_id)
+
+    assert reloaded == stored
+
+
+def test_full_filesystem_store_preserves_existing_media_reference(
+    tmp_path: Path,
+) -> None:
+    module = import_module("disaster_monitor.infrastructure.media.filesystem_store")
+    store_type = module.FilesystemMediaAssetStore
+    first = RetrievedMedia(
+        _candidate("retained"), b"retained-image", "image/png", 640, 360
+    )
+    second = RetrievedMedia(_candidate("new"), b"new-image", "image/png", 640, 360)
+    store = store_type(tmp_path / "event-media", maximum_bytes=len(first.content))
+
+    retained = store.put(first)
+    with pytest.raises(ValueError, match="byte limit"):
+        store.put(second)
+
+    assert (
+        store_type(tmp_path / "event-media", maximum_bytes=len(first.content)).get(
+            retained.media_id
+        )
+        == retained
+    )

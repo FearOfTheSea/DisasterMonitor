@@ -6,6 +6,7 @@ import psycopg
 import pytest
 
 from disaster_monitor.domain.conversation import (
+    AssistantMessagePayload,
     Conversation,
     ConversationMessage,
     ConversationRole,
@@ -46,6 +47,17 @@ async def test_postgres_conversation_repository_persists_orders_and_cascades() -
             ConversationRole.ASSISTANT,
             "First answer",
             timestamp,
+            assistant_payload=AssistantMessagePayload(
+                "assistant-answer.v1",
+                {
+                    "message": "First answer",
+                    "media_gallery": {
+                        "event_id": "event-1",
+                        "items": [],
+                        "warnings": ["No usable source photos were found."],
+                    },
+                },
+            ),
         )
     )
     await repository.create(
@@ -66,6 +78,13 @@ async def test_postgres_conversation_repository_persists_orders_and_cascades() -
             "First question",
             "First answer",
         ]
+        assert loaded.messages[0].assistant_payload is None
+        assert loaded.messages[1].assistant_payload is not None
+        assert loaded.messages[1].assistant_payload.data["media_gallery"] == {
+            "event_id": "event-1",
+            "items": [],
+            "warnings": ["No usable source photos were found."],
+        }
         assert listed[0].conversation_id == second_id
         assert listed[1].preview == "First question"
 

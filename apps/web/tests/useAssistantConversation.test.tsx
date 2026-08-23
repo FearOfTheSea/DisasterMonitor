@@ -10,6 +10,71 @@ function jsonResponse(value: unknown, status = 200) {
   });
 }
 
+function persistedAssistantResponse() {
+  return {
+    message: 'Previous answer',
+    conversation_id: 'conversation-1',
+    model: 'source-backed-agent',
+    response_type: 'current_disaster_earthquake',
+    selected_event: {
+      event_id: 'event-1',
+      disaster: 'earthquake',
+      location: 'Colombia',
+      event_time: '2026-08-21T09:00:00Z',
+      geometry: null,
+      measurements: [],
+      provider_ids: ['provider-event-1'],
+      geography_status: 'in_country',
+      source: {
+        source_id: 'event-source',
+        publisher: 'Event publisher',
+        title: 'Event title',
+        canonical_url: 'https://example.test/event',
+        retrieved_at: '2026-08-21T10:00:00Z',
+      },
+    },
+    sources: [],
+    warnings: ['Report warning'],
+    sections: [],
+    partial: false,
+    media_gallery: {
+      event_id: 'event-1',
+      physical_event_id: 'physical-event-1',
+      generated_at: '2026-08-21T10:00:00Z',
+      rejected_count: 2,
+      provider_ids: ['fixture-media'],
+      warnings: ['Gallery warning'],
+      items: [
+        {
+          media_id: `media:${'a'.repeat(64)}:png`,
+          image_url: `http://localhost:8001/api/v1/media/media:${'a'.repeat(64)}:png`,
+          event_id: 'event-1',
+          physical_event_id: 'physical-event-1',
+          source_id: 'photo-source',
+          publisher: 'Photo publisher',
+          source_page_url: 'https://example.test/photo',
+          caption: 'Rescue crews after the earthquake.',
+          credit: 'Agency',
+          credit_kind: 'agency',
+          published_at: '2026-08-21T09:30:00Z',
+          captured_at: null,
+          license_name: null,
+          license_url: null,
+          rights_status: 'source_preview',
+          role: 'rescue_effort',
+          association_status: 'corroborated',
+          association_rule_ids: ['media.association.publication_window'],
+          association_detail: 'The event metadata agrees.',
+          uncertainty: 'Contextual source media.',
+          content_sha256: 'a'.repeat(64),
+          width: 640,
+          height: 360,
+        },
+      ],
+    },
+  };
+}
+
 describe('useAssistantConversation', () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -42,6 +107,7 @@ describe('useAssistantConversation', () => {
             role: 'assistant',
             content: 'Previous answer',
             created_at: '2026-08-21T10:01:00Z',
+            assistant_response: persistedAssistantResponse(),
           },
         ],
       }),
@@ -75,6 +141,12 @@ describe('useAssistantConversation', () => {
       'Previous question',
       'Previous answer',
     ]);
+    expect(result.current.messages[1].report?.warnings).toEqual(['Report warning']);
+    expect(result.current.messages[1].report?.mediaGallery).toMatchObject({
+      rejected_count: 2,
+      warnings: ['Gallery warning'],
+      items: [{ source_id: 'photo-source' }],
+    });
 
     await act(async () => {
       await result.current.submit('Follow-up');

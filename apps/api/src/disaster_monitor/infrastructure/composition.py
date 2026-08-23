@@ -90,7 +90,9 @@ from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAd
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
     StructuredAgentModel,
 )
-from disaster_monitor.infrastructure.media.memory_store import InMemoryMediaAssetStore
+from disaster_monitor.infrastructure.media.filesystem_store import (
+    FilesystemMediaAssetStore,
+)
 from disaster_monitor.infrastructure.media.news_scraper import NewsEventMediaProvider
 from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
     FilesystemBlobStore,
@@ -132,8 +134,9 @@ class EventMediaServices:
 def build_event_media_services(
     settings: Settings, *, clock: Callable[[], datetime]
 ) -> EventMediaServices:
-    store = InMemoryMediaAssetStore(
-        maximum_bytes=settings.event_media_store_maximum_bytes
+    store = FilesystemMediaAssetStore(
+        settings.event_media_blob_root,
+        maximum_bytes=settings.event_media_store_maximum_bytes,
     )
     if not settings.event_media_enabled:
         return EventMediaServices(None, store)

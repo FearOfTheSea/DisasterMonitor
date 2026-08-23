@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     event_media_store_maximum_bytes: int = Field(
         default=24_000_000, ge=3_000_000, le=100_000_000
     )
+    event_media_blob_root: Path = Path("data/event-media/blobs")
     reliefweb_app_name: str | None = None
     operational_database_url: SecretStr | None = Field(default=None, repr=False)
     operational_blob_root: Path = Path("data/operational/blobs")

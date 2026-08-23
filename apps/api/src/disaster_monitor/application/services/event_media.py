@@ -269,8 +269,10 @@ class DisasterMediaService:
                 )
             )
         if not items:
-            return None
-        if len(items) < self._target_count:
+            warnings.append(
+                "No source-associated images met the event and media safety gates."
+            )
+        if items and len(items) < self._target_count:
             warnings.append(
                 f"Only {len(items)} source-associated image(s) met the event and "
                 "media safety gates."

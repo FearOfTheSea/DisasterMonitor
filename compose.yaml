@@ -44,6 +44,7 @@ services:
       OLLAMA_MODEL: qwen3:4b-instruct-2507-q4_K_M
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
+      EVENT_MEDIA_BLOB_ROOT: /var/lib/disaster-monitor/event-media
       OPERATIONAL_AUTO_MIGRATE: "false"
       COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
       COUNTRY_CATALOG_AUTOMATIC_UPDATES: "true"
@@ -62,6 +63,7 @@ services:
     restart: unless-stopped
     volumes:
       - operational-blobs:/var/lib/disaster-monitor/blobs
+      - event-media-blobs:/var/lib/disaster-monitor/event-media
       - country-catalog-data:/var/lib/disaster-monitor/geography
     ports:
       - "8001:8001"
@@ -131,5 +133,6 @@ services:
 volumes:
   postgres-data:
   operational-blobs:
+  event-media-blobs:
   operational-backups:
   country-catalog-data:
