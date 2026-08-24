@@ -55,6 +55,10 @@ from disaster_monitor.application.services.hypothesis_reasoning import (
 from disaster_monitor.application.services.incident_priority import (
     IncidentPriorityRanker,
 )
+from disaster_monitor.application.services.memory_recall import (
+    MemoryRecallRequest,
+    MemoryRecallService,
+)
 from disaster_monitor.application.services.operational_evidence import (
     OperationalEvidenceRecorder,
 )
@@ -62,7 +66,11 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRegistry,
     ProviderRole,
 )
+from disaster_monitor.application.services.specialist_executor import (
+    SpecialistExecutor,
+)
 from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
+from disaster_monitor.domain.coordination import SpecialistFinding
 
 MAX_TOOL_CALLS = 12
 logger = logging.getLogger(__name__)
@@ -144,6 +152,8 @@ class DisasterToolDependencies:
         default_factory=CoordinationSupervisor
     )
     operational_evidence: OperationalEvidenceRecorder | None = None
+    specialist_executor: SpecialistExecutor | None = None
+    memory_recall: MemoryRecallService | None = None
 
 
 def build_disaster_tool_registry(
@@ -445,6 +455,29 @@ class ReconcileDisasterEvidenceTool(_BaseTool):
             state.workspace.triage_decision = self.dependencies.triage_policy.decide(
                 state.workspace.incident_priority
             )
+            if (
+                self.dependencies.memory_recall is not None
+                and state.conversation_id is not None
+            ):
+                try:
+                    memory_recall = self.dependencies.memory_recall
+                    state.workspace.memory_context = await memory_recall.recall(
+                        MemoryRecallRequest(
+                            conversation_id=state.conversation_id,
+                            physical_event_id=(
+                                packet.world_state.physical_event.physical_event_id
+                            ),
+                            disaster_identifier=(
+                                packet.world_state.physical_event.event.disaster.value
+                            ),
+                            country_code=(
+                                packet.world_state.physical_event.event.country.alpha3_code
+                            ),
+                            now=self.now(),
+                        )
+                    )
+                except Exception:
+                    logger.exception("Typed historical-memory recall failed")
             try:
                 evidence_handoff = self.dependencies.handoff_planner.for_evidence_state(
                     packet.world_state
@@ -510,11 +543,27 @@ class ComposeDisasterAnswerTool(_BaseTool):
 
     async def execute(self, state: AgentExecutionState) -> str:
         if state.workspace.evidence_state is not None:
+            injected_findings: tuple[SpecialistFinding, ...] = ()
+            if self.dependencies.specialist_executor is not None:
+                specialist_result = await self.dependencies.specialist_executor.execute(
+                    state.workspace.evidence_state,
+                    state.workspace.specialist_handoffs,
+                    decision_support=state.workspace.decision_support,
+                    memory_context=state.workspace.memory_context,
+                )
+                state.specialist_model_call_count += specialist_result.model_call_count
+                state.specialist_fallback_reason = specialist_result.fallback_reason
+                state.specialist_provenance_validation_failures += (
+                    specialist_result.provenance_validation_failures
+                )
+                state.specialist_latency_ms += specialist_result.latency_ms
+                injected_findings = specialist_result.findings
             supervision = self.dependencies.coordination_supervisor.run(
                 state.workspace.evidence_state,
                 state.workspace.specialist_handoffs,
                 decision_support=state.workspace.decision_support,
                 multimodal_state=state.workspace.multimodal_state,
+                injected_findings=injected_findings,
             )
             state.workspace.coordination_supervision = supervision
             state.workspace.collaborative_investigation = supervision.collaboration

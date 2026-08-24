@@ -24,10 +24,12 @@ from disaster_monitor.application.ports.event_media import (
 )
 from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.memory_store import MemoryStore
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
 )
+from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
 from disaster_monitor.application.services.active_incidents import (
@@ -43,11 +45,16 @@ from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
 from disaster_monitor.application.services.map_navigation import MapNavigationService
+from disaster_monitor.application.services.memory_policy import MemoryPolicy
+from disaster_monitor.application.services.memory_recall import MemoryRecallService
 from disaster_monitor.application.services.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
 )
 from disaster_monitor.application.services.multimodal_association import (
     MultimodalEventAssociator,
+)
+from disaster_monitor.application.services.specialist_executor import (
+    SpecialistExecutor,
 )
 from disaster_monitor.application.services.visual_analysis import VisualAnalysisService
 from disaster_monitor.application.services.worldwide_disaster import (
@@ -68,9 +75,11 @@ from disaster_monitor.infrastructure.composition import (
     build_disaster_query_parser,
     build_event_media_services,
     build_language_model,
+    build_memory_repository,
     build_operational_services,
     build_satellite_imagery_service,
     build_source_catalog,
+    build_specialist_model,
     build_visual_analyzer,
 )
 from disaster_monitor.infrastructure.configuration import Settings
@@ -100,21 +109,42 @@ def create_app(
     active_incidents_service: ActiveIncidentsService | None = None,
     conversation_repository: ConversationStore | None = None,
     satellite_imagery_service: SatelliteImageryService | None = None,
+    specialist_model: SpecialistModel | None = None,
+    memory_repository: MemoryStore | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
     language_model = model or build_language_model(app_settings)
+    configured_specialist_model = (
+        (specialist_model or build_specialist_model(language_model))
+        if app_settings.specialist_llm_enabled
+        else None
+    )
+    specialist_executor = (
+        SpecialistExecutor(
+            configured_specialist_model,
+            max_model_calls=app_settings.specialist_model_call_limit,
+        )
+        if configured_specialist_model is not None
+        else None
+    )
     country_catalog = build_country_catalog(app_settings)
     catalog_automation = country_catalog_automation or build_country_catalog_automation(
         app_settings, country_catalog
     )
     operational = build_operational_services(app_settings, operational_repository)
     conversations = build_conversation_repository(app_settings, conversation_repository)
+    memories = build_memory_repository(app_settings, memory_repository)
+    memory_recall = (
+        MemoryRecallService(memories) if app_settings.long_term_memory_enabled else None
+    )
     disaster_report = current_disaster_report or build_current_disaster_report(
         app_settings,
         country_catalog,
         snapshot_recorder=operational.snapshots.persist,
         operational_evidence=operational.evidence,
+        specialist_executor=specialist_executor,
+        memory_recall=memory_recall,
     )
     worldwide_report = worldwide_disaster_report or WorldwideDisasterReportService(
         disaster_report.provider_registry,
@@ -127,7 +157,9 @@ def create_app(
     configured_agent_model = (
         agent_model
         if agent_model is not None
-        else (build_agent_model(app_settings) if model is None else None)
+        else (
+            build_agent_model(app_settings, language_model) if model is None else None
+        )
     )
     configured_visual_analyzer = visual_analyzer or build_visual_analyzer(app_settings)
     configured_satellite_imagery = (
@@ -248,6 +280,7 @@ def create_app(
     app.state.worldwide_disaster_report = worldwide_report
     app.state.active_incidents_service = configured_active_incidents
     app.state.agent_model = configured_agent_model
+    app.state.specialist_model = configured_specialist_model
     app.state.visual_analyzer = configured_visual_analyzer
     app.state.event_media = media_services.discovery
     app.state.media_asset_store = media_services.store
@@ -259,9 +292,14 @@ def create_app(
         disaster_agent=disaster_agent,
     )
     app.state.run_conversation_turn = RunConversationTurn(
-        app.state.answer_map_question, conversations
+        app.state.answer_map_question,
+        conversations,
+        memory_store=memories,
+        memory_policy=MemoryPolicy(),
+        memory_enabled=app_settings.long_term_memory_enabled,
     )
     app.state.conversation_repository = conversations
+    app.state.memory_repository = memories
     app.state.operational_repository = operational.repository
     app.state.country_catalog_automation = catalog_automation
     app.state.trusted_operator_identity_policy = TrustedOperatorIdentityPolicy(

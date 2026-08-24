@@ -22,6 +22,7 @@ from disaster_monitor.application.ports.geography import (
     CountryCatalogUpdateTrigger,
 )
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.memory_store import MemoryStore
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
@@ -100,6 +101,11 @@ def get_conversation_store(request: Request) -> ConversationStore:
 def get_conversation_turn(request: Request) -> RunConversationTurn:
     """Retrieve the transcript-aware assistant use case."""
     return cast(RunConversationTurn, request.app.state.run_conversation_turn)
+
+
+def get_memory_store(request: Request) -> MemoryStore:
+    """Retrieve the separate typed historical-memory repository."""
+    return cast(MemoryStore, request.app.state.memory_repository)
 
 
 def get_language_model(request: Request) -> LanguageModel:
@@ -641,6 +647,18 @@ def _assistant_response(
             coordination_analytical_release_id=(
                 result.investigation.coordination_analytical_release_id
             ),
+            physical_event_id=result.investigation.physical_event_id,
+            evidence_state_version=result.investigation.evidence_state_version,
+            specialist_model_call_count=(
+                result.investigation.specialist_model_call_count
+            ),
+            specialist_fallback_reason=(
+                result.investigation.specialist_fallback_reason
+            ),
+            specialist_provenance_validation_failures=(
+                result.investigation.specialist_provenance_validation_failures
+            ),
+            specialist_latency_ms=result.investigation.specialist_latency_ms,
         )
     )
     if result.response_type == "assistant":
@@ -795,13 +813,19 @@ async def get_conversation(
 async def delete_conversation(
     conversation_id: str,
     repository: Annotated[ConversationStore, Depends(get_conversation_store)],
+    memories: Annotated[MemoryStore, Depends(get_memory_store)],
 ) -> Response:
     """Permanently remove a conversation and its cascade-owned messages."""
-    if not await repository.delete(conversation_id):
+    if await repository.get(conversation_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The requested conversation does not exist.",
         )
+    await memories.mark_deleted_for_conversation(
+        conversation_id, deleted_at=datetime.now(UTC)
+    )
+    if not await repository.delete(conversation_id):
+        raise RuntimeError("Conversation deletion lost its validated target.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

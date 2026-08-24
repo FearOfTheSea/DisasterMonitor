@@ -1,0 +1,95 @@
+"""In-memory typed memory repository for tests and no-database development."""
+
+from dataclasses import replace
+from datetime import datetime
+
+from disaster_monitor.domain.memory import MemoryLifecycleStatus, MemoryRecord
+
+
+class InMemoryMemoryRepository:
+    def __init__(self) -> None:
+        self.records: dict[str, MemoryRecord] = {}
+
+    async def save(
+        self,
+        record: MemoryRecord,
+        *,
+        superseded_memory_ids: tuple[str, ...] = (),
+    ) -> None:
+        self.records[record.memory_id] = record
+        for memory_id in superseded_memory_ids:
+            existing = self.records.get(memory_id)
+            if existing is not None and existing.status is MemoryLifecycleStatus.ACTIVE:
+                self.records[memory_id] = replace(
+                    existing,
+                    status=MemoryLifecycleStatus.SUPERSEDED,
+                    superseded_by_memory_id=record.memory_id,
+                )
+
+    async def get(self, memory_id: str) -> MemoryRecord | None:
+        return self.records.get(memory_id)
+
+    async def list_for_scope(
+        self, conversation_id: str, physical_event_id: str | None = None
+    ) -> tuple[MemoryRecord, ...]:
+        return tuple(
+            sorted(
+                (
+                    record
+                    for record in self.records.values()
+                    if record.conversation_id == conversation_id
+                    and (
+                        physical_event_id is None
+                        or record.physical_event_id == physical_event_id
+                    )
+                ),
+                key=lambda item: (item.confirmed_at, item.memory_id),
+                reverse=True,
+            )
+        )
+
+    async def mark_superseded(
+        self,
+        memory_id: str,
+        *,
+        superseded_by_memory_id: str,
+    ) -> bool:
+        record = self.records.get(memory_id)
+        if record is None or record.status is not MemoryLifecycleStatus.ACTIVE:
+            return False
+        self.records[memory_id] = replace(
+            record,
+            status=MemoryLifecycleStatus.SUPERSEDED,
+            superseded_by_memory_id=superseded_by_memory_id,
+        )
+        return True
+
+    async def mark_expired(self, memory_id: str) -> bool:
+        record = self.records.get(memory_id)
+        if (
+            record is None
+            or record.status is not MemoryLifecycleStatus.ACTIVE
+            or record.expires_at is None
+        ):
+            return False
+        self.records[memory_id] = replace(record, status=MemoryLifecycleStatus.EXPIRED)
+        return True
+
+    async def mark_deleted_for_conversation(
+        self, conversation_id: str, *, deleted_at: datetime
+    ) -> int:
+        count = 0
+        for memory_id, record in tuple(self.records.items()):
+            if (
+                record.conversation_id != conversation_id
+                or record.status is MemoryLifecycleStatus.DELETED
+            ):
+                continue
+            self.records[memory_id] = replace(
+                record,
+                status=MemoryLifecycleStatus.DELETED,
+                superseded_by_memory_id=None,
+                deleted_at=deleted_at,
+            )
+            count += 1
+        return count

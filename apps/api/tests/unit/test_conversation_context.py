@@ -10,6 +10,10 @@ from disaster_monitor.domain.conversation import (
     ConversationMessage,
     ConversationRole,
 )
+from disaster_monitor.domain.memory import (
+    MemoryAuthority,
+    MemoryContextArtifact,
+)
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -181,3 +185,20 @@ def test_ambiguous_and_non_referential_turns_remain_unchanged() -> None:
         )
         == "What about Thailand and Vietnam?"
     )
+
+
+def test_long_term_memory_is_not_transcript_or_current_evidence() -> None:
+    context = MemoryContextArtifact(
+        context_id="memory-context:test",
+        conversation_id="conversation-a",
+        physical_event_id=None,
+        records=(),
+        created_at=NOW,
+        total_characters=0,
+        maximum_records=5,
+        maximum_characters=1_500,
+    )
+
+    assert select_bounded_history(()) == ()
+    assert context.authority is MemoryAuthority.HISTORICAL_CONTEXT
+    assert context.may_satisfy_current_evidence is False

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -59,6 +60,18 @@ class FixedRuntime:
         return state
 
 
+class EnglishRuntime(FixedRuntime):
+    async def run(self, question: str, **kwargs) -> AgentExecutionState:
+        state = await super().run(question, **kwargs)
+        state.task = replace(state.task, response_language="en")
+        return state
+
+
+class EnglishLocalizerMustNotRun(LocalizerFailure):
+    async def localize_grounded_response(self, report, language):
+        raise AssertionError("English deterministic reports need no localization.")
+
+
 class UnusedGeneralModel:
     async def generate(self, request):
         raise AssertionError("general model is not used")
@@ -102,6 +115,18 @@ async def test_grounded_answer_is_preserved_when_localization_fails() -> None:
     ).execute("質問", conversation_id="test")
 
     assert "42 people were affected" in answer.message
+
+
+@pytest.mark.asyncio
+async def test_english_grounded_answer_skips_model_localization() -> None:
+    answer = await RunDisasterAgent(
+        EnglishRuntime(),
+        UnusedGeneralModel(),
+        agent_model=EnglishLocalizerMustNotRun(),
+    ).execute("Question", conversation_id="test")
+
+    assert "42 people were affected" in answer.message
+    assert not any("localization" in item.casefold() for item in answer.warnings)
 
 
 @pytest.mark.asyncio

@@ -100,6 +100,45 @@ class SpecialistHandoff:
 
 
 @dataclass(frozen=True, slots=True)
+class SpecialistFindingDraft:
+    """Untrusted model proposal that requires application-owned validation."""
+
+    specialist_role: SpecialistRole
+    task_type: SpecialistTaskType
+    finding_key: str
+    value: str
+    summary: str
+    state_version: str
+    evidence_ids: tuple[str, ...]
+    source_ids: tuple[str, ...]
+    permissions: tuple[CoordinationPermission, ...]
+    safety_policy_fingerprint: str
+
+    def __post_init__(self) -> None:
+        texts = (
+            self.finding_key,
+            self.value,
+            self.summary,
+            self.state_version,
+            self.safety_policy_fingerprint,
+        )
+        if any(not value.strip() for value in texts):
+            raise ValueError("Specialist draft fields must not be empty.")
+        if len(self.finding_key) > 200 or len(self.value) > 500:
+            raise ValueError("Specialist draft values must be bounded.")
+        if len(self.summary) > 1_000:
+            raise ValueError("Specialist draft summary must be bounded.")
+        if not self.evidence_ids or not self.source_ids or not self.permissions:
+            raise ValueError("Specialist drafts require explicit lineage and scope.")
+        if len(self.evidence_ids) != len(set(self.evidence_ids)):
+            raise ValueError("Specialist draft evidence IDs must be unique.")
+        if len(self.source_ids) != len(set(self.source_ids)):
+            raise ValueError("Specialist draft source IDs must be unique.")
+        if len(self.permissions) != len(set(self.permissions)):
+            raise ValueError("Specialist draft permissions must be unique.")
+
+
+@dataclass(frozen=True, slots=True)
 class SpecialistFinding:
     finding_id: str
     specialist_role: SpecialistRole

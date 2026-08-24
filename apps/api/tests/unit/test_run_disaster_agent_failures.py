@@ -12,7 +12,13 @@ from disaster_monitor.application.use_cases.run_disaster_agent import RunDisaste
 
 
 class FailedRuntime:
-    async def run(self, question: str) -> AgentExecutionState:
+    async def run(
+        self,
+        question: str,
+        *,
+        conversation_id: str | None = None,
+        multimodal_assets=(),
+    ) -> AgentExecutionState:
         task = ValidatedDisasterTask(question, TaskKind.INVESTIGATION, True)
         plan = InvestigationPlan(
             "failed-plan",

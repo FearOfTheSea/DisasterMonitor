@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     ollama_model: str = Field(default="qwen3:4b-instruct-2507-q4_K_M", min_length=1)
     ollama_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
     ollama_max_tokens: int = Field(default=512, ge=32, le=4096)
+    specialist_llm_enabled: bool = False
+    specialist_model_call_limit: int = Field(default=2, ge=0, le=2)
+    long_term_memory_enabled: bool = False
     ollama_vision_model: str = Field(default="qwen3-vl:2b", min_length=1)
     ollama_vision_timeout_seconds: float = Field(default=180.0, gt=0, le=600)
     ollama_vision_max_tokens: int = Field(default=384, ge=64, le=2048)

@@ -8,6 +8,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from disaster_monitor.application.services.specialist_executor import (
+    SpecialistExecutionResult,
+)
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.evaluation.reproducibility import (
     ReproducibilityError,
@@ -112,6 +115,38 @@ class BenchIntegrityResult:
     normative_release_passed: bool
     normative_release_blockers: tuple[str, ...]
     replay_results: tuple[ReplayResult, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SpecialistBenchmarkMetrics:
+    correctness: float
+    grounding: float
+    provenance_validation_failures: int
+    fallback_rate: float
+    specialist_model_call_count: int
+    average_latency_ms: float
+
+
+def summarize_specialist_benchmark(
+    runs: tuple[SpecialistExecutionResult, ...],
+    *,
+    correctness: tuple[bool, ...],
+    grounding: tuple[bool, ...],
+) -> SpecialistBenchmarkMetrics:
+    """Produce explicit specialist metrics without changing release policy."""
+    if not runs or len(runs) != len(correctness) or len(runs) != len(grounding):
+        raise ValueError("Specialist benchmark vectors must be non-empty and aligned.")
+    return SpecialistBenchmarkMetrics(
+        correctness=sum(correctness) / len(correctness),
+        grounding=sum(grounding) / len(grounding),
+        provenance_validation_failures=sum(
+            item.provenance_validation_failures for item in runs
+        ),
+        fallback_rate=sum(item.fallback_reason is not None for item in runs)
+        / len(runs),
+        specialist_model_call_count=sum(item.model_call_count for item in runs),
+        average_latency_ms=sum(item.latency_ms for item in runs) / len(runs),
+    )
 
 
 def validate_locked_manifest(

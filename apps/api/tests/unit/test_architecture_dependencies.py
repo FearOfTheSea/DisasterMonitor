@@ -8,6 +8,8 @@ APPLICATION = SRC / "application"
 INFRASTRUCTURE = SRC / "infrastructure"
 PRESENTATION = SRC / "presentation"
 INCIDENT_PRIORITY = APPLICATION / "services" / "incident_priority.py"
+CONVERSATION_STORE = APPLICATION / "ports" / "conversation_store.py"
+MEMORY_STORE = APPLICATION / "ports" / "memory_store.py"
 
 DISASTER_POLICY_MODULES = {
     "disaster_monitor.application.disaster_aliases",
@@ -164,3 +166,12 @@ def test_generic_incident_priority_has_no_measurement_based_event_severity_logic
     ]
 
     assert references == []
+
+
+def test_memory_and_conversation_persistence_ports_remain_separate() -> None:
+    conversation_imports = _imports(CONVERSATION_STORE)
+    memory_imports = _imports(MEMORY_STORE)
+
+    assert "disaster_monitor.domain.memory" not in conversation_imports
+    assert "disaster_monitor.domain.conversation" not in memory_imports
+    assert "disaster_monitor.domain.memory" in memory_imports

@@ -12,7 +12,9 @@ from disaster_monitor.application.ports.event_media import (
     MediaAssetStore,
 )
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.memory_store import MemoryStore
 from disaster_monitor.application.ports.operational_state import OperationalRepository
+from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
 from disaster_monitor.application.services.current_disaster_report import (
@@ -31,6 +33,7 @@ from disaster_monitor.application.services.event_resolution import (
 from disaster_monitor.application.services.evidence_reconciliation import (
     EvidenceReconciler,
 )
+from disaster_monitor.application.services.memory_recall import MemoryRecallService
 from disaster_monitor.application.services.operational_evidence import (
     OperationalEvidenceRecorder,
 )
@@ -46,6 +49,9 @@ from disaster_monitor.application.services.provider_registry import (
 )
 from disaster_monitor.application.services.source_consistency import (
     validate_provider_source_consistency,
+)
+from disaster_monitor.application.services.specialist_executor import (
+    SpecialistExecutor,
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.configuration import Settings
@@ -103,10 +109,19 @@ from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAd
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
     StructuredAgentModel,
 )
+from disaster_monitor.infrastructure.llm.structured_specialist_model import (
+    StructuredSpecialistModel,
+)
 from disaster_monitor.infrastructure.media.filesystem_store import (
     FilesystemMediaAssetStore,
 )
 from disaster_monitor.infrastructure.media.news_scraper import NewsEventMediaProvider
+from disaster_monitor.infrastructure.memory.memory_repository import (
+    InMemoryMemoryRepository,
+)
+from disaster_monitor.infrastructure.memory.postgres_repository import (
+    PostgresMemoryRepository,
+)
 from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
     FilesystemBlobStore,
 )
@@ -215,6 +230,21 @@ def build_conversation_repository(
     )
 
 
+def build_memory_repository(
+    settings: Settings,
+    repository: MemoryStore | None = None,
+) -> MemoryStore:
+    """Build typed PostgreSQL historical memory or the local fallback."""
+    if repository is not None:
+        return repository
+    dsn = (
+        settings.operational_database_url.get_secret_value()
+        if settings.operational_database_url is not None
+        else ""
+    )
+    return PostgresMemoryRepository(dsn) if dsn else InMemoryMemoryRepository()
+
+
 def build_language_model(settings: Settings) -> LanguageModel:
     """Construct the configured local model adapter."""
     return OllamaQwenAdapter(
@@ -225,9 +255,16 @@ def build_language_model(settings: Settings) -> LanguageModel:
     )
 
 
-def build_agent_model(settings: Settings) -> AgentModel:
+def build_agent_model(
+    settings: Settings, language_model: LanguageModel | None = None
+) -> AgentModel:
     """Construct a separate structured-agent abstraction over local Qwen."""
-    return StructuredAgentModel(build_language_model(settings))
+    return StructuredAgentModel(language_model or build_language_model(settings))
+
+
+def build_specialist_model(language_model: LanguageModel) -> SpecialistModel:
+    """Wrap the configured text model without constructing another model adapter."""
+    return StructuredSpecialistModel(language_model)
 
 
 def build_visual_analyzer(settings: Settings) -> VisualAnalyzer:
@@ -340,6 +377,8 @@ def build_current_disaster_report(
     country_catalog: StaticCountryCatalog | None = None,
     snapshot_recorder: SourcePayloadRecorder | None = None,
     operational_evidence: OperationalEvidenceRecorder | None = None,
+    specialist_executor: SpecialistExecutor | None = None,
+    memory_recall: MemoryRecallService | None = None,
 ) -> CurrentDisasterReportService:
     """Construct capability-registered live disaster providers."""
     geography = country_catalog or build_country_catalog()
@@ -720,4 +759,6 @@ def build_current_disaster_report(
         renderer=DisasterReportRenderer(),
         source_catalog=source_catalog,
         operational_evidence=operational_evidence,
+        specialist_executor=specialist_executor,
+        memory_recall=memory_recall,
     )

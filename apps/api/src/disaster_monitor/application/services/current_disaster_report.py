@@ -35,6 +35,7 @@ from disaster_monitor.application.services.event_resolution import (
 from disaster_monitor.application.services.evidence_reconciliation import (
     EvidenceReconciler,
 )
+from disaster_monitor.application.services.memory_recall import MemoryRecallService
 from disaster_monitor.application.services.operational_evidence import (
     OperationalEvidenceRecorder,
 )
@@ -42,6 +43,9 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,
+)
+from disaster_monitor.application.services.specialist_executor import (
+    SpecialistExecutor,
 )
 
 
@@ -86,6 +90,8 @@ class CurrentDisasterReportService:
         clock: Callable[[], datetime] = _now_utc,
         source_catalog: SourceCatalog | None = None,
         operational_evidence: OperationalEvidenceRecorder | None = None,
+        specialist_executor: SpecialistExecutor | None = None,
+        memory_recall: MemoryRecallService | None = None,
     ) -> None:
         self._event_provider = event_provider
         self._situation_report_provider = situation_report_provider
@@ -105,6 +111,8 @@ class CurrentDisasterReportService:
         self._clock = clock
         self._source_catalog = source_catalog or _EmptySourceCatalog()
         self._operational_evidence = operational_evidence
+        self._specialist_executor = specialist_executor
+        self._memory_recall = memory_recall
         self._agent_tools = self.build_agent_tools(self._source_catalog)
 
     @property
@@ -132,6 +140,8 @@ class CurrentDisasterReportService:
                 self._renderer,
                 self._clock,
                 operational_evidence=self._operational_evidence,
+                specialist_executor=self._specialist_executor,
+                memory_recall=self._memory_recall,
             ),
             additional_tools,
         )

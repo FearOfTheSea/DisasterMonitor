@@ -15,6 +15,7 @@ from disaster_monitor.application.disaster import (
 from disaster_monitor.domain.coordination import (
     CollaborativeInvestigation,
     CoordinationSupervision,
+    HandoffArtifactType,
     SpecialistHandoff,
 )
 from disaster_monitor.domain.decision import (
@@ -32,6 +33,7 @@ from disaster_monitor.domain.disaster import (
     PhysicalEventIdentity,
     SituationReport,
 )
+from disaster_monitor.domain.memory import MemoryContextArtifact
 from disaster_monitor.domain.multimodal import (
     AssetEventAssociation,
     CommonOperationalPicture,
@@ -213,6 +215,29 @@ class SourceSelectionSummary:
     coverage_gaps: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class SpecialistProjectionItem:
+    """One bounded canonical value exposed read-only to a specialist model."""
+
+    key: str
+    value: str
+    evidence_ids: tuple[str, ...]
+    source_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SpecialistArtifactProjection:
+    """Compact typed projection with no provider or mutation capability."""
+
+    artifact_id: str
+    artifact_type: HandoffArtifactType
+    state_version: str
+    physical_event_id: str
+    items: tuple[SpecialistProjectionItem, ...]
+    admitted_evidence_ids: tuple[str, ...]
+    admitted_source_ids: tuple[str, ...]
+
+
 @dataclass(slots=True)
 class EvidenceWorkspace:
     source_selection: SourceSelectionSummary | None = None
@@ -238,6 +263,7 @@ class EvidenceWorkspace:
     visual_observations: tuple[VisualObservation, ...] = ()
     multimodal_state: MultimodalEvidenceState | None = None
     common_operational_picture: CommonOperationalPicture | None = None
+    memory_context: MemoryContextArtifact | None = None
     source_ids: list[str] = field(default_factory=list)
 
 
@@ -245,11 +271,13 @@ class EvidenceWorkspace:
 class AgentExecutionState:
     task: ValidatedDisasterTask
     plan: InvestigationPlan
+    conversation_id: str | None = None
     workspace: EvidenceWorkspace = field(default_factory=EvidenceWorkspace)
     completed_steps: list[str] = field(default_factory=list)
     pending_steps: list[str] = field(default_factory=list)
     tool_call_count: int = 0
     model_call_count: int = 0
+    specialist_model_call_count: int = 0
     visual_model_call_count: int = 0
     replan_count: int = 0
     warnings: list[str] = field(default_factory=list)
@@ -257,6 +285,9 @@ class AgentExecutionState:
     actions: list[InvestigationAction] = field(default_factory=list)
     final_status: AgentStatus = AgentStatus.FAILED
     termination_reason: str = "not_started"
+    specialist_fallback_reason: str | None = None
+    specialist_provenance_validation_failures: int = 0
+    specialist_latency_ms: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

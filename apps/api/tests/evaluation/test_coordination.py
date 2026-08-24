@@ -1,8 +1,10 @@
 import hashlib
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from test_decision_support import FIXTURES as DECISION_FIXTURES
 from test_decision_support import _products
 
@@ -23,11 +25,15 @@ from disaster_monitor.application.services.coordination_supervision import (
     CoordinationSupervisor,
     validate_coordination_supervision,
 )
+from disaster_monitor.application.services.specialist_executor import (
+    SpecialistExecutor,
+)
 from disaster_monitor.domain.coordination import (
     CollaborativeInvestigationStatus,
     CoordinationPermission,
     CoordinationSupervisorStatus,
     SpecialistFinding,
+    SpecialistFindingDraft,
     SpecialistRole,
 )
 from disaster_monitor.domain.multimodal import (
@@ -37,6 +43,9 @@ from disaster_monitor.domain.multimodal import (
     MultimodalAsset,
     MultimodalEvidenceState,
     MultimodalSourceMetadata,
+)
+from disaster_monitor.evaluation.disaster_agent_bench import (
+    summarize_specialist_benchmark,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "coordination"
@@ -372,6 +381,109 @@ def test_co_c_release_gate() -> None:
         "co_c.critical_policy_violations",
         critical_policy_violations,
     )
+
+
+class CanonicalSpecialistModel:
+    async def generate_finding(self, request):
+        preferred_key = (
+            "event_identity"
+            if request.handoff.receiver_role is SpecialistRole.EVIDENCE_RECONCILIATION
+            else "recommendation_status"
+        )
+        item = next(
+            value for value in request.artifact.items if value.key == preferred_key
+        )
+        return SpecialistFindingDraft(
+            specialist_role=request.handoff.receiver_role,
+            task_type=request.handoff.task_type,
+            finding_key=item.key,
+            value=item.value,
+            summary="Bounded model review retained the canonical analytical value.",
+            state_version=request.artifact.state_version,
+            evidence_ids=item.evidence_ids,
+            source_ids=item.source_ids,
+            permissions=request.handoff.granted_permissions,
+            safety_policy_fingerprint=request.safety_policy_fingerprint,
+        )
+
+
+class InventedEvidenceSpecialistModel(CanonicalSpecialistModel):
+    async def generate_finding(self, request):
+        draft = await super().generate_finding(request)
+        return replace(draft, evidence_ids=("evidence:invented",))
+
+
+@pytest.mark.asyncio
+async def test_llm_specialist_path_matches_baseline_and_records_metrics() -> None:
+    scenario_fixture = json.loads(
+        (DECISION_FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+    )
+    scenario = next(
+        item for item in scenario_fixture["cases"] if item["id"] == "positive-injuries"
+    )
+    state, _hypotheses, _priority, _triage, artifact = _products(scenario)
+    planner = CoordinationHandoffPlanner()
+    handoffs = (
+        planner.for_evidence_state(state),
+        planner.for_decision_support(artifact),
+    )
+    supervisor = CoordinationSupervisor()
+    baseline = supervisor.run(state, handoffs, decision_support=artifact)
+
+    enabled = await SpecialistExecutor(
+        CanonicalSpecialistModel(), max_model_calls=2
+    ).execute(state, handoffs, decision_support=artifact)
+    coordinated = supervisor.run(
+        state,
+        handoffs,
+        decision_support=artifact,
+        injected_findings=enabled.findings,
+    )
+    admitted_evidence_ids = {
+        identifier
+        for handoff in handoffs
+        for reference in handoff.artifact_references
+        for identifier in reference.evidence_ids
+    }
+    admitted_source_ids = {
+        identifier
+        for handoff in handoffs
+        for reference in handoff.artifact_references
+        for identifier in reference.source_ids
+    }
+    grounded = all(
+        set(finding.evidence_ids) <= admitted_evidence_ids
+        and set(finding.source_ids) <= admitted_source_ids
+        for finding in enabled.findings
+    )
+    metrics = summarize_specialist_benchmark(
+        (enabled,),
+        correctness=(
+            coordinated.status == baseline.status
+            and coordinated.sufficient == baseline.sufficient,
+        ),
+        grounding=(grounded,),
+    )
+
+    assert metrics.correctness == 1.0
+    assert metrics.grounding == 1.0
+    assert metrics.provenance_validation_failures == 0
+    assert metrics.fallback_rate == 0.0
+    assert metrics.specialist_model_call_count == 2
+    assert metrics.average_latency_ms >= 0
+
+    attacked = await SpecialistExecutor(
+        InventedEvidenceSpecialistModel(), max_model_calls=2
+    ).execute(state, handoffs, decision_support=artifact)
+    fallback = supervisor.run(
+        state,
+        handoffs,
+        decision_support=artifact,
+        injected_findings=attacked.findings,
+    )
+    assert attacked.findings == ()
+    assert attacked.provenance_validation_failures == 1
+    assert fallback == baseline
 
 
 def _supervision_episode(

@@ -182,6 +182,12 @@ class InvestigationResponse(BaseModel):
     coordination_analytical_focus: str | None = None
     coordination_analytical_parameter_set_id: str | None = None
     coordination_analytical_release_id: str | None = None
+    physical_event_id: str | None = None
+    evidence_state_version: str | None = None
+    specialist_model_call_count: int = 0
+    specialist_fallback_reason: str | None = None
+    specialist_provenance_validation_failures: int = 0
+    specialist_latency_ms: float = 0.0
 
 
 class DecisionFactResponse(BaseModel):

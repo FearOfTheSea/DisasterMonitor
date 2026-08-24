@@ -5,12 +5,16 @@ from pathlib import Path
 
 import pytest
 
+from disaster_monitor.application.services.specialist_executor import (
+    SpecialistExecutionResult,
+)
 from disaster_monitor.evaluation.disaster_agent_bench import (
     DisasterAgentBenchError,
     ReplayMode,
     evaluate_integrity,
     lock_selection,
     replay_episode,
+    summarize_specialist_benchmark,
     validate_locked_manifest,
 )
 from disaster_monitor.evaluation.reproducibility import (
@@ -188,3 +192,23 @@ def test_run_cli_writes_fail_closed_result_for_invalid_manifest(
     assert json.loads(output.read_text(encoding="utf-8"))["status"] == (
         "blocked_or_failed"
     )
+
+
+def test_specialist_benchmark_records_safety_and_runtime_metrics() -> None:
+    runs = (
+        SpecialistExecutionResult((), 2, None, 0, 12.5),
+        SpecialistExecutionResult((), 1, "evidence_membership_violation", 1, 7.5),
+    )
+
+    metrics = summarize_specialist_benchmark(
+        runs,
+        correctness=(True, False),
+        grounding=(True, False),
+    )
+
+    assert metrics.correctness == 0.5
+    assert metrics.grounding == 0.5
+    assert metrics.provenance_validation_failures == 1
+    assert metrics.fallback_rate == 0.5
+    assert metrics.specialist_model_call_count == 3
+    assert metrics.average_latency_ms == 10.0

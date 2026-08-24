@@ -52,7 +52,11 @@ class DisasterAgentRuntime:
         self._worldwide_report = worldwide_report
 
     async def run(
-        self, question: str, *, multimodal_assets: tuple[MultimodalAsset, ...] = ()
+        self,
+        question: str,
+        *,
+        conversation_id: str | None = None,
+        multimodal_assets: tuple[MultimodalAsset, ...] = (),
     ) -> AgentExecutionState:
         model_calls = 0
         interpretation_failed = False
@@ -78,12 +82,22 @@ class DisasterAgentRuntime:
             "no-plan", task.question, (), status=PlanStatus.COMPLETED
         )
         if task.kind in {TaskKind.NON_DISASTER, TaskKind.GENERAL_KNOWLEDGE}:
-            state = AgentExecutionState(task, empty_plan, model_call_count=model_calls)
+            state = AgentExecutionState(
+                task,
+                empty_plan,
+                conversation_id=conversation_id,
+                model_call_count=model_calls,
+            )
             state.final_status = AgentStatus.DELEGATED
             state.termination_reason = task.kind.value
             return state
         if task.validation_status != ValidationStatus.VALID:
-            state = AgentExecutionState(task, empty_plan, model_call_count=model_calls)
+            state = AgentExecutionState(
+                task,
+                empty_plan,
+                conversation_id=conversation_id,
+                model_call_count=model_calls,
+            )
             state.final_status = AgentStatus.CLARIFICATION_REQUIRED
             if task.validation_status == ValidationStatus.CATALOG_LIMITATION:
                 state.final_status = AgentStatus.COVERAGE_UNAVAILABLE
@@ -94,7 +108,12 @@ class DisasterAgentRuntime:
             return state
 
         if task.geographic_scope is GeographicScope.WORLDWIDE:
-            state = AgentExecutionState(task, empty_plan, model_call_count=model_calls)
+            state = AgentExecutionState(
+                task,
+                empty_plan,
+                conversation_id=conversation_id,
+                model_call_count=model_calls,
+            )
             if self._worldwide_report is None or task.worldwide_query is None:
                 state.final_status = AgentStatus.COVERAGE_UNAVAILABLE
                 state.termination_reason = "coverage_unavailable"
@@ -160,7 +179,12 @@ class DisasterAgentRuntime:
                 plan = default_investigation_plan(
                     task, multimodal_assets_available=bool(multimodal_assets)
                 )
-        state = AgentExecutionState(task, plan, model_call_count=model_calls)
+        state = AgentExecutionState(
+            task,
+            plan,
+            conversation_id=conversation_id,
+            model_call_count=model_calls,
+        )
         state.workspace.multimodal_assets = multimodal_assets
         state.capability_gaps.extend(plan.capability_gaps)
         try:

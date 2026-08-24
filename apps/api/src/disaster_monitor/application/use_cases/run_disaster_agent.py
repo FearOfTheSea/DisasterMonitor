@@ -82,9 +82,15 @@ class RunDisasterAgent:
             else ()
         )
         state = (
-            await self._runtime.run(resolved_question, multimodal_assets=assets)
+            await self._runtime.run(
+                resolved_question,
+                conversation_id=conversation,
+                multimodal_assets=assets,
+            )
             if assets
-            else await self._runtime.run(resolved_question)
+            else await self._runtime.run(
+                resolved_question, conversation_id=conversation
+            )
         )
         if state.task.kind in {TaskKind.NON_DISASTER, TaskKind.GENERAL_KNOWLEDGE}:
             return await self._general_answer(
@@ -201,7 +207,12 @@ class RunDisasterAgent:
     async def _localize_grounded_report(
         self, report: DisasterReport, response_language: str | None
     ) -> DisasterReport:
-        if not response_language or self._agent_model is None:
+        language_prefix = (
+            response_language.casefold().replace("_", "-").split("-", 1)[0]
+            if response_language
+            else None
+        )
+        if language_prefix in {None, "en"} or self._agent_model is None:
             return report
         localize = getattr(self._agent_model, "localize_grounded_response", None)
         if localize is None:
@@ -416,4 +427,20 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
         coordination_analytical_release_id=(
             supervision.analytical_release_id if supervision else None
         ),
+        physical_event_id=(
+            state.workspace.selected_physical_event.physical_event_id
+            if state.workspace.selected_physical_event is not None
+            else None
+        ),
+        evidence_state_version=(
+            state.workspace.evidence_state.state_version
+            if state.workspace.evidence_state is not None
+            else None
+        ),
+        specialist_model_call_count=state.specialist_model_call_count,
+        specialist_fallback_reason=state.specialist_fallback_reason,
+        specialist_provenance_validation_failures=(
+            state.specialist_provenance_validation_failures
+        ),
+        specialist_latency_ms=state.specialist_latency_ms,
     )

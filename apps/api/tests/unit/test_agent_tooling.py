@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -46,6 +46,7 @@ from disaster_monitor.application.services.event_resolution import (
 from disaster_monitor.application.services.evidence_reconciliation import (
     EvidenceReconciler,
 )
+from disaster_monitor.application.services.memory_recall import MemoryRecallService
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
@@ -55,6 +56,10 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.application.services.source_consistency import (
     validate_provider_source_consistency,
 )
+from disaster_monitor.application.services.specialist_executor import (
+    SpecialistExecutor,
+)
+from disaster_monitor.domain.coordination import SpecialistFindingDraft, SpecialistRole
 from disaster_monitor.domain.disaster import (
     Country,
     Disaster,
@@ -62,8 +67,16 @@ from disaster_monitor.domain.disaster import (
     GeographicArea,
     SourceReference,
 )
+from disaster_monitor.domain.memory import (
+    MemoryLifecycleStatus,
+    MemoryRecord,
+    MemoryType,
+)
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
+)
+from disaster_monitor.infrastructure.memory.memory_repository import (
+    InMemoryMemoryRepository,
 )
 from disaster_monitor.infrastructure.sources.static_source_catalog import (
     StaticSourceCatalog,
@@ -388,6 +401,8 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
         state.workspace.hypotheses[0].proposition not in state.workspace.report.message
     )
     assert state.model_call_count == 0
+    assert state.specialist_model_call_count == 0
+    assert state.specialist_fallback_reason is None
 
     class ReplanAgent:
         async def interpret(self, question):
@@ -416,6 +431,91 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     assert reviewed.replan_count == 1
     assert reviewed.model_call_count == 2
     assert any("no distinct" in warning.lower() for warning in reviewed.warnings)
+
+    class CanonicalSpecialistModel:
+        def __init__(self) -> None:
+            self.requests = []
+
+        async def generate_finding(self, request):
+            self.requests.append(request)
+            key = (
+                "event_identity"
+                if request.handoff.receiver_role
+                is SpecialistRole.EVIDENCE_RECONCILIATION
+                else "recommendation_status"
+            )
+            item = next(value for value in request.artifact.items if value.key == key)
+            return SpecialistFindingDraft(
+                specialist_role=request.handoff.receiver_role,
+                task_type=request.handoff.task_type,
+                finding_key=item.key,
+                value=item.value,
+                summary="The canonical analytical value remains unchanged.",
+                state_version=request.artifact.state_version,
+                evidence_ids=item.evidence_ids,
+                source_ids=item.source_ids,
+                permissions=request.handoff.granted_permissions,
+                safety_policy_fingerprint=request.safety_policy_fingerprint,
+            )
+
+    physical_event = state.workspace.selected_physical_event
+    assert physical_event is not None
+    memories = InMemoryMemoryRepository()
+    await memories.save(
+        MemoryRecord(
+            memory_id="memory:prior-state",
+            schema_version="agent-memory.v1",
+            memory_type=MemoryType.PHYSICAL_EVENT_REFERENCE,
+            status=MemoryLifecycleStatus.ACTIVE,
+            summary=(
+                "Historical earthquake reference; current truth requires new evidence."
+            ),
+            conversation_id="conversation-a",
+            physical_event_id=physical_event.physical_event_id,
+            disaster_identifier="earthquake",
+            country_code="JPN",
+            source_message_ids=("message:prior",),
+            evidence_ids=(physical_event.physical_event_id,),
+            world_state_version="state:prior",
+            created_at=NOW - timedelta(days=1),
+            confirmed_at=NOW - timedelta(days=1),
+            expires_at=NOW + timedelta(days=30),
+        )
+    )
+    specialist_model = CanonicalSpecialistModel()
+    memory_tools = build_disaster_tool_registry(
+        DisasterToolDependencies(
+            registry,
+            StaticSourceCatalog(),
+            provider,
+            EmptySituationProvider(),
+            default_event_policy_registry(),
+            EvidenceReconciler(),
+            DisasterReportRenderer(),
+            lambda: NOW,
+            specialist_executor=SpecialistExecutor(specialist_model),
+            memory_recall=MemoryRecallService(memories),
+        )
+    )
+    memory_enabled = await DisasterAgentRuntime(
+        country_catalog=catalog,
+        query_parser=DisasterQueryParser(catalog),
+        tool_registry=memory_tools,
+        agent_model=None,
+    ).run(
+        "Provide decision support for the latest earthquake in Japan.",
+        conversation_id="conversation-a",
+    )
+
+    assert memory_enabled.specialist_model_call_count == 2
+    assert memory_enabled.workspace.memory_context is not None
+    assert memory_enabled.workspace.memory_context.records[0].world_state_version == (
+        "state:prior"
+    )
+    assert all(
+        request.memory_context is memory_enabled.workspace.memory_context
+        for request in specialist_model.requests
+    )
 
 
 def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> None:

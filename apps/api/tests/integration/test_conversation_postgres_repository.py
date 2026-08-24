@@ -26,6 +26,10 @@ async def test_postgres_conversation_repository_persists_orders_and_cascades() -
         pytest.skip("OPERATIONAL_DATABASE_URL is not configured")
 
     await PostgresOperationalRepository(dsn).migrate()
+    async with await psycopg.AsyncConnection.connect(dsn) as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute("SELECT to_regclass('agent_memory')")
+            assert (await cursor.fetchone())[0] == "agent_memory"
     conversation_id = f"test-conversation:{uuid4()}"
     second_id = f"test-conversation:{uuid4()}"
     timestamp = datetime(2026, 8, 21, 10, 0, tzinfo=UTC)

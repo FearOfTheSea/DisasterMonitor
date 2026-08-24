@@ -1,9 +1,14 @@
 """Shared deterministic model doubles for backend tests."""
 
+import asyncio
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from disaster_monitor.application.dto import (
     ModelReadiness,
