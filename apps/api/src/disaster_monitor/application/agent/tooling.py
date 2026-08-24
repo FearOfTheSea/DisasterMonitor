@@ -550,6 +550,7 @@ class ComposeDisasterAnswerTool(_BaseTool):
                     state.workspace.specialist_handoffs,
                     decision_support=state.workspace.decision_support,
                     memory_context=state.workspace.memory_context,
+                    request_model_calls=state.specialist_model_call_count,
                 )
                 state.specialist_model_call_count += specialist_result.model_call_count
                 state.specialist_fallback_reason = specialist_result.fallback_reason

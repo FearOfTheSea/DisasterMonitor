@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -38,6 +39,42 @@ def client_for(
         )
 
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def paged_client(
+    pages: dict[int, object], requests: list[httpx.Request]
+) -> httpx.AsyncClient:
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        page = int(request.url.params["pageNumber"])
+        payload = pages[page]
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=json.dumps(payload).encode(),
+            request=request,
+        )
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+def flood_feature(
+    event_id: int,
+    *,
+    iso3: str = "CHN",
+    longitude: float = 102.5,
+    latitude: float = 30.5,
+) -> dict[str, object]:
+    feature = deepcopy(fixture("gdacs_flood_search.json")["features"][0])
+    properties = feature["properties"]
+    assert isinstance(properties, dict)
+    properties["eventid"] = event_id
+    properties["iso3"] = iso3
+    properties["affectedcountries"] = [{"iso3": iso3}]
+    geometry = feature["geometry"]
+    assert isinstance(geometry, dict)
+    geometry["coordinates"] = [longitude, latitude]
+    return feature
 
 
 CASES = (
@@ -184,4 +221,107 @@ async def test_gdacs_country_query_preserves_explicit_date_bounds() -> None:
     params = dict(requests[0].url.params.multi_items())
     assert params["fromDate"] == date_from.isoformat()
     assert params["toDate"] == date_to.isoformat()
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_country_query_discovers_valid_event_on_second_page() -> None:
+    requests: list[httpx.Request] = []
+    snapshots: list[object] = []
+    first_page = {
+        "type": "FeatureCollection",
+        "features": [flood_feature(index) for index in range(100)],
+    }
+    second_page = {
+        "type": "FeatureCollection",
+        "features": [flood_feature(200, iso3="JPN", longitude=139.0, latitude=35.0)],
+    }
+
+    async def record_snapshot(payload: object) -> object:
+        snapshots.append(payload)
+        return type("Snapshot", (), {"snapshot_id": f"snapshot:{len(snapshots)}"})()
+
+    client = paged_client({1: first_page, 2: second_page}, requests)
+    country = CATALOG.get_by_alpha3("JPN")
+    assert country is not None
+    adapter = GdacsFloodAdapter(
+        geography=CATALOG,
+        client=client,
+        snapshot_recorder=record_snapshot,
+    )
+
+    result = await adapter.find_recent_events(
+        DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",)), now=NOW
+    )
+
+    assert [event.event_id for event in result.records] == ["gdacs:fl:200"]
+    assert result.records[0].source.snapshot_id == "snapshot:2"
+    assert [request.url.params["pageNumber"] for request in requests] == ["1", "2"]
+    assert len(snapshots) == 2
+    assert snapshots[0].canonical_request_identity != (
+        snapshots[1].canonical_request_identity
+    )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_pagination_stops_at_internal_bound_with_typed_issue() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        page = int(request.url.params["pageNumber"])
+        payload = {
+            "type": "FeatureCollection",
+            "features": [flood_feature(page * 1_000 + index) for index in range(100)],
+        }
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=json.dumps(payload).encode(),
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    result = await GdacsFloodAdapter(client=client).find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.FLOOD), now=NOW
+    )
+
+    assert len(requests) == 5
+    assert len(result.records) == 500
+    assert result.issues[-1].reason_code == "pagination_limit_reached"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_malformed_later_page_preserves_partial_success() -> None:
+    requests: list[httpx.Request] = []
+    first_page = {
+        "type": "FeatureCollection",
+        "features": [flood_feature(index) for index in range(100)],
+    }
+    client = paged_client({1: first_page, 2: {"unexpected": []}}, requests)
+
+    result = await GdacsFloodAdapter(client=client).find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.FLOOD), now=NOW
+    )
+
+    assert len(result.records) == 100
+    assert len(requests) == 2
+    assert result.issues[-1].reason_code == "invalid_schema"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_empty_first_page_retains_empty_result_contract() -> None:
+    requests: list[httpx.Request] = []
+    client = client_for({"type": "FeatureCollection", "features": []}, requests)
+
+    result = await GdacsFloodAdapter(client=client).find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.FLOOD), now=NOW
+    )
+
+    assert result.records == ()
+    assert [issue.reason_code for issue in result.issues] == ["empty_result"]
+    assert len(requests) == 1
     await client.aclose()

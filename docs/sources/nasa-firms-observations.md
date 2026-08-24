@@ -7,10 +7,14 @@ source-backed point. It never creates one event per hotspot.
 
 The official FIRMS Area CSV API requires a free `MAP_KEY`. DisasterMonitor queries the
 global `VIIRS_SNPP_NRT` product for a three-day window and a bounding box around the
-selected point, then independently keeps only valid detections within 50 km. At most
-500 detections are admitted. They are aggregated into one `possible`-correlation
-situation record with a preliminary count and observation interval. No individual
-pixel becomes a physical-event identity, perimeter, ignition point, or confirmed fact.
+selected point. When the 50 km search circle crosses the antimeridian, the adapter
+issues exactly two valid area requests, one on each longitude side. Both successful
+payloads are snapshotted, responses are merged in request order, exact duplicate
+detections are removed, and the distance check is applied after merging. At most 500
+detections are admitted across the complete search. They are aggregated into one
+`possible`-correlation situation record with a preliminary count and observation
+interval. No individual pixel becomes a physical-event identity, perimeter, ignition
+point, or confirmed fact.
 
 FIRMS provides satellite fire and thermal anomaly pixels, generally within hours of
 overpass. A detection can represent a small intense source or a larger cooler source

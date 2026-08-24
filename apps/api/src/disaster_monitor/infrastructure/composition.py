@@ -6,6 +6,9 @@ from datetime import datetime, timedelta
 
 from disaster_monitor.application.disaster import GeographicScope
 from disaster_monitor.application.ports.agent_model import AgentModel
+from disaster_monitor.application.ports.conversation_deletion import (
+    ConversationDeletionStore,
+)
 from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.event_media import (
     EventMediaDiscovery,
@@ -55,6 +58,9 @@ from disaster_monitor.application.services.specialist_executor import (
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.conversations.deletion_store import (
+    InMemoryConversationDeletionStore,
+)
 from disaster_monitor.infrastructure.conversations.memory_repository import (
     InMemoryConversationRepository,
 )
@@ -243,6 +249,18 @@ def build_memory_repository(
         else ""
     )
     return PostgresMemoryRepository(dsn) if dsn else InMemoryMemoryRepository()
+
+
+def build_conversation_deletion_store(
+    conversations: ConversationStore,
+    memories: MemoryStore,
+) -> ConversationDeletionStore:
+    """Use FK cascade in PostgreSQL and one staged mutation in memory."""
+    if isinstance(conversations, InMemoryConversationRepository) and isinstance(
+        memories, InMemoryMemoryRepository
+    ):
+        return InMemoryConversationDeletionStore(conversations, memories)
+    return conversations
 
 
 def build_language_model(settings: Settings) -> LanguageModel:

@@ -5,6 +5,9 @@ from uuid import uuid4
 import psycopg
 import pytest
 
+from disaster_monitor.application.use_cases.delete_conversation import (
+    DeleteConversation,
+)
 from disaster_monitor.domain.conversation import Conversation
 from disaster_monitor.domain.memory import (
     MemoryLifecycleStatus,
@@ -61,7 +64,7 @@ async def test_postgres_memory_survives_recreation_and_conversation_deletion() -
             conversation_id, "physical-event:test"
         ) == (record,)
 
-        assert await conversations.delete(conversation_id) is True
+        await DeleteConversation(conversations).execute(conversation_id)
         async with await psycopg.AsyncConnection.connect(dsn) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute(

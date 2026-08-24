@@ -67,7 +67,10 @@ source authority, issue public warnings, or select events.
   overlap the Copernicus/EC-JRC family used by GFM; wildfire records retain GWIS
   lineage and are downstream of FIRMS; volcano records retain their VAAC label and are
   downstream of VAA/Smithsonian reporting. Agreement within those families is not
-  treated as independent corroboration.
+  treated as independent corroboration. GFM/GDACS floods, EONET/GDACS wildfires, and
+  Smithsonian-USGS/GDACS eruptions are reconciled only by exact maintained source-pair
+  rules with conservative source-backed time and point-distance gates; uncertain or
+  merely nearby observations remain separate.
 - CEMS Global Flood Monitoring (GFM) provides primary bounded named-country and
   worldwide flood discovery after country-clipped or bounded-footprint Observed Flood
   Extent class-1 statistics confirm nonzero flood pixels.
@@ -79,8 +82,10 @@ source authority, issue public warnings, or select events.
 - NASA FIRMS optionally adds aggregated VIIRS thermal-anomaly observations after a
   wildfire with a source-backed point is selected. It requires `NASA_FIRMS_MAP_KEY`,
   remains possible-correlation satellite evidence, and never discovers events or
-  creates one event per hotspot. Because GDACS WF is downstream of GWIS/FIRMS, the two
-  do not count as independent corroboration.
+  creates one event per hotspot. Antimeridian-crossing circles use two bounded area
+  requests with global deduplication and one shared 500-observation ceiling. Because
+  GDACS WF is downstream of GWIS/FIRMS, the two do not count as independent
+  corroboration.
 - NASA COOLR Landslides provides primary bounded named-country and worldwide landslide
   event discovery from the COOLR report catalogue. Runtime evidence remains secondary;
   accepted reports are restricted to the documented GLC and LRC import classes, and

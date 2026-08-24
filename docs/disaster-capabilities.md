@@ -79,7 +79,10 @@ does not confirm occurrence, and an absent activation says nothing about occurre
 GDACS FL, WF, and VO provide fallback secondary discovery. Their upstream lineage is
 material: FL overlaps the Copernicus/EC-JRC family used by GFM, WF is produced by GWIS
 from FIRMS detections, and VO summarizes VAA and Smithsonian reporting. These records
-remain distinct observations but do not create independent-source counts.
+remain distinct observations but do not create independent-source counts. Exact
+GFM/GDACS, EONET/GDACS, and Smithsonian-USGS/GDACS source pairs may be assigned to one
+physical event only when their typed time and point geometry satisfy conservative
+hazard-specific gates; nearby observations outside those gates remain separate.
 NOAA IBTrACS does not add a second live tropical-cyclone feed. It is queried only after
 GDACS selects a cyclone and attaches one active track only when name, onset, and track
 proximity uniquely reconcile identity. Its agency inputs can overlap GDACS, so the
@@ -120,6 +123,9 @@ statistics only for flood event discovery and does not expose raster products as
 general imagery. Configured NASA FIRMS observations are a narrow, non-imagery
 exception: one allowlisted VIIRS product is queried in a bounded area around an
 already selected wildfire point, then aggregated as possible observation evidence.
+Searches that cross the antimeridian use two area requests, snapshot both responses,
+deduplicate before applying one global 500-observation ceiling, and retain the exact
+50 km distance filter.
 It cannot discover events, expose arbitrary imagery, define a perimeter, or create one
 event per hotspot. Structured
 source-candidate metadata can be screened into a separate review queue, but it cannot

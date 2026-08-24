@@ -64,7 +64,10 @@ A request is bounded to:
 Specialist-model calls have separate accounting from interpretation, planning,
 review, localization, and visual-model calls. The two supported model-backed roles
 run sequentially through the configured text model; no additional text model or
-parallel Ollama worker is constructed.
+parallel Ollama worker is constructed. The remaining specialist budget is carried in
+request state and checked on every execution, so repeated composition cannot reset the
+two-call ceiling. Trusted built-in workflow tools may appear only once in a validated
+plan.
 
 The runtime does not allow:
 
@@ -123,8 +126,11 @@ has no tools, provider/network/filesystem access, or recursive-agent authority, 
 returns an untrusted `SpecialistFindingDraft`. Application policy validates role and
 task ownership, granted permissions, state lineage, evidence/source membership,
 provenance, safety fingerprint, contradictions, and budgets before constructing a
-trusted finding. Any model or validation failure discards all model findings for the
-request and retains the deterministic result.
+trusted finding. The returned key/value must select one exact projection item and its
+evidence/source identifiers must exactly equal that item's current-evidence lineage;
+projection-wide or historical-memory identifiers cannot substitute for item lineage.
+Any model or validation failure discards all model findings for the request and retains
+the deterministic result without changing canonical evidence.
 
 ## State
 
@@ -132,8 +138,11 @@ DisasterMonitor keeps five state categories deliberately separate:
 
 1. **Durable conversation transcripts.** `ConversationStore` retains message IDs,
    roles, text, timestamps, and versioned assistant response payloads for the UI and
-   conversation lifecycle. Deleting a conversation removes its cascade-owned
-   transcript and prevents recall of conversation-derived memory.
+   conversation lifecycle. Deleting a conversation atomically and physically removes
+   its cascade-owned transcript and derived memory. PostgreSQL performs one
+   conversation delete in a transaction and relies on the maintained `ON DELETE
+   CASCADE` ownership invariant; the in-memory implementation applies the same
+   all-or-nothing semantics. Conversation deletion does not retain memory tombstones.
 2. **Bounded conversational history.** For applicable general-model requests, the
    newest whole transcript messages are selected deterministically, capped at eight
    messages and 6,000 characters, and included as non-authoritative prompt context.

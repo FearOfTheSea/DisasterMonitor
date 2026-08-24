@@ -22,7 +22,6 @@ from disaster_monitor.application.ports.geography import (
     CountryCatalogUpdateTrigger,
 )
 from disaster_monitor.application.ports.language_model import LanguageModel
-from disaster_monitor.application.ports.memory_store import MemoryStore
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
@@ -40,6 +39,9 @@ from disaster_monitor.application.services.active_incidents import (
 )
 from disaster_monitor.application.services.operational_ingestion import (
     record_operator_review,
+)
+from disaster_monitor.application.use_cases.delete_conversation import (
+    DeleteConversation,
 )
 from disaster_monitor.application.use_cases.run_conversation_turn import (
     RunConversationTurn,
@@ -103,9 +105,9 @@ def get_conversation_turn(request: Request) -> RunConversationTurn:
     return cast(RunConversationTurn, request.app.state.run_conversation_turn)
 
 
-def get_memory_store(request: Request) -> MemoryStore:
-    """Retrieve the separate typed historical-memory repository."""
-    return cast(MemoryStore, request.app.state.memory_repository)
+def get_delete_conversation(request: Request) -> DeleteConversation:
+    """Retrieve the atomic conversation-deletion use case."""
+    return cast(DeleteConversation, request.app.state.delete_conversation)
 
 
 def get_language_model(request: Request) -> LanguageModel:
@@ -812,20 +814,10 @@ async def get_conversation(
 )
 async def delete_conversation(
     conversation_id: str,
-    repository: Annotated[ConversationStore, Depends(get_conversation_store)],
-    memories: Annotated[MemoryStore, Depends(get_memory_store)],
+    use_case: Annotated[DeleteConversation, Depends(get_delete_conversation)],
 ) -> Response:
-    """Permanently remove a conversation and its cascade-owned messages."""
-    if await repository.get(conversation_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="The requested conversation does not exist.",
-        )
-    await memories.mark_deleted_for_conversation(
-        conversation_id, deleted_at=datetime.now(UTC)
-    )
-    if not await repository.delete(conversation_id):
-        raise RuntimeError("Conversation deletion lost its validated target.")
+    """Permanently remove a conversation and all lifecycle-owned state."""
+    await use_case.execute(conversation_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

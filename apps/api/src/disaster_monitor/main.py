@@ -17,6 +17,9 @@ from disaster_monitor.application.agent.multimodal_tools import (
 )
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.ports.agent_model import AgentModel
+from disaster_monitor.application.ports.conversation_deletion import (
+    ConversationDeletionStore,
+)
 from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.event_media import (
     EventMediaDiscovery,
@@ -61,6 +64,9 @@ from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
+from disaster_monitor.application.use_cases.delete_conversation import (
+    DeleteConversation,
+)
 from disaster_monitor.application.use_cases.run_conversation_turn import (
     RunConversationTurn,
 )
@@ -68,6 +74,7 @@ from disaster_monitor.application.use_cases.run_disaster_agent import RunDisaste
 from disaster_monitor.infrastructure.composition import (
     EventMediaServices,
     build_agent_model,
+    build_conversation_deletion_store,
     build_conversation_repository,
     build_country_catalog,
     build_country_catalog_automation,
@@ -111,6 +118,7 @@ def create_app(
     satellite_imagery_service: SatelliteImageryService | None = None,
     specialist_model: SpecialistModel | None = None,
     memory_repository: MemoryStore | None = None,
+    conversation_deletion_store: ConversationDeletionStore | None = None,
 ) -> FastAPI:
     """Build an application with explicit, testable dependencies."""
     app_settings = settings or Settings()
@@ -135,6 +143,10 @@ def create_app(
     operational = build_operational_services(app_settings, operational_repository)
     conversations = build_conversation_repository(app_settings, conversation_repository)
     memories = build_memory_repository(app_settings, memory_repository)
+    conversation_deletion = (
+        conversation_deletion_store
+        or build_conversation_deletion_store(conversations, memories)
+    )
     memory_recall = (
         MemoryRecallService(memories) if app_settings.long_term_memory_enabled else None
     )
@@ -298,6 +310,7 @@ def create_app(
         memory_policy=MemoryPolicy(),
         memory_enabled=app_settings.long_term_memory_enabled,
     )
+    app.state.delete_conversation = DeleteConversation(conversation_deletion)
     app.state.conversation_repository = conversations
     app.state.memory_repository = memories
     app.state.operational_repository = operational.repository

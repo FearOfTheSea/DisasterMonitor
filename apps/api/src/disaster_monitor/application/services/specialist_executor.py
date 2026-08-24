@@ -75,8 +75,11 @@ class SpecialistExecutor:
         *,
         decision_support: DecisionSupportArtifact | None = None,
         memory_context: MemoryContextArtifact | None = None,
+        request_model_calls: int = 0,
     ) -> SpecialistExecutionResult:
         started = perf_counter()
+        if request_model_calls < 0:
+            raise ValueError("Request specialist model-call count cannot be negative.")
         if self._model is None or self._max_model_calls == 0:
             return self._result((), 0, None, 0, started)
         supported = tuple(
@@ -85,7 +88,8 @@ class SpecialistExecutor:
             for handoff in handoffs
             if handoff.receiver_role is role
         )
-        if len(supported) > self._max_model_calls:
+        remaining_model_calls = max(0, self._max_model_calls - request_model_calls)
+        if len(supported) > remaining_model_calls:
             return self._result(
                 (), 0, "specialist_model_call_budget_exceeded", 0, started
             )
@@ -182,15 +186,25 @@ def _validation_failure(
         )
     ):
         return "state_version_lineage_violation"
-    if not set(draft.evidence_ids) <= set(projection.admitted_evidence_ids):
-        return "evidence_membership_violation"
-    if not set(draft.source_ids) <= set(projection.admitted_source_ids):
-        return "source_membership_violation"
     if draft.safety_policy_fingerprint != SAFETY_POLICY_FINGERPRINT:
         return "safety_policy_violation"
     expected = _expected_values(state, draft.specialist_role, decision_support)
     if expected.get(draft.finding_key) != draft.value:
         return "contradictory_specialist_output"
+    selected_item = next(
+        (
+            item
+            for item in projection.items
+            if item.key == draft.finding_key and item.value == draft.value
+        ),
+        None,
+    )
+    if selected_item is None:
+        return "contradictory_specialist_output"
+    if draft.evidence_ids != selected_item.evidence_ids:
+        return "evidence_membership_violation"
+    if draft.source_ids != selected_item.source_ids:
+        return "source_membership_violation"
     return None
 
 
@@ -208,21 +222,37 @@ def _projection(
     ):
         raise ValueError("Specialist handoff escaped admitted canonical provenance.")
     values = _expected_values(state, handoff.receiver_role, decision_support)
-    items = tuple(
-        SpecialistProjectionItem(
-            key=key,
-            value=value,
-            evidence_ids=reference.evidence_ids,
-            source_ids=reference.source_ids,
+    items = []
+    for key, value in values.items():
+        evidence_ids, source_ids = _item_provenance(
+            state,
+            handoff.receiver_role,
+            key,
+            decision_support,
+            fallback_evidence_ids=reference.evidence_ids,
+            fallback_source_ids=reference.source_ids,
         )
-        for key, value in values.items()
-    )
+        if (
+            not evidence_ids
+            or not source_ids
+            or not set(evidence_ids) <= set(reference.evidence_ids)
+            or not set(source_ids) <= set(reference.source_ids)
+        ):
+            raise ValueError("Specialist item escaped admitted canonical provenance.")
+        items.append(
+            SpecialistProjectionItem(
+                key=key,
+                value=value,
+                evidence_ids=evidence_ids,
+                source_ids=source_ids,
+            )
+        )
     return SpecialistArtifactProjection(
         artifact_id=reference.artifact_id,
         artifact_type=reference.artifact_type,
         state_version=state.state_version,
         physical_event_id=state.physical_event.physical_event_id,
-        items=items,
+        items=tuple(items),
         admitted_evidence_ids=reference.evidence_ids,
         admitted_source_ids=reference.source_ids,
     )
@@ -272,6 +302,81 @@ def _expected_values(
         )
         return result
     return {}
+
+
+def _item_provenance(
+    state: EvidenceWorldState,
+    role: SpecialistRole,
+    key: str,
+    decision_support: DecisionSupportArtifact | None,
+    *,
+    fallback_evidence_ids: tuple[str, ...],
+    fallback_source_ids: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    if role is SpecialistRole.EVIDENCE_RECONCILIATION:
+        if key == "event_identity":
+            return (
+                (state.physical_event.physical_event_id,),
+                (state.physical_event.event.source.source_id,),
+            )
+        if key.startswith("claim:") and key.endswith(":conflict"):
+            claim_key = key.removeprefix("claim:").removesuffix(":conflict")
+            claim = state.claim(claim_key)
+            evidence_ids = tuple(
+                dict.fromkeys(item.observation.observation_id for item in claim.history)
+            )
+            source_ids = tuple(
+                dict.fromkeys(
+                    item.observation.fact.source.source_id for item in claim.history
+                )
+            )
+            if evidence_ids and source_ids:
+                return evidence_ids, source_ids
+    if role is SpecialistRole.DECISION_ANALYSIS and decision_support is not None:
+        if key.startswith("claim:") and key.endswith(":conflict"):
+            claim_key = key.removeprefix("claim:").removesuffix(":conflict")
+            contradiction = next(
+                (
+                    item
+                    for item in decision_support.contradictions
+                    if item.claim_key == claim_key
+                ),
+                None,
+            )
+            if contradiction is not None:
+                source_by_evidence = {
+                    item.observation.observation_id: (
+                        item.observation.fact.source.source_id
+                    )
+                    for claim in state.claims
+                    for item in claim.history
+                }
+                source_ids = tuple(
+                    dict.fromkeys(
+                        source_by_evidence[evidence_id]
+                        for evidence_id in contradiction.evidence_ids
+                        if evidence_id in source_by_evidence
+                    )
+                )
+                if source_ids:
+                    return contradiction.evidence_ids, source_ids
+        evidence_ids = tuple(
+            dict.fromkeys(
+                evidence_id
+                for fact in decision_support.facts
+                for evidence_id in fact.evidence_ids
+            )
+        )
+        source_ids = tuple(
+            dict.fromkeys(
+                source_id
+                for fact in decision_support.facts
+                for source_id in fact.source_ids
+            )
+        )
+        if evidence_ids and source_ids:
+            return evidence_ids, source_ids
+    return fallback_evidence_ids, fallback_source_ids
 
 
 def _known_provenance(

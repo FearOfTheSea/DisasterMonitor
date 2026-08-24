@@ -710,10 +710,60 @@ class DefaultEventPolicy(BaseEventPolicy):
         )
 
 
+class _CrossProviderGeoTemporalEventPolicy(DefaultEventPolicy):
+    source_pair: frozenset[str]
+    maximum_time_delta: timedelta
+    maximum_distance_km: float
+
+    def _identity_time(self, event: DisasterEvent) -> datetime:
+        return event.event_time
+
+    def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
+        if super().same_physical_event(first, second):
+            return True
+        if (
+            first.disaster != second.disaster
+            or first.country.alpha3_code != second.country.alpha3_code
+            or frozenset((first.source.source_id, second.source.source_id))
+            != self.source_pair
+        ):
+            return False
+        if (
+            abs(
+                (
+                    self._identity_time(first) - self._identity_time(second)
+                ).total_seconds()
+            )
+            > self.maximum_time_delta.total_seconds()
+        ):
+            return False
+        distance = _distance_km(first, second)
+        return distance is not None and distance <= self.maximum_distance_km
+
+
+class FloodEventPolicy(_CrossProviderGeoTemporalEventPolicy):
+    """Conservatively reconcile GFM and GDACS observations of one flood."""
+
+    source_pair = frozenset(("cems-gfm-floods", "gdacs-floods"))
+    maximum_time_delta = timedelta(hours=72)
+    maximum_distance_km = 25.0
+
+
+class WildfireEventPolicy(_CrossProviderGeoTemporalEventPolicy):
+    """Conservatively reconcile EONET and GDACS observations of one wildfire."""
+
+    source_pair = frozenset(("nasa-eonet-wildfires", "gdacs-wildfires"))
+    maximum_time_delta = timedelta(hours=72)
+    maximum_distance_km = 25.0
+
+
 class VolcanicEruptionEventPolicy(DefaultEventPolicy):
     """Resolve ongoing WVAR eruptions by their current report publication."""
 
     _WVAR_SOURCE_ID = "smithsonian-usgs-volcanic-activity"
+    _GDACS_SOURCE_ID = "gdacs-volcanic-eruptions"
+    _MAXIMUM_IDENTITY_TIME_DELTA = timedelta(days=7)
+    _MAXIMUM_IDENTITY_DISTANCE_KM = 8.0
 
     def _wvar_observation_time(self, event: DisasterEvent) -> datetime | None:
         if event.source.source_id != self._WVAR_SOURCE_ID:
@@ -734,6 +784,26 @@ class VolcanicEruptionEventPolicy(DefaultEventPolicy):
     def rank(self, event: DisasterEvent, query: DisasterQuery, now: datetime) -> float:
         observation_time = self._wvar_observation_time(event)
         return (observation_time or event.event_time).timestamp()
+
+    def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
+        if super().same_physical_event(first, second):
+            return True
+        if (
+            first.disaster != second.disaster
+            or first.country.alpha3_code != second.country.alpha3_code
+            or frozenset((first.source.source_id, second.source.source_id))
+            != frozenset((self._WVAR_SOURCE_ID, self._GDACS_SOURCE_ID))
+        ):
+            return False
+        first_time = self._wvar_observation_time(first) or first.event_time
+        second_time = self._wvar_observation_time(second) or second.event_time
+        if (
+            abs((first_time - second_time).total_seconds())
+            > self._MAXIMUM_IDENTITY_TIME_DELTA.total_seconds()
+        ):
+            return False
+        distance = _distance_km(first, second)
+        return distance is not None and distance <= self._MAXIMUM_IDENTITY_DISTANCE_KM
 
     def describe_selection(self, query: DisasterQuery, ambiguous: bool) -> str:
         if ambiguous:
@@ -758,6 +828,8 @@ def default_event_policy_registry() -> EventPolicyRegistry:
     return EventPolicyRegistry(
         {
             Disaster.EARTHQUAKE: EarthquakeEventPolicy(),
+            Disaster.FLOOD: FloodEventPolicy(),
+            Disaster.WILDFIRE: WildfireEventPolicy(),
             Disaster.VOLCANIC_ERUPTION: VolcanicEruptionEventPolicy(),
         },
         DefaultEventPolicy(),

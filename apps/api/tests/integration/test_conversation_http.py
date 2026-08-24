@@ -22,7 +22,6 @@ from disaster_monitor.domain.conversation import (
     ConversationMessage,
     ConversationRole,
 )
-from disaster_monitor.domain.memory import MemoryLifecycleStatus
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.conversations.memory_repository import (
     InMemoryConversationRepository,
@@ -97,7 +96,7 @@ async def test_conversation_turn_persists_typed_memory_and_deletion_hides_it() -
     assert stored[0].may_satisfy_current_evidence is False
     assert deleted.status_code == 204
     after_delete = await memories.list_for_scope(conversation_id, "physical-event:test")
-    assert after_delete[0].status is MemoryLifecycleStatus.DELETED
+    assert after_delete == ()
 
 
 @pytest.mark.asyncio

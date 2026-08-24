@@ -3,7 +3,12 @@
 DisasterMonitor uses the official GDACS GeoJSON event-list API for bounded global and
 named-country discovery of tropical cyclones (`TC`), floods (`FL`), wildfires (`WF`),
 and volcanic eruptions (`VO`). All four registrations are secondary tier and secondary
-source authority. The API requires no key, returns at most 100 records per page, and
+source authority. The API requires no key and returns at most 100 records per page.
+DisasterMonitor follows pages sequentially until a short page exhausts the requested
+date interval or the internal ceiling of five pages/500 raw records is reached. Every
+successful page is snapshotted with a page-specific credential-free request identity.
+A later page failure retains earlier valid records with a typed provider issue; reaching
+the ceiling emits `pagination_limit_reached` rather than claiming exhaustive coverage.
 GDACS asks API users to acknowledge “Global Disaster Alert and Coordination System,
 GDACS.” Its terms describe products as modelled or semi-automatic outputs built from
 scientific institutions and authoritative information for potential international
@@ -27,6 +32,10 @@ their agreement is not counted as fully independent corroboration. GDACS centroi
 impact thresholds, model severity, casualty, and displacement fields are not promoted;
 only event identity plus source-reported alert label are retained.
 
+GFM and GDACS observations are assigned to one physical flood only for the exact
+maintained source pair when both have source-backed points within 25 km and event times
+within 72 hours. Otherwise they remain separate candidates.
+
 ## Wildfires (`WF`)
 
 GDACS wildfire events are produced from JRC’s Global Wildfire Information System
@@ -38,6 +47,10 @@ through NASA FIRMS. GDACS WF is therefore valid secondary event discovery, but i
 agreement with direct FIRMS observations is not independent. The event-list point is a
 centroid, not a perimeter, ignition, hotspot, containment, impact, or warning claim.
 
+EONET and GDACS observations are assigned to one physical wildfire only for the exact
+maintained source pair when both have source-backed points within 25 km and event times
+within 72 hours. Otherwise they remain separate candidates.
+
 ## Volcanic eruptions (`VO`)
 
 GDACS volcano status is based mainly on daily Volcanic Ash Advisories and Smithsonian
@@ -47,6 +60,12 @@ secondary discovery/corroboration but dependent on the same Smithsonian/USGS WVA
 VAA source families it summarizes. A point is a volcano location, not ash geometry or
 an exclusion zone. Alert level is not a local warning, ash-concentration measurement,
 impact, casualty, evacuation, or response claim.
+
+Smithsonian/USGS WVAR and GDACS observations are assigned to one physical eruption only
+for the exact maintained source pair when their source-backed observation/event times
+are within seven days and their volcano points are within 8 km. Otherwise they remain
+separate candidates. These pairwise rules do not weaken the non-transitive clique
+requirement for multi-observation identity.
 
 ## Testing and freshness
 

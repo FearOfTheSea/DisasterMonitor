@@ -134,68 +134,83 @@ class NasaFirmsObservationAdapter:
             return ProviderBatch(issues=(_geometry_unavailable(),))
         latitude, longitude = point
         start_date = now.astimezone(UTC).date() - timedelta(days=_DAY_RANGE - 1)
-        bbox = _bbox(latitude, longitude)
-        endpoint = (
-            f"{_FIRMS_API_ROOT}/{quote(self._map_key or '', safe='')}/"
-            f"{_FIRMS_PRODUCT}/{bbox}/{_DAY_RANGE}/{start_date.isoformat()}"
-        )
-        capture = build_snapshot_capture(
-            self._snapshot_recorder,
-            source_id=self.source_id,
-            parameters={
-                "event": event.event_id,
-                "product": _FIRMS_PRODUCT,
-                "bbox": bbox,
-                "start": start_date.isoformat(),
-                "days": str(_DAY_RANGE),
-            },
-            rights_id="nasa-earth-science-data-use",
-            retrieved_at=now,
-        )
-        payload = await get_text(
-            self._client,
-            endpoint,
-            allowed_hosts=self.allowed_hosts,
-            max_bytes=self._max_response_bytes,
-            provider_name=self.provider_name,
-            capture=capture,
-        )
-        detections: list[_Detection] = []
+        detections: set[_Detection] = set()
         issues: list[ProviderIssue] = []
-        reader = csv.DictReader(StringIO(payload))
-        if reader.fieldnames is None or not {
-            "latitude",
-            "longitude",
-            "acq_date",
-            "acq_time",
-        }.issubset(reader.fieldnames):
-            return ProviderBatch(issues=(_invalid_schema(),))
-        for index, row in enumerate(reader):
-            try:
-                detection = _parse_detection(row)
-            except (TypeError, ValueError, OverflowError) as error:
-                issues.append(_invalid_record(index, error))
+        contributing_snapshot_ids: list[str] = []
+        row_index = 0
+        limit_reached = False
+        for bbox in _bboxes(latitude, longitude):
+            endpoint = (
+                f"{_FIRMS_API_ROOT}/{quote(self._map_key or '', safe='')}/"
+                f"{_FIRMS_PRODUCT}/{bbox}/{_DAY_RANGE}/{start_date.isoformat()}"
+            )
+            capture = build_snapshot_capture(
+                self._snapshot_recorder,
+                source_id=self.source_id,
+                parameters={
+                    "event": event.event_id,
+                    "product": _FIRMS_PRODUCT,
+                    "bbox": bbox,
+                    "start": start_date.isoformat(),
+                    "days": str(_DAY_RANGE),
+                },
+                rights_id="nasa-earth-science-data-use",
+                retrieved_at=now,
+            )
+            payload = await get_text(
+                self._client,
+                endpoint,
+                allowed_hosts=self.allowed_hosts,
+                max_bytes=self._max_response_bytes,
+                provider_name=self.provider_name,
+                capture=capture,
+            )
+            reader = csv.DictReader(StringIO(payload))
+            if reader.fieldnames is None or not {
+                "latitude",
+                "longitude",
+                "acq_date",
+                "acq_time",
+            }.issubset(reader.fieldnames):
+                issues.append(_invalid_schema())
                 continue
-            if (
-                _distance_km(
-                    latitude,
-                    longitude,
-                    detection.latitude,
-                    detection.longitude,
-                )
-                <= _OBSERVATION_RADIUS_KM
-            ):
-                detections.append(detection)
-            if len(detections) >= _MAX_OBSERVATIONS:
-                issues.append(_observation_limit())
+            previous_count = len(detections)
+            for row in reader:
+                index = row_index
+                row_index += 1
+                try:
+                    detection = _parse_detection(row)
+                except (TypeError, ValueError, OverflowError) as error:
+                    issues.append(_invalid_record(index, error))
+                    continue
+                if (
+                    _distance_km(
+                        latitude,
+                        longitude,
+                        detection.latitude,
+                        detection.longitude,
+                    )
+                    <= _OBSERVATION_RADIUS_KM
+                ):
+                    detections.add(detection)
+                if len(detections) >= _MAX_OBSERVATIONS:
+                    issues.append(_observation_limit())
+                    limit_reached = True
+                    break
+            if len(detections) > previous_count and capture and capture.snapshot:
+                contributing_snapshot_ids.append(capture.snapshot.snapshot_id)
+            if limit_reached:
                 break
         if not detections:
             if not issues:
                 issues.append(_empty_result())
             return ProviderBatch(issues=tuple(issues))
-        detections.sort(key=lambda item: item.observed_at)
-        earliest = detections[0].observed_at
-        latest = detections[-1].observed_at
+        ordered_detections = sorted(
+            detections,
+            key=lambda item: (item.observed_at, item.latitude, item.longitude),
+        )
+        earliest = ordered_detections[0].observed_at
+        latest = ordered_detections[-1].observed_at
         source = SourceReference(
             source_id=self.source_id,
             publisher="NASA Fire Information for Resource Management System (FIRMS)",
@@ -206,14 +221,14 @@ class NasaFirmsObservationAdapter:
             retrieved_at=now,
             authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
             snapshot_id=(
-                capture.snapshot.snapshot_id if capture and capture.snapshot else None
+                contributing_snapshot_ids[0] if contributing_snapshot_ids else None
             ),
         )
         facts = (
             ReportedFact(
                 category="satellite_observation",
                 label="Nearby thermal anomaly detections",
-                value=str(len(detections)),
+                value=str(len(ordered_detections)),
                 status=FactStatus.PRELIMINARY,
                 source=source,
                 event_id=event.event_id,
@@ -232,7 +247,8 @@ class NasaFirmsObservationAdapter:
         report = SituationReport(
             source=source,
             narrative=(
-                f"NASA FIRMS reported {len(detections)} VIIRS fire/thermal anomaly "
+                f"NASA FIRMS reported {len(ordered_detections)} VIIRS fire/thermal "
+                "anomaly "
                 f"detections within {_OBSERVATION_RADIUS_KM:.0f} km of the selected "
                 "event point. These satellite pixels are possible observations only: "
                 "they do not confirm wildfire identity, ignition, perimeter, size, "
@@ -268,15 +284,28 @@ def _event_point(
     return point.latitude, point.longitude
 
 
-def _bbox(latitude: float, longitude: float) -> str:
+def _bboxes(latitude: float, longitude: float) -> tuple[str, ...]:
     latitude_delta = _OBSERVATION_RADIUS_KM / 111.0
     longitude_scale = max(cos(radians(latitude)), 0.1)
     longitude_delta = _OBSERVATION_RADIUS_KM / (111.0 * longitude_scale)
-    west = max(-180.0, longitude - longitude_delta)
     south = max(-90.0, latitude - latitude_delta)
-    east = min(180.0, longitude + longitude_delta)
     north = min(90.0, latitude + latitude_delta)
-    return ",".join(f"{value:.5f}" for value in (west, south, east, north))
+    west = longitude - longitude_delta
+    east = longitude + longitude_delta
+    boxes: tuple[tuple[float, float, float, float], ...]
+    if west < -180.0:
+        boxes = (
+            (-180.0, south, east, north),
+            (west + 360.0, south, 180.0, north),
+        )
+    elif east > 180.0:
+        boxes = (
+            (west, south, 180.0, north),
+            (-180.0, south, east - 360.0, north),
+        )
+    else:
+        boxes = ((west, south, east, north),)
+    return tuple(",".join(f"{value:.5f}" for value in bounds) for bounds in boxes)
 
 
 def _parse_detection(row: dict[str, str]) -> _Detection:

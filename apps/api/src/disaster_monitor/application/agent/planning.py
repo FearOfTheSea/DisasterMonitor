@@ -91,6 +91,13 @@ def validate_plan(
             raise ValueError("The investigation plan has duplicate step IDs.")
         if step.tool_name not in allowed_tools:
             raise ValueError(f"Unknown agent tool: {step.tool_name}")
+        if (
+            step.tool_name in _BUILTIN_TOOL_PREREQUISITES
+            and step.tool_name in seen_tools
+        ):
+            raise ValueError(
+                "The investigation plan has duplicate trusted disaster tool steps."
+            )
         if any(dependency not in seen_steps for dependency in step.dependencies):
             raise ValueError("The investigation plan has invalid sequencing.")
         required_tools = _BUILTIN_TOOL_PREREQUISITES.get(step.tool_name, ())

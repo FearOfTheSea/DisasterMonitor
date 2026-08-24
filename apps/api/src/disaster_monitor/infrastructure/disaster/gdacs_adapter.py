@@ -28,6 +28,7 @@ from disaster_monitor.domain.disaster import (
     point_event_geometry,
 )
 from disaster_monitor.infrastructure.disaster.errors import (
+    DisasterProviderError,
     DisasterProviderResponseError,
 )
 from disaster_monitor.infrastructure.disaster.http import (
@@ -40,6 +41,8 @@ from disaster_monitor.infrastructure.disaster.http import (
 GDACS_SEARCH_URL = "https://www.gdacs.org/gdacsapi/api/Events/geteventlist/SEARCH"
 GDACS_EVENT_DATA_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventdata"
 _GDACS_MAX_PAGE_SIZE = 100
+_GDACS_MAX_PAGES = 5
+_GDACS_MAX_RECORDS = _GDACS_MAX_PAGE_SIZE * _GDACS_MAX_PAGES
 _GDACS_RIGHTS_ID = "gdacs-terms-of-use"
 
 
@@ -82,6 +85,7 @@ def build_gdacs_params(
     *,
     now: datetime,
     event_type: str = "TC",
+    page_number: int = 1,
 ) -> dict[str, str | int]:
     """Build the official bounded GDACS event-list query."""
     start = (
@@ -99,7 +103,7 @@ def build_gdacs_params(
         "fromDate": start.isoformat(),
         "toDate": end.isoformat(),
         "pageSize": _GDACS_MAX_PAGE_SIZE,
-        "pageNumber": 1,
+        "pageNumber": page_number,
     }
 
 
@@ -309,65 +313,84 @@ class _GdacsEventAdapter:
         now: datetime,
         country_query: DisasterQuery | None = None,
     ) -> ProviderBatch[WorldwideDisasterEvent | DisasterEvent]:
-        params = build_gdacs_params(query, now=now, event_type=self.event_type)
-        capture = build_snapshot_capture(
-            self._snapshot_recorder,
-            source_id=self.source_id,
-            parameters={
-                "eventtype": self.event_type,
-                "from": str(params["fromDate"]),
-                "to": str(params["toDate"]),
-                "limit": str(
-                    query.limit if isinstance(query, WorldwideDisasterQuery) else 50
-                ),
-            },
-            rights_id=_GDACS_RIGHTS_ID,
-            retrieved_at=now,
-        )
-        try:
-            payload = await get_json(
-                self._client,
-                GDACS_SEARCH_URL,
-                allowed_hosts=self.allowed_hosts,
-                params=params,
-                max_bytes=self._max_response_bytes,
-                provider_name=self.provider_name,
-                capture=capture,
-                accepted_content_types=frozenset({""}),
-            )
-        except DisasterProviderResponseError as error:
-            if error.failure.reason_code == "empty_result":
-                return ProviderBatch(issues=(_empty_result(self.provider_name),))
-            raise
-        if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
-            raise DisasterProviderResponseError(
-                "The GDACS response was not a GeoJSON FeatureCollection.",
-                reason_code="invalid_schema",
-            )
-        raw_features = payload.get("features")
-        if not isinstance(raw_features, list):
-            raise DisasterProviderResponseError(
-                "The GDACS response had no feature list.",
-                reason_code="invalid_schema",
-            )
-
         events: list[WorldwideDisasterEvent | DisasterEvent] = []
         issues: list[ProviderIssue] = []
-        snapshot_id = (
-            capture.snapshot.snapshot_id if capture and capture.snapshot else None
-        )
-        for index, raw_feature in enumerate(raw_features):
-            event, feature_issues = self._parse_feature(
-                raw_feature,
+        seen_event_ids: set[str] = set()
+        raw_record_count = 0
+        saw_raw_features = False
+        for page_number in range(1, _GDACS_MAX_PAGES + 1):
+            params = build_gdacs_params(
+                query,
                 now=now,
-                index=index,
-                snapshot_id=snapshot_id,
-                country_query=country_query,
+                event_type=self.event_type,
+                page_number=page_number,
             )
-            if event is not None:
-                events.append(event)
-            issues.extend(feature_issues)
-        if not events and not issues and (country_query is None or not raw_features):
+            capture = build_snapshot_capture(
+                self._snapshot_recorder,
+                source_id=self.source_id,
+                parameters={
+                    "eventtype": self.event_type,
+                    "from": str(params["fromDate"]),
+                    "to": str(params["toDate"]),
+                    "page": str(page_number),
+                    "page_size": str(_GDACS_MAX_PAGE_SIZE),
+                },
+                rights_id=_GDACS_RIGHTS_ID,
+                retrieved_at=now,
+            )
+            try:
+                payload = await get_json(
+                    self._client,
+                    GDACS_SEARCH_URL,
+                    allowed_hosts=self.allowed_hosts,
+                    params=params,
+                    max_bytes=self._max_response_bytes,
+                    provider_name=self.provider_name,
+                    capture=capture,
+                    accepted_content_types=frozenset({""}),
+                )
+                raw_features = _feature_list(payload)
+            except DisasterProviderError as error:
+                if page_number == 1:
+                    if error.failure.reason_code == "empty_result":
+                        return ProviderBatch(
+                            issues=(_empty_result(self.provider_name),)
+                        )
+                    raise
+                issues.append(
+                    _pagination_failure(self.provider_name, page_number, error)
+                )
+                break
+
+            saw_raw_features = saw_raw_features or bool(raw_features)
+            snapshot_id = (
+                capture.snapshot.snapshot_id if capture and capture.snapshot else None
+            )
+            remaining_records = _GDACS_MAX_RECORDS - raw_record_count
+            for index, raw_feature in enumerate(raw_features[:remaining_records]):
+                event, feature_issues = self._parse_feature(
+                    raw_feature,
+                    now=now,
+                    index=raw_record_count + index,
+                    snapshot_id=snapshot_id,
+                    country_query=country_query,
+                )
+                if event is not None and event.event_id not in seen_event_ids:
+                    events.append(event)
+                    seen_event_ids.add(event.event_id)
+                issues.extend(feature_issues)
+            raw_record_count += min(len(raw_features), remaining_records)
+            if len(raw_features) < _GDACS_MAX_PAGE_SIZE:
+                break
+            if raw_record_count >= _GDACS_MAX_RECORDS:
+                issues.append(_pagination_limit(self.provider_name))
+                break
+
+        if (
+            not events
+            and not issues
+            and (country_query is None or not saw_raw_features)
+        ):
             issues.append(_empty_result(self.provider_name))
         return ProviderBatch(records=tuple(events), issues=tuple(issues))
 
@@ -457,6 +480,46 @@ def _invalid_record(provider_name: str, index: int, error: Exception) -> Provide
         f"{provider_name}: A malformed event record was skipped.",
         reason_code="invalid_record",
         detail=f"feature[{index}]: {error}",
+    )
+
+
+def _feature_list(payload: object) -> list[object]:
+    if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
+        raise DisasterProviderResponseError(
+            "The GDACS response was not a GeoJSON FeatureCollection.",
+            reason_code="invalid_schema",
+        )
+    raw_features = payload.get("features")
+    if not isinstance(raw_features, list):
+        raise DisasterProviderResponseError(
+            "The GDACS response had no feature list.",
+            reason_code="invalid_schema",
+        )
+    return raw_features
+
+
+def _pagination_failure(
+    provider_name: str, page_number: int, error: DisasterProviderError
+) -> ProviderIssue:
+    failure = error.failure
+    return ProviderIssue(
+        provider_name,
+        f"{provider_name}: Retrieval stopped after a later GDACS page failed; "
+        "earlier records were retained.",
+        reason_code=failure.reason_code,
+        retryable=failure.retryable,
+        http_status=failure.http_status,
+        detail=f"page[{page_number}]: {failure.detail or str(error)}",
+    )
+
+
+def _pagination_limit(provider_name: str) -> ProviderIssue:
+    return ProviderIssue(
+        provider_name,
+        f"{provider_name}: The bounded GDACS pagination ceiling was reached; "
+        "coverage may be incomplete.",
+        reason_code="pagination_limit_reached",
+        detail=f"pages={_GDACS_MAX_PAGES}; records={_GDACS_MAX_RECORDS}",
     )
 
 

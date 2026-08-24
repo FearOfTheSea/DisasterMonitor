@@ -31,7 +31,9 @@ FIXTURE = (
 ).read_bytes()
 
 
-def wildfire_event() -> DisasterEvent:
+def wildfire_event(
+    *, latitude: float = 35.0, longitude: float = 139.0
+) -> DisasterEvent:
     source = SourceReference(
         source_id="selected-wildfire",
         publisher="Selected wildfire provider",
@@ -48,7 +50,7 @@ def wildfire_event() -> DisasterEvent:
         country=JAPAN,
         event_time=datetime(2026, 8, 20, tzinfo=UTC),
         source=source,
-        geometry=point_event_geometry(35.0, 139.0, source),
+        geometry=point_event_geometry(latitude, longitude, source),
         provider_ids=("wildfire:selected",),
     )
 
@@ -173,4 +175,116 @@ async def test_firms_never_runs_for_non_wildfire_or_geometryless_event() -> None
     assert geometryless.records == ()
     assert geometryless.issues[0].reason_code == "event_geometry_unavailable"
     assert requests == []
+    await client.aclose()
+
+
+def detection_csv(rows: list[tuple[float, float, str, str]]) -> bytes:
+    lines = ["latitude,longitude,acq_date,acq_time"]
+    lines.extend(
+        f"{latitude},{longitude},{acquired_on},{acquired_at}"
+        for latitude, longitude, acquired_on, acquired_at in rows
+    )
+    return ("\n".join(lines) + "\n").encode()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event_longitude", "detection_longitude"),
+    ((179.9, -179.9), (-179.9, 179.9)),
+)
+async def test_firms_antimeridian_searches_both_longitude_sides(
+    event_longitude: float, detection_longitude: float
+) -> None:
+    requests: list[httpx.Request] = []
+    snapshots: list[object] = []
+    payload = detection_csv([(0.0, detection_longitude, "2026-08-23", "0315")])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/csv"},
+            content=payload,
+            request=request,
+        )
+
+    async def record_snapshot(value: object) -> object:
+        snapshots.append(value)
+        return SimpleNamespace(snapshot_id=f"snapshot:firms:{len(snapshots)}")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    result = await NasaFirmsObservationAdapter(
+        map_key="secret-map-key",
+        client=client,
+        snapshot_recorder=record_snapshot,
+    ).get_situation_reports(
+        wildfire_event(latitude=0.0, longitude=event_longitude),
+        wildfire_query(),
+        now=NOW,
+    )
+
+    assert len(requests) == 2
+    assert len(snapshots) == 2
+    assert "1 VIIRS fire/thermal anomaly detections" in result.records[0].narrative
+    assert result.issues == ()
+    assert all(
+        "secret-map-key" not in item.canonical_request_identity for item in snapshots
+    )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_firms_non_antimeridian_search_uses_one_request() -> None:
+    requests: list[httpx.Request] = []
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: (
+                requests.append(request)
+                or httpx.Response(
+                    200,
+                    headers={"content-type": "text/csv"},
+                    content=FIXTURE,
+                    request=request,
+                )
+            )
+        )
+    )
+
+    result = await NasaFirmsObservationAdapter(
+        map_key="secret-map-key", client=client
+    ).get_situation_reports(wildfire_event(), wildfire_query(), now=NOW)
+
+    assert len(result.records) == 1
+    assert len(requests) == 1
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_firms_result_limit_is_global_across_antimeridian_responses() -> None:
+    requests: list[httpx.Request] = []
+    east = [(index / 100_000, 179.9, "2026-08-23", "0315") for index in range(300)]
+    west = [(-index / 100_000, -179.9, "2026-08-23", "0315") for index in range(300)]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        rows = east if len(requests) == 1 else west
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/csv"},
+            content=detection_csv(rows),
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    result = await NasaFirmsObservationAdapter(
+        map_key="secret-map-key", client=client
+    ).get_situation_reports(
+        wildfire_event(latitude=0.0, longitude=179.9),
+        wildfire_query(),
+        now=NOW,
+    )
+
+    assert len(requests) == 2
+    assert "500 VIIRS fire/thermal anomaly detections" in result.records[0].narrative
+    assert [issue.reason_code for issue in result.issues] == ["result_limit_reached"]
     await client.aclose()

@@ -75,6 +75,36 @@ def _generic_event(event_id: str, **changes: object) -> DisasterEvent:
     )
 
 
+def _provider_event(
+    disaster: Disaster,
+    source_id: str,
+    event_id: str,
+    *,
+    event_time: datetime,
+    latitude: float,
+    longitude: float,
+) -> DisasterEvent:
+    source = SourceReference(
+        source_id,
+        source_id,
+        "Source-backed event observation",
+        f"https://{source_id}.example/{event_id}",
+        event_time,
+        event_time,
+        NOW,
+    )
+    return DisasterEvent(
+        event_id=event_id,
+        disaster=disaster,
+        location="Japan",
+        country=JAPAN,
+        event_time=event_time,
+        source=source,
+        geometry=point_event_geometry(latitude, longitude, source),
+        provider_ids=(event_id,),
+    )
+
+
 def test_earthquake_policy_clusters_cross_provider_observations() -> None:
     policy = EarthquakeEventPolicy()
     observations = (
@@ -205,6 +235,123 @@ def test_volcanic_policy_does_not_refresh_old_events_from_unrelated_sources() ->
     )
 
     assert resolution.selected is None
+
+
+@pytest.mark.parametrize(
+    ("disaster", "primary_source", "gdacs_source", "time_delta", "point_delta"),
+    (
+        (
+            Disaster.FLOOD,
+            "cems-gfm-floods",
+            "gdacs-floods",
+            timedelta(hours=24),
+            0.1,
+        ),
+        (
+            Disaster.WILDFIRE,
+            "nasa-eonet-wildfires",
+            "gdacs-wildfires",
+            timedelta(hours=24),
+            0.1,
+        ),
+        (
+            Disaster.VOLCANIC_ERUPTION,
+            "smithsonian-usgs-volcanic-activity",
+            "gdacs-volcanic-eruptions",
+            timedelta(days=3),
+            0.03,
+        ),
+    ),
+)
+def test_secondary_gdacs_observation_of_same_real_event_is_reconciled(
+    disaster: Disaster,
+    primary_source: str,
+    gdacs_source: str,
+    time_delta: timedelta,
+    point_delta: float,
+) -> None:
+    observations = (
+        _provider_event(
+            disaster,
+            primary_source,
+            f"{primary_source}:event-a",
+            event_time=NOW - timedelta(days=4),
+            latitude=35.0,
+            longitude=139.0,
+        ),
+        _provider_event(
+            disaster,
+            gdacs_source,
+            f"{gdacs_source}:unrelated-id",
+            event_time=NOW - timedelta(days=4) + time_delta,
+            latitude=35.0 + point_delta,
+            longitude=139.0,
+        ),
+    )
+
+    identity = (
+        default_event_policy_registry().for_disaster(disaster).identify(observations)
+    )
+
+    assert len(identity.physical_events) == 1
+    assert {item.event_id for item in identity.physical_events[0].observations} == {
+        item.event_id for item in observations
+    }
+
+
+@pytest.mark.parametrize(
+    ("disaster", "primary_source", "gdacs_source", "point_delta"),
+    (
+        (
+            Disaster.FLOOD,
+            "cems-gfm-floods",
+            "gdacs-floods",
+            0.4,
+        ),
+        (
+            Disaster.WILDFIRE,
+            "nasa-eonet-wildfires",
+            "gdacs-wildfires",
+            0.3,
+        ),
+        (
+            Disaster.VOLCANIC_ERUPTION,
+            "smithsonian-usgs-volcanic-activity",
+            "gdacs-volcanic-eruptions",
+            0.1,
+        ),
+    ),
+)
+def test_nearby_distinct_primary_and_gdacs_events_are_not_merged(
+    disaster: Disaster,
+    primary_source: str,
+    gdacs_source: str,
+    point_delta: float,
+) -> None:
+    observations = (
+        _provider_event(
+            disaster,
+            primary_source,
+            f"{primary_source}:event-a",
+            event_time=NOW - timedelta(days=1),
+            latitude=35.0,
+            longitude=139.0,
+        ),
+        _provider_event(
+            disaster,
+            gdacs_source,
+            f"{gdacs_source}:event-b",
+            event_time=NOW - timedelta(days=1),
+            latitude=35.0 + point_delta,
+            longitude=139.0,
+        ),
+    )
+
+    identity = (
+        default_event_policy_registry().for_disaster(disaster).identify(observations)
+    )
+
+    assert len(identity.physical_events) == 2
 
 
 def test_earthquake_sequence_and_aftershock_policy_remains_disaster_specific() -> None:

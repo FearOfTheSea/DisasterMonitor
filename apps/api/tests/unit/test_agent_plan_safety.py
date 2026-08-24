@@ -43,6 +43,27 @@ def test_plan_validation_rejects_incomplete_trusted_disaster_pipeline() -> None:
         validate_plan(missing_composer, allowed_tools=allowed)
 
 
+def test_plan_validation_rejects_duplicate_trusted_tool_steps() -> None:
+    tools = (*DEFAULT_TOOL_ORDER, DEFAULT_TOOL_ORDER[-1])
+    plan = InvestigationPlan(
+        "duplicate-composition",
+        "Do not repeat a trusted workflow stage.",
+        tuple(
+            PlanStep(
+                f"step-{index}",
+                name,
+                (),
+                name,
+                () if index == 1 else (f"step-{index - 1}",),
+            )
+            for index, name in enumerate(tools, 1)
+        ),
+    )
+
+    with pytest.raises(ValueError, match="duplicate trusted"):
+        validate_plan(plan, allowed_tools=frozenset(DEFAULT_TOOL_ORDER))
+
+
 def test_plan_validation_rejects_multimodal_tools_without_admitted_assets() -> None:
     tool_order = (
         *DEFAULT_TOOL_ORDER[:-1],
