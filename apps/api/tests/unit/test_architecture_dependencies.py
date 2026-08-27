@@ -10,11 +10,16 @@ PRESENTATION = SRC / "presentation"
 INCIDENT_PRIORITY = APPLICATION / "services" / "incident_priority.py"
 CONVERSATION_STORE = APPLICATION / "ports" / "conversation_store.py"
 MEMORY_STORE = APPLICATION / "ports" / "memory_store.py"
+MAIN = SRC / "main.py"
 
 INFRASTRUCTURE_COMPOSITION_MODULES = {
+    "disaster_monitor.infrastructure.app_dependencies",
     "disaster_monitor.infrastructure.composition",
     "disaster_monitor.infrastructure.operations.runtime",
 }
+INFRASTRUCTURE_COMPOSITION_PREFIXES = (
+    "disaster_monitor.infrastructure.disaster.registrations.",
+)
 INFRASTRUCTURE_APPLICATION_SURFACE = {
     "disaster_monitor.application.agent.models",
     "disaster_monitor.application.disaster",
@@ -31,7 +36,6 @@ DISASTER_POLICY_MODULES = {
     "disaster_monitor.application.disaster_aliases",
     "disaster_monitor.application.services.disaster_query_policy",
     "disaster_monitor.application.services.event_media",
-    "disaster_monitor.application.services.event_resolution",
     "disaster_monitor.application.services.evidence_correlation",
     "disaster_monitor.application.services.incident_priority_policy",
     "disaster_monitor.application.services.report_profiles",
@@ -113,7 +117,10 @@ def test_presentation_does_not_import_infrastructure() -> None:
 def test_infrastructure_imports_only_application_contract_surface() -> None:
     violations = []
     for path in _python_files(INFRASTRUCTURE):
-        if _module_name(path) in INFRASTRUCTURE_COMPOSITION_MODULES:
+        module = _module_name(path)
+        if module in INFRASTRUCTURE_COMPOSITION_MODULES or module.startswith(
+            INFRASTRUCTURE_COMPOSITION_PREFIXES
+        ):
             continue
         for name in _imports(path):
             if not name.startswith("disaster_monitor.application"):
@@ -138,10 +145,7 @@ def test_concrete_adapters_are_constructed_only_in_composition_modules() -> None
             and (node.name.endswith("Adapter") or node.name.startswith("Composite"))
         )
 
-    allowed_modules = {
-        "disaster_monitor.infrastructure.composition",
-        "disaster_monitor.main",
-    }
+    allowed_modules = {"disaster_monitor.infrastructure.composition"}
     violations = []
     for path in _python_files(SRC):
         module = _module_name(path)
@@ -156,7 +160,11 @@ def test_concrete_adapters_are_constructed_only_in_composition_modules() -> None
                 if isinstance(node.func, ast.Attribute)
                 else None
             )
-            if name in concrete_names and module not in allowed_modules:
+            if (
+                name in concrete_names
+                and module not in allowed_modules
+                and not module.startswith(INFRASTRUCTURE_COMPOSITION_PREFIXES)
+            ):
                 violations.append(f"{path.relative_to(SRC)} constructs {name}")
 
     assert violations == []
@@ -166,7 +174,9 @@ def test_generic_application_modules_do_not_branch_on_specific_disasters() -> No
     violations = []
     for path in _python_files(APPLICATION):
         module = _module_name(path)
-        if module in DISASTER_POLICY_MODULES:
+        if module in DISASTER_POLICY_MODULES or module.startswith(
+            "disaster_monitor.application.services.event_policies."
+        ):
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
@@ -208,3 +218,20 @@ def test_memory_and_conversation_persistence_ports_remain_separate() -> None:
     assert "disaster_monitor.domain.memory" not in conversation_imports
     assert "disaster_monitor.domain.conversation" not in memory_imports
     assert "disaster_monitor.domain.memory" in memory_imports
+
+
+def test_fastapi_state_exposes_only_the_typed_dependency_container() -> None:
+    tree = ast.parse(MAIN.read_text(encoding="utf-8"), filename=str(MAIN))
+    assigned_state_attributes = {
+        node.targets[0].attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Attribute)
+        and isinstance(node.targets[0].value, ast.Attribute)
+        and isinstance(node.targets[0].value.value, ast.Name)
+        and node.targets[0].value.value.id == "app"
+        and node.targets[0].value.attr == "state"
+    }
+
+    assert assigned_state_attributes == {"dependencies"}

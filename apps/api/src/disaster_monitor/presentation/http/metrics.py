@@ -9,6 +9,7 @@ from prometheus_client import (
     generate_latest,
 )
 
+from disaster_monitor.application.agent.diagnostics import AgentCapabilityDiagnostic
 from disaster_monitor.domain.operations import IngestJobStatus
 
 
@@ -40,6 +41,18 @@ class OperationalMetrics:
             ("status",),
             registry=self.registry,
         )
+        self.agent_capability_failures = Counter(
+            "disastermonitor_agent_optional_capability_failures_total",
+            "Optional agent capability failures by bounded capability and kind.",
+            ("capability", "failure"),
+            registry=self.registry,
+        )
+
+    def record(self, diagnostic: AgentCapabilityDiagnostic) -> None:
+        self.agent_capability_failures.labels(
+            capability=diagnostic.capability.value,
+            failure=diagnostic.failure.value,
+        ).inc()
 
     def update_jobs(self, counts: dict[IngestJobStatus, int]) -> None:
         for status in IngestJobStatus:

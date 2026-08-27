@@ -57,9 +57,12 @@ Ports include stable boundary normalization and admission primitives when both a
 adapter and an application service must apply the same rule. Infrastructure adapters
 must not import `application/services/**` or `application/use_cases/**`.
 
-`infrastructure/composition.py`, `infrastructure/operations/runtime.py`, and
-`main.py` are composition roots rather than adapters. They may import application
-services and use cases solely to construct the object graph and process entry points.
+`infrastructure/composition.py`, provider-family modules under
+`infrastructure/disaster/registrations/`, `infrastructure/operations/runtime.py`, and
+`main.py` are composition roots rather than adapters. `infrastructure/app_dependencies.py`
+is the typed runtime container at that boundary. These modules may import application
+services and use cases solely to construct or expose the object graph and process entry
+points.
 
 Architecture boundaries are enforced by `apps/api/tests/unit/test_architecture_dependencies.py`.
 

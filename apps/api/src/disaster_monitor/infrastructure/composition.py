@@ -2,9 +2,13 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
-from disaster_monitor.application.disaster import GeographicScope
+from disaster_monitor.application.agent.multimodal_tools import (
+    MultimodalToolDependencies,
+    build_multimodal_agent_tools,
+)
+from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.conversation_deletion import (
     ConversationDeletionStore,
@@ -14,12 +18,22 @@ from disaster_monitor.application.ports.event_media import (
     EventMediaDiscovery,
     MediaAssetStore,
 )
+from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.memory_store import MemoryStore
 from disaster_monitor.application.ports.operational_state import OperationalRepository
+from disaster_monitor.application.ports.operator_identity import (
+    TrustedOperatorIdentityPolicy,
+)
 from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
+from disaster_monitor.application.services.active_incidents import (
+    ActiveIncidentsService,
+)
+from disaster_monitor.application.services.common_operational_picture import (
+    CommonOperationalPictureBuilder,
+)
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -36,19 +50,26 @@ from disaster_monitor.application.services.event_resolution import (
 from disaster_monitor.application.services.evidence_reconciliation import (
     EvidenceReconciler,
 )
+from disaster_monitor.application.services.map_navigation import MapNavigationService
+from disaster_monitor.application.services.memory_policy import MemoryPolicy
 from disaster_monitor.application.services.memory_recall import MemoryRecallService
+from disaster_monitor.application.services.multimodal_asset_admission import (
+    MultimodalAssetAdmissionService,
+)
+from disaster_monitor.application.services.multimodal_association import (
+    MultimodalEventAssociator,
+)
 from disaster_monitor.application.services.operational_evidence import (
     OperationalEvidenceRecorder,
 )
 from disaster_monitor.application.services.operational_ingestion import (
     SnapshotPersistenceService,
 )
+from disaster_monitor.application.services.provider_freshness import (
+    ProviderFreshnessService,
+)
 from disaster_monitor.application.services.provider_registry import (
-    ProviderCapabilities,
-    ProviderRegistration,
     ProviderRegistry,
-    ProviderRole,
-    ProviderTier,
 )
 from disaster_monitor.application.services.source_consistency import (
     validate_provider_source_consistency,
@@ -60,7 +81,25 @@ from disaster_monitor.application.services.source_evidence_policy import (
 from disaster_monitor.application.services.specialist_executor import (
     SpecialistExecutor,
 )
-from disaster_monitor.domain.disaster import Disaster
+from disaster_monitor.application.services.visual_analysis import VisualAnalysisService
+from disaster_monitor.application.services.worldwide_disaster import (
+    WorldwideDisasterReportService,
+)
+from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
+from disaster_monitor.application.use_cases.delete_conversation import (
+    DeleteConversation,
+)
+from disaster_monitor.application.use_cases.record_operator_action import (
+    RecordOperatorAction,
+)
+from disaster_monitor.application.use_cases.run_conversation_turn import (
+    RunConversationTurn,
+)
+from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
+from disaster_monitor.infrastructure.app_dependencies import (
+    AppDependencies,
+    AppLifecycle,
+)
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.conversations.deletion_store import (
     InMemoryConversationDeletionStore,
@@ -72,41 +111,14 @@ from disaster_monitor.infrastructure.conversations.memory_repository import (
 from disaster_monitor.infrastructure.conversations.postgres_repository import (
     PostgresConversationRepository,
 )
-from disaster_monitor.infrastructure.disaster.cems_gfm_adapter import CemsGfmAdapter
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
     CompositeSituationReportProvider,
 )
-from disaster_monitor.infrastructure.disaster.copernicus_ems_mapping_adapter import (
-    CopernicusRapidMappingAdapter,
-)
-from disaster_monitor.infrastructure.disaster.emsc_adapter import (
-    EmscEarthquakeAdapter,
-)
-from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
-    GdacsFloodAdapter,
-    GdacsTropicalCycloneAdapter,
-    GdacsVolcanicEruptionAdapter,
-    GdacsWildfireAdapter,
-)
 from disaster_monitor.infrastructure.disaster.http import SourcePayloadRecorder
-from disaster_monitor.infrastructure.disaster.ibtracs_adapter import IbtracsTrackAdapter
-from disaster_monitor.infrastructure.disaster.nasa_coolr_adapter import (
-    NasaCoolrLandslideAdapter,
+from disaster_monitor.infrastructure.disaster.registrations import (
+    build_provider_registrations,
 )
-from disaster_monitor.infrastructure.disaster.nasa_eonet_adapter import (
-    NasaEonetWildfireAdapter,
-)
-from disaster_monitor.infrastructure.disaster.nasa_firms_adapter import (
-    NasaFirmsObservationAdapter,
-)
-from disaster_monitor.infrastructure.disaster.reliefweb_adapter import (
-    ReliefWebSituationAdapter,
-)
-from disaster_monitor.infrastructure.disaster.smithsonian_gvp_adapter import (
-    SmithsonianGvpAdapter,
-)
-from disaster_monitor.infrastructure.disaster.usgs_adapter import UsgsEarthquakeAdapter
 from disaster_monitor.infrastructure.geography.country_catalog_updates import (
     AutonomousCountryCatalogUpdater,
     CountryCatalogAutomation,
@@ -153,6 +165,7 @@ from disaster_monitor.infrastructure.sources.static_source_catalog import (
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
     OllamaVisionAdapter,
 )
+from disaster_monitor.presentation.http.metrics import OperationalMetrics
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +181,183 @@ class OperationalServices:
 class EventMediaServices:
     discovery: EventMediaDiscovery | None
     store: MediaAssetStore
+
+
+def build_app_dependencies(
+    settings: Settings,
+    *,
+    model: LanguageModel | None = None,
+    current_disaster_report: CurrentDisasterReportService | None = None,
+    disaster_query_parser: DisasterQueryParser | None = None,
+    agent_model: AgentModel | None = None,
+    visual_analyzer: VisualAnalyzer | None = None,
+    operational_repository: OperationalRepository | None = None,
+    country_catalog_automation: CountryCatalogUpdateAutomation | None = None,
+    worldwide_disaster_report: WorldwideDisasterReportService | None = None,
+    event_media: EventMediaDiscovery | None = None,
+    media_asset_store: MediaAssetStore | None = None,
+    active_incidents_service: ActiveIncidentsService | None = None,
+    conversation_repository: ConversationStore | None = None,
+    satellite_imagery_service: SatelliteImageryService | None = None,
+    specialist_model: SpecialistModel | None = None,
+    memory_repository: MemoryStore | None = None,
+    conversation_deletion_store: ConversationDeletionStore | None = None,
+) -> AppDependencies:
+    """Construct the complete API object graph and its lifecycle delegates."""
+    language_model = model or build_language_model(settings)
+    configured_specialist_model = (
+        (specialist_model or build_specialist_model(language_model))
+        if settings.specialist_llm_enabled
+        else None
+    )
+    specialist_executor = (
+        SpecialistExecutor(
+            configured_specialist_model,
+            max_model_calls=settings.specialist_model_call_limit,
+        )
+        if configured_specialist_model is not None
+        else None
+    )
+    country_catalog = build_country_catalog(settings)
+    catalog_automation = country_catalog_automation or build_country_catalog_automation(
+        settings, country_catalog
+    )
+    operational = build_operational_services(settings, operational_repository)
+    conversations = build_conversation_repository(settings, conversation_repository)
+    memories = build_memory_repository(settings, memory_repository)
+    conversation_deletion = (
+        conversation_deletion_store
+        if conversation_deletion_store is not None
+        else build_conversation_deletion_store(conversations, memories)
+    )
+    memory_recall = (
+        MemoryRecallService(memories) if settings.long_term_memory_enabled else None
+    )
+    disaster_report = current_disaster_report or build_current_disaster_report(
+        settings,
+        country_catalog,
+        snapshot_recorder=operational.snapshots.persist,
+        operational_evidence=operational.evidence,
+        specialist_executor=specialist_executor,
+        memory_recall=memory_recall,
+    )
+    worldwide_report = worldwide_disaster_report or WorldwideDisasterReportService(
+        disaster_report.provider_registry,
+    )
+    configured_active_incidents = active_incidents_service or ActiveIncidentsService(
+        disaster_report.provider_registry
+    )
+    query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
+    source_catalog = build_source_catalog(settings)
+    configured_agent_model = (
+        agent_model
+        if agent_model is not None
+        else (build_agent_model(settings, language_model) if model is None else None)
+    )
+    configured_visual_analyzer = visual_analyzer or build_visual_analyzer(settings)
+    configured_satellite_imagery = (
+        satellite_imagery_service or build_satellite_imagery_service(settings)
+    )
+
+    def clock() -> datetime:
+        return datetime.now(UTC)
+
+    if event_media is None:
+        media_services = build_event_media_services(settings, clock=clock)
+    else:
+        media_services = EventMediaServices(
+            event_media,
+            media_asset_store
+            or FilesystemMediaAssetStore(
+                settings.event_media_blob_root,
+                maximum_bytes=settings.event_media_store_maximum_bytes,
+            ),
+        )
+    multimodal_tools = build_multimodal_agent_tools(
+        MultimodalToolDependencies(
+            associator=MultimodalEventAssociator(),
+            visual_analysis=VisualAnalysisService(
+                configured_visual_analyzer,
+                clock=clock,
+            ),
+            cop_builder=CommonOperationalPictureBuilder(),
+            clock=clock,
+        )
+    )
+    runtime = DisasterAgentRuntime(
+        country_catalog=country_catalog,
+        query_parser=query_parser,
+        tool_registry=disaster_report.build_agent_tools(
+            source_catalog, multimodal_tools
+        ),
+        agent_model=configured_agent_model,
+        worldwide_report=worldwide_report,
+    )
+    metrics = OperationalMetrics()
+    disaster_agent = RunDisasterAgent(
+        runtime,
+        language_model,
+        MultimodalAssetAdmissionService(clock=clock),
+        MapNavigationService(country_catalog),
+        country_catalog,
+        media_services.discovery,
+        agent_model=configured_agent_model,
+        diagnostics=metrics,
+    )
+    answer_map_question = AnswerMapQuestion(
+        language_model,
+        disaster_report,
+        query_parser,
+        disaster_agent=disaster_agent,
+    )
+
+    async def migrate_operational_repository() -> None:
+        if settings.operational_auto_migrate and isinstance(
+            operational.repository, PostgresOperationalRepository
+        ):
+            await operational.repository.migrate()
+
+    async def close_resource(resource: object | None) -> None:
+        close = getattr(resource, "aclose", None)
+        if close is not None:
+            await close()
+
+    return AppDependencies(
+        conversation_store=conversations,
+        run_conversation_turn=RunConversationTurn(
+            answer_map_question,
+            conversations,
+            memory_store=memories,
+            memory_policy=MemoryPolicy(),
+            memory_enabled=settings.long_term_memory_enabled,
+        ),
+        delete_conversation=DeleteConversation(conversation_deletion),
+        language_model=language_model,
+        active_incidents=configured_active_incidents,
+        satellite_imagery=configured_satellite_imagery,
+        media_assets=media_services.store,
+        operational_repository=operational.repository,
+        provider_freshness=ProviderFreshnessService(operational.repository),
+        record_operator_action=RecordOperatorAction(operational.repository),
+        operator_identity=TrustedOperatorIdentityPolicy(
+            enabled=settings.trusted_operator_identity_enabled,
+            header_name=settings.trusted_operator_identity_header,
+        ),
+        country_catalog_automation=catalog_automation,
+        operational_metrics=metrics,
+        lifecycle=AppLifecycle(
+            startup_hooks=(migrate_operational_repository, catalog_automation.start),
+            shutdown_hooks=(
+                catalog_automation.aclose,
+                lambda: close_resource(language_model),
+                lambda: close_resource(disaster_report),
+                lambda: close_resource(configured_agent_model),
+                lambda: close_resource(configured_visual_analyzer),
+                lambda: close_resource(media_services.discovery),
+                configured_satellite_imagery.aclose,
+            ),
+        ),
+    )
 
 
 def build_event_media_services(
@@ -420,369 +610,8 @@ def build_current_disaster_report(
 ) -> CurrentDisasterReportService:
     """Construct capability-registered live disaster providers."""
     geography = country_catalog or build_country_catalog()
-    usgs = UsgsEarthquakeAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    emsc = EmscEarthquakeAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    gdacs = GdacsTropicalCycloneAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    ibtracs = IbtracsTrackAdapter(
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    gdacs_floods = GdacsFloodAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    gdacs_wildfires = GdacsWildfireAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    gdacs_volcanoes = GdacsVolcanicEruptionAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    gfm = CemsGfmAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    eonet = NasaEonetWildfireAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    firms = NasaFirmsObservationAdapter(
-        map_key=settings.nasa_firms_map_key,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    coolr = NasaCoolrLandslideAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    copernicus_mapping = CopernicusRapidMappingAdapter(
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    smithsonian_gvp = SmithsonianGvpAdapter(
-        geography=geography,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
-    reliefweb = ReliefWebSituationAdapter(
-        app_name=settings.reliefweb_app_name,
-        snapshot_recorder=snapshot_recorder,
-        timeout_seconds=settings.disaster_provider_timeout_seconds,
-        max_response_bytes=settings.disaster_provider_max_response_bytes,
-    )
     registry = ProviderRegistry(
-        (
-            ProviderRegistration(
-                "CEMS Global Flood Monitoring (GFM)",
-                gfm,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.FLOOD}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.PRIMARY,
-                source_id="cems-gfm-floods",
-                allowed_hosts=gfm.allowed_hosts,
-                event_provider=gfm,
-                worldwide_provider=gfm,
-            ),
-            ProviderRegistration(
-                "GDACS floods",
-                gdacs_floods,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.FLOOD}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="gdacs-floods",
-                allowed_hosts=gdacs_floods.allowed_hosts,
-                event_provider=gdacs_floods,
-                worldwide_provider=gdacs_floods,
-            ),
-            ProviderRegistration(
-                "EMSC SeismicPortal",
-                emsc,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.EARTHQUAKE}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="emsc-earthquakes",
-                allowed_hosts=emsc.allowed_hosts,
-                event_provider=emsc,
-                worldwide_provider=emsc,
-            ),
-            ProviderRegistration(
-                "USGS",
-                usgs,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.EARTHQUAKE}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="usgs-earthquakes",
-                allowed_hosts=usgs.allowed_hosts,
-                event_provider=usgs,
-                worldwide_provider=usgs,
-            ),
-            ProviderRegistration(
-                "NASA EONET Wildfires",
-                eonet,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.WILDFIRE}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.PRIMARY,
-                source_id="nasa-eonet-wildfires",
-                allowed_hosts=eonet.allowed_hosts,
-                event_provider=eonet,
-                worldwide_provider=eonet,
-            ),
-            ProviderRegistration(
-                "GDACS wildfires",
-                gdacs_wildfires,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.WILDFIRE}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="gdacs-wildfires",
-                allowed_hosts=gdacs_wildfires.allowed_hosts,
-                event_provider=gdacs_wildfires,
-                worldwide_provider=gdacs_wildfires,
-            ),
-            ProviderRegistration(
-                "NASA FIRMS observations",
-                firms,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    disasters=frozenset({Disaster.WILDFIRE}),
-                    country_codes=None,
-                    requires_configuration=True,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    situation_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="nasa-firms-observations",
-                configured=firms.configured,
-                allowed_hosts=firms.allowed_hosts,
-                situation_provider=firms,
-                worldwide_situation_provider=firms,
-            ),
-            ProviderRegistration(
-                "NASA COOLR Landslides",
-                coolr,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.LANDSLIDE}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.PRIMARY,
-                source_id="nasa-coolr-landslides",
-                allowed_hosts=coolr.allowed_hosts,
-                event_provider=coolr,
-                worldwide_provider=coolr,
-            ),
-            ProviderRegistration(
-                "Copernicus EMS Rapid Mapping landslides",
-                copernicus_mapping,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    disasters=frozenset({Disaster.LANDSLIDE}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    situation_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="copernicus-rapid-mapping-landslides",
-                allowed_hosts=copernicus_mapping.allowed_hosts,
-                situation_provider=copernicus_mapping,
-                worldwide_situation_provider=copernicus_mapping,
-            ),
-            ProviderRegistration(
-                "GDACS tropical cyclones",
-                gdacs,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.TROPICAL_CYCLONE}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="gdacs-tropical-cyclones",
-                allowed_hosts=gdacs.allowed_hosts,
-                event_provider=gdacs,
-                worldwide_provider=gdacs,
-            ),
-            ProviderRegistration(
-                "NOAA IBTrACS track reconciliation",
-                ibtracs,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    disasters=frozenset({Disaster.TROPICAL_CYCLONE}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    situation_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="noaa-ibtracs-tracks",
-                allowed_hosts=ibtracs.allowed_hosts,
-                situation_provider=ibtracs,
-                worldwide_situation_provider=ibtracs,
-            ),
-            ProviderRegistration(
-                "Smithsonian / USGS Weekly Volcanic Activity Report",
-                smithsonian_gvp,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.VOLCANIC_ERUPTION}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.PRIMARY,
-                source_id="smithsonian-usgs-volcanic-activity",
-                allowed_hosts=smithsonian_gvp.allowed_hosts,
-                event_provider=smithsonian_gvp,
-                worldwide_provider=smithsonian_gvp,
-            ),
-            ProviderRegistration(
-                "GDACS volcanic eruptions",
-                gdacs_volcanoes,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    disasters=frozenset({Disaster.VOLCANIC_ERUPTION}),
-                    country_codes=None,
-                    geographic_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                    event_scopes=frozenset(
-                        {GeographicScope.COUNTRY, GeographicScope.WORLDWIDE}
-                    ),
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="gdacs-volcanic-eruptions",
-                allowed_hosts=gdacs_volcanoes.allowed_hosts,
-                event_provider=gdacs_volcanoes,
-                worldwide_provider=gdacs_volcanoes,
-            ),
-            ProviderRegistration(
-                "ReliefWeb",
-                reliefweb,
-                ProviderCapabilities(
-                    roles=frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    disasters=frozenset(Disaster),
-                    country_codes=None,
-                    geographic_scopes=frozenset({GeographicScope.COUNTRY}),
-                    requires_configuration=True,
-                ),
-                tier=ProviderTier.SECONDARY,
-                source_id="reliefweb-situation-reports",
-                configured=reliefweb.configured,
-                allowed_hosts=reliefweb.allowed_hosts,
-                situation_provider=reliefweb,
-            ),
-        )
+        build_provider_registrations(settings, geography, snapshot_recorder)
     )
     source_catalog = build_source_catalog(settings)
     validate_provider_source_consistency(registry, source_catalog)

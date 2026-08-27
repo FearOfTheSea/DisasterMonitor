@@ -171,6 +171,79 @@ def test_explicit_dated_event_is_an_investigation_without_model_help() -> None:
     assert task.query.date_from.isoformat() == "2026-08-04T15:00:00+00:00"
 
 
+def test_incomplete_canonical_date_range_uses_matching_deterministic_range() -> None:
+    question = "Tell me about the magnitude 7.7 earthquake in Japan on August 15, 2026."
+    expected = validate(question)
+    task = validate(
+        question,
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.EARTHQUAKE,
+            country_code="JPN",
+            country_name="Japan",
+            date_from="2026-08-15T00:00:00+00:00",
+            date_to=None,
+            canonical=True,
+        ),
+    )
+
+    assert expected.query is not None
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.query is not None
+    assert task.query.date_from == expected.query.date_from
+    assert task.query.date_to == expected.query.date_to
+    assert task.query.discriminator("magnitude") == "7.7"
+
+
+def test_well_formed_canonical_dates_do_not_override_country_calendar() -> None:
+    question = "Tell me about the earthquake in Japan on August 15, 2026."
+    expected = validate(question)
+    task = validate(
+        question,
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.EARTHQUAKE,
+            country_code="JPN",
+            country_name="Japan",
+            date_from="2026-08-15T00:00:00Z",
+            date_to="2026-08-15T23:59:59Z",
+            canonical=True,
+        ),
+    )
+
+    assert expected.query is not None
+    assert task.query is not None
+    assert task.query.date_from == expected.query.date_from
+    assert task.query.date_to == expected.query.date_to
+
+
+def test_canonical_model_cannot_invent_dates_for_latest_request() -> None:
+    task = validate(
+        "What is the latest earthquake in Japan right now?",
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.EARTHQUAKE,
+            country_code="JPN",
+            country_name="Japan",
+            date_from="2023-11-08T00:00:00Z",
+            date_to="2023-11-08T23:59:59Z",
+            canonical=True,
+        ),
+    )
+
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.query is not None
+    assert task.query.time_intent == "recent"
+    assert task.query.date_from is None
+    assert task.query.date_to is None
+
+
 def test_canonicalizes_supported_current_disaster_task_and_information_scope() -> None:
     task = validate(
         "How many fatalities were reported for the August 5, 2026 earthquake in Japan?"

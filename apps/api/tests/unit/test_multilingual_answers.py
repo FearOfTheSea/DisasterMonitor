@@ -3,6 +3,10 @@ from datetime import UTC, datetime
 
 import pytest
 
+from disaster_monitor.application.agent.diagnostics import (
+    AgentCapability,
+    AgentCapabilityDiagnostic,
+)
 from disaster_monitor.application.agent.models import (
     AgentExecutionState,
     AgentStatus,
@@ -77,6 +81,14 @@ class UnusedGeneralModel:
         raise AssertionError("general model is not used")
 
 
+class RecordingDiagnostics:
+    def __init__(self) -> None:
+        self.items: list[AgentCapabilityDiagnostic] = []
+
+    def record(self, diagnostic: AgentCapabilityDiagnostic) -> None:
+        self.items.append(diagnostic)
+
+
 class RecordingGeneralModel:
     def __init__(self) -> None:
         self.requests = []
@@ -108,13 +120,18 @@ class GeneralRuntime:
 
 @pytest.mark.asyncio
 async def test_grounded_answer_is_preserved_when_localization_fails() -> None:
+    diagnostics = RecordingDiagnostics()
     answer = await RunDisasterAgent(
         FixedRuntime(),
         UnusedGeneralModel(),
         agent_model=LocalizerFailure(),
+        diagnostics=diagnostics,
     ).execute("質問", conversation_id="test")
 
     assert "42 people were affected" in answer.message
+    assert len(diagnostics.items) == 1
+    assert diagnostics.items[0].capability is AgentCapability.RESPONSE_LOCALIZATION
+    assert diagnostics.items[0].attempt_count == 3
 
 
 @pytest.mark.asyncio

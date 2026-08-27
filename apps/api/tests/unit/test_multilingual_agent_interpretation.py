@@ -188,3 +188,24 @@ def test_model_cannot_inject_an_unsupported_disaster_value() -> None:
 
     assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
     assert task.disaster is None
+
+
+def test_model_cannot_invent_an_event_discriminator() -> None:
+    task = validate_disaster_task(
+        "Latest earthquake in Japan.",
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.EARTHQUAKE,
+            country_code="JPN",
+            country_name="Japan",
+            event_discriminators=("magnitude:9.9",),
+            canonical=True,
+        ),
+        country_catalog=CATALOG,
+        query_parser=DisasterQueryParser(CATALOG),
+    )
+
+    assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
+    assert task.query is None

@@ -23,6 +23,9 @@ from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
 )
+from disaster_monitor.application.services.disaster_query_policy import (
+    default_disaster_query_policies,
+)
 from disaster_monitor.application.services.worldwide_disaster_policy import (
     WorldwideDisasterPolicyRegistry,
     default_worldwide_disaster_policy_registry,
@@ -155,6 +158,7 @@ def validate_disaster_task(
             question,
             draft,
             country_catalog=country_catalog,
+            query_parser=query_parser,
         )
     safety_requires_evidence = disaster_safety_gate(question)
     deterministic_disasters = _disaster_mentions(question)
@@ -266,8 +270,9 @@ def _validate_canonical_task(
     draft: DisasterTaskDraft,
     *,
     country_catalog: CountryCatalog,
+    query_parser: DisasterQueryParser,
 ) -> ValidatedDisasterTask:
-    """Validate model-proposed semantics without reparsing the user's language."""
+    """Validate model semantics, repairing only incomplete trusted date metadata."""
     if draft.requested_response_language is not None and (
         not isinstance(draft.requested_response_language, str)
         or not re.fullmatch(
@@ -330,7 +335,13 @@ def _validate_canonical_task(
             response_language=draft.requested_response_language,
             response_language_explicit=draft.response_language_explicit,
         )
-    if draft.event_discriminators:
+    scope = draft.geographic_scope or GeographicScope.COUNTRY
+    discriminator_requested = bool(draft.event_discriminators) or bool(
+        default_disaster_query_policies()
+        .for_disaster(draft.disaster)
+        .discriminators(question)
+    )
+    if scope is GeographicScope.WORLDWIDE and discriminator_requested:
         return _canonical_invalid(
             question,
             "The model proposed an unsupported event discriminator.",
@@ -338,13 +349,54 @@ def _validate_canonical_task(
             response_language=draft.requested_response_language,
             response_language_explicit=draft.response_language_explicit,
         )
-
-    scope = draft.geographic_scope or GeographicScope.COUNTRY
-    dates, date_detail = _canonical_dates(draft)
+    recent_window_requested = bool(_CURRENT_EVENT_MARKERS.search(question)) and not (
+        _EVENT_DATE_MARKER.search(question)
+    )
+    incomplete_date_range = not recent_window_requested and (
+        draft.date_from is None
+    ) != (draft.date_to is None)
+    deterministic_date_requested = scope is GeographicScope.COUNTRY and bool(
+        _EVENT_DATE_MARKER.search(question)
+    )
+    dates, date_detail = (
+        ((None, None), None) if recent_window_requested else _canonical_dates(draft)
+    )
+    matched_query = None
+    if incomplete_date_range or deterministic_date_requested or discriminator_requested:
+        matched_query = _matching_deterministic_query(
+            question,
+            draft,
+            country_catalog=country_catalog,
+            query_parser=query_parser,
+        )
+    if (
+        incomplete_date_range or deterministic_date_requested
+    ) and matched_query is not None:
+        if matched_query.date_from is not None and matched_query.date_to is not None:
+            dates = matched_query.date_from, matched_query.date_to
+            date_detail = None
     if date_detail is not None:
         return _canonical_invalid(
             question,
             date_detail,
+            disaster=draft.disaster,
+            response_language=draft.requested_response_language,
+            response_language_explicit=draft.response_language_explicit,
+        )
+    if deterministic_date_requested and matched_query is None:
+        return _canonical_invalid(
+            question,
+            "The explicit event date could not be normalized safely.",
+            disaster=draft.disaster,
+            response_language=draft.requested_response_language,
+            response_language_explicit=draft.response_language_explicit,
+        )
+    if discriminator_requested and (
+        matched_query is None or not matched_query.event_discriminators
+    ):
+        return _canonical_invalid(
+            question,
+            "The explicit event discriminator could not be normalized safely.",
             disaster=draft.disaster,
             response_language=draft.requested_response_language,
             response_language_explicit=draft.response_language_explicit,
@@ -419,7 +471,9 @@ def _validate_canonical_task(
         focus=tuple(item.value for item in needs),
         date_from=date_from,
         date_to=date_to,
-        event_discriminators=(),
+        event_discriminators=(
+            matched_query.event_discriminators if matched_query is not None else ()
+        ),
     )
     return ValidatedDisasterTask(
         question=question,
@@ -471,6 +525,26 @@ def _canonical_dates(
     if date_from >= date_to:
         return (None, None), "The model returned a reversed canonical date range."
     return (date_from, date_to), None
+
+
+def _matching_deterministic_query(
+    question: str,
+    draft: DisasterTaskDraft,
+    *,
+    country_catalog: CountryCatalog,
+    query_parser: DisasterQueryParser,
+) -> DisasterQuery | None:
+    country = _resolve_canonical_country(draft, country_catalog)
+    parsed = query_parser.parse(question)
+    query = parsed.query
+    if (
+        country is None
+        or query is None
+        or query.disaster is not draft.disaster
+        or query.country.alpha3_code != country.alpha3_code
+    ):
+        return None
+    return query
 
 
 def _canonical_datetime(value: str) -> datetime:

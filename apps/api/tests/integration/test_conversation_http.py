@@ -30,6 +30,7 @@ from disaster_monitor.infrastructure.memory.memory_repository import (
     InMemoryMemoryRepository,
 )
 from disaster_monitor.main import create_app
+from disaster_monitor.presentation.http.routes import get_conversation_turn
 
 NOW = datetime(2026, 8, 21, 10, tzinfo=UTC)
 
@@ -72,13 +73,14 @@ async def test_conversation_turn_persists_typed_memory_and_deletion_hides_it() -
         conversation_repository=conversations,
         memory_repository=memories,
     )
-    app.state.run_conversation_turn = RunConversationTurn(
+    conversation_turn = RunConversationTurn(
         Assistant(),
         conversations,
         clock=lambda: NOW,
         memory_store=memories,
         memory_enabled=True,
     )
+    app.dependency_overrides[get_conversation_turn] = lambda: conversation_turn
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -246,9 +248,8 @@ async def test_reloaded_conversation_reconstructs_media_report_and_legacy_text()
         media_asset_store=Store(),
         event_media=Discovery(),
     )
-    app.state.run_conversation_turn = RunConversationTurn(
-        Assistant(), repository, clock=lambda: NOW
-    )
+    conversation_turn = RunConversationTurn(Assistant(), repository, clock=lambda: NOW)
+    app.dependency_overrides[get_conversation_turn] = lambda: conversation_turn
     await repository.create(Conversation("legacy", NOW, NOW))
     await repository.append(
         ConversationMessage(

@@ -1,9 +1,16 @@
 """Agent-first assistant use case and safe general-model delegation."""
 
+import logging
 import re
 from dataclasses import replace
 from uuid import uuid4
 
+from disaster_monitor.application.agent.diagnostics import (
+    AgentCapability,
+    AgentCapabilityDiagnostic,
+    AgentCapabilityFailure,
+    AgentDiagnostics,
+)
 from disaster_monitor.application.agent.models import (
     AgentExecutionState,
     AgentStatus,
@@ -40,6 +47,8 @@ from disaster_monitor.domain.disaster import Country, EventGeometryKind
 from disaster_monitor.domain.errors import ModelResponseError, ModelRuntimeError
 from disaster_monitor.domain.models import MapQuestion, MapView
 
+logger = logging.getLogger(__name__)
+
 
 class RunDisasterAgent:
     def __init__(
@@ -51,6 +60,7 @@ class RunDisasterAgent:
         country_catalog: CountryCatalog | None = None,
         event_media: EventMediaDiscovery | None = None,
         agent_model: AgentModel | None = None,
+        diagnostics: AgentDiagnostics | None = None,
     ) -> None:
         self._runtime = runtime
         self._general_model = general_model
@@ -59,6 +69,7 @@ class RunDisasterAgent:
         self._country_catalog = country_catalog
         self._event_media = event_media
         self._agent_model = agent_model
+        self._diagnostics = diagnostics
 
     async def execute(
         self,
@@ -201,7 +212,13 @@ class RunDisasterAgent:
         )
         try:
             return await self._event_media.discover(context)
-        except Exception:
+        except Exception as error:
+            self._record_capability_failure(
+                AgentCapability.EVENT_MEDIA_DISCOVERY,
+                AgentCapabilityFailure.DEPENDENCY_FAILURE,
+                attempt_count=1,
+                error=error,
+            )
             return None
 
     async def _localize_grounded_report(
@@ -216,11 +233,18 @@ class RunDisasterAgent:
             return report
         localize = getattr(self._agent_model, "localize_grounded_response", None)
         if localize is None:
+            self._record_capability_failure(
+                AgentCapability.RESPONSE_LOCALIZATION,
+                AgentCapabilityFailure.NOT_SUPPORTED,
+                attempt_count=0,
+            )
             return _localization_fallback(report)
+        last_error: Exception | None = None
         for _ in range(3):
             try:
                 localized = await localize(report, response_language)
-            except Exception:
+            except Exception as error:
+                last_error = error
                 continue
             if (
                 isinstance(localized, str)
@@ -228,7 +252,50 @@ class RunDisasterAgent:
                 and _preserves_grounded_tokens(report.message, localized)
             ):
                 return replace(report, message=localized.strip())
+        self._record_capability_failure(
+            AgentCapability.RESPONSE_LOCALIZATION,
+            (
+                AgentCapabilityFailure.DEPENDENCY_FAILURE
+                if last_error is not None
+                else AgentCapabilityFailure.INVALID_RESULT
+            ),
+            attempt_count=3,
+            error=last_error,
+        )
         return _localization_fallback(report)
+
+    def _record_capability_failure(
+        self,
+        capability: AgentCapability,
+        failure: AgentCapabilityFailure,
+        *,
+        attempt_count: int,
+        error: Exception | None = None,
+    ) -> None:
+        diagnostic = AgentCapabilityDiagnostic(
+            capability,
+            failure,
+            attempt_count,
+            type(error).__name__ if error is not None else None,
+        )
+        logger.warning(
+            "Optional agent capability failed",
+            extra={
+                "capability": capability.value,
+                "failure": failure.value,
+                "attempt_count": attempt_count,
+                "exception_type": diagnostic.exception_type,
+            },
+            exc_info=(
+                (type(error), error, error.__traceback__) if error is not None else None
+            ),
+        )
+        if self._diagnostics is None:
+            return
+        try:
+            self._diagnostics.record(diagnostic)
+        except Exception:
+            logger.exception("Agent diagnostic recorder failed")
 
     async def _general_answer(
         self,

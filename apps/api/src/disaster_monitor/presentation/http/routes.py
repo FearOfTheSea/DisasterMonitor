@@ -2,9 +2,7 @@
 
 import base64
 import binascii
-from datetime import UTC, datetime, timedelta
 from typing import Annotated, cast
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
@@ -37,11 +35,15 @@ from disaster_monitor.application.services.active_incidents import (
     ActiveIncidentsQuery,
     ActiveIncidentsService,
 )
-from disaster_monitor.application.services.operational_ingestion import (
-    record_operator_review,
+from disaster_monitor.application.services.provider_freshness import (
+    ProviderFreshnessService,
 )
 from disaster_monitor.application.use_cases.delete_conversation import (
     DeleteConversation,
+)
+from disaster_monitor.application.use_cases.record_operator_action import (
+    RecordOperatorAction,
+    UnknownEvidenceStateError,
 )
 from disaster_monitor.application.use_cases.run_conversation_turn import (
     RunConversationTurn,
@@ -49,7 +51,6 @@ from disaster_monitor.application.use_cases.run_conversation_turn import (
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import EventGeometry
 from disaster_monitor.domain.models import MapNavigationAction, MapView
-from disaster_monitor.domain.operations import OperatorActionRecord
 from disaster_monitor.presentation.http.metrics import OperationalMetrics
 from disaster_monitor.presentation.http.multimodal_schemas import (
     MultimodalAssetRequest,
@@ -97,32 +98,36 @@ router = APIRouter()
 
 def get_conversation_store(request: Request) -> ConversationStore:
     """Retrieve the conversation repository built by the composition root."""
-    return cast(ConversationStore, request.app.state.conversation_repository)
+    return cast(ConversationStore, request.app.state.dependencies.conversation_store)
 
 
 def get_conversation_turn(request: Request) -> RunConversationTurn:
     """Retrieve the transcript-aware assistant use case."""
-    return cast(RunConversationTurn, request.app.state.run_conversation_turn)
+    return cast(
+        RunConversationTurn, request.app.state.dependencies.run_conversation_turn
+    )
 
 
 def get_delete_conversation(request: Request) -> DeleteConversation:
     """Retrieve the atomic conversation-deletion use case."""
-    return cast(DeleteConversation, request.app.state.delete_conversation)
+    return cast(DeleteConversation, request.app.state.dependencies.delete_conversation)
 
 
 def get_language_model(request: Request) -> LanguageModel:
     """Retrieve the provider-neutral model port built by the composition root."""
-    return cast(LanguageModel, request.app.state.language_model)
+    return cast(LanguageModel, request.app.state.dependencies.language_model)
 
 
 def get_active_incidents_service(request: Request) -> ActiveIncidentsService:
     """Retrieve the provider-backed incident discovery use case."""
-    return cast(ActiveIncidentsService, request.app.state.active_incidents_service)
+    return cast(ActiveIncidentsService, request.app.state.dependencies.active_incidents)
 
 
 def get_satellite_imagery_service(request: Request) -> SatelliteImageryService:
     """Retrieve the validated imagery use case built by the composition root."""
-    return cast(SatelliteImageryService, request.app.state.satellite_imagery_service)
+    return cast(
+        SatelliteImageryService, request.app.state.dependencies.satellite_imagery
+    )
 
 
 def _event_geometry_response(
@@ -146,12 +151,26 @@ def _event_geometry_response(
 
 
 def get_media_asset_store(request: Request) -> MediaAssetStore:
-    return cast(MediaAssetStore, request.app.state.media_asset_store)
+    return cast(MediaAssetStore, request.app.state.dependencies.media_assets)
 
 
 def get_operational_repository(request: Request) -> OperationalRepository:
     """Retrieve the operational store built by the composition root."""
-    return cast(OperationalRepository, request.app.state.operational_repository)
+    return cast(
+        OperationalRepository, request.app.state.dependencies.operational_repository
+    )
+
+
+def get_provider_freshness(request: Request) -> ProviderFreshnessService:
+    return cast(
+        ProviderFreshnessService, request.app.state.dependencies.provider_freshness
+    )
+
+
+def get_record_operator_action(request: Request) -> RecordOperatorAction:
+    return cast(
+        RecordOperatorAction, request.app.state.dependencies.record_operator_action
+    )
 
 
 def get_trusted_operator_identity_policy(
@@ -160,7 +179,7 @@ def get_trusted_operator_identity_policy(
     """Retrieve the application-facing identity policy from the composition root."""
     return cast(
         TrustedOperatorIdentityPolicy,
-        request.app.state.trusted_operator_identity_policy,
+        request.app.state.dependencies.operator_identity,
     )
 
 
@@ -168,14 +187,8 @@ def get_country_catalog_automation(request: Request) -> CountryCatalogUpdateAuto
     """Retrieve autonomous catalog updates from the composition root."""
     return cast(
         CountryCatalogUpdateAutomation,
-        request.app.state.country_catalog_automation,
+        request.app.state.dependencies.country_catalog_automation,
     )
-
-
-_FRESHNESS_EXPECTATIONS = {
-    "usgs-earthquakes": timedelta(minutes=15),
-    "gdacs-tropical-cyclones": timedelta(hours=1),
-}
 
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
@@ -331,12 +344,10 @@ async def readiness(
     tags=["operations"],
 )
 async def provider_freshness(
-    repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+    service: Annotated[ProviderFreshnessService, Depends(get_provider_freshness)],
 ) -> list[ProviderFreshnessResponse]:
     """Expose upstream freshness and failures without hiding unavailable sources."""
-    values = await repository.freshness(
-        now=datetime.now(UTC), expectations=_FRESHNESS_EXPECTATIONS
-    )
+    values = await service.list()
     return [
         ProviderFreshnessResponse(
             source_id=item.source_id,
@@ -441,7 +452,7 @@ async def metrics(
 ) -> Response:
     """Expose API and durable queue metrics for an owner-selected scraper."""
     operational_metrics = cast(
-        OperationalMetrics, request.app.state.operational_metrics
+        OperationalMetrics, request.app.state.dependencies.operational_metrics
     )
     operational_metrics.update_jobs(await repository.job_status_counts())
     content, content_type = operational_metrics.render()
@@ -496,7 +507,7 @@ async def operator_action(
         TrustedOperatorIdentityPolicy,
         Depends(get_trusted_operator_identity_policy),
     ],
-    repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+    use_case: Annotated[RecordOperatorAction, Depends(get_record_operator_action)],
 ) -> OperatorActionResponse:
     """Record an attributable bounded review from a trusted identity boundary."""
     if not policy.enabled:
@@ -510,30 +521,27 @@ async def operator_action(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="A trusted operator identity is required.",
         )
-    if not await repository.world_state_exists(body.state_version):
+    try:
+        result = await use_case.execute(
+            operator_id=operator_id,
+            decision=body.decision,
+            state_version=body.state_version,
+            rationale=body.rationale,
+            evidence_ids=tuple(body.evidence_ids),
+            policy_ids=tuple(body.policy_ids),
+        )
+    except UnknownEvidenceStateError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The reviewed evidence state does not exist.",
-        )
-    reviewed_at = datetime.now(UTC)
-    action = OperatorActionRecord(
-        action_id=f"operator-action:{uuid4()}",
-        operator_id=operator_id,
-        decision=body.decision,
-        state_version=body.state_version,
-        rationale=body.rationale,
-        evidence_ids=tuple(dict.fromkeys(body.evidence_ids)),
-        policy_ids=tuple(dict.fromkeys(body.policy_ids)),
-        reviewed_at=reviewed_at,
-    )
-    created = await record_operator_review(repository, action)
+        ) from None
     return OperatorActionResponse(
-        action_id=action.action_id,
-        operator_id=operator_id,
-        state_version=body.state_version,
-        decision=body.decision,
-        reviewed_at=reviewed_at,
-        created=created,
+        action_id=result.action.action_id,
+        operator_id=result.action.operator_id,
+        state_version=result.action.state_version,
+        decision=result.action.decision,
+        reviewed_at=result.action.reviewed_at,
+        created=result.created,
     )
 
 

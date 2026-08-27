@@ -35,6 +35,9 @@ Invoke-WebRequest http://localhost:8001/api/v1/metrics
 The migration service must finish before the API, scheduler, and worker start. The
 queue uses at-least-once delivery, `SKIP LOCKED`, bounded exponential retry, and a
 dead-letter state. Snapshot and observation identities make duplicate delivery safe.
+API and web runtime images run as dedicated non-root users. The API image is built from
+the frozen uv lock graph used by CI, and the web runtime contains the Next.js standalone
+output built from `package-lock.json`.
 
 Without `OPERATIONAL_DATABASE_URL`, a standalone API uses an explicit in-process
 metadata fallback and filesystem blobs for development. That metadata does not survive
@@ -47,8 +50,10 @@ The operations panel and API show `fresh`, `stale`, `unavailable`, or
 sources remain visible and cannot masquerade as current evidence. Configured-source
 failures retry and then dead-letter. Unregistered scheduled identities fail closed.
 The Prometheus-format endpoint reports low-cardinality request count, status, latency,
-in-progress requests, and queue counts by state. The owner must choose and secure the
-actual scraper, alert thresholds, log retention, and incident routing before pilot.
+in-progress requests, queue counts by state, and optional agent-capability failures for
+localization and contextual-media discovery. Detailed failures are logged while public
+responses retain bounded fallback wording. The owner must choose and secure the actual
+scraper, alert thresholds, log retention, and incident routing before pilot.
 
 ## Operator identity
 

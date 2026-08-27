@@ -39,6 +39,11 @@ Non-disaster and general-knowledge requests may use the general model path. Disa
 - Tools enforce prerequisites and write normalized artifacts to a request-scoped evidence workspace.
 - `CurrentDisasterReportService` remains a compatibility facade over the same tool path.
 
+Tool contracts, budgets, and typed state remain shared, while implementations are
+separated into source, evidence, decision, and coordination capabilities. Each tool is
+constructed with the smallest applicable dependency bundle; there is no dynamic plugin
+or service-locator path.
+
 Default disaster flow:
 
 ```text
@@ -50,6 +55,10 @@ compose_disaster_answer
 ```
 
 When admitted multimodal assets exist, visual analysis and common-operational-picture steps may be inserted before composition.
+
+Optional response localization and contextual-media discovery retain their established
+user-facing fallback. Failures emit a typed diagnostic, a structured log entry, and a
+low-cardinality metric without exposing internal exception details to the user.
 
 ## Execution limits
 

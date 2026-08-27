@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v9.0.0
         with:
-          version: latest
+          version: 0.11.32
       - run: uv sync --project apps/api --frozen
       - run: uv run --directory apps/api ruff format --check src tests
       - run: uv run --directory apps/api ruff check src tests
@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v9.0.0
         with:
-          version: latest
+          version: 0.11.32
       - run: uv sync --project apps/api --frozen
       - name: Apply migrations from scratch
         run: >-
@@ -57,10 +57,15 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 24.19.0
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: 0.11.32
       - run: npm ci
+        working-directory: apps/web
+      - run: npm run check:api-contract
         working-directory: apps/web
       - run: npm run format:check
         working-directory: apps/web
@@ -88,11 +93,11 @@ jobs:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v9.0.0
         with:
-          version: latest
+          version: 0.11.32
       - run: uv sync --project apps/api --frozen
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 24.19.0
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci

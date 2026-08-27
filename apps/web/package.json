@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "generate:api-contract": "node scripts/generate_api_contract.mjs",
+    "check:api-contract": "node scripts/generate_api_contract.mjs --check",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

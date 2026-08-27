@@ -28,7 +28,7 @@ type AssistantPanelProps = {
   onDeleteConversation?: (conversationId: string) => void | Promise<void>;
 };
 
-function formatTime(value: string | undefined) {
+function formatTime(value: string | null | undefined) {
   if (!value) {
     return 'Time unavailable';
   }

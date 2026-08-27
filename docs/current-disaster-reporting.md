@@ -48,6 +48,11 @@ Same-source corrections supersede the current projection but do not erase histor
 Cross-source disagreement remains a conflict. Provider text is bounded and sanitized;
 the renderer does not infer damage from magnitude, intensity, or bulletin absence.
 
+Executable registrations are assembled from provider-family builders. The maintained
+source catalog remains a separate artifact, so startup consistency checks still detect
+source identity, configuration, allowed-host, role, and executable-registration drift
+instead of validating one structure against itself.
+
 Hypotheses, triage, decision support, specialist coordination, multimodal observations,
 and contextual media are typed artifacts. They cannot create verified facts, expand
 source authority, issue public warnings, or select events.
