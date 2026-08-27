@@ -36,7 +36,7 @@ Dependency direction:
 ```text
 presentation --> application --> domain
 
-infrastructure --> application ports
+infrastructure adapters --> application contracts --> domain
 ```
 
 - Domain contains core concepts and does not depend on frameworks or infrastructure.
@@ -44,6 +44,22 @@ infrastructure --> application ports
 - Infrastructure implements those ports and communicates with external systems.
 - Presentation translates HTTP requests and responses.
 - Concrete dependencies are wired at the composition boundary.
+
+The application surface available to infrastructure adapters is deliberately narrow:
+
+- `application/ports/**`
+- boundary data models in `application/agent/models.py`, `disaster.py`, `dto.py`,
+  `media.py`, `multimodal.py`, `satellite_imagery.py`, and
+  `source_intelligence.py`
+- the visual-analysis prompt contract in `application/prompts/visual_analysis.py`
+
+Ports include stable boundary normalization and admission primitives when both an
+adapter and an application service must apply the same rule. Infrastructure adapters
+must not import `application/services/**` or `application/use_cases/**`.
+
+`infrastructure/composition.py`, `infrastructure/operations/runtime.py`, and
+`main.py` are composition roots rather than adapters. They may import application
+services and use cases solely to construct the object graph and process entry points.
 
 Architecture boundaries are enforced by `apps/api/tests/unit/test_architecture_dependencies.py`.
 

@@ -7,6 +7,10 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
     RequestType,
 )
+from disaster_monitor.application.ports.provider_text import sanitize_provider_text
+from disaster_monitor.application.ports.temporal_normalization import (
+    normalize_timestamp,
+)
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -16,8 +20,6 @@ from disaster_monitor.application.services.disaster_query_parser import (
 from disaster_monitor.application.services.event_resolution import resolve_recent_event
 from disaster_monitor.application.services.evidence_reconciliation import (
     build_evidence_packet,
-    normalize_timestamp,
-    sanitize_provider_text,
 )
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,

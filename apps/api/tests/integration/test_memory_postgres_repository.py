@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -8,7 +7,11 @@ import pytest
 from disaster_monitor.application.use_cases.delete_conversation import (
     DeleteConversation,
 )
-from disaster_monitor.domain.conversation import Conversation
+from disaster_monitor.domain.conversation import (
+    Conversation,
+    ConversationMessage,
+    ConversationRole,
+)
 from disaster_monitor.domain.memory import (
     MemoryLifecycleStatus,
     MemoryRecord,
@@ -26,16 +29,25 @@ from disaster_monitor.infrastructure.operations.postgres_repository import (
 
 
 @pytest.mark.asyncio
-async def test_postgres_memory_survives_recreation_and_conversation_deletion() -> None:
-    dsn = os.environ.get("OPERATIONAL_DATABASE_URL")
-    if not dsn:
-        pytest.skip("OPERATIONAL_DATABASE_URL is not configured")
-
+@pytest.mark.postgres
+async def test_postgres_memory_survives_recreation_and_conversation_deletion(
+    postgres_dsn: str,
+) -> None:
+    dsn = postgres_dsn
     await PostgresOperationalRepository(dsn).migrate()
     conversation_id = f"test-memory-conversation:{uuid4()}"
     now = datetime(2026, 8, 24, 12, tzinfo=UTC)
     conversations = PostgresConversationRepository(dsn)
     await conversations.create(Conversation(conversation_id, now, now))
+    await conversations.append(
+        ConversationMessage(
+            f"test-memory-message:{uuid4()}",
+            conversation_id,
+            ConversationRole.USER,
+            "Persist this transcript with its derived memory.",
+            now,
+        )
+    )
     memory_id = f"memory:{uuid4()}"
     record = MemoryRecord(
         memory_id=memory_id,
@@ -65,8 +77,15 @@ async def test_postgres_memory_survives_recreation_and_conversation_deletion() -
         ) == (record,)
 
         await DeleteConversation(conversations).execute(conversation_id)
+        assert await conversations.get(conversation_id) is None
         async with await psycopg.AsyncConnection.connect(dsn) as connection:
             async with connection.cursor() as cursor:
+                await cursor.execute(
+                    "SELECT COUNT(*) FROM conversation_message "
+                    "WHERE conversation_id=%s",
+                    (conversation_id,),
+                )
+                assert (await cursor.fetchone())[0] == 0
                 await cursor.execute(
                     "SELECT COUNT(*) FROM agent_memory WHERE conversation_id=%s",
                     (conversation_id,),

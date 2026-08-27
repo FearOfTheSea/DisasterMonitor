@@ -1,4 +1,4 @@
-"""Small bounded decoder checks shared by image admission and source media."""
+"""Bounded image metadata decoding shared with media adapters."""
 
 from struct import unpack
 

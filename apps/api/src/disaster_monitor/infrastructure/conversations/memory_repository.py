@@ -1,5 +1,6 @@
 """In-memory conversation repository for tests and no-database development."""
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import timedelta
 
@@ -14,23 +15,23 @@ from disaster_monitor.domain.errors import ConversationNotFoundError
 
 class InMemoryConversationRepository:
     def __init__(self) -> None:
-        self.conversations: dict[str, Conversation] = {}
-        self.messages: dict[str, ConversationMessage] = {}
+        self._conversations: dict[str, Conversation] = {}
+        self._messages: dict[str, ConversationMessage] = {}
 
     async def create(self, conversation: Conversation) -> None:
-        if conversation.conversation_id in self.conversations:
+        if conversation.conversation_id in self._conversations:
             raise ValueError("Conversation ID already exists.")
-        self.conversations[conversation.conversation_id] = conversation
+        self._conversations[conversation.conversation_id] = conversation
 
     async def get(self, conversation_id: str) -> Conversation | None:
-        conversation = self.conversations.get(conversation_id)
+        conversation = self._conversations.get(conversation_id)
         if conversation is None:
             return None
         messages = tuple(
             sorted(
                 (
                     message
-                    for message in self.messages.values()
+                    for message in self._messages.values()
                     if message.conversation_id == conversation_id
                 ),
                 key=lambda message: (message.created_at, message.message_id),
@@ -45,7 +46,7 @@ class InMemoryConversationRepository:
 
     async def list(self) -> tuple[ConversationSummary, ...]:
         summaries = []
-        for conversation in self.conversations.values():
+        for conversation in self._conversations.values():
             loaded = await self.get(conversation.conversation_id)
             assert loaded is not None
             summaries.append(
@@ -65,18 +66,18 @@ class InMemoryConversationRepository:
         )
 
     async def append(self, message: ConversationMessage) -> None:
-        conversation = self.conversations.get(message.conversation_id)
+        conversation = self._conversations.get(message.conversation_id)
         if conversation is None:
             raise ConversationNotFoundError(message.conversation_id)
-        if message.message_id in self.messages:
+        if message.message_id in self._messages:
             raise ValueError("Message ID already exists.")
         created_at = max(
             message.created_at,
             conversation.updated_at + timedelta(microseconds=1),
         )
         stored_message = replace(message, created_at=created_at)
-        self.messages[message.message_id] = stored_message
-        self.conversations[message.conversation_id] = Conversation(
+        self._messages[message.message_id] = stored_message
+        self._conversations[message.conversation_id] = Conversation(
             conversation_id=conversation.conversation_id,
             created_at=conversation.created_at,
             updated_at=created_at,
@@ -84,12 +85,29 @@ class InMemoryConversationRepository:
         )
 
     async def delete(self, conversation_id: str) -> bool:
-        if conversation_id not in self.conversations:
+        deletion = self.prepare_delete(conversation_id)
+        if deletion is None:
             return False
-        del self.conversations[conversation_id]
-        self.messages = {
+        deletion()
+        return True
+
+    def prepare_delete(self, conversation_id: str) -> Callable[[], None] | None:
+        """Prepare a non-failing state replacement for coordinated deletion."""
+        if conversation_id not in self._conversations:
+            return None
+        conversations = {
+            stored_id: conversation
+            for stored_id, conversation in self._conversations.items()
+            if stored_id != conversation_id
+        }
+        messages = {
             message_id: message
-            for message_id, message in self.messages.items()
+            for message_id, message in self._messages.items()
             if message.conversation_id != conversation_id
         }
-        return True
+
+        def commit() -> None:
+            self._conversations = conversations
+            self._messages = messages
+
+        return commit

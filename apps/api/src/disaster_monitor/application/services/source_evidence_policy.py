@@ -9,6 +9,9 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
 )
+from disaster_monitor.application.ports.source_evidence import (
+    SourceEvidencePolicyError,
+)
 from disaster_monitor.domain.disaster import (
     Country,
     Disaster,
@@ -24,10 +27,6 @@ from disaster_monitor.domain.disaster import (
     SourceAuthority,
     SourceReference,
 )
-
-
-class SourceEvidencePolicyError(ValueError):
-    """A normalized record escaped its approved source boundary."""
 
 
 def validate_event_evidence(

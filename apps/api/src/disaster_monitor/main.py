@@ -145,7 +145,8 @@ def create_app(
     memories = build_memory_repository(app_settings, memory_repository)
     conversation_deletion = (
         conversation_deletion_store
-        or build_conversation_deletion_store(conversations, memories)
+        if conversation_deletion_store is not None
+        else build_conversation_deletion_store(conversations, memories)
     )
     memory_recall = (
         MemoryRecallService(memories) if app_settings.long_term_memory_enabled else None

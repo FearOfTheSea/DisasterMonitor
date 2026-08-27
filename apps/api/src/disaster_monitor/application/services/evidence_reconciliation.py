@@ -3,11 +3,11 @@
 import re
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, datetime
-from html import unescape
+from datetime import datetime
 from typing import Protocol
 
 from disaster_monitor.application.disaster import DisasterQuery, EvidencePacket
+from disaster_monitor.application.ports.provider_text import sanitize_provider_text
 from disaster_monitor.application.services.evidence_correlation import (
     correlate_situation_report,
     default_evidence_correlation_policies,
@@ -32,14 +32,6 @@ from disaster_monitor.domain.disaster import (
     SourceReference,
 )
 
-MAX_NARRATIVE_LENGTH = 1_200
-_TAG = re.compile(r"<[^>]+>")
-_INSTRUCTION_FRAGMENT = re.compile(
-    r"\b(?:ignore|disregard|override|system message|developer message|"
-    r"tool call|prompt injection)(?:\s+\w+){0,4}[.!?:;]?",
-    re.IGNORECASE,
-)
-
 
 class _CorrelationPolicy(Protocol):
     def correlate(
@@ -49,42 +41,6 @@ class _CorrelationPolicy(Protocol):
 
 class _CorrelationPolicies(Protocol):
     def for_disaster(self, disaster: Disaster) -> _CorrelationPolicy: ...
-
-
-def sanitize_provider_text(text: str, *, limit: int = MAX_NARRATIVE_LENGTH) -> str:
-    """Remove markup, control characters, and instruction-like provider text."""
-    cleaned = _TAG.sub(" ", unescape(text))
-    lines = []
-    for line in cleaned.splitlines():
-        safe_line = _INSTRUCTION_FRAGMENT.sub(" ", line)
-        safe_line = re.sub(r"\s+", " ", safe_line).strip()
-        if safe_line:
-            lines.append(safe_line)
-    cleaned = re.sub(r"\s+", " ", " ".join(lines)).strip()
-    return cleaned[:limit]
-
-
-def normalize_timestamp(value: object) -> datetime | None:
-    """Normalize provider-neutral datetime and Unix timestamp values."""
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-    if isinstance(value, (int, float)):
-        number = float(value)
-        if number > 100_000_000_000:
-            number /= 1_000
-        return datetime.fromtimestamp(number, tz=UTC)
-    if not isinstance(value, str):
-        return None
-    text = value.strip()
-    if text.endswith("Z"):
-        text = f"{text[:-1]}+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _has_correlation_metadata(report: SituationReport) -> bool:

@@ -5,6 +5,10 @@ from pathlib import Path
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery
+from disaster_monitor.application.ports.source_payload import (
+    AcquiredSourcePayload,
+    canonical_request_identity,
+)
 from disaster_monitor.application.services.evidence_state import (
     build_evidence_world_state,
 )
@@ -12,13 +16,11 @@ from disaster_monitor.application.services.operational_evidence import (
     OperationalEvidenceRecorder,
 )
 from disaster_monitor.application.services.operational_ingestion import (
-    AcquiredSourcePayload,
     IngestionScheduler,
     IngestionWorker,
     ScheduledInvestigation,
     ScheduledInvestigationWorker,
     SnapshotPersistenceService,
-    canonical_request_identity,
     record_operator_review,
     scheduled_job,
     snapshot_idempotency_key,

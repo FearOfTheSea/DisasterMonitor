@@ -16,6 +16,9 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRole,
     ProviderTier,
 )
+from disaster_monitor.application.services.source_evidence_policy import (
+    validate_event_evidence,
+)
 from disaster_monitor.domain.disaster import (
     Disaster,
     DisasterEvent,
@@ -175,9 +178,9 @@ async def test_composite_propagates_tiers_and_primary_wins_canonical_selection()
         )
     )
 
-    batch = await CompositeDisasterEventProvider(registry).find_recent_events(
-        _query(), now=NOW
-    )
+    batch = await CompositeDisasterEventProvider(
+        registry, validate=validate_event_evidence
+    ).find_recent_events(_query(), now=NOW)
     identity = DefaultEventPolicy().identify(batch.records).physical_events[0]
 
     assert {item.provider_tier for item in batch.records} == {

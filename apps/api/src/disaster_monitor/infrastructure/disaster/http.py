@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from disaster_monitor.application.services.operational_ingestion import (
+from disaster_monitor.application.ports.source_payload import (
     AcquiredSourcePayload,
     canonical_request_identity,
 )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import psycopg
 from psycopg.rows import dict_row
@@ -17,6 +17,11 @@ from disaster_monitor.domain.conversation import (
     ConversationSummary,
 )
 from disaster_monitor.domain.errors import ConversationNotFoundError
+
+if TYPE_CHECKING:
+    from disaster_monitor.infrastructure.memory.postgres_repository import (
+        PostgresMemoryRepository,
+    )
 
 
 class PostgresConversationRepository:
@@ -162,6 +167,10 @@ class PostgresConversationRepository:
                     (conversation_id,),
                 )
                 return cursor.rowcount == 1
+
+    def shares_database_with(self, memories: PostgresMemoryRepository) -> bool:
+        """Report whether FK cascade covers the supplied memory repository."""
+        return memories.uses_database(self._dsn)
 
     async def _connection(self) -> psycopg.AsyncConnection[Any]:
         return await psycopg.AsyncConnection.connect(self._dsn)

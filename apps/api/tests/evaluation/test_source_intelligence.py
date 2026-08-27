@@ -7,6 +7,9 @@ from typing import cast
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery, ProviderBatch
+from disaster_monitor.application.ports.source_evidence import (
+    SourceEvidencePolicyError,
+)
 from disaster_monitor.application.services.evidence_reconciliation import (
     EvidenceReconciler,
 )
@@ -17,7 +20,6 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRole,
 )
 from disaster_monitor.application.services.source_evidence_policy import (
-    SourceEvidencePolicyError,
     validate_event_evidence,
     validate_situation_evidence,
 )
@@ -501,7 +503,7 @@ async def test_si_b_release_gate() -> None:
 
 async def _run_acquisition_episode(primary: str, secondary: str) -> bool:
     result = await CompositeDisasterEventProvider(
-        _episode_registry(primary, secondary)
+        _episode_registry(primary, secondary), validate=validate_event_evidence
     ).find_recent_events(_query(), now=NOW)
     expected_records = int(primary == "success") + int(secondary == "success")
     expected_issues = int(primary != "success") + int(secondary != "success")

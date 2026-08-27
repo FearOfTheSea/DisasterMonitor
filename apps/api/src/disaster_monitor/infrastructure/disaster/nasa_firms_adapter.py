@@ -18,7 +18,7 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
 )
-from disaster_monitor.application.services.evidence_reconciliation import (
+from disaster_monitor.application.ports.temporal_normalization import (
     normalize_timestamp,
 )
 from disaster_monitor.domain.disaster import (

@@ -19,6 +19,38 @@ jobs:
       - run: uv run --directory apps/api mypy
       - run: uv run --directory apps/api pytest -q
 
+  postgres-persistence:
+    runs-on: ubuntu-latest
+    env:
+      OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-ci-only@127.0.0.1:5432/disastermonitor
+      REQUIRE_POSTGRES_TESTS: "true"
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: disastermonitor
+          POSTGRES_USER: disastermonitor
+          POSTGRES_PASSWORD: disastermonitor-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U disastermonitor -d disastermonitor"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: latest
+      - run: uv sync --project apps/api --frozen
+      - name: Apply migrations from scratch
+        run: >-
+          uv run --directory apps/api python -m
+          disaster_monitor.infrastructure.operations.runtime migrate
+      - name: Run PostgreSQL persistence integration tests
+        run: uv run --directory apps/api pytest tests/integration -m postgres -q
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -50,7 +82,7 @@ jobs:
         run: test -z "$(git ls-files .migration-sources)"
 
   system:
-    needs: [backend, frontend]
+    needs: [backend, frontend, postgres-persistence]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

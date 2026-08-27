@@ -11,9 +11,9 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
     ProviderIssue,
 )
-from disaster_monitor.application.services.evidence_reconciliation import (
+from disaster_monitor.application.ports.provider_text import sanitize_provider_text
+from disaster_monitor.application.ports.temporal_normalization import (
     normalize_timestamp,
-    sanitize_provider_text,
 )
 from disaster_monitor.domain.disaster import (
     Disaster,

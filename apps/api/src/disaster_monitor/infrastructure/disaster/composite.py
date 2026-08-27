@@ -13,15 +13,15 @@ from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.ports.provider_registry import (
     ProviderRegistration,
-    ProviderRegistry,
+    ProviderRegistryPort,
     ProviderRole,
 )
-from disaster_monitor.application.services.source_evidence_policy import (
+from disaster_monitor.application.ports.source_evidence import (
+    EventEvidenceValidator,
+    SituationEvidenceValidator,
     SourceEvidencePolicyError,
-    validate_event_evidence,
-    validate_situation_evidence,
 )
 from disaster_monitor.domain.disaster import DisasterEvent, SituationReport
 from disaster_monitor.infrastructure.disaster.errors import DisasterProviderError
@@ -84,14 +84,20 @@ class CompositeDisasterEventProvider:
     """Query a small ordered list of event sources and retain partial success."""
 
     def __init__(
-        self, providers: Iterable[DisasterEventProvider] | ProviderRegistry
+        self,
+        providers: Iterable[DisasterEventProvider] | ProviderRegistryPort,
+        *,
+        validate: EventEvidenceValidator | None = None,
     ) -> None:
-        if isinstance(providers, ProviderRegistry):
-            self._registry: ProviderRegistry | None = providers
+        if isinstance(providers, ProviderRegistryPort):
+            if validate is None:
+                raise ValueError("Registry-backed event providers require validation.")
+            self._registry: ProviderRegistryPort | None = providers
             self._providers: tuple[DisasterEventProvider, ...] = ()
         else:
             self._registry = None
             self._providers = tuple(providers)
+        self._validate = validate
         self.last_diagnostics: tuple[ProviderIssue, ...] = ()
         self.last_record_counts: dict[str, int] = {}
 
@@ -146,7 +152,8 @@ class CompositeDisasterEventProvider:
                         accepted.append(record)
                         continue
                     try:
-                        accepted_record = validate_event_evidence(
+                        assert self._validate is not None
+                        accepted_record = self._validate(
                             record,
                             query,
                             source_id=registration.source_id or "",
@@ -188,14 +195,22 @@ class CompositeSituationReportProvider:
     """Query official and supplementary situation sources with bounded fan-out."""
 
     def __init__(
-        self, providers: Iterable[SituationReportProvider] | ProviderRegistry
+        self,
+        providers: Iterable[SituationReportProvider] | ProviderRegistryPort,
+        *,
+        validate: SituationEvidenceValidator | None = None,
     ) -> None:
-        if isinstance(providers, ProviderRegistry):
-            self._registry: ProviderRegistry | None = providers
+        if isinstance(providers, ProviderRegistryPort):
+            if validate is None:
+                raise ValueError(
+                    "Registry-backed situation providers require validation."
+                )
+            self._registry: ProviderRegistryPort | None = providers
             self._providers: tuple[SituationReportProvider, ...] = ()
         else:
             self._registry = None
             self._providers = tuple(providers)
+        self._validate = validate
         self.last_diagnostics: tuple[ProviderIssue, ...] = ()
         self.last_record_counts: dict[str, int] = {}
 
@@ -257,8 +272,9 @@ class CompositeSituationReportProvider:
                         accepted.append(record)
                         continue
                     try:
+                        assert self._validate is not None
                         accepted.append(
-                            validate_situation_evidence(
+                            self._validate(
                                 record,
                                 query,
                                 source_id=registration.source_id or "",

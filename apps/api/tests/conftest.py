@@ -1,6 +1,7 @@
 """Shared deterministic model doubles for backend tests."""
 
 import asyncio
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,23 @@ def isolated_country_catalog_root(
     """Keep ignored live catalog data from changing deterministic test baselines."""
     monkeypatch.setenv("COUNTRY_CATALOG_ROOT", str(tmp_path / "country-catalog"))
     monkeypatch.setenv("EVENT_MEDIA_ENABLED", "false")
+
+
+@pytest.fixture(scope="session")
+def postgres_dsn() -> str:
+    """Require PostgreSQL in its dedicated gate and skip it elsewhere."""
+    dsn = os.environ.get("OPERATIONAL_DATABASE_URL", "").strip()
+    if dsn:
+        return dsn
+    if os.environ.get("REQUIRE_POSTGRES_TESTS", "").strip().casefold() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        pytest.fail(
+            "REQUIRE_POSTGRES_TESTS is enabled but OPERATIONAL_DATABASE_URL is absent."
+        )
+    pytest.skip("OPERATIONAL_DATABASE_URL is not configured")
 
 
 @dataclass

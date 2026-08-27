@@ -15,6 +15,10 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRole,
     ProviderTier,
 )
+from disaster_monitor.application.services.source_evidence_policy import (
+    validate_event_evidence,
+    validate_situation_evidence,
+)
 from disaster_monitor.domain.disaster import (
     Disaster,
     DisasterEvent,
@@ -204,8 +208,10 @@ def _registry():
 @pytest.mark.asyncio
 async def test_capabilities_include_japan_providers_and_exclude_them_abroad() -> None:
     registry, global_catalog, usgs, global_situation = _registry()
-    events = CompositeDisasterEventProvider(registry)
-    situations = CompositeSituationReportProvider(registry)
+    events = CompositeDisasterEventProvider(registry, validate=validate_event_evidence)
+    situations = CompositeSituationReportProvider(
+        registry, validate=validate_situation_evidence
+    )
 
     japan_query = _query(Disaster.EARTHQUAKE)
     japan_batch = await events.find_recent_events(japan_query, now=NOW)

@@ -13,6 +13,10 @@ from disaster_monitor.application.ports.operational_state import (
     ImmutableBlobStore,
     OperationalRepository,
 )
+from disaster_monitor.application.ports.source_payload import (
+    AcquiredSourcePayload,
+    SourcePayloadAcquirer,
+)
 from disaster_monitor.domain.operations import (
     AuditEventRecord,
     IngestJob,
@@ -20,30 +24,6 @@ from disaster_monitor.domain.operations import (
     OperatorActionRecord,
     SourceSnapshotRecord,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class AcquiredSourcePayload:
-    """One bounded successful response prior to immutable persistence."""
-
-    source_id: str
-    canonical_request_identity: str
-    provider_revision: str | None
-    content: bytes
-    content_type: str
-    response_status: int
-    retrieved_at: datetime
-    published_at: datetime | None
-    observed_at: datetime | None
-    rights_id: str
-
-
-class SourcePayloadAcquirer(Protocol):
-    """Fetch one allowlisted request without deciding source authority."""
-
-    async def acquire(
-        self, canonical_request_identity: str
-    ) -> AcquiredSourcePayload: ...
 
 
 class ScheduledDisasterInvestigator(Protocol):
@@ -138,15 +118,6 @@ class ScheduledInvestigationWorker:
         else:
             await self._repository.complete(job.job_id, completed_at=now)
         return job
-
-
-def canonical_request_identity(source_id: str, parameters: Mapping[str, str]) -> str:
-    """Build a stable request identity without retaining credentials."""
-    material = "&".join(
-        f"{key}={parameters[key]}" for key in sorted(parameters) if parameters[key]
-    )
-    digest = hashlib.sha256(f"{source_id}|{material}".encode()).hexdigest()
-    return f"request:{source_id}:{digest}"
 
 
 def snapshot_idempotency_key(

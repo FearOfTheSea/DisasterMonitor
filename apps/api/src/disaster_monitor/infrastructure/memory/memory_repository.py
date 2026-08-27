@@ -1,5 +1,6 @@
 """In-memory typed memory repository for tests and no-database development."""
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 
@@ -8,7 +9,7 @@ from disaster_monitor.domain.memory import MemoryLifecycleStatus, MemoryRecord
 
 class InMemoryMemoryRepository:
     def __init__(self) -> None:
-        self.records: dict[str, MemoryRecord] = {}
+        self._records: dict[str, MemoryRecord] = {}
 
     async def save(
         self,
@@ -16,18 +17,18 @@ class InMemoryMemoryRepository:
         *,
         superseded_memory_ids: tuple[str, ...] = (),
     ) -> None:
-        self.records[record.memory_id] = record
+        self._records[record.memory_id] = record
         for memory_id in superseded_memory_ids:
-            existing = self.records.get(memory_id)
+            existing = self._records.get(memory_id)
             if existing is not None and existing.status is MemoryLifecycleStatus.ACTIVE:
-                self.records[memory_id] = replace(
+                self._records[memory_id] = replace(
                     existing,
                     status=MemoryLifecycleStatus.SUPERSEDED,
                     superseded_by_memory_id=record.memory_id,
                 )
 
     async def get(self, memory_id: str) -> MemoryRecord | None:
-        return self.records.get(memory_id)
+        return self._records.get(memory_id)
 
     async def list_for_scope(
         self, conversation_id: str, physical_event_id: str | None = None
@@ -36,7 +37,7 @@ class InMemoryMemoryRepository:
             sorted(
                 (
                     record
-                    for record in self.records.values()
+                    for record in self._records.values()
                     if record.conversation_id == conversation_id
                     and (
                         physical_event_id is None
@@ -54,10 +55,10 @@ class InMemoryMemoryRepository:
         *,
         superseded_by_memory_id: str,
     ) -> bool:
-        record = self.records.get(memory_id)
+        record = self._records.get(memory_id)
         if record is None or record.status is not MemoryLifecycleStatus.ACTIVE:
             return False
-        self.records[memory_id] = replace(
+        self._records[memory_id] = replace(
             record,
             status=MemoryLifecycleStatus.SUPERSEDED,
             superseded_by_memory_id=superseded_by_memory_id,
@@ -65,27 +66,27 @@ class InMemoryMemoryRepository:
         return True
 
     async def mark_expired(self, memory_id: str) -> bool:
-        record = self.records.get(memory_id)
+        record = self._records.get(memory_id)
         if (
             record is None
             or record.status is not MemoryLifecycleStatus.ACTIVE
             or record.expires_at is None
         ):
             return False
-        self.records[memory_id] = replace(record, status=MemoryLifecycleStatus.EXPIRED)
+        self._records[memory_id] = replace(record, status=MemoryLifecycleStatus.EXPIRED)
         return True
 
     async def mark_deleted_for_conversation(
         self, conversation_id: str, *, deleted_at: datetime
     ) -> int:
         count = 0
-        for memory_id, record in tuple(self.records.items()):
+        for memory_id, record in tuple(self._records.items()):
             if (
                 record.conversation_id != conversation_id
                 or record.status is MemoryLifecycleStatus.DELETED
             ):
                 continue
-            self.records[memory_id] = replace(
+            self._records[memory_id] = replace(
                 record,
                 status=MemoryLifecycleStatus.DELETED,
                 superseded_by_memory_id=None,
@@ -93,3 +94,18 @@ class InMemoryMemoryRepository:
             )
             count += 1
         return count
+
+    def prepare_delete_for_conversation(
+        self, conversation_id: str
+    ) -> Callable[[], None]:
+        """Prepare physical removal for a coordinated conversation deletion."""
+        records = {
+            memory_id: record
+            for memory_id, record in self._records.items()
+            if record.conversation_id != conversation_id
+        }
+
+        def commit() -> None:
+            self._records = records
+
+        return commit

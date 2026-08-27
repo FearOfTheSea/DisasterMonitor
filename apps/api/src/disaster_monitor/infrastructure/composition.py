@@ -53,6 +53,10 @@ from disaster_monitor.application.services.provider_registry import (
 from disaster_monitor.application.services.source_consistency import (
     validate_provider_source_consistency,
 )
+from disaster_monitor.application.services.source_evidence_policy import (
+    validate_event_evidence,
+    validate_situation_evidence,
+)
 from disaster_monitor.application.services.specialist_executor import (
     SpecialistExecutor,
 )
@@ -60,6 +64,7 @@ from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.conversations.deletion_store import (
     InMemoryConversationDeletionStore,
+    PostgresConversationDeletionStore,
 )
 from disaster_monitor.infrastructure.conversations.memory_repository import (
     InMemoryConversationRepository,
@@ -256,11 +261,26 @@ def build_conversation_deletion_store(
     memories: MemoryStore,
 ) -> ConversationDeletionStore:
     """Use FK cascade in PostgreSQL and one staged mutation in memory."""
-    if isinstance(conversations, InMemoryConversationRepository) and isinstance(
-        memories, InMemoryMemoryRepository
+    if (
+        type(conversations) is InMemoryConversationRepository
+        and type(memories) is InMemoryMemoryRepository
     ):
-        return InMemoryConversationDeletionStore(conversations, memories)
-    return conversations
+        return InMemoryConversationDeletionStore(
+            conversations,
+            memories,
+        )
+    if (
+        type(conversations) is PostgresConversationRepository
+        and type(memories) is PostgresMemoryRepository
+    ):
+        return PostgresConversationDeletionStore(
+            conversations,
+            memories,
+        )
+    raise ValueError(
+        "Repositories do not share an atomic conversation deletion boundary. "
+        "Provide an explicit conversation deletion store for custom persistence."
+    )
 
 
 def build_language_model(settings: Settings) -> LanguageModel:
@@ -766,8 +786,12 @@ def build_current_disaster_report(
     )
     source_catalog = build_source_catalog(settings)
     validate_provider_source_consistency(registry, source_catalog)
-    event_provider = CompositeDisasterEventProvider(registry)
-    situation_provider = CompositeSituationReportProvider(registry)
+    event_provider = CompositeDisasterEventProvider(
+        registry, validate=validate_event_evidence
+    )
+    situation_provider = CompositeSituationReportProvider(
+        registry, validate=validate_situation_evidence
+    )
     return CurrentDisasterReportService(
         event_provider,
         situation_provider,

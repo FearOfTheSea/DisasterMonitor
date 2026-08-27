@@ -23,7 +23,7 @@ from disaster_monitor.application.media import (
     MediaRightsStatus,
     RetrievedMedia,
 )
-from disaster_monitor.application.services.image_validation import image_metadata
+from disaster_monitor.application.ports.image_metadata import image_metadata
 
 _DISCOVERY_URL = "https://www.bing.com/news/search"
 _DISCOVERY_HOSTS = frozenset({"www.bing.com"})

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 
 from disaster_monitor.application.multimodal import AssetAdmissionInput
-from disaster_monitor.application.services.image_validation import image_metadata
+from disaster_monitor.application.ports.image_metadata import image_metadata
 from disaster_monitor.application.services.multimodal_geometry import (
     MultimodalGeometryPolicy,
 )

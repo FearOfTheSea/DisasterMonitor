@@ -10,8 +10,8 @@ from disaster_monitor.application.ports.geography import (
     CountryCatalogUpdateStatus,
     CountryCatalogUpdateTrigger,
 )
+from disaster_monitor.application.ports.source_payload import AcquiredSourcePayload
 from disaster_monitor.application.services.operational_ingestion import (
-    AcquiredSourcePayload,
     SnapshotPersistenceService,
 )
 from disaster_monitor.domain.operations import WorldStateVersionRecord

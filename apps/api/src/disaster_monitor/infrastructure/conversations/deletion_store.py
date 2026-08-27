@@ -1,10 +1,16 @@
-"""Atomic in-memory deletion of a conversation and its derived memory."""
+"""Persistence-specific atomic deletion of conversation-owned state."""
 
 from disaster_monitor.infrastructure.conversations.memory_repository import (
     InMemoryConversationRepository,
 )
+from disaster_monitor.infrastructure.conversations.postgres_repository import (
+    PostgresConversationRepository,
+)
 from disaster_monitor.infrastructure.memory.memory_repository import (
     InMemoryMemoryRepository,
+)
+from disaster_monitor.infrastructure.memory.postgres_repository import (
+    PostgresMemoryRepository,
 )
 
 
@@ -18,24 +24,30 @@ class InMemoryConversationDeletionStore:
         self._memories = memories
 
     async def delete(self, conversation_id: str) -> bool:
-        if conversation_id not in self._conversations.conversations:
+        delete_conversation = self._conversations.prepare_delete(conversation_id)
+        if delete_conversation is None:
             return False
-        conversations = {
-            key: value
-            for key, value in self._conversations.conversations.items()
-            if key != conversation_id
-        }
-        messages = {
-            key: value
-            for key, value in self._conversations.messages.items()
-            if value.conversation_id != conversation_id
-        }
-        memories = {
-            key: value
-            for key, value in self._memories.records.items()
-            if value.conversation_id != conversation_id
-        }
-        self._conversations.conversations = conversations
-        self._conversations.messages = messages
-        self._memories.records = memories
+        delete_memories = self._memories.prepare_delete_for_conversation(
+            conversation_id
+        )
+        delete_memories()
+        delete_conversation()
         return True
+
+
+class PostgresConversationDeletionStore:
+    """Delete through the conversation FK root in one database transaction."""
+
+    def __init__(
+        self,
+        conversations: PostgresConversationRepository,
+        memories: PostgresMemoryRepository,
+    ) -> None:
+        if not conversations.shares_database_with(memories):
+            raise ValueError(
+                "Repositories do not share an atomic conversation deletion boundary."
+            )
+        self._conversations = conversations
+
+    async def delete(self, conversation_id: str) -> bool:
+        return await self._conversations.delete(conversation_id)

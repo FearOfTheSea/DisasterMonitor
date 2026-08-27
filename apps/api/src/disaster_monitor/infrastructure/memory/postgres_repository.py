@@ -151,6 +151,10 @@ class PostgresMemoryRepository:
                 )
                 return cursor.rowcount
 
+    def uses_database(self, dsn: str) -> bool:
+        """Report exact transactional compatibility without exposing credentials."""
+        return self._dsn == dsn
+
     async def _connection(self) -> psycopg.AsyncConnection[Any]:
         return await psycopg.AsyncConnection.connect(self._dsn)
 

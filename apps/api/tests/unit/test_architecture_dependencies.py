@@ -11,6 +11,22 @@ INCIDENT_PRIORITY = APPLICATION / "services" / "incident_priority.py"
 CONVERSATION_STORE = APPLICATION / "ports" / "conversation_store.py"
 MEMORY_STORE = APPLICATION / "ports" / "memory_store.py"
 
+INFRASTRUCTURE_COMPOSITION_MODULES = {
+    "disaster_monitor.infrastructure.composition",
+    "disaster_monitor.infrastructure.operations.runtime",
+}
+INFRASTRUCTURE_APPLICATION_SURFACE = {
+    "disaster_monitor.application.agent.models",
+    "disaster_monitor.application.disaster",
+    "disaster_monitor.application.dto",
+    "disaster_monitor.application.media",
+    "disaster_monitor.application.multimodal",
+    "disaster_monitor.application.ports",
+    "disaster_monitor.application.prompts.visual_analysis",
+    "disaster_monitor.application.satellite_imagery",
+    "disaster_monitor.application.source_intelligence",
+}
+
 DISASTER_POLICY_MODULES = {
     "disaster_monitor.application.disaster_aliases",
     "disaster_monitor.application.services.disaster_query_policy",
@@ -90,6 +106,23 @@ def test_presentation_does_not_import_infrastructure() -> None:
         if name == "disaster_monitor.infrastructure"
         or name.startswith("disaster_monitor.infrastructure.")
     ]
+
+    assert violations == []
+
+
+def test_infrastructure_imports_only_application_contract_surface() -> None:
+    violations = []
+    for path in _python_files(INFRASTRUCTURE):
+        if _module_name(path) in INFRASTRUCTURE_COMPOSITION_MODULES:
+            continue
+        for name in _imports(path):
+            if not name.startswith("disaster_monitor.application"):
+                continue
+            if not any(
+                name == allowed or name.startswith(f"{allowed}.")
+                for allowed in INFRASTRUCTURE_APPLICATION_SURFACE
+            ):
+                violations.append(f"{path.relative_to(SRC)} imports {name}")
 
     assert violations == []
 

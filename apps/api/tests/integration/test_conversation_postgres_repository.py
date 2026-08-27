@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -20,11 +19,11 @@ from disaster_monitor.infrastructure.operations.postgres_repository import (
 
 
 @pytest.mark.asyncio
-async def test_postgres_conversation_repository_persists_orders_and_cascades() -> None:
-    dsn = os.environ.get("OPERATIONAL_DATABASE_URL")
-    if not dsn:
-        pytest.skip("OPERATIONAL_DATABASE_URL is not configured")
-
+@pytest.mark.postgres
+async def test_postgres_conversation_repository_persists_orders_and_cascades(
+    postgres_dsn: str,
+) -> None:
+    dsn = postgres_dsn
     await PostgresOperationalRepository(dsn).migrate()
     async with await psycopg.AsyncConnection.connect(dsn) as connection:
         async with connection.cursor() as cursor:

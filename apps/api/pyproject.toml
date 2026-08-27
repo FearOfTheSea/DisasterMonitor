@@ -35,6 +35,9 @@ packages = ["src/disaster_monitor"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+markers = [
+    "postgres: requires a real PostgreSQL/PostGIS database",
+]
 
 [tool.ruff]
 target-version = "py312"
