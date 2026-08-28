@@ -25,8 +25,8 @@ const command = [
   '-c',
   [
     'import json',
-    'from disaster_monitor.main import app',
-    'print(json.dumps(app.openapi(), sort_keys=True, separators=(",", ":")))',
+    'from disaster_monitor.presentation.http.api import create_schema_app',
+    'print(json.dumps(create_schema_app().openapi(), sort_keys=True, separators=(",", ":")))',
   ].join('; '),
 ];
 const result = spawnSync('uv', command, { encoding: 'utf8', cwd: webRoot });
@@ -79,6 +79,107 @@ function schemaType(schema) {
   return 'unknown';
 }
 
+const validationKeywords = new Set([
+  '$ref',
+  'additionalProperties',
+  'allOf',
+  'anyOf',
+  'const',
+  'enum',
+  'exclusiveMaximum',
+  'exclusiveMinimum',
+  'format',
+  'items',
+  'maxItems',
+  'maxLength',
+  'maximum',
+  'minItems',
+  'minLength',
+  'minimum',
+  'oneOf',
+  'pattern',
+  'prefixItems',
+  'properties',
+  'required',
+  'type',
+]);
+const annotationKeywords = new Set([
+  'default',
+  'deprecated',
+  'description',
+  'example',
+  'examples',
+  'readOnly',
+  'title',
+  'writeOnly',
+]);
+
+function runtimeSchema(schema) {
+  if (Array.isArray(schema)) return schema.map(runtimeSchema);
+  if (!schema || typeof schema !== 'object') return schema;
+  const unsupported = Object.keys(schema).filter(
+    (name) => !validationKeywords.has(name) && !annotationKeywords.has(name),
+  );
+  if (unsupported.length) {
+    throw new Error(
+      `Runtime validator does not support OpenAPI keywords: ${unsupported.join(', ')}`,
+    );
+  }
+  return Object.fromEntries(
+    Object.entries(schema)
+      .filter(([name]) => validationKeywords.has(name))
+      .map(([name, value]) => [
+        name,
+        name === 'properties'
+          ? Object.fromEntries(
+              Object.entries(value).map(([field, fieldSchema]) => [
+                field,
+                runtimeSchema(fieldSchema),
+              ]),
+            )
+          : runtimeSchema(value),
+      ]),
+  );
+}
+
+function referencedSchemas(schema) {
+  const names = new Set();
+  const pending = [schema];
+  while (pending.length) {
+    const value = pending.pop();
+    if (Array.isArray(value)) {
+      pending.push(...value);
+    } else if (value && typeof value === 'object') {
+      if (typeof value.$ref === 'string') names.add(referenceName(value.$ref));
+      pending.push(...Object.values(value));
+    }
+  }
+  return names;
+}
+
+const runtimeSchemaNames = new Set([
+  'AssistantResponse',
+  'ConversationResponse',
+  'ConversationSummaryResponse',
+]);
+const pendingRuntimeSchemas = [...runtimeSchemaNames];
+while (pendingRuntimeSchemas.length) {
+  const name = pendingRuntimeSchemas.pop();
+  const schema = schemas[name];
+  if (!schema) throw new Error(`The backend OpenAPI schema is missing ${name}.`);
+  for (const referenced of referencedSchemas(schema)) {
+    if (!runtimeSchemaNames.has(referenced)) {
+      runtimeSchemaNames.add(referenced);
+      pendingRuntimeSchemas.push(referenced);
+    }
+  }
+}
+const runtimeSchemas = Object.fromEntries(
+  [...runtimeSchemaNames]
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => [name, runtimeSchema(schemas[name])]),
+);
+
 const body = Object.keys(schemas)
   .sort((left, right) => left.localeCompare(right))
   .map((name) => `export type ${name} = ${schemaType(schemas[name])};`)
@@ -86,6 +187,16 @@ const body = Object.keys(schemas)
 const unformattedOutput = [
   '// Generated from the DisasterMonitor backend OpenAPI schema.',
   '// Run `npm run generate:api-contract` after backend schema changes.',
+  '',
+  "import { matchesOpenApiSchema } from '@/shared/api/openapiSchema';",
+  '',
+  `const apiSchemas = ${JSON.stringify(runtimeSchemas, null, 2)} as const;`,
+  '',
+  'export type ApiSchemaName = keyof typeof apiSchemas;',
+  '',
+  'export function matchesApiSchema(name: ApiSchemaName, value: unknown): boolean {',
+  '  return matchesOpenApiSchema(value, apiSchemas[name], apiSchemas);',
+  '}',
   '',
   body,
   '',

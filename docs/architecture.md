@@ -45,6 +45,16 @@ infrastructure adapters --> application contracts --> domain
 - Presentation translates HTTP requests and responses.
 - Concrete dependencies are wired at the composition boundary.
 
+`AppDependencyOverrides` is the typed composition input. The production bootstrap
+may also accept a prebuilt `AppDependencies` container, while retaining legacy
+individual test overrides as a thin compatibility facade. Presentation constructs
+HTTP metrics and supplies agent diagnostics through the application-owned
+`AgentDiagnostics` protocol; infrastructure never imports presentation.
+
+The side-effect-free HTTP shell in `presentation/http/api.py` registers the same
+router and models as production and is the only application factory used for OpenAPI
+generation. It does not construct infrastructure adapters or runtime resources.
+
 The application surface available to infrastructure adapters is deliberately narrow:
 
 - `application/ports/**`
@@ -80,6 +90,9 @@ apps/web/src/
 ```
 
 The frontend communicates with the backend through typed API clients. External disaster providers and Ollama are backend concerns.
+Generated frontend contract output includes both TypeScript types and the backend
+OpenAPI component schemas used for runtime structural validation. Handwritten client
+validation is limited to semantic, cross-field, provenance, and geometry invariants.
 
 ## Tests
 

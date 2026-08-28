@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from time import perf_counter
 
 import uvicorn
@@ -38,10 +39,15 @@ from disaster_monitor.application.services.disaster_query_parser import (
 from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
-from disaster_monitor.infrastructure.composition import build_app_dependencies
+from disaster_monitor.infrastructure.app_dependencies import AppDependencies
+from disaster_monitor.infrastructure.composition import (
+    AppDependencyOverrides,
+    build_app_dependencies,
+)
 from disaster_monitor.infrastructure.configuration import Settings
-from disaster_monitor.presentation.http.error_handlers import register_error_handlers
-from disaster_monitor.presentation.http.routes import router
+from disaster_monitor.presentation.http.api import create_http_app
+from disaster_monitor.presentation.http.metrics import OperationalMetrics
+from disaster_monitor.presentation.http.routes import get_operational_metrics
 
 
 def create_app(
@@ -62,11 +68,13 @@ def create_app(
     specialist_model: SpecialistModel | None = None,
     memory_repository: MemoryStore | None = None,
     conversation_deletion_store: ConversationDeletionStore | None = None,
+    *,
+    overrides: AppDependencyOverrides | None = None,
+    dependencies: AppDependencies | None = None,
 ) -> FastAPI:
-    """Bootstrap FastAPI with explicit dependency overrides for tests."""
+    """Bootstrap FastAPI from typed overrides or a prebuilt dependency graph."""
     app_settings = settings or Settings()
-    dependencies = build_app_dependencies(
-        app_settings,
+    legacy_overrides = AppDependencyOverrides(
         model=model,
         current_disaster_report=current_disaster_report,
         disaster_query_parser=disaster_query_parser,
@@ -84,16 +92,60 @@ def create_app(
         memory_repository=memory_repository,
         conversation_deletion_store=conversation_deletion_store,
     )
+    has_legacy_overrides = any(
+        value is not None
+        for value in (
+            model,
+            current_disaster_report,
+            disaster_query_parser,
+            agent_model,
+            visual_analyzer,
+            operational_repository,
+            country_catalog_automation,
+            worldwide_disaster_report,
+            event_media,
+            media_asset_store,
+            active_incidents_service,
+            conversation_repository,
+            satellite_imagery_service,
+            specialist_model,
+            memory_repository,
+            conversation_deletion_store,
+        )
+    )
+    if overrides is not None and has_legacy_overrides:
+        raise ValueError("Use either typed overrides or legacy keyword overrides.")
+    if dependencies is not None and (overrides is not None or has_legacy_overrides):
+        raise ValueError("Prebuilt dependencies cannot be combined with overrides.")
+
+    metrics = (
+        dependencies.agent_diagnostics
+        if dependencies is not None
+        and isinstance(dependencies.agent_diagnostics, OperationalMetrics)
+        else OperationalMetrics()
+    )
+    app_dependencies = dependencies
+    if app_dependencies is None:
+        configured_overrides = overrides or legacy_overrides
+        if configured_overrides.agent_diagnostics is None:
+            configured_overrides = replace(
+                configured_overrides,
+                agent_diagnostics=metrics,
+            )
+        app_dependencies = build_app_dependencies(
+            app_settings,
+            overrides=configured_overrides,
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        await dependencies.lifecycle.startup()
+        await app_dependencies.lifecycle.startup()
         try:
             yield
         finally:
-            await dependencies.lifecycle.shutdown()
+            await app_dependencies.lifecycle.shutdown()
 
-    app = FastAPI(
+    app = create_http_app(
         title=app_settings.app_name,
         version="0.1.0",
         lifespan=lifespan,
@@ -105,7 +157,6 @@ def create_app(
     ) -> Response:
         path = request.url.path
         started = perf_counter()
-        metrics = dependencies.operational_metrics
         metrics.in_progress.inc()
         try:
             response = await call_next(request)
@@ -130,9 +181,8 @@ def create_app(
         allow_methods=["DELETE", "GET", "POST"],
         allow_headers=["Content-Type"],
     )
-    app.state.dependencies = dependencies
-    app.include_router(router, prefix="/api/v1")
-    register_error_handlers(app)
+    app.state.dependencies = app_dependencies
+    app.dependency_overrides[get_operational_metrics] = lambda: metrics
     return app
 
 

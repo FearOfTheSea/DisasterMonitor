@@ -1,24 +1,12 @@
 import type { MapNavigationAction } from '@/shared/types/assistant';
+import { matchesApiSchema } from '@/shared/api/generated/assistant';
 
 export function isMapNavigationAction(value: unknown): value is MapNavigationAction {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false;
-  }
-  const action = value as Record<string, unknown>;
+  if (!matchesApiSchema('MapNavigationActionResponse', value)) return false;
+  const action = value as MapNavigationAction;
   if (
     action.type !== 'fit_bounds' ||
-    typeof action.label !== 'string' ||
-    action.label.trim().length === 0 ||
-    action.label.length > 160 ||
-    typeof action.max_zoom !== 'number' ||
-    !Number.isFinite(action.max_zoom) ||
-    action.max_zoom < 2 ||
-    action.max_zoom > 18 ||
-    !Array.isArray(action.bounds) ||
-    action.bounds.length !== 4 ||
-    !action.bounds.every((coordinate) =>
-      typeof coordinate === 'number' ? Number.isFinite(coordinate) : false,
-    )
+    !action.bounds.every((coordinate) => Number.isFinite(coordinate))
   ) {
     return false;
   }

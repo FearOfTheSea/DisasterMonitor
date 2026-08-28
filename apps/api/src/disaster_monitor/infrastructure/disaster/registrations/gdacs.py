@@ -1,5 +1,7 @@
 """GDACS executable provider-family registrations."""
 
+from dataclasses import dataclass
+
 from disaster_monitor.application.services.provider_registry import (
     ProviderRegistration,
     ProviderTier,
@@ -17,7 +19,15 @@ from disaster_monitor.infrastructure.disaster.registrations.common import (
 )
 
 
-def build(context: RegistrationContext) -> tuple[ProviderRegistration, ...]:
+@dataclass(frozen=True, slots=True)
+class GdacsRegistrations:
+    floods: ProviderRegistration
+    wildfires: ProviderRegistration
+    tropical_cyclones: ProviderRegistration
+    volcanic_eruptions: ProviderRegistration
+
+
+def build(context: RegistrationContext) -> GdacsRegistrations:
     floods = GdacsFloodAdapter(
         geography=context.geography,
         snapshot_recorder=context.snapshot_recorder,
@@ -42,21 +52,21 @@ def build(context: RegistrationContext) -> tuple[ProviderRegistration, ...]:
         timeout_seconds=context.settings.disaster_provider_timeout_seconds,
         max_response_bytes=context.settings.disaster_provider_max_response_bytes,
     )
-    return (
-        _registration("GDACS floods", floods, Disaster.FLOOD, "gdacs-floods"),
-        _registration(
+    return GdacsRegistrations(
+        floods=_registration("GDACS floods", floods, Disaster.FLOOD, "gdacs-floods"),
+        wildfires=_registration(
             "GDACS wildfires",
             wildfires,
             Disaster.WILDFIRE,
             "gdacs-wildfires",
         ),
-        _registration(
+        tropical_cyclones=_registration(
             "GDACS tropical cyclones",
             cyclones,
             Disaster.TROPICAL_CYCLONE,
             "gdacs-tropical-cyclones",
         ),
-        _registration(
+        volcanic_eruptions=_registration(
             "GDACS volcanic eruptions",
             volcanoes,
             Disaster.VOLCANIC_ERUPTION,

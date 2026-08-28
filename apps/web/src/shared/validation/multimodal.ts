@@ -1,59 +1,81 @@
+import { matchesApiSchema } from '@/shared/api/generated/assistant';
 import type {
   AnalyticalMapFeature,
-  AssetEventAssociation,
   CommonOperationalPicture,
   CopGeometry,
   CopLayer,
-  MultimodalAsset,
   MultimodalEvidenceState,
   SourceMapFeature,
-  VisualAnalysisConfiguration,
-  VisualObservation,
 } from '@/shared/types/assistant';
-
-type UnknownObject = Record<string, unknown>;
 
 export function isMultimodalEvidenceState(
   value: unknown,
 ): value is MultimodalEvidenceState {
-  if (!isObject(value)) return false;
+  if (!matchesApiSchema('MultimodalStateResponse', value)) return false;
+  const state = value as MultimodalEvidenceState;
   return (
-    strings(value, [
-      'state_version',
-      'evidence_world_state_version',
-      'physical_event_id',
-      'evaluated_at',
-    ]) &&
-    Array.isArray(value.assets) &&
-    value.assets.every(isAsset) &&
-    Array.isArray(value.associations) &&
-    value.associations.every(isAssociation) &&
-    Array.isArray(value.observations) &&
-    value.observations.every(isObservation) &&
-    referencesStayWithinState(value as MultimodalEvidenceState)
+    Array.isArray(state.assets) &&
+    Array.isArray(state.associations) &&
+    Array.isArray(state.observations) &&
+    state.assets.every(
+      (asset) =>
+        nonEmpty(
+          asset.asset_id,
+          asset.retrieved_at,
+          asset.modality,
+          asset.media_type,
+          asset.content_sha256,
+          asset.capture_role,
+          asset.eligibility,
+          asset.source.source_id,
+          asset.source.attribution,
+        ) && asset.byte_length > 0,
+    ) &&
+    state.associations.every((association) =>
+      nonEmpty(
+        association.association_id,
+        association.asset_id,
+        association.physical_event_id,
+        association.status,
+        association.detail,
+      ),
+    ) &&
+    state.observations.every(
+      (observation) =>
+        observation.modality === 'image' &&
+        observation.truth_status === 'analytical' &&
+        nonEmpty(
+          observation.observation_id,
+          observation.asset_id,
+          observation.association_id,
+          observation.physical_event_id,
+          observation.kind,
+          observation.status,
+          observation.uncertainty,
+          observation.created_at,
+          observation.configuration.model_id,
+          observation.configuration.adapter_version,
+          observation.configuration.analysis_version,
+          observation.configuration.prompt_version,
+          observation.configuration.preprocessing_version,
+        ) &&
+        observation.configuration.maximum_output_tokens > 0,
+    ) &&
+    referencesStayWithinState(state)
   );
 }
 
 export function isCommonOperationalPicture(
   value: unknown,
 ): value is CommonOperationalPicture {
-  if (!isObject(value)) return false;
-  if (
-    !strings(value, [
-      'cop_id',
-      'physical_event_id',
-      'multimodal_state_version',
-      'created_at',
-      'updated_at',
-      'status',
-    ]) ||
-    !Array.isArray(value.layers) ||
-    value.layers.length === 0
-  ) {
-    return false;
-  }
-  return value.layers.every(
-    (layer) => isLayer(layer) && layer.physical_event_id === value.physical_event_id,
+  if (!matchesApiSchema('CommonOperationalPictureResponse', value)) return false;
+  const cop = value as CommonOperationalPicture;
+  return (
+    cop.layers.length > 0 &&
+    cop.layers.every(
+      (layer) =>
+        layer.physical_event_id === cop.physical_event_id && layerIsConsistent(layer),
+    )
   );
 }
 
@@ -79,81 +101,6 @@ export function copMatchesMultimodalState(
   );
 }
 
-function isAsset(value: unknown): value is MultimodalAsset {
-  if (!isObject(value) || !isObject(value.source)) return false;
-  return (
-    strings(value, [
-      'asset_id',
-      'retrieved_at',
-      'modality',
-      'media_type',
-      'content_sha256',
-      'capture_role',
-      'eligibility',
-    ]) &&
-    strings(value.source, ['source_id', 'attribution']) &&
-    typeof value.byte_length === 'number' &&
-    value.byte_length > 0 &&
-    stringArray(value.parent_asset_ids) &&
-    stringArray(value.eligibility_reasons) &&
-    (value.footprint === undefined ||
-      value.footprint === null ||
-      isGeometry(value.footprint))
-  );
-}
-
-function isAssociation(value: unknown): value is AssetEventAssociation {
-  return (
-    isObject(value) &&
-    strings(value, [
-      'association_id',
-      'asset_id',
-      'physical_event_id',
-      'status',
-      'detail',
-    ]) &&
-    stringArray(value.rule_ids)
-  );
-}
-
-function isObservation(value: unknown): value is VisualObservation {
-  if (!isObject(value) || !isObject(value.configuration)) return false;
-  return (
-    strings(value, [
-      'observation_id',
-      'asset_id',
-      'association_id',
-      'physical_event_id',
-      'kind',
-      'status',
-      'uncertainty',
-      'created_at',
-    ]) &&
-    value.modality === 'image' &&
-    value.truth_status === 'analytical' &&
-    optionalConfidence(value.confidence) &&
-    stringArray(value.visual_cues) &&
-    stringArray(value.safety_rule_ids) &&
-    isConfiguration(value.configuration)
-  );
-}
-
-function isConfiguration(value: UnknownObject): value is VisualAnalysisConfiguration {
-  return (
-    strings(value, [
-      'model_id',
-      'adapter_version',
-      'analysis_version',
-      'prompt_version',
-      'preprocessing_version',
-    ]) &&
-    typeof value.maximum_output_tokens === 'number' &&
-    value.maximum_output_tokens > 0 &&
-    typeof value.temperature === 'number' &&
-    typeof value.seed === 'number'
-  );
-}
-
 function referencesStayWithinState(state: MultimodalEvidenceState): boolean {
   const assets = new Set(state.assets.map((item) => item.asset_id));
   const associations = new Set(state.associations.map((item) => item.association_id));
@@ -171,135 +118,114 @@ function referencesStayWithinState(state: MultimodalEvidenceState): boolean {
   );
 }
 
-function isLayer(value: unknown): value is CopLayer {
+function layerIsConsistent(layer: CopLayer): boolean {
   if (
-    !isObject(value) ||
-    !strings(value, [
-      'layer_id',
-      'physical_event_id',
-      'title',
-      'semantic_kind',
-      'created_at',
-      'updated_at',
-      'status',
-      'uncertainty',
-      'attribution',
-    ]) ||
-    !Array.isArray(value.features) ||
-    value.features.length === 0
+    layer.features.length === 0 ||
+    !nonEmpty(
+      layer.layer_id,
+      layer.physical_event_id,
+      layer.title,
+      layer.semantic_kind,
+      layer.created_at,
+      layer.updated_at,
+      layer.status,
+      layer.uncertainty,
+      layer.attribution,
+    )
   ) {
     return false;
   }
-  if (value.layer_type === 'source') {
+  if (layer.layer_type === 'source') {
     return (
-      stringArray(value.source_ids) &&
-      value.source_ids.length > 0 &&
-      stringArray(value.source_asset_ids) &&
-      value.source_asset_ids.length > 0 &&
-      value.features.every(
+      layer.source_ids.length > 0 &&
+      layer.source_asset_ids.length > 0 &&
+      layer.features.every(
         (feature) =>
-          isSourceFeature(feature) &&
-          feature.physical_event_id === value.physical_event_id,
+          sourceFeatureIsConsistent(feature) &&
+          feature.physical_event_id === layer.physical_event_id,
       ) &&
       sameStrings(
-        value.source_ids,
-        value.features.map((feature) => feature.source_id),
+        layer.source_ids,
+        layer.features.map((feature) => feature.source_id),
       ) &&
       sameStrings(
-        value.source_asset_ids,
-        value.features.flatMap((feature) => feature.source_asset_ids),
+        layer.source_asset_ids,
+        layer.features.flatMap((feature) => feature.source_asset_ids),
       )
     );
   }
-  if (value.layer_type === 'analytical') {
-    return (
-      stringArray(value.source_asset_ids) &&
-      value.source_asset_ids.length > 0 &&
-      stringArray(value.visual_observation_ids) &&
-      value.visual_observation_ids.length > 0 &&
-      value.features.every(
-        (feature) =>
-          isAnalyticalFeature(feature) &&
-          feature.physical_event_id === value.physical_event_id,
-      ) &&
-      sameStrings(
-        value.source_asset_ids,
-        value.features.flatMap((feature) => feature.source_asset_ids),
-      ) &&
-      sameStrings(
-        value.visual_observation_ids,
-        value.features.flatMap((feature) => feature.visual_observation_ids),
-      )
-    );
-  }
-  return false;
-}
-
-function isSourceFeature(value: unknown): value is SourceMapFeature {
-  if (!isFeatureBase(value) || value.feature_type !== 'source') return false;
-  const sourceMatches =
-    (value.source_authority === 'official' && value.authority === 'official_source') ||
-    (value.source_authority === 'source_supplied' &&
-      value.authority === 'source_supplied');
   return (
-    typeof value.source_id === 'string' && value.source_id.length > 0 && sourceMatches
+    layer.source_asset_ids.length > 0 &&
+    layer.visual_observation_ids.length > 0 &&
+    layer.features.every(
+      (feature) =>
+        analyticalFeatureIsConsistent(feature) &&
+        feature.physical_event_id === layer.physical_event_id,
+    ) &&
+    sameStrings(
+      layer.source_asset_ids,
+      layer.features.flatMap((feature) => feature.source_asset_ids),
+    ) &&
+    sameStrings(
+      layer.visual_observation_ids,
+      layer.features.flatMap((feature) => feature.visual_observation_ids),
+    )
   );
 }
 
-function isAnalyticalFeature(value: unknown): value is AnalyticalMapFeature {
+function sourceFeatureIsConsistent(feature: SourceMapFeature): boolean {
+  const authorityMatches =
+    (feature.source_authority === 'official' &&
+      feature.authority === 'official_source') ||
+    (feature.source_authority === 'source_supplied' &&
+      feature.authority === 'source_supplied');
   return (
-    isFeatureBase(value) &&
-    value.feature_type === 'analytical' &&
-    value.authority === 'analytical_generated' &&
-    stringArray(value.visual_observation_ids) &&
-    value.visual_observation_ids.length > 0 &&
-    optionalConfidence(value.confidence)
+    authorityMatches && nonEmpty(feature.source_id) && featureBaseIsConsistent(feature)
   );
 }
 
-function isFeatureBase(value: unknown): value is UnknownObject & {
-  source_asset_ids: string[];
-  geometry: CopGeometry;
-} {
+function analyticalFeatureIsConsistent(feature: AnalyticalMapFeature): boolean {
   return (
-    isObject(value) &&
-    strings(value, [
-      'feature_id',
-      'physical_event_id',
-      'created_at',
-      'semantic_kind',
-      'attribution',
-      'status',
-      'uncertainty',
-    ]) &&
-    stringArray(value.source_asset_ids) &&
-    value.source_asset_ids.length > 0 &&
-    isGeometry(value.geometry)
+    feature.authority === 'analytical_generated' &&
+    feature.visual_observation_ids.length > 0 &&
+    featureBaseIsConsistent(feature)
   );
 }
 
-function isGeometry(value: unknown): value is CopGeometry {
-  if (!isObject(value) || value.crs !== 'EPSG:4326') return false;
+function featureBaseIsConsistent(
+  feature: SourceMapFeature | AnalyticalMapFeature,
+): boolean {
+  return (
+    nonEmpty(
+      feature.feature_id,
+      feature.physical_event_id,
+      feature.created_at,
+      feature.semantic_kind,
+      feature.attribution,
+      feature.status,
+      feature.uncertainty,
+    ) &&
+    feature.source_asset_ids.length > 0 &&
+    geometryIsValid(feature.geometry)
+  );
+}
+
+function geometryIsValid(value: CopGeometry): boolean {
+  if (value.crs !== 'EPSG:4326') return false;
   if (value.type === 'Point') return isCoordinate(value.coordinates);
   if (value.type === 'LineString') {
     return (
-      Array.isArray(value.coordinates) &&
       value.coordinates.length >= 2 &&
       value.coordinates.length <= 4_096 &&
       value.coordinates.every(isCoordinate)
     );
   }
-  if (value.type === 'Polygon') {
-    return isPolygonCoordinates(value.coordinates);
-  }
-  return false;
+  return isPolygonCoordinates(value.coordinates);
 }
 
-function isCoordinate(value: unknown): value is [number, number] {
+function isCoordinate(value: [number, number]): boolean {
   return (
-    Array.isArray(value) &&
-    value.length === 2 &&
-    value.every((item) => typeof item === 'number' && Number.isFinite(item)) &&
+    value.every(Number.isFinite) &&
     value[0] >= -180 &&
     value[0] <= 180 &&
     value[1] >= -90 &&
@@ -307,12 +233,11 @@ function isCoordinate(value: unknown): value is [number, number] {
   );
 }
 
-function isPolygonCoordinates(value: unknown): value is [number, number][][] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 8) return false;
+function isPolygonCoordinates(value: [number, number][][]): boolean {
+  if (value.length === 0 || value.length > 8) return false;
   if (
     value.some(
       (ring) =>
-        !Array.isArray(ring) ||
         ring.length < 4 ||
         !ring.every(isCoordinate) ||
         ring[0][0] !== ring[ring.length - 1][0] ||
@@ -321,14 +246,13 @@ function isPolygonCoordinates(value: unknown): value is [number, number][][] {
   ) {
     return false;
   }
-  const rings = value as [number, number][][];
   if (
-    rings.reduce((total, ring) => total + ring.length, 0) > 4_096 ||
-    rings.some((ring) => Math.abs(signedArea(ring)) < 1e-12 || selfIntersects(ring))
+    value.reduce((total, ring) => total + ring.length, 0) > 4_096 ||
+    value.some((ring) => Math.abs(signedArea(ring)) < 1e-12 || selfIntersects(ring))
   ) {
     return false;
   }
-  const [exterior, ...holes] = rings;
+  const [exterior, ...holes] = value;
   if (
     holes.some(
       (hole) =>
@@ -412,9 +336,7 @@ function selfIntersects(ring: [number, number][]): boolean {
   const lastSegment = ring.length - 2;
   for (let first = 0; first < ring.length - 1; first += 1) {
     for (let second = first + 1; second < ring.length - 1; second += 1) {
-      if (second === first + 1 || (first === 0 && second === lastSegment)) {
-        continue;
-      }
+      if (second === first + 1 || (first === 0 && second === lastSegment)) continue;
       if (
         segmentsIntersect(ring[first], ring[first + 1], ring[second], ring[second + 1])
       ) {
@@ -464,22 +386,8 @@ function pointInRing(point: [number, number], ring: [number, number][]): boolean
   return inside;
 }
 
-function optionalConfidence(value: unknown): boolean {
-  return (
-    value === undefined ||
-    value === null ||
-    (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)
-  );
-}
-
-function strings(value: UnknownObject, names: string[]): boolean {
-  return names.every(
-    (name) => typeof value[name] === 'string' && value[name].length > 0,
-  );
-}
-
-function stringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+function nonEmpty(...values: string[]): boolean {
+  return values.every((value) => value.trim().length > 0);
 }
 
 function sameStrings(left: string[], right: string[]): boolean {
@@ -487,8 +395,4 @@ function sameStrings(left: string[], right: string[]): boolean {
     new Set(left).size === new Set(right).size &&
     [...new Set(left)].every((item) => new Set(right).has(item))
   );
-}
-
-function isObject(value: unknown): value is UnknownObject {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }

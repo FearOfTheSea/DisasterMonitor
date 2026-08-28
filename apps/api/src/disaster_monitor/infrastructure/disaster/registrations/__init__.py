@@ -54,18 +54,18 @@ def build_provider_registrations(
     gdacs = build_gdacs(context)
     return (
         *build_cems_gfm(context),
-        gdacs[0],
+        gdacs.floods,
         *build_emsc(context),
         *build_usgs(context),
         *build_nasa_eonet(context),
-        gdacs[1],
+        gdacs.wildfires,
         *build_nasa_firms(context),
         *build_nasa_coolr(context),
         *copernicus_ems_mapping.build(context),
-        gdacs[2],
+        gdacs.tropical_cyclones,
         *build_ibtracs(context),
         *build_smithsonian_gvp(context),
-        gdacs[3],
+        gdacs.volcanic_eruptions,
         *build_reliefweb(context),
     )
 

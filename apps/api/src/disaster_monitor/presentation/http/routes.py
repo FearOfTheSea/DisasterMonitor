@@ -161,6 +161,11 @@ def get_operational_repository(request: Request) -> OperationalRepository:
     )
 
 
+def get_operational_metrics() -> OperationalMetrics:
+    """Require the HTTP bootstrap to provide its presentation metrics adapter."""
+    raise RuntimeError("Operational metrics were not configured.")
+
+
 def get_provider_freshness(request: Request) -> ProviderFreshnessService:
     return cast(
         ProviderFreshnessService, request.app.state.dependencies.provider_freshness
@@ -447,13 +452,12 @@ def _country_catalog_response(
 
 @router.get("/metrics", tags=["operations"])
 async def metrics(
-    request: Request,
     repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+    operational_metrics: Annotated[
+        OperationalMetrics, Depends(get_operational_metrics)
+    ],
 ) -> Response:
     """Expose API and durable queue metrics for an owner-selected scraper."""
-    operational_metrics = cast(
-        OperationalMetrics, request.app.state.dependencies.operational_metrics
-    )
     operational_metrics.update_jobs(await repository.job_status_counts())
     content, content_type = operational_metrics.render()
     return Response(content=content, media_type=content_type)

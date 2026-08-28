@@ -1,0 +1,259 @@
+import type {
+  AssistantResponse as ApiAssistantResponse,
+  ConversationResponse as ApiConversationResponse,
+  DecisionSupportResponse,
+  DisasterMediaGalleryResponse,
+  EventGeometryResponse,
+  InvestigationResponse,
+  MultimodalStateResponse,
+} from '@/shared/api/generated/assistant';
+import { matchesApiSchema } from '@/shared/api/generated/assistant';
+import type {
+  AssistantResponse,
+  ConversationSummary,
+  DisasterMediaGallery,
+  InvestigationSummary,
+  MultimodalEvidenceState,
+  PersistedConversation,
+  PersistedConversationMessage,
+} from '@/shared/types/assistant';
+import { isMapNavigationAction } from '@/shared/validation/mapNavigation';
+import {
+  copMatchesMultimodalState,
+  isCommonOperationalPicture,
+  isMultimodalEvidenceState,
+} from '@/shared/validation/multimodal';
+
+export function validatedAssistantResponse(
+  value: unknown,
+): AssistantResponse | undefined {
+  if (!matchesApiSchema('AssistantResponse', value)) return undefined;
+  const response = normalizeAssistantResponse(value as ApiAssistantResponse);
+  return assistantSemanticsAreValid(response) ? response : undefined;
+}
+
+export function validatedConversationSummaries(
+  value: unknown,
+): ConversationSummary[] | undefined {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item) => matchesApiSchema('ConversationSummaryResponse', item))
+  ) {
+    return undefined;
+  }
+  return value as ConversationSummary[];
+}
+
+export function validatedConversation(
+  value: unknown,
+): PersistedConversation | undefined {
+  if (!matchesApiSchema('ConversationResponse', value)) return undefined;
+  const conversation = value as ApiConversationResponse;
+  const messages: PersistedConversationMessage[] = [];
+  for (const message of conversation.messages ?? []) {
+    const rawAssistantResponse = message.assistant_response;
+    if (rawAssistantResponse !== undefined && rawAssistantResponse !== null) {
+      const assistantResponse = validatedAssistantResponse(rawAssistantResponse);
+      if (
+        message.role !== 'assistant' ||
+        assistantResponse === undefined ||
+        assistantResponse.message !== message.content
+      ) {
+        return undefined;
+      }
+      messages.push({ ...message, assistant_response: assistantResponse });
+    } else {
+      messages.push({ ...message, assistant_response: rawAssistantResponse });
+    }
+  }
+  return { ...conversation, messages };
+}
+
+function assistantSemanticsAreValid(response: AssistantResponse): boolean {
+  if (response.map_action && !isMapNavigationAction(response.map_action)) return false;
+  if (
+    response.selected_event?.geometry &&
+    !eventGeometryIsConsistent(response.selected_event.geometry)
+  ) {
+    return false;
+  }
+  if (
+    response.decision_support &&
+    !decisionSupportIsConsistent(response.decision_support)
+  ) {
+    return false;
+  }
+  if (response.multimodal && !isMultimodalEvidenceState(response.multimodal)) {
+    return false;
+  }
+  if (
+    response.common_operational_picture &&
+    (!response.multimodal ||
+      !isCommonOperationalPicture(response.common_operational_picture) ||
+      !copMatchesMultimodalState(
+        response.common_operational_picture,
+        response.multimodal,
+      ))
+  ) {
+    return false;
+  }
+  return (
+    !response.media_gallery ||
+    mediaGalleryIsConsistent(response.media_gallery, response.selected_event?.event_id)
+  );
+}
+
+function eventGeometryIsConsistent(geometry: EventGeometryResponse): boolean {
+  const requiredCoordinateCount = {
+    point: 1,
+    area: 3,
+    track: 2,
+    descriptive: 0,
+  }[geometry.kind];
+  const coordinates = geometry.coordinates ?? [];
+  if (
+    (geometry.kind === 'area' || geometry.kind === 'track'
+      ? coordinates.length < requiredCoordinateCount
+      : coordinates.length !== requiredCoordinateCount) ||
+    coordinates.some(
+      ({ latitude, longitude }) =>
+        latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180,
+    )
+  ) {
+    return false;
+  }
+  return geometry.kind !== 'descriptive' || Boolean(geometry.description?.trim());
+}
+
+function decisionSupportIsConsistent(value: DecisionSupportResponse): boolean {
+  const statementTypeByStatus: Record<string, string> = {
+    source_backed_event: 'verified_fact',
+    confirmed: 'verified_fact',
+    preliminary: 'preliminary_observation',
+    estimated: 'source_estimate',
+    disputed: 'disputed_observation',
+  };
+  return (
+    value.advisory_only === true &&
+    value.facts.every(
+      (fact) => fact.statement_type === statementTypeByStatus[fact.status],
+    ) &&
+    value.estimates.every((estimate) => estimate.statement_type === 'estimate')
+  );
+}
+
+function mediaGalleryIsConsistent(
+  gallery: DisasterMediaGallery,
+  selectedEventId: string | undefined,
+): boolean {
+  if (
+    gallery.items.length > 6 ||
+    (selectedEventId !== undefined && gallery.event_id !== selectedEventId)
+  ) {
+    return false;
+  }
+  return gallery.items.every(
+    (item) =>
+      item.event_id === gallery.event_id &&
+      item.physical_event_id === gallery.physical_event_id &&
+      /^https?:\/\//.test(item.image_url) &&
+      item.source_page_url.startsWith('https://') &&
+      ['photographer', 'agency', 'publisher'].includes(item.credit_kind) &&
+      ['licensed_reuse', 'source_preview'].includes(item.rights_status) &&
+      [
+        'aftermath',
+        'rescue_effort',
+        'relief_operation',
+        'scientific_overview',
+        'relevant_scene',
+      ].includes(item.role) &&
+      ['exact_event_link', 'corroborated'].includes(item.association_status) &&
+      /^[a-f0-9]{64}$/.test(item.content_sha256) &&
+      item.width > 0 &&
+      item.height > 0,
+  );
+}
+
+function normalizeAssistantResponse(value: ApiAssistantResponse): AssistantResponse {
+  return {
+    ...value,
+    map_action: value.map_action
+      ? {
+          ...value.map_action,
+          type: value.map_action.type ?? 'fit_bounds',
+          max_zoom: value.map_action.max_zoom ?? 10,
+        }
+      : value.map_action,
+    selected_event: value.selected_event
+      ? {
+          ...value.selected_event,
+          geometry: value.selected_event.geometry
+            ? {
+                ...value.selected_event.geometry,
+                coordinates: value.selected_event.geometry.coordinates ?? [],
+              }
+            : value.selected_event.geometry,
+          measurements: value.selected_event.measurements ?? [],
+          provider_ids: value.selected_event.provider_ids ?? [],
+        }
+      : value.selected_event,
+    investigation: value.investigation
+      ? normalizeInvestigation(value.investigation)
+      : value.investigation,
+    multimodal: value.multimodal
+      ? normalizeMultimodalState(value.multimodal)
+      : value.multimodal,
+    media_gallery: value.media_gallery
+      ? normalizeMediaGallery(value.media_gallery)
+      : value.media_gallery,
+  };
+}
+
+function normalizeInvestigation(value: InvestigationResponse): InvestigationSummary {
+  return {
+    ...value,
+    information_needs: value.information_needs ?? [],
+    output_modalities: value.output_modalities ?? [],
+    actions: value.actions ?? [],
+    source_ids: value.source_ids ?? [],
+    evidence_count: value.evidence_count ?? 0,
+    capability_gaps: value.capability_gaps ?? [],
+  };
+}
+
+function normalizeMultimodalState(
+  value: MultimodalStateResponse,
+): MultimodalEvidenceState {
+  return {
+    ...value,
+    assets: (value.assets ?? []).map((asset) => ({
+      ...asset,
+      parent_asset_ids: asset.parent_asset_ids ?? [],
+      eligibility_reasons: asset.eligibility_reasons ?? [],
+    })),
+    associations: (value.associations ?? []).map((association) => ({
+      ...association,
+      rule_ids: association.rule_ids ?? [],
+    })),
+    observations: (value.observations ?? []).map((observation) => ({
+      ...observation,
+      visual_cues: observation.visual_cues ?? [],
+      safety_rule_ids: observation.safety_rule_ids ?? [],
+    })),
+  };
+}
+
+function normalizeMediaGallery(
+  value: DisasterMediaGalleryResponse,
+): DisasterMediaGallery {
+  return {
+    ...value,
+    items: (value.items ?? []).map((item) => ({
+      ...item,
+      association_rule_ids: item.association_rule_ids ?? [],
+    })),
+    rejected_count: value.rejected_count ?? 0,
+    provider_ids: value.provider_ids ?? [],
+    warnings: value.warnings ?? [],
+  };
+}

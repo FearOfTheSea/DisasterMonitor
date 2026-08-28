@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from disaster_monitor.application.agent.diagnostics import AgentDiagnostics
 from disaster_monitor.application.agent.multimodal_tools import (
     MultimodalToolDependencies,
     build_multimodal_agent_tools,
@@ -165,7 +166,6 @@ from disaster_monitor.infrastructure.sources.static_source_catalog import (
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
     OllamaVisionAdapter,
 )
-from disaster_monitor.presentation.http.metrics import OperationalMetrics
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,30 +183,39 @@ class EventMediaServices:
     store: MediaAssetStore
 
 
+@dataclass(frozen=True, slots=True)
+class AppDependencyOverrides:
+    """Typed test and embedding overrides for the application object graph."""
+
+    model: LanguageModel | None = None
+    current_disaster_report: CurrentDisasterReportService | None = None
+    disaster_query_parser: DisasterQueryParser | None = None
+    agent_model: AgentModel | None = None
+    visual_analyzer: VisualAnalyzer | None = None
+    operational_repository: OperationalRepository | None = None
+    country_catalog_automation: CountryCatalogUpdateAutomation | None = None
+    worldwide_disaster_report: WorldwideDisasterReportService | None = None
+    event_media: EventMediaDiscovery | None = None
+    media_asset_store: MediaAssetStore | None = None
+    active_incidents_service: ActiveIncidentsService | None = None
+    conversation_repository: ConversationStore | None = None
+    satellite_imagery_service: SatelliteImageryService | None = None
+    specialist_model: SpecialistModel | None = None
+    memory_repository: MemoryStore | None = None
+    conversation_deletion_store: ConversationDeletionStore | None = None
+    agent_diagnostics: AgentDiagnostics | None = None
+
+
 def build_app_dependencies(
     settings: Settings,
     *,
-    model: LanguageModel | None = None,
-    current_disaster_report: CurrentDisasterReportService | None = None,
-    disaster_query_parser: DisasterQueryParser | None = None,
-    agent_model: AgentModel | None = None,
-    visual_analyzer: VisualAnalyzer | None = None,
-    operational_repository: OperationalRepository | None = None,
-    country_catalog_automation: CountryCatalogUpdateAutomation | None = None,
-    worldwide_disaster_report: WorldwideDisasterReportService | None = None,
-    event_media: EventMediaDiscovery | None = None,
-    media_asset_store: MediaAssetStore | None = None,
-    active_incidents_service: ActiveIncidentsService | None = None,
-    conversation_repository: ConversationStore | None = None,
-    satellite_imagery_service: SatelliteImageryService | None = None,
-    specialist_model: SpecialistModel | None = None,
-    memory_repository: MemoryStore | None = None,
-    conversation_deletion_store: ConversationDeletionStore | None = None,
+    overrides: AppDependencyOverrides | None = None,
 ) -> AppDependencies:
     """Construct the complete API object graph and its lifecycle delegates."""
-    language_model = model or build_language_model(settings)
+    configured = overrides or AppDependencyOverrides()
+    language_model = configured.model or build_language_model(settings)
     configured_specialist_model = (
-        (specialist_model or build_specialist_model(language_model))
+        (configured.specialist_model or build_specialist_model(language_model))
         if settings.specialist_llm_enabled
         else None
     )
@@ -219,55 +228,74 @@ def build_app_dependencies(
         else None
     )
     country_catalog = build_country_catalog(settings)
-    catalog_automation = country_catalog_automation or build_country_catalog_automation(
-        settings, country_catalog
+    catalog_automation = (
+        configured.country_catalog_automation
+        or build_country_catalog_automation(settings, country_catalog)
     )
-    operational = build_operational_services(settings, operational_repository)
-    conversations = build_conversation_repository(settings, conversation_repository)
-    memories = build_memory_repository(settings, memory_repository)
+    operational = build_operational_services(
+        settings, configured.operational_repository
+    )
+    conversations = build_conversation_repository(
+        settings, configured.conversation_repository
+    )
+    memories = build_memory_repository(settings, configured.memory_repository)
     conversation_deletion = (
-        conversation_deletion_store
-        if conversation_deletion_store is not None
+        configured.conversation_deletion_store
+        if configured.conversation_deletion_store is not None
         else build_conversation_deletion_store(conversations, memories)
     )
     memory_recall = (
         MemoryRecallService(memories) if settings.long_term_memory_enabled else None
     )
-    disaster_report = current_disaster_report or build_current_disaster_report(
-        settings,
-        country_catalog,
-        snapshot_recorder=operational.snapshots.persist,
-        operational_evidence=operational.evidence,
-        specialist_executor=specialist_executor,
-        memory_recall=memory_recall,
+    disaster_report = (
+        configured.current_disaster_report
+        or build_current_disaster_report(
+            settings,
+            country_catalog,
+            snapshot_recorder=operational.snapshots.persist,
+            operational_evidence=operational.evidence,
+            specialist_executor=specialist_executor,
+            memory_recall=memory_recall,
+        )
     )
-    worldwide_report = worldwide_disaster_report or WorldwideDisasterReportService(
-        disaster_report.provider_registry,
+    worldwide_report = (
+        configured.worldwide_disaster_report
+        or WorldwideDisasterReportService(disaster_report.provider_registry)
     )
-    configured_active_incidents = active_incidents_service or ActiveIncidentsService(
-        disaster_report.provider_registry
+    configured_active_incidents = (
+        configured.active_incidents_service
+        or ActiveIncidentsService(disaster_report.provider_registry)
     )
-    query_parser = disaster_query_parser or build_disaster_query_parser(country_catalog)
+    query_parser = configured.disaster_query_parser or build_disaster_query_parser(
+        country_catalog
+    )
     source_catalog = build_source_catalog(settings)
     configured_agent_model = (
-        agent_model
-        if agent_model is not None
-        else (build_agent_model(settings, language_model) if model is None else None)
+        configured.agent_model
+        if configured.agent_model is not None
+        else (
+            build_agent_model(settings, language_model)
+            if configured.model is None
+            else None
+        )
     )
-    configured_visual_analyzer = visual_analyzer or build_visual_analyzer(settings)
+    configured_visual_analyzer = configured.visual_analyzer or build_visual_analyzer(
+        settings
+    )
     configured_satellite_imagery = (
-        satellite_imagery_service or build_satellite_imagery_service(settings)
+        configured.satellite_imagery_service
+        or build_satellite_imagery_service(settings)
     )
 
     def clock() -> datetime:
         return datetime.now(UTC)
 
-    if event_media is None:
+    if configured.event_media is None:
         media_services = build_event_media_services(settings, clock=clock)
     else:
         media_services = EventMediaServices(
-            event_media,
-            media_asset_store
+            configured.event_media,
+            configured.media_asset_store
             or FilesystemMediaAssetStore(
                 settings.event_media_blob_root,
                 maximum_bytes=settings.event_media_store_maximum_bytes,
@@ -293,7 +321,6 @@ def build_app_dependencies(
         agent_model=configured_agent_model,
         worldwide_report=worldwide_report,
     )
-    metrics = OperationalMetrics()
     disaster_agent = RunDisasterAgent(
         runtime,
         language_model,
@@ -302,7 +329,7 @@ def build_app_dependencies(
         country_catalog,
         media_services.discovery,
         agent_model=configured_agent_model,
-        diagnostics=metrics,
+        diagnostics=configured.agent_diagnostics,
     )
     answer_map_question = AnswerMapQuestion(
         language_model,
@@ -344,7 +371,7 @@ def build_app_dependencies(
             header_name=settings.trusted_operator_identity_header,
         ),
         country_catalog_automation=catalog_automation,
-        operational_metrics=metrics,
+        agent_diagnostics=configured.agent_diagnostics,
         lifecycle=AppLifecycle(
             startup_hooks=(migrate_operational_repository, catalog_automation.start),
             shutdown_hooks=(
@@ -487,7 +514,12 @@ def build_agent_model(
     settings: Settings, language_model: LanguageModel | None = None
 ) -> AgentModel:
     """Construct a separate structured-agent abstraction over local Qwen."""
-    return StructuredAgentModel(language_model or build_language_model(settings))
+    if language_model is not None:
+        return StructuredAgentModel(language_model)
+    return StructuredAgentModel(
+        build_language_model(settings),
+        owns_language_model=True,
+    )
 
 
 def build_specialist_model(language_model: LanguageModel) -> SpecialistModel:

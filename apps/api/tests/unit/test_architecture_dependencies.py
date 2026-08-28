@@ -114,6 +114,18 @@ def test_presentation_does_not_import_infrastructure() -> None:
     assert violations == []
 
 
+def test_infrastructure_does_not_import_presentation() -> None:
+    violations = [
+        f"{path.relative_to(SRC)} imports {name}"
+        for path in _python_files(INFRASTRUCTURE)
+        for name in _imports(path)
+        if name == "disaster_monitor.presentation"
+        or name.startswith("disaster_monitor.presentation.")
+    ]
+
+    assert violations == []
+
+
 def test_infrastructure_imports_only_application_contract_surface() -> None:
     violations = []
     for path in _python_files(INFRASTRUCTURE):

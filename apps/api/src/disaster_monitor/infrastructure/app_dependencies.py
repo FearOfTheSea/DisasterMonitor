@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+from disaster_monitor.application.agent.diagnostics import AgentDiagnostics
 from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.event_media import MediaAssetStore
 from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
@@ -27,7 +28,6 @@ from disaster_monitor.application.use_cases.record_operator_action import (
 from disaster_monitor.application.use_cases.run_conversation_turn import (
     RunConversationTurn,
 )
-from disaster_monitor.presentation.http.metrics import OperationalMetrics
 
 AsyncHook = Callable[[], Awaitable[None]]
 
@@ -40,8 +40,12 @@ class AppLifecycle:
     shutdown_hooks: tuple[AsyncHook, ...] = ()
 
     async def startup(self) -> None:
-        for hook in self.startup_hooks:
-            await hook()
+        try:
+            for hook in self.startup_hooks:
+                await hook()
+        except BaseException:
+            await self.shutdown()
+            raise
 
     async def shutdown(self) -> None:
         for hook in self.shutdown_hooks:
@@ -64,5 +68,5 @@ class AppDependencies:
     record_operator_action: RecordOperatorAction
     operator_identity: TrustedOperatorIdentityPolicy
     country_catalog_automation: CountryCatalogUpdateAutomation
-    operational_metrics: OperationalMetrics
+    agent_diagnostics: AgentDiagnostics | None
     lifecycle: AppLifecycle = field(default_factory=AppLifecycle)

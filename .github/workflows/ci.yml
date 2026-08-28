@@ -78,6 +78,42 @@ jobs:
       - run: npm run build
         working-directory: apps/web
 
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build API runtime image
+        run: docker build --file apps/api/Dockerfile --tag disaster-monitor-api:ci apps/api
+      - name: Verify API package import in final image
+        run: >-
+          docker run --rm disaster-monitor-api:ci
+          python -c "import disaster_monitor"
+      - name: Verify API health in final image
+        shell: bash
+        run: |
+          container_id="$(docker run --detach --publish 127.0.0.1:8001:8001 \
+            --env COUNTRY_CATALOG_AUTOMATIC_UPDATES=false \
+            --env EVENT_MEDIA_ENABLED=false \
+            --env OPERATIONAL_BLOB_ROOT=/var/lib/disaster-monitor/blobs \
+            --env EVENT_MEDIA_BLOB_ROOT=/var/lib/disaster-monitor/event-media \
+            --env COUNTRY_CATALOG_ROOT=/var/lib/disaster-monitor/geography \
+            disaster-monitor-api:ci)"
+          trap 'docker rm --force "$container_id" >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8001/api/v1/health >/dev/null; then
+              exit 0
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' "$container_id")" != true ]; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 1
+          done
+          docker logs "$container_id"
+          exit 1
+      - name: Build web runtime image
+        run: docker build --file apps/web/Dockerfile --tag disaster-monitor-web:ci apps/web
+
   repository:
     runs-on: ubuntu-latest
     steps:

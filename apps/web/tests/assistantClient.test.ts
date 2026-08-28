@@ -175,6 +175,87 @@ describe('AssistantClient', () => {
     );
   });
 
+  it('rejects nested payloads that violate the generated OpenAPI contract', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Malformed event.',
+          conversation_id: 'session-contract',
+          model: 'source-backed-agent',
+          selected_event: {
+            event_id: 'event-1',
+            disaster: 'earthquake',
+            location: 'Test location',
+            event_time: '2026-08-27T12:00:00Z',
+            geometry: {
+              kind: 'point',
+              coordinates: [{ latitude: 0, longitude: 0 }],
+              source_id: 'source-1',
+              estimated: 'yes',
+            },
+            measurements: [],
+            geography_status: 'in_country',
+            source: {
+              source_id: 'source-1',
+              publisher: 'Publisher',
+              title: 'Event notice',
+              canonical_url: 'https://example.test/event',
+              retrieved_at: '2026-08-27T12:01:00Z',
+            },
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('What happened?', null, {
+        centerLatitude: 0,
+        centerLongitude: 0,
+        zoom: 2,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+  });
+
+  it('accepts valid generated-contract defaults omitted by the backend', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Valid event.',
+          conversation_id: 'session-contract',
+          model: 'source-backed-agent',
+          selected_event: {
+            event_id: 'event-1',
+            disaster: 'earthquake',
+            location: 'Test location',
+            event_time: '2026-08-27T12:00:00Z',
+            geography_status: 'in_country',
+            source: {
+              source_id: 'source-1',
+              publisher: 'Publisher',
+              title: 'Event notice',
+              canonical_url: 'https://example.test/event',
+              retrieved_at: '2026-08-27T12:01:00Z',
+            },
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('What happened?', null, {
+        centerLatitude: 0,
+        centerLongitude: 0,
+        zoom: 2,
+      }),
+    ).resolves.toMatchObject({
+      selected_event: { disaster: 'earthquake', measurements: [] },
+    });
+  });
+
   it('accepts structured current-disaster metadata and source timestamps', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

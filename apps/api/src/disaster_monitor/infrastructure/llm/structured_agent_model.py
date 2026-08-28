@@ -33,8 +33,14 @@ MAX_LOCALIZATION_CHUNK = 6_000
 class StructuredAgentModel:
     """Use an existing language-model port for JSON-only agent operations."""
 
-    def __init__(self, language_model: LanguageModel) -> None:
+    def __init__(
+        self,
+        language_model: LanguageModel,
+        *,
+        owns_language_model: bool = False,
+    ) -> None:
         self._language_model = language_model
+        self._owns_language_model = owns_language_model
 
     async def interpret(self, question: str) -> DisasterTaskDraft:
         allowed_needs = ", ".join(item.value for item in InformationNeed)
@@ -332,6 +338,8 @@ class StructuredAgentModel:
         )
 
     async def aclose(self) -> None:
+        if not self._owns_language_model:
+            return
         close = getattr(self._language_model, "aclose", None)
         if close is not None:
             result: Awaitable[None] = close()

@@ -138,9 +138,9 @@ npm run test:system
 
 The backend OpenAPI document is the assistant transport-contract authority. After an
 HTTP schema change, run `npm run generate:api-contract` in `apps/web` and commit the
-generated file. `check:api-contract` regenerates in memory and fails when the committed
-contract is stale; handwritten frontend validation remains responsible only for
-semantic and cross-record invariants.
+generated types and runtime schemas. `check:api-contract` regenerates in memory and
+fails when the committed contract is stale; handwritten frontend validation remains
+responsible only for semantic and cross-record invariants.
 
 During Red and Green, run the narrowest relevant test. Before completing a substantial change, run the relevant static checks and affected suites. CI remains the full repository gate.
 
@@ -153,6 +153,8 @@ Normal CI should remain deterministic. Live provider and Qwen smoke checks are s
 CI and the API container install the frozen `apps/api/uv.lock` graph. Frontend CI and
 containers use `npm ci` with `apps/web/package-lock.json`; release-critical Node and uv
 versions are pinned in the workflow and Dockerfiles.
+CI builds both final runtime images, imports `disaster_monitor` from the API image, and
+polls the containerized health endpoint without Ollama or external providers.
 
 Coverage is a diagnostic, not the goal. If coverage reporting is introduced, use it to find untested behavior and prevent meaningful regressions rather than optimizing for a percentage alone.
 
