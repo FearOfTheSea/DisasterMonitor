@@ -43,13 +43,31 @@ class AppLifecycle:
         try:
             for hook in self.startup_hooks:
                 await hook()
-        except BaseException:
-            await self.shutdown()
+        except BaseException as startup_failure:
+            try:
+                await self.shutdown()
+            except BaseException as cleanup_failure:
+                startup_failure.add_note(
+                    "Lifecycle cleanup also failed: "
+                    f"{type(cleanup_failure).__name__}: {cleanup_failure}"
+                )
             raise
 
     async def shutdown(self) -> None:
+        failure: BaseException | None = None
         for hook in self.shutdown_hooks:
-            await hook()
+            try:
+                await hook()
+            except BaseException as hook_failure:
+                if failure is None:
+                    failure = hook_failure
+                else:
+                    failure.add_note(
+                        "Another lifecycle cleanup hook failed: "
+                        f"{type(hook_failure).__name__}: {hook_failure}"
+                    )
+        if failure is not None:
+            raise failure
 
 
 @dataclass(frozen=True, slots=True)

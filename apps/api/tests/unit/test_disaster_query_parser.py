@@ -78,6 +78,24 @@ def test_explicit_natural_date_uses_country_calendar_boundary() -> None:
     assert query.time_intent == "specified"
 
 
+def test_day_first_explicit_date_overrides_latest_intent() -> None:
+    query = PARSER.parse(
+        "Latest update on the 24 August 2026 earthquake in Japan."
+    ).query
+
+    assert query is not None
+    assert query.date_from == datetime(2026, 8, 23, 15, 0, tzinfo=UTC)
+    assert query.date_to == datetime(2026, 8, 24, 15, 0, tzinfo=UTC)
+    assert query.time_intent == "specified"
+
+
+def test_invalid_explicit_date_fails_closed() -> None:
+    result = PARSER.parse("Latest update on the 31 February 2026 earthquake in Japan.")
+
+    assert result.query is None
+    assert result.detail == "The explicit event date could not be normalized safely."
+
+
 @pytest.mark.parametrize(
     ("text", "status"),
     [

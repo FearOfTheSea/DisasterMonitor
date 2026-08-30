@@ -144,6 +144,31 @@ async def test_recalled_prior_state_is_read_only_history_not_current_evidence() 
 
 
 @pytest.mark.asyncio
+async def test_in_memory_save_replaces_the_active_physical_event_scope() -> None:
+    repository = InMemoryMemoryRepository()
+    first = record(1, world_state_version="state:prior")
+    replacement = record(2, world_state_version="state:replacement")
+
+    await repository.save(first)
+    await repository.save(replacement)
+
+    stored = await repository.list_for_scope(
+        first.conversation_id, first.physical_event_id
+    )
+    active = tuple(
+        item for item in stored if item.status is MemoryLifecycleStatus.ACTIVE
+    )
+    superseded = tuple(
+        item for item in stored if item.status is MemoryLifecycleStatus.SUPERSEDED
+    )
+
+    assert active == (replacement,)
+    assert len(superseded) == 1
+    assert superseded[0].memory_id == first.memory_id
+    assert superseded[0].superseded_by_memory_id == replacement.memory_id
+
+
+@pytest.mark.asyncio
 async def test_in_memory_repository_supports_deletion_and_recreation() -> None:
     repository = InMemoryMemoryRepository()
     await repository.save(record(1))

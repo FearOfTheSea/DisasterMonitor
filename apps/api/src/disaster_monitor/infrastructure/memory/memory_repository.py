@@ -4,7 +4,11 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 
-from disaster_monitor.domain.memory import MemoryLifecycleStatus, MemoryRecord
+from disaster_monitor.domain.memory import (
+    MemoryLifecycleStatus,
+    MemoryRecord,
+    MemoryType,
+)
 
 
 class InMemoryMemoryRepository:
@@ -17,6 +21,26 @@ class InMemoryMemoryRepository:
         *,
         superseded_memory_ids: tuple[str, ...] = (),
     ) -> None:
+        if (
+            record.status is MemoryLifecycleStatus.ACTIVE
+            and record.memory_type is MemoryType.PHYSICAL_EVENT_REFERENCE
+            and record.physical_event_id is not None
+        ):
+            for memory_id, scoped_record in tuple(self._records.items()):
+                if (
+                    memory_id != record.memory_id
+                    and scoped_record.status is MemoryLifecycleStatus.ACTIVE
+                    and scoped_record.memory_type is record.memory_type
+                    and scoped_record.conversation_id == record.conversation_id
+                    and scoped_record.physical_event_id == record.physical_event_id
+                ):
+                    self._records[memory_id] = replace(
+                        scoped_record,
+                        status=MemoryLifecycleStatus.SUPERSEDED,
+                        superseded_by_memory_id=record.memory_id,
+                    )
+            self._records[record.memory_id] = record
+            return
         self._records[record.memory_id] = record
         for memory_id in superseded_memory_ids:
             existing = self._records.get(memory_id)

@@ -171,6 +171,25 @@ def test_explicit_dated_event_is_an_investigation_without_model_help() -> None:
     assert task.query.date_from.isoformat() == "2026-08-04T15:00:00+00:00"
 
 
+def test_latest_marker_does_not_discard_day_first_explicit_event_date() -> None:
+    task = validate("Latest update on the 24 August 2026 earthquake in Japan.")
+
+    assert task.kind is TaskKind.INVESTIGATION
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.query is not None
+    assert task.query.time_intent == "specified"
+    assert task.query.date_from.isoformat() == "2026-08-23T15:00:00+00:00"
+    assert task.query.date_to.isoformat() == "2026-08-24T15:00:00+00:00"
+
+
+def test_invalid_explicit_event_date_does_not_become_a_recent_query() -> None:
+    task = validate("Latest update on the 31 February 2026 earthquake in Japan.")
+
+    assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
+    assert task.query is None
+    assert task.detail == "The explicit event date could not be normalized safely."
+
+
 def test_incomplete_canonical_date_range_uses_matching_deterministic_range() -> None:
     question = "Tell me about the magnitude 7.7 earthquake in Japan on August 15, 2026."
     expected = validate(question)

@@ -22,6 +22,7 @@ from disaster_monitor.application.disaster_aliases import recognized_disasters
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.services.disaster_query_parser import (
     DisasterQueryParser,
+    has_explicit_date,
 )
 from disaster_monitor.application.services.disaster_query_policy import (
     default_disaster_query_policies,
@@ -70,12 +71,6 @@ _GENERAL_KNOWLEDGE_MARKERS = re.compile(
     r"とは何|なぜ|仕組み|一般的))",
     re.I,
 )
-_EVENT_DATE_MARKER = re.compile(
-    r"\b(?:20\d{2}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]20\d{2}|"
-    r"(?:january|february|march|april|may|june|july|august|september|october|"
-    r"november|december)\s+\d{1,2}(?:st|nd|rd|th)?\s*,?\s*20\d{2})\b",
-    re.I,
-)
 _PLACE_AFTER_IN = re.compile(
     r"\b(?:in|from|across)\s+([A-Z][A-Za-z .'-]{1,60}?)(?=[?.!,]|\s+(?:on|and)\b|$)"
 )
@@ -122,7 +117,7 @@ def disaster_safety_gate(question: str) -> bool:
     disasters = _disaster_mentions(question)
     if not disasters:
         return False
-    if _CURRENT_EVENT_MARKERS.search(question) or _EVENT_DATE_MARKER.search(question):
+    if _CURRENT_EVENT_MARKERS.search(question) or has_explicit_date(question):
         return True
     if _GENERAL_KNOWLEDGE_MARKERS.search(question):
         return False
@@ -349,14 +344,15 @@ def _validate_canonical_task(
             response_language=draft.requested_response_language,
             response_language_explicit=draft.response_language_explicit,
         )
-    recent_window_requested = bool(_CURRENT_EVENT_MARKERS.search(question)) and not (
-        _EVENT_DATE_MARKER.search(question)
+    explicit_date_requested = has_explicit_date(question)
+    recent_window_requested = (
+        bool(_CURRENT_EVENT_MARKERS.search(question)) and not explicit_date_requested
     )
     incomplete_date_range = not recent_window_requested and (
         draft.date_from is None
     ) != (draft.date_to is None)
-    deterministic_date_requested = scope is GeographicScope.COUNTRY and bool(
-        _EVENT_DATE_MARKER.search(question)
+    deterministic_date_requested = (
+        scope is GeographicScope.COUNTRY and explicit_date_requested
     )
     dates, date_detail = (
         ((None, None), None) if recent_window_requested else _canonical_dates(draft)

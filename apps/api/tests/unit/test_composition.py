@@ -196,6 +196,54 @@ async def test_failed_startup_runs_shutdown_hooks_for_constructed_resources() ->
 
 
 @pytest.mark.asyncio
+async def test_shutdown_attempts_every_hook_after_a_failure() -> None:
+    events: list[str] = []
+
+    async def failed() -> None:
+        events.append("stop-failed")
+        raise RuntimeError("shutdown failed")
+
+    async def closed() -> None:
+        events.append("stop-closed")
+
+    lifecycle = AppLifecycle(shutdown_hooks=(failed, closed))
+
+    with pytest.raises(RuntimeError, match="shutdown failed"):
+        await lifecycle.shutdown()
+
+    assert events == ["stop-failed", "stop-closed"]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_failure_does_not_replace_startup_failure() -> None:
+    events: list[str] = []
+
+    async def startup_failed() -> None:
+        events.append("start-failed")
+        raise RuntimeError("startup failed")
+
+    async def cleanup_failed() -> None:
+        events.append("stop-failed")
+        raise ValueError("cleanup failed")
+
+    async def cleanup_finished() -> None:
+        events.append("stop-finished")
+
+    lifecycle = AppLifecycle(
+        startup_hooks=(startup_failed,),
+        shutdown_hooks=(cleanup_failed, cleanup_finished),
+    )
+
+    with pytest.raises(RuntimeError, match="startup failed") as raised:
+        await lifecycle.startup()
+
+    assert events == ["start-failed", "stop-failed", "stop-finished"]
+    assert raised.value.__notes__ == [
+        "Lifecycle cleanup also failed: ValueError: cleanup failed"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_shared_language_model_is_closed_exactly_once(tmp_path: Path) -> None:
     model = ClosableLanguageModel()
     dependencies = build_app_dependencies(

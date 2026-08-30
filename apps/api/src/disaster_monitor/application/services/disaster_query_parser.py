@@ -35,6 +35,12 @@ _MONTH_DATE = re.compile(
     r"November|December)\s+(\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(20\d{2})\b",
     re.IGNORECASE,
 )
+_DAY_MONTH_DATE = re.compile(
+    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+"
+    r"(January|February|March|April|May|June|July|August|September|October|"
+    r"November|December)\s*,?\s*(20\d{2})\b",
+    re.IGNORECASE,
+)
 _MONTHS = {
     name.lower(): index
     for index, name in enumerate(
@@ -60,6 +66,14 @@ _COORDINATES = re.compile(
 )
 
 
+def has_explicit_date(text: str) -> bool:
+    """Recognize exactly the explicit date forms the parser attempts to normalize."""
+    return any(
+        pattern.search(text)
+        for pattern in (_ISO_DATE, _SLASH_DATE, _MONTH_DATE, _DAY_MONTH_DATE)
+    )
+
+
 def _extract_day(text: str) -> date | None:
     match = _ISO_DATE.search(text)
     if match:
@@ -77,6 +91,13 @@ def _extract_day(text: str) -> date | None:
     match = _MONTH_DATE.search(text)
     if match:
         month_name, month_day, month_year = match.groups()
+        try:
+            return date(int(month_year), _MONTHS[month_name.lower()], int(month_day))
+        except ValueError:
+            return None
+    match = _DAY_MONTH_DATE.search(text)
+    if match:
+        month_day, month_name, month_year = match.groups()
         try:
             return date(int(month_year), _MONTHS[month_name.lower()], int(month_day))
         except ValueError:
@@ -141,6 +162,11 @@ class DisasterQueryParser:
             )
         country = countries[0]
         day = _extract_day(normalized)
+        if day is None and has_explicit_date(normalized):
+            return DisasterQueryParseResult(
+                QueryParseStatus.INVALID_DATE,
+                detail="The explicit event date could not be normalized safely.",
+            )
         date_range: tuple[datetime, datetime] | None = None
         if day is not None:
             if not country.default_timezone:
@@ -209,6 +235,7 @@ class DisasterQueryParser:
         if result.status in {
             QueryParseStatus.MULTIPLE_COUNTRIES,
             QueryParseStatus.MULTIPLE_DISASTERS,
+            QueryParseStatus.INVALID_DATE,
             QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
         }:
             return RequestClassification(

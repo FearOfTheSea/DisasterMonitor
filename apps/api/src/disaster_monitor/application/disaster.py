@@ -34,6 +34,7 @@ class QueryParseStatus(StrEnum):
     NO_COUNTRY = "no_country"
     MULTIPLE_DISASTERS = "multiple_disasters"
     MULTIPLE_COUNTRIES = "multiple_countries"
+    INVALID_DATE = "invalid_date"
     DATE_TIMEZONE_UNAVAILABLE = "date_timezone_unavailable"
 
 

@@ -12,7 +12,9 @@ class MemoryStore(Protocol):
         record: MemoryRecord,
         *,
         superseded_memory_ids: tuple[str, ...] = (),
-    ) -> None: ...
+    ) -> None:
+        """Persist a record, atomically replacing its active physical-event scope."""
+        ...
 
     async def get(self, memory_id: str) -> MemoryRecord | None: ...
 

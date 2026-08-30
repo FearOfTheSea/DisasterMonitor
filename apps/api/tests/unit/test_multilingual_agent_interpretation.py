@@ -30,6 +30,8 @@ def canonical_draft(
     response_language: str = "en",
     explicit: bool = False,
     country_code: str | None = "JPN",
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> DisasterTaskDraft:
     return DisasterTaskDraft(
         disaster_related=task_kind is not TaskKind.NON_DISASTER,
@@ -46,10 +48,57 @@ def canonical_draft(
         ),
         country_code=country_code,
         country_name="Japan" if country_code == "JPN" else None,
+        date_from=date_from,
+        date_to=date_to,
         requested_response_language=response_language,
         response_language_explicit=explicit,
         canonical=True,
     )
+
+
+@pytest.mark.parametrize(
+    ("date_from", "date_to"),
+    (
+        pytest.param(
+            "2026-08-24T00:00:00+09:00",
+            "2026-08-25T00:00:00+09:00",
+            id="matching-model-date",
+        ),
+        pytest.param(
+            "2026-08-25T00:00:00Z",
+            "2026-08-26T00:00:00Z",
+            id="wrong-model-date",
+        ),
+    ),
+)
+def test_canonical_explicit_date_uses_deterministic_country_calendar(
+    date_from: str, date_to: str
+) -> None:
+    task = validate_disaster_task(
+        "Latest update on the 24 August 2026 earthquake in Japan.",
+        canonical_draft(date_from=date_from, date_to=date_to),
+        country_catalog=CATALOG,
+        query_parser=DisasterQueryParser(CATALOG),
+    )
+
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.query is not None
+    assert task.query.time_intent == "specified"
+    assert task.query.date_from.isoformat() == "2026-08-23T15:00:00+00:00"
+    assert task.query.date_to.isoformat() == "2026-08-24T15:00:00+00:00"
+
+
+def test_canonical_invalid_explicit_date_fails_closed() -> None:
+    task = validate_disaster_task(
+        "Latest update on the 31 February 2026 earthquake in Japan.",
+        canonical_draft(),
+        country_catalog=CATALOG,
+        query_parser=DisasterQueryParser(CATALOG),
+    )
+
+    assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
+    assert task.query is None
+    assert task.detail == "The explicit event date could not be normalized safely."
 
 
 @pytest.mark.parametrize(

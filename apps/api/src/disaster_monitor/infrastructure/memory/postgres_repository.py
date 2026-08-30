@@ -31,6 +31,36 @@ class PostgresMemoryRepository:
     ) -> None:
         async with await self._connection() as connection:
             async with connection.cursor() as cursor:
+                replaces_active_scope = (
+                    record.status is MemoryLifecycleStatus.ACTIVE
+                    and record.memory_type is MemoryType.PHYSICAL_EVENT_REFERENCE
+                    and record.physical_event_id is not None
+                )
+                if replaces_active_scope:
+                    await cursor.execute(
+                        "SELECT 1 FROM conversation WHERE conversation_id=%s "
+                        "FOR UPDATE",
+                        (record.conversation_id,),
+                    )
+                    await cursor.execute(
+                        """
+                        UPDATE agent_memory
+                        SET lifecycle_status='superseded',
+                            superseded_by_memory_id=%s
+                        WHERE conversation_id=%s
+                          AND memory_type=%s
+                          AND physical_event_id=%s
+                          AND memory_id<>%s
+                          AND lifecycle_status='active'
+                        """,
+                        (
+                            record.memory_id,
+                            record.conversation_id,
+                            record.memory_type.value,
+                            record.physical_event_id,
+                            record.memory_id,
+                        ),
+                    )
                 await cursor.execute(
                     """
                     INSERT INTO agent_memory(
@@ -67,7 +97,7 @@ class PostgresMemoryRepository:
                     """,
                     _parameters(record),
                 )
-                if superseded_memory_ids:
+                if superseded_memory_ids and not replaces_active_scope:
                     await cursor.execute(
                         """
                         UPDATE agent_memory

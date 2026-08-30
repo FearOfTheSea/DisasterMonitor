@@ -166,7 +166,9 @@ DisasterMonitor keeps five state categories deliberately separate:
    references such as physical-event ID, evidence IDs, and prior state version rather
    than volatile current claims. Models and specialists cannot write or search the
    store; policy alone admits candidates, and specialists receive only a supervisor-
-   created frozen `MemoryContextArtifact`.
+   created frozen `MemoryContextArtifact`. Persistence atomically replaces the active
+   physical-event reference in a conversation scope, and PostgreSQL enforces that at
+   most one such reference remains active.
 4. **Request-scoped agent/evidence state.** Plans, tool state, workspaces, handoffs,
    analytical findings, multimodal state, and recalled memory context exist only for
    the current request. They are not restored as an autonomous investigation.
