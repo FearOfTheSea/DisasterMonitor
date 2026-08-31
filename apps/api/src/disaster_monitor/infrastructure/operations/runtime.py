@@ -8,10 +8,16 @@ import os
 import socket
 from datetime import UTC, datetime
 
+from disaster_monitor.application.services.active_incidents import (
+    ActiveIncidentsService,
+)
 from disaster_monitor.application.services.operational_ingestion import (
-    IngestionScheduler,
+    IncidentWatchScheduler,
+    IncidentWatchWorker,
     ScheduledInvestigation,
-    ScheduledInvestigationWorker,
+)
+from disaster_monitor.application.use_cases.refresh_incident_watch import (
+    RefreshIncidentWatch,
 )
 from disaster_monitor.infrastructure.composition import (
     build_country_catalog,
@@ -47,7 +53,7 @@ async def _migrate(settings: Settings) -> None:
 
 async def _scheduler(settings: Settings, *, once: bool) -> None:
     repository = _postgres(settings)
-    scheduler = IngestionScheduler(repository, scheduled_investigations(settings))
+    scheduler = IncidentWatchScheduler(repository)
     while True:
         await scheduler.enqueue_due(now=datetime.now(UTC))
         if once:
@@ -65,10 +71,14 @@ async def _worker(settings: Settings, *, once: bool) -> None:
         snapshot_recorder=operational.snapshots.persist,
         operational_evidence=operational.evidence,
     )
-    worker = ScheduledInvestigationWorker(
-        repository,
-        report,
-        scheduled_investigations(settings),
+    discovery = ActiveIncidentsService(
+        report.provider_registry,
+        country_event_provider=report.event_provider,
+        country_catalog=countries,
+        event_policies=report.event_policies,
+    )
+    worker = IncidentWatchWorker(
+        repository, RefreshIncidentWatch(repository, discovery)
     )
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
     try:

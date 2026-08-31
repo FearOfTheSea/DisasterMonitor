@@ -2198,6 +2198,11 @@ export type CountryCatalogUpdateResponse = {
   trigger?: 'manual' | 'scheduled' | 'script' | null;
 };
 
+export type CountryIncidentWatchScopeRequest = {
+  country: string;
+  kind: 'country';
+};
+
 export type DecisionEstimateResponse = {
   contradicting_evidence_ids: Array<string>;
   estimate_id: string;
@@ -2330,6 +2335,89 @@ export type HealthResponse = {
 
 export type HTTPValidationError = {
   detail?: Array<ValidationError>;
+};
+
+export type IncidentWatchChangeResponse = {
+  after_hash: string | null;
+  before_hash: string | null;
+  change_id: string;
+  created_at: string;
+  detail: string;
+  incident: IncidentWatchEventResponse | null;
+  kind:
+    | 'new_event'
+    | 'observation_gap'
+    | 'measurements_changed'
+    | 'geometry_changed'
+    | 'evidence_set_changed'
+    | 'coverage_changed';
+  observation_id: string;
+  previous_observation_id: string | null;
+  read_at: string | null;
+  source_ids?: Array<string>;
+  summary: string;
+  watch_id: string;
+};
+
+export type IncidentWatchCreateRequest = {
+  disaster: Disaster;
+  refresh_interval_seconds: number;
+  scope: CountryIncidentWatchScopeRequest | WorldwideIncidentWatchScopeRequest;
+};
+
+export type IncidentWatchEnabledRequest = {
+  enabled: boolean;
+};
+
+export type IncidentWatchEventResponse = {
+  disaster: Disaster;
+  event_id: string;
+  event_time: string;
+  evidence_sources?: Array<SourceResponse>;
+  geometry: EventGeometryResponse | null;
+  location: string;
+  measurements?: Array<EventMeasurementResponse>;
+  physical_event_id: string;
+  provider_ids?: Array<string>;
+  provider_tier: ProviderTier;
+  source: SourceResponse;
+  source_authority: SourceAuthority;
+};
+
+export type IncidentWatchMarkReadRequest = {
+  change_ids?: Array<string>;
+};
+
+export type IncidentWatchMarkReadResponse = {
+  marked_read_count: number;
+  unread_change_count: number;
+  watch_id: string;
+};
+
+export type IncidentWatchResponse = {
+  coverage_state:
+    | 'events_found'
+    | 'no_matching_records'
+    | 'stale'
+    | 'degraded'
+    | 'unavailable'
+    | null;
+  created_at: string;
+  disaster: Disaster;
+  enabled: boolean;
+  last_checked_at: string | null;
+  next_refresh_at: string;
+  refresh_interval_seconds: number;
+  scope: IncidentWatchScopeResponse;
+  unread_change_count: number;
+  updated_at: string;
+  watch_id: string;
+};
+
+export type IncidentWatchScopeResponse = {
+  country_code: string | null;
+  country_name: string | null;
+  kind: 'country' | 'worldwide';
 };
 
 export type InvestigationResponse = {
@@ -2642,4 +2730,8 @@ export type VisualObservationResponse = {
   truth_status: 'analytical';
   uncertainty: string;
   visual_cues?: Array<string>;
+};
+
+export type WorldwideIncidentWatchScopeRequest = {
+  kind: 'worldwide';
 };

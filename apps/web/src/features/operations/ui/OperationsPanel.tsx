@@ -14,10 +14,13 @@ import type {
   EvidenceSnapshot,
   ProviderFreshness,
 } from '@/shared/types/operations';
+import type { IncidentWatchEvent } from '@/features/operations/model/incidentWatch';
+import { IncidentWatches } from '@/features/operations/ui/IncidentWatches';
 
 type OperationsPanelProps = {
   evidenceStateVersion?: string;
   onClose: () => void;
+  onSelectWatchIncident: (incident: IncidentWatchEvent) => void;
 };
 
 function formatTime(value: string | null) {
@@ -29,6 +32,7 @@ function formatTime(value: string | null) {
 export function OperationsPanel({
   evidenceStateVersion,
   onClose,
+  onSelectWatchIncident,
 }: OperationsPanelProps) {
   const [providers, setProviders] = useState<ProviderFreshness[]>([]);
   const [history, setHistory] = useState<EvidenceSnapshot[]>([]);
@@ -132,6 +136,7 @@ export function OperationsPanel({
         </button>
       </header>
       <div className="operations-scroll">
+        <IncidentWatches onSelectIncident={onSelectWatchIncident} />
         {loading && (
           <div className="operations-loading" role="status">
             <span className="loading-indicator" aria-hidden="true" />

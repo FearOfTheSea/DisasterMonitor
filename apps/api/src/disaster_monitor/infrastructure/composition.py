@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from disaster_monitor.application.agent.diagnostics import AgentDiagnostics
 from disaster_monitor.application.agent.multimodal_tools import (
@@ -20,6 +21,7 @@ from disaster_monitor.application.ports.event_media import (
     MediaAssetStore,
 )
 from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
+from disaster_monitor.application.ports.incident_watch_store import IncidentWatchStore
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.memory_store import MemoryStore
 from disaster_monitor.application.ports.operational_state import OperationalRepository
@@ -89,6 +91,9 @@ from disaster_monitor.application.services.worldwide_disaster import (
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.application.use_cases.delete_conversation import (
     DeleteConversation,
+)
+from disaster_monitor.application.use_cases.manage_incident_watches import (
+    ManageIncidentWatches,
 )
 from disaster_monitor.application.use_cases.record_operator_action import (
     RecordOperatorAction,
@@ -264,7 +269,12 @@ def build_app_dependencies(
     )
     configured_active_incidents = (
         configured.active_incidents_service
-        or ActiveIncidentsService(disaster_report.provider_registry)
+        or ActiveIncidentsService(
+            disaster_report.provider_registry,
+            country_event_provider=disaster_report.event_provider,
+            country_catalog=country_catalog,
+            event_policies=disaster_report.event_policies,
+        )
     )
     query_parser = configured.disaster_query_parser or build_disaster_query_parser(
         country_catalog
@@ -361,6 +371,10 @@ def build_app_dependencies(
         delete_conversation=DeleteConversation(conversation_deletion),
         language_model=language_model,
         active_incidents=configured_active_incidents,
+        incident_watches=ManageIncidentWatches(
+            cast(IncidentWatchStore, operational.repository),
+            country_catalog,
+        ),
         satellite_imagery=configured_satellite_imagery,
         media_assets=media_services.store,
         operational_repository=operational.repository,

@@ -313,6 +313,117 @@ class ActiveIncidentsSnapshotResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class CountryIncidentWatchScopeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    kind: Literal["country"]
+    country: Annotated[str, Field(min_length=1, max_length=200)]
+
+
+class WorldwideIncidentWatchScopeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["worldwide"]
+
+
+class IncidentWatchCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    disaster: Disaster
+    scope: Annotated[
+        CountryIncidentWatchScopeRequest | WorldwideIncidentWatchScopeRequest,
+        Field(discriminator="kind"),
+    ]
+    refresh_interval_seconds: Annotated[int, Field(ge=300, le=86_400)]
+
+
+class IncidentWatchScopeResponse(BaseModel):
+    kind: Literal["country", "worldwide"]
+    country_code: str | None
+    country_name: str | None
+
+
+class IncidentWatchResponse(BaseModel):
+    watch_id: str
+    disaster: Disaster
+    scope: IncidentWatchScopeResponse
+    enabled: bool
+    refresh_interval_seconds: int
+    created_at: datetime
+    updated_at: datetime
+    next_refresh_at: datetime
+    last_checked_at: datetime | None
+    coverage_state: (
+        Literal[
+            "events_found",
+            "no_matching_records",
+            "stale",
+            "degraded",
+            "unavailable",
+        ]
+        | None
+    )
+    unread_change_count: int
+
+
+class IncidentWatchEnabledRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+
+
+class IncidentWatchEventResponse(BaseModel):
+    physical_event_id: str
+    event_id: str
+    disaster: Disaster
+    location: str
+    event_time: datetime
+    geometry: EventGeometryResponse | None
+    measurements: list[EventMeasurementResponse] = Field(default_factory=list)
+    provider_ids: list[str] = Field(default_factory=list)
+    provider_tier: ProviderTier
+    source_authority: SourceAuthority
+    source: SourceResponse
+    evidence_sources: list[SourceResponse] = Field(default_factory=list)
+
+
+class IncidentWatchChangeResponse(BaseModel):
+    change_id: str
+    watch_id: str
+    kind: Literal[
+        "new_event",
+        "observation_gap",
+        "measurements_changed",
+        "geometry_changed",
+        "evidence_set_changed",
+        "coverage_changed",
+    ]
+    summary: str
+    detail: str
+    created_at: datetime
+    read_at: datetime | None
+    source_ids: list[str] = Field(default_factory=list)
+    observation_id: str
+    previous_observation_id: str | None
+    before_hash: str | None
+    after_hash: str | None
+    incident: IncidentWatchEventResponse | None
+
+
+class IncidentWatchMarkReadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    change_ids: Annotated[list[str], Field(max_length=500)] = Field(
+        default_factory=list
+    )
+
+
+class IncidentWatchMarkReadResponse(BaseModel):
+    watch_id: str
+    marked_read_count: int
+    unread_change_count: int
+
+
 class ReportSectionResponse(BaseModel):
     """One readable report section."""
 

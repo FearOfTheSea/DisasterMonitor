@@ -30,6 +30,15 @@ again at every hop, and an article cannot send the retriever to an unregistered 
 host. This is a presentation-source registry; it does not add providers to the trusted
 disaster-evidence catalog.
 
+Candidate collection and image retrieval both use bounded backfill. The news adapter
+scans source pages in waves and continues past pages that time out or do not expose a
+safe image, up to three times the configured candidate limit. The application then
+retrieves association-approved candidates in ranked batches until it fills the gallery
+or exhausts the candidate pool. This allows later candidates to replace broken,
+undersized, duplicate, or otherwise unusable images without weakening any admission
+rule. Idempotent media requests receive one retry for transient transport, timeout,
+rate-limit, and server failures; permanent and safety failures are not retried.
+
 The architecture supports a future provider hierarchy such as official emergency
 agency galleries, humanitarian organizations, licensed open-media APIs, and finally
 maintained source-page extraction. Every provider must emit the same metadata and pass
@@ -92,6 +101,10 @@ EVENT_MEDIA_MAX_IMAGE_BYTES=3000000
 EVENT_MEDIA_STORE_MAXIMUM_BYTES=24000000
 EVENT_MEDIA_BLOB_ROOT=data/event-media/blobs
 ```
+
+`EVENT_MEDIA_CANDIDATE_LIMIT` bounds candidates returned by the news adapter. To fill
+that candidate pool when individual publisher pages fail extraction, the adapter may
+inspect at most three times that number of unique registered pages.
 
 Set `EVENT_MEDIA_ENABLED=false` to disable discovery. Provider timeouts and source-page
 limits reuse `DISASTER_PROVIDER_TIMEOUT_SECONDS` and

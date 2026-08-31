@@ -120,6 +120,14 @@ class CurrentDisasterReportService:
         return self._provider_registry
 
     @property
+    def event_provider(self) -> DisasterEventProvider:
+        return self._event_provider
+
+    @property
+    def event_policies(self) -> EventPolicyRegistry:
+        return self._event_policies
+
+    @property
     def source_catalog(self) -> SourceCatalog:
         return self._source_catalog
 

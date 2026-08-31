@@ -21,9 +21,12 @@ from disaster_monitor.application.services.provider_registry import (
 )
 from disaster_monitor.domain.disaster import (
     Disaster,
+    IncidentWatch,
+    IncidentWatchScope,
     ProviderTier,
     SourceAuthority,
     SourceReference,
+    WatchCoverageState,
     descriptive_event_geometry,
     point_event_geometry,
 )
@@ -121,6 +124,19 @@ def _registration(
 
 def _coverage(snapshot):
     return {item.disaster: item for item in snapshot.coverage}
+
+
+def _watch(disaster: Disaster) -> IncidentWatch:
+    return IncidentWatch(
+        watch_id=f"incident-watch:{disaster.value}",
+        disaster=disaster,
+        scope=IncidentWatchScope.worldwide(),
+        enabled=True,
+        refresh_interval_seconds=900,
+        created_at=NOW,
+        updated_at=NOW,
+        next_refresh_at=NOW,
+    )
 
 
 @pytest.mark.asyncio
@@ -379,6 +395,52 @@ async def test_unconfigured_worldwide_coverage_is_unavailable() -> None:
         IncidentCoverageState.UNAVAILABLE
     )
     assert provider.queries == []
+
+
+@pytest.mark.asyncio
+async def test_watch_observation_preserves_empty_failure_stale_and_unavailable() -> (
+    None
+):
+    empty = FakeWorldwideProvider("empty-earthquakes", ProviderBatch())
+    failed = FakeWorldwideProvider("failed-floods", RuntimeError("offline"))
+    stale = FakeWorldwideProvider(
+        "stale-wildfires",
+        ProviderBatch(
+            (
+                _event(
+                    "stale-wildfires",
+                    Disaster.WILDFIRE,
+                    "old-fire",
+                    NOW - timedelta(days=2),
+                ),
+            )
+        ),
+    )
+    service = ActiveIncidentsService(
+        ProviderRegistry(
+            (
+                _registration("Empty earthquakes", empty, Disaster.EARTHQUAKE),
+                _registration("Failed floods", failed, Disaster.FLOOD),
+                _registration("Stale wildfires", stale, Disaster.WILDFIRE),
+            )
+        ),
+        clock=lambda: NOW,
+    )
+
+    no_match = await service.observe_watch(_watch(Disaster.EARTHQUAKE))
+    degraded = await service.observe_watch(_watch(Disaster.FLOOD))
+    stale_result = await service.observe_watch(_watch(Disaster.WILDFIRE))
+    unavailable = await service.observe_watch(_watch(Disaster.LANDSLIDE))
+
+    assert no_match.coverage_state is WatchCoverageState.NO_MATCHING_RECORDS
+    assert no_match.successful is True
+    assert degraded.coverage_state is WatchCoverageState.DEGRADED
+    assert degraded.successful is False and degraded.retryable is True
+    assert degraded.provider_source_ids == ("failed-floods",)
+    assert stale_result.coverage_state is WatchCoverageState.STALE
+    assert stale_result.successful is False
+    assert unavailable.coverage_state is WatchCoverageState.UNAVAILABLE
+    assert unavailable.successful is False
 
 
 @pytest.mark.asyncio

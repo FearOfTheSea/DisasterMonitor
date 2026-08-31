@@ -41,6 +41,11 @@ from disaster_monitor.application.services.provider_freshness import (
 from disaster_monitor.application.use_cases.delete_conversation import (
     DeleteConversation,
 )
+from disaster_monitor.application.use_cases.manage_incident_watches import (
+    IncidentWatchNotFoundError,
+    InvalidIncidentWatchScopeError,
+    ManageIncidentWatches,
+)
 from disaster_monitor.application.use_cases.record_operator_action import (
     RecordOperatorAction,
     UnknownEvidenceStateError,
@@ -49,7 +54,14 @@ from disaster_monitor.application.use_cases.run_conversation_turn import (
     RunConversationTurn,
 )
 from disaster_monitor.domain.decision import DecisionSupportArtifact
-from disaster_monitor.domain.disaster import EventGeometry
+from disaster_monitor.domain.disaster import (
+    EventGeometry,
+    IncidentWatch,
+    IncidentWatchChange,
+    SourceReference,
+    WatchIncident,
+    WatchScopeKind,
+)
 from disaster_monitor.domain.models import MapNavigationAction, MapView
 from disaster_monitor.presentation.http.metrics import OperationalMetrics
 from disaster_monitor.presentation.http.multimodal_schemas import (
@@ -80,6 +92,14 @@ from disaster_monitor.presentation.http.schemas import (
     EventMeasurementResponse,
     EvidenceSnapshotResponse,
     HealthResponse,
+    IncidentWatchChangeResponse,
+    IncidentWatchCreateRequest,
+    IncidentWatchEnabledRequest,
+    IncidentWatchEventResponse,
+    IncidentWatchMarkReadRequest,
+    IncidentWatchMarkReadResponse,
+    IncidentWatchResponse,
+    IncidentWatchScopeResponse,
     InvestigationResponse,
     MapNavigationActionResponse,
     OperatorActionRequest,
@@ -123,6 +143,10 @@ def get_active_incidents_service(request: Request) -> ActiveIncidentsService:
     return cast(ActiveIncidentsService, request.app.state.dependencies.active_incidents)
 
 
+def get_incident_watches(request: Request) -> ManageIncidentWatches:
+    return cast(ManageIncidentWatches, request.app.state.dependencies.incident_watches)
+
+
 def get_satellite_imagery_service(request: Request) -> SatelliteImageryService:
     """Retrieve the validated imagery use case built by the composition root."""
     return cast(
@@ -147,6 +171,92 @@ def _event_geometry_response(
         description=geometry.description,
         source_id=geometry.source.source_id,
         estimated=geometry.estimated,
+    )
+
+
+def _incident_watch_response(watch: IncidentWatch) -> IncidentWatchResponse:
+    return IncidentWatchResponse(
+        watch_id=watch.watch_id,
+        disaster=watch.disaster,
+        scope=IncidentWatchScopeResponse(
+            kind=watch.scope.kind.value,
+            country_code=watch.scope.country_code,
+            country_name=watch.scope.country_name,
+        ),
+        enabled=watch.enabled,
+        refresh_interval_seconds=watch.refresh_interval_seconds,
+        created_at=watch.created_at,
+        updated_at=watch.updated_at,
+        next_refresh_at=watch.next_refresh_at,
+        last_checked_at=watch.last_checked_at,
+        coverage_state=(
+            watch.coverage_state.value if watch.coverage_state is not None else None
+        ),
+        unread_change_count=watch.unread_change_count,
+    )
+
+
+def _incident_watch_event_response(
+    incident: WatchIncident,
+) -> IncidentWatchEventResponse:
+    return IncidentWatchEventResponse(
+        physical_event_id=incident.physical_event_id,
+        event_id=incident.event_id,
+        disaster=incident.disaster,
+        location=incident.location,
+        event_time=incident.event_time,
+        geometry=_event_geometry_response(incident.geometry),
+        measurements=[
+            EventMeasurementResponse(
+                kind=item.kind,
+                value=item.value,
+                unit=item.unit,
+                source_id=item.source.source_id,
+            )
+            for item in incident.measurements
+        ],
+        provider_ids=list(incident.provider_ids),
+        provider_tier=incident.provider_tier,
+        source_authority=incident.source_authority,
+        source=_source_response(incident.source),
+        evidence_sources=[_source_response(item) for item in incident.evidence_sources],
+    )
+
+
+def _source_response(source: SourceReference) -> SourceResponse:
+    return SourceResponse(
+        source_id=source.source_id,
+        publisher=source.publisher,
+        title=source.title,
+        canonical_url=source.canonical_url,
+        published_at=source.published_at,
+        updated_at=source.updated_at,
+        retrieved_at=source.retrieved_at,
+        snapshot_id=source.snapshot_id,
+    )
+
+
+def _incident_watch_change_response(
+    change: IncidentWatchChange,
+) -> IncidentWatchChangeResponse:
+    return IncidentWatchChangeResponse(
+        change_id=change.change_id,
+        watch_id=change.watch_id,
+        kind=change.kind.value,
+        summary=change.summary,
+        detail=change.detail,
+        created_at=change.created_at,
+        read_at=change.read_at,
+        source_ids=list(change.source_ids),
+        observation_id=change.observation_id,
+        previous_observation_id=change.previous_observation_id,
+        before_hash=change.before_hash,
+        after_hash=change.after_hash,
+        incident=(
+            _incident_watch_event_response(change.incident)
+            if change.incident is not None
+            else None
+        ),
     )
 
 
@@ -300,16 +410,7 @@ async def active_incidents(
                 provider_ids=list(incident.provider_ids),
                 provider_tier=incident.provider_tier,
                 source_authority=incident.source_authority,
-                source=SourceResponse(
-                    source_id=incident.source.source_id,
-                    publisher=incident.source.publisher,
-                    title=incident.source.title,
-                    canonical_url=incident.source.canonical_url,
-                    published_at=incident.source.published_at,
-                    updated_at=incident.source.updated_at,
-                    retrieved_at=incident.source.retrieved_at,
-                    snapshot_id=incident.source.snapshot_id,
-                ),
+                source=_source_response(incident.source),
             )
             for incident in snapshot.incidents
         ],
@@ -324,6 +425,119 @@ async def active_incidents(
             for item in snapshot.coverage
         ],
         warnings=list(snapshot.warnings),
+    )
+
+
+@router.post(
+    "/incident-watches",
+    response_model=IncidentWatchResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["incident-watches"],
+)
+async def create_incident_watch(
+    body: IncidentWatchCreateRequest,
+    use_case: Annotated[ManageIncidentWatches, Depends(get_incident_watches)],
+) -> IncidentWatchResponse:
+    """Create one bounded local watch for a disaster and canonical scope."""
+    try:
+        watch = await use_case.create(
+            disaster=body.disaster,
+            scope_kind=WatchScopeKind(body.scope.kind),
+            country=getattr(body.scope, "country", None),
+            refresh_interval_seconds=body.refresh_interval_seconds,
+        )
+    except (InvalidIncidentWatchScopeError, ValueError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return _incident_watch_response(watch)
+
+
+@router.get(
+    "/incident-watches",
+    response_model=list[IncidentWatchResponse],
+    tags=["incident-watches"],
+)
+async def list_incident_watches(
+    use_case: Annotated[ManageIncidentWatches, Depends(get_incident_watches)],
+) -> list[IncidentWatchResponse]:
+    return [_incident_watch_response(item) for item in await use_case.list()]
+
+
+@router.post(
+    "/incident-watches/{watch_id}/enabled",
+    response_model=IncidentWatchResponse,
+    tags=["incident-watches"],
+)
+async def set_incident_watch_enabled(
+    watch_id: str,
+    body: IncidentWatchEnabledRequest,
+    use_case: Annotated[ManageIncidentWatches, Depends(get_incident_watches)],
+) -> IncidentWatchResponse:
+    try:
+        watch = await use_case.set_enabled(watch_id, enabled=body.enabled)
+    except IncidentWatchNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="Incident watch not found."
+        ) from None
+    return _incident_watch_response(watch)
+
+
+@router.delete(
+    "/incident-watches/{watch_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["incident-watches"],
+)
+async def delete_incident_watch(
+    watch_id: str,
+    use_case: Annotated[ManageIncidentWatches, Depends(get_incident_watches)],
+) -> Response:
+    try:
+        await use_case.delete(watch_id)
+    except IncidentWatchNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="Incident watch not found."
+        ) from None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/incident-watches/{watch_id}/timeline",
+    response_model=list[IncidentWatchChangeResponse],
+    tags=["incident-watches"],
+)
+async def incident_watch_timeline(
+    watch_id: str,
+    use_case: Annotated[ManageIncidentWatches, Depends(get_incident_watches)],
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[IncidentWatchChangeResponse]:
+    try:
+        values = await use_case.timeline(watch_id, limit=limit)
+    except IncidentWatchNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="Incident watch not found."
+        ) from None
+    return [_incident_watch_change_response(item) for item in values]
+
+
+@router.post(
+    "/incident-watches/{watch_id}/timeline/read",
+    response_model=IncidentWatchMarkReadResponse,
+    tags=["incident-watches"],
+)
+async def mark_incident_watch_timeline_read(
+    watch_id: str,
+    body: IncidentWatchMarkReadRequest,
+    use_case: Annotated[ManageIncidentWatches, Depends(get_incident_watches)],
+) -> IncidentWatchMarkReadResponse:
+    try:
+        marked, watch = await use_case.mark_read(watch_id, tuple(body.change_ids))
+    except IncidentWatchNotFoundError:
+        raise HTTPException(
+            status_code=404, detail="Incident watch not found."
+        ) from None
+    return IncidentWatchMarkReadResponse(
+        watch_id=watch.watch_id,
+        marked_read_count=marked,
+        unread_change_count=watch.unread_change_count,
     )
 
 

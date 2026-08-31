@@ -9,6 +9,7 @@ import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPan
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
 import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
+import type { IncidentWatchEvent } from '@/features/operations/model/incidentWatch';
 import { DEFAULT_MAP_VIEW } from '@/shared/config/runtime';
 import type { MapView } from '@/shared/types/assistant';
 
@@ -74,10 +75,19 @@ export default function Home() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [operationsOpen, setOperationsOpen] = useState(false);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>();
+  const [watchFocusIncident, setWatchFocusIncident] = useState<IncidentWatchEvent>();
   const [mapView, setMapView] = useState<MapView>(DEFAULT_MAP_VIEW);
   const conversation = useAssistantConversation();
   const activeIncidents = useActiveIncidents();
   const handleViewChange = useCallback((view: MapView) => setMapView(view), []);
+  const handleSelectActiveIncident = useCallback((incidentId: string) => {
+    setWatchFocusIncident(undefined);
+    setSelectedIncidentId(incidentId);
+  }, []);
+  const handleSelectWatchIncident = useCallback((incident: IncidentWatchEvent) => {
+    setWatchFocusIncident(incident);
+    setSelectedIncidentId(incident.event_id);
+  }, []);
   const handleToggleAssistant = useCallback(() => {
     setAssistantOpen((open) => {
       const nextOpen = !open;
@@ -104,6 +114,16 @@ export default function Home() {
     .reverse()
     .find((message) => message.report?.decisionSupport?.evidence_state_version)?.report
     ?.decisionSupport?.evidence_state_version;
+  const mapIncidents = useMemo(() => {
+    const incidents = activeIncidents.snapshot?.incidents ?? [];
+    if (!watchFocusIncident) return incidents;
+    return [
+      watchFocusIncident,
+      ...incidents.filter(
+        (incident) => incident.event_id !== watchFocusIncident.event_id,
+      ),
+    ];
+  }, [activeIncidents.snapshot?.incidents, watchFocusIncident]);
 
   return (
     <main className="app-shell">
@@ -147,16 +167,16 @@ export default function Home() {
           status={activeIncidents.status}
           error={activeIncidents.error}
           selectedIncidentId={selectedIncidentId}
-          onSelectIncident={setSelectedIncidentId}
+          onSelectIncident={handleSelectActiveIncident}
           onRefresh={activeIncidents.refresh}
         />
         <div className="map-region">
           <DisasterMap
             onViewChange={handleViewChange}
-            onSelectIncident={setSelectedIncidentId}
+            onSelectIncident={handleSelectActiveIncident}
             commonOperationalPicture={commonOperationalPicture}
             areaOfInterest={areaOfInterest}
-            activeIncidents={activeIncidents.snapshot?.incidents}
+            activeIncidents={mapIncidents}
             selectedIncidentId={selectedIncidentId}
           />
           <div className="map-overlay" role="status" aria-live="polite">
@@ -187,6 +207,7 @@ export default function Home() {
         {operationsOpen && (
           <OperationsPanel
             evidenceStateVersion={evidenceStateVersion}
+            onSelectWatchIncident={handleSelectWatchIncident}
             onClose={() => setOperationsOpen(false)}
           />
         )}

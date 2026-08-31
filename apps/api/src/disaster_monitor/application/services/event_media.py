@@ -215,59 +215,65 @@ class DisasterMediaService:
         accepted.sort(key=_candidate_sort_key)
         items: list[DisasterMediaItem] = []
         checksums: set[str] = set()
-        retrieval_set = accepted[: max(self._target_count * 2, self._target_count)]
-        retrievals = await asyncio.gather(
-            *(
-                provider.retrieve(assessment.candidate)
-                for provider, assessment in retrieval_set
-            ),
-            return_exceptions=True,
-        )
-        for (_, assessment), retrieved in zip(retrieval_set, retrievals, strict=True):
+        batch_size = max(self._target_count * 2, self._target_count)
+        for start in range(0, len(accepted), batch_size):
             if len(items) >= self._target_count:
                 break
-            if isinstance(retrieved, BaseException):
-                rejected_count += 1
-                continue
-            try:
-                stored = self._store.put(retrieved)
-            except Exception:
-                rejected_count += 1
-                continue
-            if stored.content_sha256 in checksums:
-                rejected_count += 1
-                continue
-            checksums.add(stored.content_sha256)
-            candidate = assessment.candidate
-            items.append(
-                DisasterMediaItem(
-                    media_id=stored.media_id,
-                    event_id=context.event_id,
-                    physical_event_id=context.physical_event_id,
-                    source_id=candidate.source_id,
-                    publisher=candidate.publisher,
-                    source_page_url=candidate.source_page_url,
-                    caption=candidate.caption,
-                    credit=candidate.credit,
-                    credit_kind=candidate.credit_kind,
-                    published_at=candidate.published_at,
-                    captured_at=candidate.captured_at,
-                    license_name=candidate.license_name,
-                    license_url=candidate.license_url,
-                    rights_status=candidate.rights_status,
-                    role=_content_role(candidate),
-                    association_status=assessment.status,
-                    association_rule_ids=assessment.rule_ids,
-                    association_detail=assessment.detail,
-                    uncertainty=(
-                        "Source-associated preview; the photograph is contextual "
-                        "media, not a verified Disaster Monitor fact."
-                    ),
-                    content_sha256=stored.content_sha256,
-                    width=retrieved.width,
-                    height=retrieved.height,
-                )
+            retrieval_batch = accepted[start : start + batch_size]
+            retrievals = await asyncio.gather(
+                *(
+                    provider.retrieve(assessment.candidate)
+                    for provider, assessment in retrieval_batch
+                ),
+                return_exceptions=True,
             )
+            for (_, assessment), retrieved in zip(
+                retrieval_batch, retrievals, strict=True
+            ):
+                if len(items) >= self._target_count:
+                    break
+                if isinstance(retrieved, BaseException):
+                    rejected_count += 1
+                    continue
+                try:
+                    stored = self._store.put(retrieved)
+                except Exception:
+                    rejected_count += 1
+                    continue
+                if stored.content_sha256 in checksums:
+                    rejected_count += 1
+                    continue
+                checksums.add(stored.content_sha256)
+                candidate = assessment.candidate
+                items.append(
+                    DisasterMediaItem(
+                        media_id=stored.media_id,
+                        event_id=context.event_id,
+                        physical_event_id=context.physical_event_id,
+                        source_id=candidate.source_id,
+                        publisher=candidate.publisher,
+                        source_page_url=candidate.source_page_url,
+                        caption=candidate.caption,
+                        credit=candidate.credit,
+                        credit_kind=candidate.credit_kind,
+                        published_at=candidate.published_at,
+                        captured_at=candidate.captured_at,
+                        license_name=candidate.license_name,
+                        license_url=candidate.license_url,
+                        rights_status=candidate.rights_status,
+                        role=_content_role(candidate),
+                        association_status=assessment.status,
+                        association_rule_ids=assessment.rule_ids,
+                        association_detail=assessment.detail,
+                        uncertainty=(
+                            "Source-associated preview; the photograph is contextual "
+                            "media, not a verified Disaster Monitor fact."
+                        ),
+                        content_sha256=stored.content_sha256,
+                        width=retrieved.width,
+                        height=retrieved.height,
+                    )
+                )
         if not items:
             warnings.append(
                 "No source-associated images met the event and media safety gates."

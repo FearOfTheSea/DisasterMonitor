@@ -35,6 +35,7 @@ _GENERIC_IMAGE_MARKERS = (
     "sprite",
     "avatar",
 )
+_RETRYABLE_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,21 +198,27 @@ class NewsEventMediaProvider:
         if successful_searches == 0:
             raise RuntimeError("All bounded event-media searches were unavailable.")
         unique = {item.source_page_url: item for item in news_items}
-        selected = sorted(
+        ranked = sorted(
             unique.values(),
             key=lambda item: (
                 item.policy.priority,
                 -item.published_at.timestamp(),
                 item.source_page_url,
             ),
-        )[: self._candidate_limit]
-        scraped = await asyncio.gather(
-            *(self._scrape_item(item) for item in selected),
-            return_exceptions=True,
-        )
-        return tuple(
-            item for item in scraped if isinstance(item, DisasterMediaCandidate)
-        )
+        )[: self._candidate_limit * 3]
+        candidates: list[DisasterMediaCandidate] = []
+        for start in range(0, len(ranked), self._candidate_limit):
+            if len(candidates) >= self._candidate_limit:
+                break
+            page_batch = ranked[start : start + self._candidate_limit]
+            scraped = await asyncio.gather(
+                *(self._scrape_item(item) for item in page_batch),
+                return_exceptions=True,
+            )
+            candidates.extend(
+                item for item in scraped if isinstance(item, DisasterMediaCandidate)
+            )
+        return tuple(candidates[: self._candidate_limit])
 
     async def retrieve(self, candidate: DisasterMediaCandidate) -> RetrievedMedia:
         policy = self._by_source_id.get(candidate.source_id)
@@ -339,6 +346,35 @@ class NewsEventMediaProvider:
         )
 
     async def _bounded_get(
+        self,
+        url: str,
+        *,
+        allowed_hosts: frozenset[str],
+        maximum_bytes: int,
+        accept: str,
+    ) -> tuple[bytes, str]:
+        for attempt in range(2):
+            try:
+                return await self._bounded_get_once(
+                    url,
+                    allowed_hosts=allowed_hosts,
+                    maximum_bytes=maximum_bytes,
+                    accept=accept,
+                )
+            except (httpx.TimeoutException, httpx.TransportError):
+                if attempt == 0:
+                    continue
+                raise
+            except httpx.HTTPStatusError as error:
+                if (
+                    attempt == 0
+                    and error.response.status_code in _RETRYABLE_STATUS_CODES
+                ):
+                    continue
+                raise
+        raise RuntimeError("The bounded media request exhausted its retry budget.")
+
+    async def _bounded_get_once(
         self,
         url: str,
         *,

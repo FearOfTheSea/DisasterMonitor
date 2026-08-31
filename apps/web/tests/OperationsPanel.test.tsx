@@ -11,12 +11,23 @@ import {
   requestCountryCatalogUpdate,
 } from '@/features/operations/api/operationsClient';
 
+const incidentWatchUi = vi.hoisted(() => ({
+  onSelectIncident: undefined as unknown,
+}));
+
 vi.mock('@/features/operations/api/operationsClient', () => ({
   fetchProviderFreshness: vi.fn(),
   fetchEvidenceHistory: vi.fn(),
   fetchCountryCatalogStatus: vi.fn(),
   requestCountryCatalogUpdate: vi.fn(),
   recordOperatorReview: vi.fn(),
+}));
+
+vi.mock('@/features/operations/ui/IncidentWatches', () => ({
+  IncidentWatches: (props: { onSelectIncident: unknown }) => {
+    incidentWatchUi.onSelectIncident = props.onSelectIncident;
+    return <section aria-label="Incident watches fixture" />;
+  },
 }));
 
 describe('OperationsPanel', () => {
@@ -91,8 +102,17 @@ describe('OperationsPanel', () => {
 
   it('shows provenance and records a bounded review', async () => {
     const user = userEvent.setup();
-    render(<OperationsPanel evidenceStateVersion="world-state:1" onClose={vi.fn()} />);
+    const onSelectWatchIncident = vi.fn();
+    render(
+      <OperationsPanel
+        evidenceStateVersion="world-state:1"
+        onClose={vi.fn()}
+        onSelectWatchIncident={onSelectWatchIncident}
+      />,
+    );
 
+    expect(screen.getByLabelText('Incident watches fixture')).toBeInTheDocument();
+    expect(incidentWatchUi.onSelectIncident).toBe(onSelectWatchIncident);
     expect(await screen.findAllByText('global-warnings-vietnam-warnings')).toHaveLength(
       2,
     );

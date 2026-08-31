@@ -18,22 +18,22 @@ never dynamically imports or constructs providers.
 
 ## Current live capability matrix
 
-| Provider                           | Tier      | Role               | Disasters        | Scope                         | Additional requirement                                      |
-| ---------------------------------- | --------- | ------------------ | ---------------- | ----------------------------- | ----------------------------------------------------------- |
-| CEMS Global Flood Monitoring (GFM) | Primary   | Event discovery    | Flood            | Named countries and worldwide | Country-clipped class-1 `ensemble_flood_extent` statistics |
-| GDACS floods                       | Secondary | Event discovery    | Flood            | Named countries and worldwide | GloFAS/FloodList-derived curated events; centroid only |
-| EMSC SeismicPortal                | Secondary | Event discovery and scientific corroboration | Earthquake | Named countries and worldwide | Maintained-country validation; CC BY 4.0 FDSN event data |
-| USGS                              | Secondary | Event discovery    | Earthquake       | Named countries and worldwide | Country validation for named scope                         |
-| NASA EONET Wildfires              | Primary   | Event discovery    | Wildfire         | Named countries and worldwide | EONET geometry and maintained-country validation            |
-| GDACS wildfires                   | Secondary | Event discovery    | Wildfire         | Named countries and worldwide | GWIS-derived event curation; FIRMS-dependent upstream |
-| NASA FIRMS observations           | Secondary | Satellite observation | Wildfire      | Selected named-country or worldwide event | `NASA_FIRMS_MAP_KEY`; exact event point; aggregated possible correlation only |
-| NASA COOLR Landslides             | Primary   | Event discovery    | Landslide        | Named countries and worldwide | COOLR point and maintained-country validation               |
-| Copernicus EMS Rapid Mapping landslides | Secondary | Mapping evidence | Landslide | Selected named-country or worldwide event | EMSR Mass movement; time/centroid match; delivered feasible DEL/GRA product |
-| GDACS tropical cyclones           | Secondary | Event discovery    | Tropical cyclone | Named countries and worldwide | None                                                        |
-| NOAA IBTrACS track reconciliation | Secondary | Scientific verification and map layers | Tropical cyclone | Selected GDACS named-country or worldwide event | Unique name/start/track match against v04r01 active subset |
-| Smithsonian / USGS Weekly Volcanic Activity Report | Primary | Event discovery | Volcanic eruption | Named countries and worldwide | Explicit WVAR eruptive-activity classification and day-precise start |
-| GDACS volcanic eruptions          | Secondary | Event discovery    | Volcanic eruption | Named countries and worldwide | VAA/Smithsonian-derived event records; volcano point only |
-| ReliefWeb                         | Secondary | Situation evidence | Earthquake, flood, wildfire, landslide, tropical cyclone, volcanic eruption | Named countries | `RELIEFWEB_APP_NAME` |
+| Provider                                           | Tier      | Role                                         | Disasters                                                                   | Scope                                           | Additional requirement                                                        |
+| -------------------------------------------------- | --------- | -------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------- |
+| CEMS Global Flood Monitoring (GFM)                 | Primary   | Event discovery                              | Flood                                                                       | Named countries and worldwide                   | Country-clipped class-1 `ensemble_flood_extent` statistics                    |
+| GDACS floods                                       | Secondary | Event discovery                              | Flood                                                                       | Named countries and worldwide                   | GloFAS/FloodList-derived curated events; centroid only                        |
+| EMSC SeismicPortal                                 | Secondary | Event discovery and scientific corroboration | Earthquake                                                                  | Named countries and worldwide                   | Maintained-country validation; CC BY 4.0 FDSN event data                      |
+| USGS                                               | Secondary | Event discovery                              | Earthquake                                                                  | Named countries and worldwide                   | Country validation for named scope                                            |
+| NASA EONET Wildfires                               | Primary   | Event discovery                              | Wildfire                                                                    | Named countries and worldwide                   | EONET geometry and maintained-country validation                              |
+| GDACS wildfires                                    | Secondary | Event discovery                              | Wildfire                                                                    | Named countries and worldwide                   | GWIS-derived event curation; FIRMS-dependent upstream                         |
+| NASA FIRMS observations                            | Secondary | Satellite observation                        | Wildfire                                                                    | Selected named-country or worldwide event       | `NASA_FIRMS_MAP_KEY`; exact event point; aggregated possible correlation only |
+| NASA COOLR Landslides                              | Primary   | Event discovery                              | Landslide                                                                   | Named countries and worldwide                   | COOLR point and maintained-country validation                                 |
+| Copernicus EMS Rapid Mapping landslides            | Secondary | Mapping evidence                             | Landslide                                                                   | Selected named-country or worldwide event       | EMSR Mass movement; time/centroid match; delivered feasible DEL/GRA product   |
+| GDACS tropical cyclones                            | Secondary | Event discovery                              | Tropical cyclone                                                            | Named countries and worldwide                   | None                                                                          |
+| NOAA IBTrACS track reconciliation                  | Secondary | Scientific verification and map layers       | Tropical cyclone                                                            | Selected GDACS named-country or worldwide event | Unique name/start/track match against v04r01 active subset                    |
+| Smithsonian / USGS Weekly Volcanic Activity Report | Primary   | Event discovery                              | Volcanic eruption                                                           | Named countries and worldwide                   | Explicit WVAR eruptive-activity classification and day-precise start          |
+| GDACS volcanic eruptions                           | Secondary | Event discovery                              | Volcanic eruption                                                           | Named countries and worldwide                   | VAA/Smithsonian-derived event records; volcano point only                     |
+| ReliefWeb                                          | Secondary | Situation evidence                           | Earthquake, flood, wildfire, landslide, tropical cyclone, volcanic eruption | Named countries                                 | `RELIEFWEB_APP_NAME`                                                          |
 
 ## Active Incidents surface
 
@@ -60,6 +60,39 @@ does not infer a centroid, bounding box, polygon, severity, casualty count, impa
 warning. This surface is bounded event discovery, not complete global surveillance,
 continuous polling, incident management, or proof of current operational impact; the
 assistant and report-selection workflows remain separate.
+
+## Incident Watches
+
+Incident Watch v1 provides persistent, local, bounded monitoring for exactly one
+supported disaster type and either one canonical named country or worldwide scope.
+The API supports create, list, enable/disable, delete, newest-first timeline, and
+timeline-read operations under `/api/v1/incident-watches`. The Evidence operations
+panel shows the scope, enabled state, last check, current coverage, unread count, and
+source-backed timeline. A timeline event is mapped only when its retained provider
+evidence contains usable point, track, or area geometry.
+
+Enabled watches are refreshed by the existing scheduler and worker queue. Each refresh
+uses the same provider registry, event-discovery adapters, provider tiers, provenance
+validation, physical-event equivalence, bounded result limits, and coverage semantics
+as current disaster reporting and Active Incidents. No model decides whether evidence
+changed or whether an in-app alert exists. Deterministic typed-state hashes classify a
+new physical event, an observation gap, measurement or geometry changes, event/source
+evidence-set changes, and coverage transitions. Replaying the same normalized evidence
+does not create duplicate changes or unread alerts.
+
+`no_matching_records` remains a successful bounded lookup with no usable match and is
+never rendered as “no disaster.” If a previously observed event is absent from such a
+result, the timeline calls this an observation gap and explicitly does not claim the
+event ended. Provider failure, stale evidence, degraded coverage, and unavailable
+coverage remain distinct. Failed or stale observations may change coverage but do not
+replace the last successful comparison baseline.
+
+PostgreSQL operations storage makes watches, normalized observations, changes, and read
+state durable. The in-memory operations repository provides matching deterministic
+semantics for tests and standalone development but does not survive restart. Incident
+Watches are in-app monitoring only: they are not complete global surveillance, public
+warnings, browser/OS push, email/SMS delivery, evacuation directives, or resource
+orders.
 
 GFM provides primary global named-country and bounded countryless worldwide flood
 event discovery. EMSC and USGS provide global named-country and countryless worldwide

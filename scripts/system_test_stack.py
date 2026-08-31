@@ -1,11 +1,13 @@
 """Run the real Next.js UI against a fake-model FastAPI server."""
 
+import asyncio
 import os
 import subprocess
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 
 import uvicorn
 
@@ -15,17 +17,36 @@ web_directory = script_directory.parent / "apps" / "web"
 sys.path.insert(0, str(api_src))
 sys.path.insert(0, str(script_directory))
 
+from disaster_monitor.application.services.active_incidents import (
+    ActiveIncidentsService,
+)
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
+)
+from disaster_monitor.application.services.operational_ingestion import (
+    IncidentWatchScheduler,
+    IncidentWatchWorker,
 )
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRole,
 )
+from disaster_monitor.application.use_cases.manage_incident_watches import (
+    ManageIncidentWatches,
+)
+from disaster_monitor.application.use_cases.refresh_incident_watch import (
+    RefreshIncidentWatch,
+)
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
+)
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
+from disaster_monitor.infrastructure.operations.memory_repository import (
+    InMemoryOperationalRepository,
 )
 from disaster_monitor.main import create_app
 from system_test_backend import (
@@ -41,34 +62,46 @@ def main() -> int:
     catalog_directory = tempfile.TemporaryDirectory(
         prefix="disaster-monitor-system-country-catalog-"
     )
+    repository = InMemoryOperationalRepository()
+    active_incidents = build_system_active_incidents_service()
+    app = create_app(
+        settings=Settings(
+            allowed_origins="http://127.0.0.1:4173",
+            country_catalog_automatic_updates=False,
+            country_catalog_root=Path(catalog_directory.name),
+        ),
+        model=FakeSystemModel(),
+        current_disaster_report=CurrentDisasterReportService(
+            CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
+            FakeSystemSituationProvider(),
+            provider_capabilities=(
+                ProviderCapabilities(
+                    frozenset({ProviderRole.EVENT_DISCOVERY}),
+                    frozenset({Disaster.EARTHQUAKE}),
+                    None,
+                ),
+                ProviderCapabilities(
+                    frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                    frozenset({Disaster.EARTHQUAKE}),
+                    None,
+                ),
+            ),
+            clock=lambda: NOW,
+        ),
+        active_incidents_service=active_incidents,
+        operational_repository=repository,
+    )
+    app.state.dependencies = replace(
+        app.state.dependencies,
+        incident_watches=ManageIncidentWatches(
+            repository,
+            StaticCountryCatalog(),
+            clock=lambda: NOW,
+        ),
+    )
     api_server = uvicorn.Server(
         uvicorn.Config(
-            create_app(
-                settings=Settings(
-                    allowed_origins="http://127.0.0.1:4173",
-                    country_catalog_automatic_updates=False,
-                    country_catalog_root=Path(catalog_directory.name),
-                ),
-                model=FakeSystemModel(),
-                current_disaster_report=CurrentDisasterReportService(
-                    CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
-                    FakeSystemSituationProvider(),
-                    provider_capabilities=(
-                        ProviderCapabilities(
-                            frozenset({ProviderRole.EVENT_DISCOVERY}),
-                            frozenset({Disaster.EARTHQUAKE}),
-                            None,
-                        ),
-                        ProviderCapabilities(
-                            frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                            frozenset({Disaster.EARTHQUAKE}),
-                            None,
-                        ),
-                    ),
-                    clock=lambda: NOW,
-                ),
-                active_incidents_service=build_system_active_incidents_service(),
-            ),
+            app,
             host="127.0.0.1",
             port=8787,
             log_level="warning",
@@ -76,6 +109,13 @@ def main() -> int:
     )
     api_thread = Thread(target=api_server.run, daemon=True)
     api_thread.start()
+    watch_runtime_stop = Event()
+    watch_runtime_thread = Thread(
+        target=_run_watch_runtime,
+        args=(repository, active_incidents, watch_runtime_stop),
+        daemon=True,
+    )
+    watch_runtime_thread.start()
 
     npm_command = "npm.cmd" if os.name == "nt" else "npm"
     web_environment = os.environ.copy()
@@ -105,12 +145,35 @@ def main() -> int:
     except KeyboardInterrupt:
         return 130
     finally:
+        watch_runtime_stop.set()
+        watch_runtime_thread.join(timeout=10)
         api_server.should_exit = True
         api_thread.join(timeout=10)
         if web_process.poll() is None:
             web_process.terminate()
             web_process.wait(timeout=10)
         catalog_directory.cleanup()
+
+
+def _run_watch_runtime(
+    repository: InMemoryOperationalRepository,
+    active_incidents: ActiveIncidentsService,
+    stop: Event,
+) -> None:
+    async def run() -> None:
+        scheduler = IncidentWatchScheduler(repository)
+        worker = IncidentWatchWorker(
+            repository,
+            RefreshIncidentWatch(repository, active_incidents),
+            clock=lambda: NOW,
+        )
+        while not stop.is_set():
+            await scheduler.enqueue_due(now=NOW)
+            while await worker.run_once("system-incident-watch-worker") is not None:
+                pass
+            await asyncio.sleep(0.05)
+
+    asyncio.run(run())
 
 
 if __name__ == "__main__":

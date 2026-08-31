@@ -153,6 +153,48 @@ async def test_gallery_selects_three_and_never_fetches_injected_old_photo() -> N
 
 
 @pytest.mark.asyncio
+async def test_gallery_backfills_when_the_initial_retrieval_batch_is_rejected() -> None:
+    candidates = tuple(_candidate(str(index), priority=index) for index in range(1, 10))
+
+    class Provider:
+        provider_id = "fixture-media"
+
+        def __init__(self) -> None:
+            self.retrieved: list[str] = []
+
+        async def discover(self, context, *, now):
+            return candidates
+
+        async def retrieve(self, candidate):
+            self.retrieved.append(candidate.candidate_id)
+            if int(candidate.candidate_id.rsplit(":", 1)[-1]) <= 6:
+                raise ValueError("The source returned an unusable image.")
+            content = b"image-" + candidate.candidate_id.encode()
+            return RetrievedMedia(candidate, content, "image/png", 640, 360)
+
+    provider = Provider()
+    gallery = await DisasterMediaService(
+        (provider,),
+        InMemoryMediaAssetStore(),
+        clock=lambda: NOW,
+        target_count=3,
+    ).discover(_context())
+
+    assert gallery is not None
+    assert [item.source_id for item in gallery.items] == [
+        "fixture-source:7",
+        "fixture-source:8",
+        "fixture-source:9",
+    ]
+    assert gallery.rejected_count == 6
+    assert provider.retrieved == [
+        *(f"candidate:{index}" for index in range(1, 7)),
+        *(f"candidate:{index}" for index in range(7, 10)),
+    ]
+    assert gallery.warnings == ()
+
+
+@pytest.mark.asyncio
 async def test_zero_accepted_images_return_bounded_diagnostics() -> None:
     rejected = _candidate(
         "unrelated",

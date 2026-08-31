@@ -22,6 +22,9 @@ from disaster_monitor.application.services.provider_freshness import (
 from disaster_monitor.application.use_cases.delete_conversation import (
     DeleteConversation,
 )
+from disaster_monitor.application.use_cases.manage_incident_watches import (
+    ManageIncidentWatches,
+)
 from disaster_monitor.application.use_cases.record_operator_action import (
     RecordOperatorAction,
 )
@@ -79,6 +82,7 @@ class AppDependencies:
     delete_conversation: DeleteConversation
     language_model: LanguageModel
     active_incidents: ActiveIncidentsService
+    incident_watches: ManageIncidentWatches
     satellite_imagery: SatelliteImageryService
     media_assets: MediaAssetStore
     operational_repository: OperationalRepository

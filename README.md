@@ -11,9 +11,12 @@ facts. See [docs/agent-runtime.md](docs/agent-runtime.md).
 
 - Next.js/OpenLayers map with a default-visible, source-backed Active Incidents
   sidebar plus an assistant UI with session-local conversation state.
+- Persistent local Incident Watches with bounded scheduled refresh, deterministic
+  source-backed change timelines, unread/read state, and exact-evidence map focus.
 - Selectable NASA GIBS satellite imagery plus optional server-proxied Copernicus
   Sentinel-2 and one configured Planet mosaic.
-- FastAPI health, readiness, active-incidents, assistant, and operations endpoints.
+- FastAPI health, readiness, active-incidents, incident-watch, assistant, and operations
+  endpoints.
 - Optional local Qwen text and vision adapters.
 - Deterministic request normalization, event selection, evidence reconciliation, and
   source-attributed reports.
@@ -92,6 +95,7 @@ Useful checks:
 Invoke-RestMethod http://localhost:8001/api/v1/health
 Invoke-RestMethod http://localhost:8001/api/v1/ready
 Invoke-RestMethod 'http://localhost:8001/api/v1/incidents?time_window_days=7&limit_per_disaster=10'
+Invoke-RestMethod http://localhost:8001/api/v1/incident-watches
 Invoke-RestMethod http://localhost:8001/api/v1/satellite-imagery
 ```
 
@@ -101,6 +105,15 @@ records per disaster. Each of the six hazards has a separate coverage state so a
 upstream failure, unavailable provider, or successful empty result cannot be mistaken
 for proof that no disaster occurred. Map features are drawn only from source-backed
 point, track, or area geometry returned by the endpoint.
+
+Incident Watches monitor one disaster type in one canonical country or worldwide at a
+bounded 5-minute to 24-hour interval. The existing scheduler/worker uses the registered
+provider path and deterministic typed-state hashes; Qwen does not decide changes or
+alerts. With Compose, watches and timelines are durable in PostgreSQL. A standalone API
+uses the non-durable in-memory fallback. Open Evidence operations to create watches,
+inspect coverage and source-attributed timelines, focus retained geometry on the map,
+and mark changes read. This is bounded monitoring, not complete global surveillance or
+an external warning/notification system.
 
 ### Optional protected satellite imagery
 

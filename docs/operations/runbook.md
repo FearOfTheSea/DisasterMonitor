@@ -15,10 +15,11 @@ PostgreSQL/PostGIS + filesystem blob storage`. PostgreSQL is the durable job,
 metadata, state, and audit store. Raw payloads are content-addressed files on a
 separate volume. No Redis, Celery, Kafka, or Kubernetes dependency is introduced.
 
-The scheduler may enqueue only the reviewed Japan earthquake and Vietnam flood,
-landslide, cyclone, and active-fire investigations declared in the operational runtime.
-A worker may retrieve and reconcile evidence. It cannot publish warnings, contact
-agencies, evacuate people, allocate resources, or expand decision authority.
+The scheduler enqueues enabled Incident Watches only when their persisted bounded
+refresh time is due. The worker resolves each watch through the registered
+event-discovery path and records deterministic observation/change state. It cannot
+publish warnings, contact agencies, evacuate people, allocate resources, or expand
+decision authority.
 
 ## Start and inspect
 
@@ -42,6 +43,31 @@ output built from `package-lock.json`.
 Without `OPERATIONAL_DATABASE_URL`, a standalone API uses an explicit in-process
 metadata fallback and filesystem blobs for development. That metadata does not survive
 restart and must not support an operational-continuity claim.
+
+## Incident Watch operations
+
+Create one worldwide watch from PowerShell:
+
+```powershell
+$watch = Invoke-RestMethod -Method Post `
+  -Uri http://localhost:8001/api/v1/incident-watches `
+  -ContentType application/json `
+  -Body '{"disaster":"earthquake","scope":{"kind":"worldwide"},"refresh_interval_seconds":900}'
+Invoke-RestMethod http://localhost:8001/api/v1/incident-watches
+Invoke-RestMethod "http://localhost:8001/api/v1/incident-watches/$($watch.watch_id)/timeline"
+```
+
+Refresh intervals are limited to 300-86400 seconds. Enabling a disabled watch makes it
+due immediately; disabling it prevents new jobs without deleting its timeline. Deleting
+a watch removes its local observations, changes, and read state. The UI can mark
+timeline entries read, but no external notification channel is configured.
+
+For a due watch, inspect `ingest_job` rows with source
+`incident-watch-refresh`, the watch's `last_checked_at`, `next_refresh_at`, and
+`coverage_state`, then its newest-first change timeline. A retryable provider failure is
+persisted as degraded coverage before the queue applies bounded retry.
+Do not interpret `no_matching_records`, an observation gap, or unavailable coverage as
+proof that an incident ended or did not occur.
 
 ## Freshness and degraded operation
 
@@ -109,3 +135,6 @@ Record drill evidence under ignored `data/experiments/`:
 6. restore a backup and compare counts/checksums;
 7. verify forged identity headers are stripped by the deployed proxy;
 8. rerun backend, frontend, evaluation, system, and Compose checks.
+9. create a disposable watch, replay identical evidence, and confirm one logical alert;
+10. force provider failure and recovery, confirm visible coverage transitions, bounded
+    retry, and preservation of the previous successful observation baseline.

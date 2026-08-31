@@ -114,6 +114,60 @@ try {
       throw new Error(`Incident selection did not remain on ${fixture.location}.`);
     }
   }
+  await page.getByRole('button', { name: 'Evidence operations' }).click();
+  await page.getByRole('heading', { name: 'Incident watches' }).waitFor();
+  await page.getByLabel('Watch disaster').selectOption('wildfire');
+  await page.getByLabel('Watch scope').selectOption('worldwide');
+  const createWatchResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/incident-watches') &&
+      response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Create watch' }).click();
+  if (!(await createWatchResponse).ok()) {
+    throw new Error('The Incident Watch create request failed.');
+  }
+  const watchDeadline = Date.now() + 30_000;
+  let scheduledAlertVisible = false;
+  while (Date.now() < watchDeadline) {
+    const response = await page.request.get(
+      'http://127.0.0.1:8787/api/v1/incident-watches',
+    );
+    const watches = await response.json();
+    if (
+      watches.some(
+        (watch) => watch.disaster === 'wildfire' && watch.unread_change_count === 1,
+      )
+    ) {
+      scheduledAlertVisible = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (!scheduledAlertVisible) {
+    throw new Error('The scheduled Incident Watch refresh did not emit an alert.');
+  }
+  await page.getByRole('button', { name: 'Refresh watches' }).click();
+  const watchCard = page
+    .locator('.incident-watch-card')
+    .filter({ hasText: 'Worldwide' });
+  await watchCard.getByText('Wildfire', { exact: true }).waitFor();
+  await watchCard.getByText('1 unread', { exact: true }).waitFor();
+  await watchCard.getByRole('button', { name: 'Show timeline for Worldwide' }).click();
+  await page.getByText('New physical event discovered', { exact: true }).waitFor();
+  await page
+    .locator('.incident-watch-timeline')
+    .getByRole('button', {
+      name: 'Focus Equatorial wildfire perimeter fixture on map',
+    })
+    .click();
+  await page
+    .locator('.map-overlay')
+    .getByText(/0\.00,\s*-120\.00/)
+    .waitFor();
+  await page.getByRole('button', { name: 'Mark timeline read' }).click();
+  await watchCard.getByText('0 unread', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Close operations', exact: true }).click();
   await page.getByRole('button', { name: 'Open assistant' }).click();
   await page.getByLabel('Question').fill('Zoom into Japan.');
   const mapActionResponse = page.waitForResponse((response) =>
@@ -168,7 +222,7 @@ try {
     .waitFor();
   await browser.close();
   console.log(
-    'System test passed: all six Active Incidents hazards focused their own geometry and the existing source-backed assistant workflow rendered.',
+    'System test passed: all six Active Incidents hazards focused their own geometry, a scheduled Incident Watch refresh produced a visible source-backed timeline alert, and the existing assistant workflow rendered.',
   );
 } finally {
   stopStack();
