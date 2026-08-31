@@ -394,7 +394,7 @@ async def test_copernicus_rapid_mapping_is_landslide_map_evidence_not_discovery(
 
 
 @pytest.mark.asyncio
-async def test_ibtracs_is_tropical_cyclone_track_reconciliation_not_discovery() -> None:
+async def test_cyclone_map_sources_are_situation_context_not_discovery() -> None:
     service = build_current_disaster_report(
         Settings(_env_file=None), country_catalog=CATALOG
     )
@@ -412,21 +412,29 @@ async def test_ibtracs_is_tropical_cyclone_track_reconciliation_not_discovery() 
             (item.name, item.source_id, item.tier) for item in country.registrations
         ] == [
             (
+                "NOAA NHC/CPHC cyclone forecasts",
+                "noaa-nhc-cyclone-forecast",
+                ProviderTier.PRIMARY,
+            ),
+            (
                 "NOAA IBTrACS track reconciliation",
                 "noaa-ibtracs-tracks",
                 ProviderTier.SECONDARY,
-            )
+            ),
         ]
         assert country.unavailable_configuration == ("ReliefWeb",)
         assert [item.name for item in worldwide.registrations] == [
-            "NOAA IBTrACS track reconciliation"
+            "NOAA NHC/CPHC cyclone forecasts",
+            "NOAA IBTrACS track reconciliation",
         ]
-        assert all(
-            item.name != "NOAA IBTrACS track reconciliation"
+        discovery_names = {
+            item.name
             for item in registry.select(
                 _query(Disaster.TROPICAL_CYCLONE),
                 ProviderRole.EVENT_DISCOVERY,
             ).registrations
-        )
+        }
+        assert "NOAA NHC/CPHC cyclone forecasts" not in discovery_names
+        assert "NOAA IBTrACS track reconciliation" not in discovery_names
     finally:
         await service.aclose()

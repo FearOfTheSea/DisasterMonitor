@@ -1,5 +1,5 @@
 import base64
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
 import httpx
@@ -39,6 +39,11 @@ from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
+    CorrelationStatus,
+    CycloneMapCoordinate,
+    CycloneMapGeometryKind,
+    CycloneMapLayer,
+    CycloneMapSemanticRole,
     Disaster,
     DisasterEvent,
     EventMeasurement,
@@ -183,6 +188,151 @@ async def test_health_endpoint_does_not_need_the_model() -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_current_cyclone_serializes_supplemental_forecast_geometry() -> None:
+    event_source = SourceReference(
+        source_id="gdacs-tropical-cyclones",
+        publisher="GDACS",
+        title="Tropical Cyclone Fixture-26",
+        canonical_url="https://www.gdacs.org/report.aspx?eventtype=TC&eventid=42",
+        published_at=NOW,
+        updated_at=NOW,
+        retrieved_at=NOW,
+        authority=SourceAuthority.SECONDARY,
+    )
+    event = DisasterEvent(
+        event_id="gdacs:tc:42",
+        disaster=Disaster.TROPICAL_CYCLONE,
+        location="Pacific Ocean near Japan",
+        country=JAPAN,
+        event_time=NOW,
+        source=event_source,
+        geometry=point_event_geometry(25.0, 142.0, event_source),
+    )
+    product_source = SourceReference(
+        source_id="noaa-nhc-cyclone-forecast",
+        publisher="NOAA NHC/CPHC",
+        title="Advisory #15 forecast track",
+        canonical_url="https://www.nhc.noaa.gov/fixture-track.kmz",
+        published_at=NOW,
+        updated_at=NOW,
+        retrieved_at=NOW,
+        authority=SourceAuthority.NATIONAL_AUTHORITY,
+    )
+    layer = CycloneMapLayer(
+        layer_id="noaa-nhc:EP112026:advisory-015:forecast-track",
+        semantic_role=CycloneMapSemanticRole.FORECAST_TRACK,
+        geometry_kind=CycloneMapGeometryKind.TRACK,
+        coordinates=(
+            CycloneMapCoordinate(25.1, 141.5, NOW + timedelta(hours=12)),
+            CycloneMapCoordinate(25.4, 140.7, NOW + timedelta(hours=24)),
+        ),
+        source=product_source,
+        issued_at=NOW,
+        valid_from=NOW + timedelta(hours=12),
+        valid_to=NOW + timedelta(hours=24),
+        storm_id="EP112026",
+        provisional=False,
+        limitation="Forecast positions are not an observed storm footprint.",
+        reconciliation="Unique name and source-backed center proximity match.",
+    )
+
+    class EventProvider:
+        async def find_recent_events(self, query, *, now):
+            return ProviderBatch((event,))
+
+    class SituationProvider:
+        async def get_situation_reports(self, selected, query, *, now):
+            return ProviderBatch(
+                (
+                    SituationReport(
+                        source=product_source,
+                        narrative="Official forecast geometry is available.",
+                        event_id=selected.event_id,
+                        correlation=CorrelationStatus.MATCHED,
+                        reported_event_time=selected.event_time,
+                        locations=(selected.location,),
+                        countries=(JAPAN.canonical_name,),
+                        country_codes=(JAPAN.alpha3_code,),
+                        disaster=Disaster.TROPICAL_CYCLONE,
+                        provider_event_ids=("atcf:EP112026",),
+                        supplemental_geometry=(layer,),
+                    ),
+                )
+            )
+
+    capabilities = (
+        ProviderCapabilities(
+            frozenset({ProviderRole.EVENT_DISCOVERY}),
+            frozenset({Disaster.TROPICAL_CYCLONE}),
+            None,
+        ),
+        ProviderCapabilities(
+            frozenset({ProviderRole.SITUATION_EVIDENCE}),
+            frozenset({Disaster.TROPICAL_CYCLONE}),
+            None,
+        ),
+    )
+    service = CurrentDisasterReportService(
+        EventProvider(),
+        SituationProvider(),
+        provider_capabilities=capabilities,
+        clock=lambda: NOW,
+    )
+    app = create_app(model=FakeLanguageModel(), current_disaster_report=service)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/assistant",
+            json={"question": "What is the latest tropical cyclone in Japan?"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["selected_event"]["geometry"]["coordinates"] == [
+        {"latitude": 25.0, "longitude": 142.0}
+    ]
+    assert body["selected_event"]["supplemental_geometry"] == [
+        {
+            "layer_id": layer.layer_id,
+            "semantic_role": "forecast_track",
+            "geometry_kind": "track",
+            "coordinates": [
+                {
+                    "latitude": 25.1,
+                    "longitude": 141.5,
+                    "valid_at": "2026-08-06T00:00:00Z",
+                },
+                {
+                    "latitude": 25.4,
+                    "longitude": 140.7,
+                    "valid_at": "2026-08-06T12:00:00Z",
+                },
+            ],
+            "source": {
+                "source_id": product_source.source_id,
+                "publisher": product_source.publisher,
+                "title": product_source.title,
+                "canonical_url": product_source.canonical_url,
+                "published_at": "2026-08-05T12:00:00Z",
+                "updated_at": "2026-08-05T12:00:00Z",
+                "retrieved_at": "2026-08-05T12:00:00Z",
+                "snapshot_id": None,
+            },
+            "issued_at": "2026-08-05T12:00:00Z",
+            "valid_from": "2026-08-06T00:00:00Z",
+            "valid_to": "2026-08-06T12:00:00Z",
+            "storm_id": "EP112026",
+            "provisional": False,
+            "limitation": layer.limitation,
+            "reconciliation": layer.reconciliation,
+            "wind_threshold": None,
+            "wind_threshold_unit": None,
+        }
+    ]
 
 
 @pytest.mark.asyncio

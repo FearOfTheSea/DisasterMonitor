@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
+import type { SelectedEvent } from '@/shared/types/assistant';
 
 const adapterMocks = vi.hoisted(() => ({
   destroy: vi.fn(),
@@ -12,6 +13,7 @@ const adapterMocks = vi.hoisted(() => ({
   onSelectIncident: undefined as ((incidentId: string) => void) | undefined,
   setActiveIncidents: vi.fn(),
   setCommonOperationalPicture: vi.fn(),
+  setCycloneMapLayers: vi.fn(),
   setSatelliteImagery: vi.fn(),
   setSatelliteOpacity: vi.fn(),
   setSelectedIncident: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
     focusActiveIncident = adapterMocks.focusActiveIncident;
     setActiveIncidents = adapterMocks.setActiveIncidents;
     setCommonOperationalPicture = adapterMocks.setCommonOperationalPicture;
+    setCycloneMapLayers = adapterMocks.setCycloneMapLayers;
     setSatelliteImagery = adapterMocks.setSatelliteImagery;
     setSatelliteOpacity = adapterMocks.setSatelliteOpacity;
     setSelectedIncident = adapterMocks.setSelectedIncident;
@@ -226,6 +229,140 @@ describe('DisasterMap assistant focus', () => {
     adapterMocks.onSelectIncident?.('flood-1');
 
     expect(onSelectIncident).toHaveBeenCalledWith('flood-1');
+  });
+
+  it('renders distinct cyclone layer semantics and clears stale layers', () => {
+    const source = {
+      source_id: 'noaa-nhc-cyclone-forecast',
+      publisher: 'NOAA NHC/CPHC',
+      title: 'Advisory products',
+      canonical_url: 'https://www.nhc.noaa.gov/fixture.kmz',
+      published_at: '2026-08-31T03:00:00Z',
+      updated_at: '2026-08-31T03:00:00Z',
+      retrieved_at: '2026-08-31T03:05:00Z',
+      snapshot_id: null,
+    };
+    const selectedEvent: SelectedEvent = {
+      event_id: 'gdacs:tc:42',
+      disaster: 'tropical_cyclone',
+      location: 'Pacific Ocean',
+      event_time: '2026-08-31T03:00:00Z',
+      geometry: null,
+      measurements: [],
+      provider_ids: ['atcf:EP112026'],
+      geography_status: 'worldwide',
+      source,
+      supplemental_geometry: [
+        {
+          layer_id: 'provisional',
+          semantic_role: 'provisional_track',
+          geometry_kind: 'track',
+          coordinates: [
+            { latitude: 16, longitude: -122, valid_at: '2026-08-30T12:00:00Z' },
+            { latitude: 17, longitude: -124, valid_at: '2026-08-31T00:00:00Z' },
+          ],
+          source,
+          issued_at: '2026-08-31T00:00:00Z',
+          valid_from: '2026-08-30T12:00:00Z',
+          valid_to: '2026-08-31T00:00:00Z',
+          storm_id: 'EP112026',
+          provisional: true,
+          limitation: 'Provisional best-track context, not a forecast.',
+          reconciliation: 'Unique identity match.',
+          wind_threshold: null,
+          wind_threshold_unit: null,
+        },
+        {
+          layer_id: 'forecast',
+          semantic_role: 'forecast_track',
+          geometry_kind: 'track',
+          coordinates: [
+            { latitude: 17.2, longitude: -124.4, valid_at: '2026-08-31T12:00:00Z' },
+            { latitude: 17.8, longitude: -127, valid_at: '2026-09-01T00:00:00Z' },
+          ],
+          source,
+          issued_at: '2026-08-31T03:00:00Z',
+          valid_from: '2026-08-31T12:00:00Z',
+          valid_to: '2026-09-01T00:00:00Z',
+          storm_id: 'EP112026',
+          provisional: false,
+          limitation: 'Forecast positions are not an observed storm footprint.',
+          reconciliation: 'Unique identity match.',
+          wind_threshold: null,
+          wind_threshold_unit: null,
+        },
+        {
+          layer_id: 'cone',
+          semantic_role: 'uncertainty_area',
+          geometry_kind: 'area',
+          coordinates: [
+            { latitude: 16, longitude: -124, valid_at: null },
+            { latitude: 16, longitude: -130, valid_at: null },
+            { latitude: 20, longitude: -130, valid_at: null },
+          ],
+          source,
+          issued_at: '2026-08-31T03:00:00Z',
+          valid_from: '2026-08-31T03:00:00Z',
+          valid_to: '2026-09-05T03:00:00Z',
+          storm_id: 'EP112026',
+          provisional: false,
+          limitation: 'The cone is not an observed storm footprint.',
+          reconciliation: 'Unique identity match.',
+          wind_threshold: null,
+          wind_threshold_unit: null,
+        },
+      ],
+    };
+
+    const { rerender } = render(
+      <DisasterMap
+        onViewChange={vi.fn()}
+        onSelectIncident={vi.fn()}
+        selectedEvent={selectedEvent}
+      />,
+    );
+
+    expect(adapterMocks.setCycloneMapLayers).toHaveBeenCalledWith(
+      selectedEvent.supplemental_geometry,
+    );
+    expect(
+      screen
+        .getByText('Provisional track')
+        .closest('li')
+        ?.querySelector('.cyclone-legend-mark'),
+    ).toHaveClass('cyclone-legend-provisional_track');
+    expect(
+      screen
+        .getByText('Forecast track')
+        .closest('li')
+        ?.querySelector('.cyclone-legend-mark'),
+    ).toHaveClass('cyclone-legend-forecast_track');
+    expect(
+      screen
+        .getByText('Forecast uncertainty')
+        .closest('li')
+        ?.querySelector('.cyclone-legend-mark'),
+    ).toHaveClass('cyclone-legend-uncertainty_area');
+    expect(
+      screen.getByText(
+        'Forecast and uncertainty geometry are not observed storm footprints.',
+      ),
+    ).toBeVisible();
+
+    rerender(
+      <DisasterMap
+        onViewChange={vi.fn()}
+        onSelectIncident={vi.fn()}
+        selectedEvent={{
+          ...selectedEvent,
+          event_id: 'earthquake-1',
+          disaster: 'earthquake',
+          supplemental_geometry: [],
+        }}
+      />,
+    );
+    expect(adapterMocks.setCycloneMapLayers).toHaveBeenLastCalledWith([]);
+    expect(screen.queryByText('Forecast track')).not.toBeInTheDocument();
   });
 
   it('switches the one satellite layer and preserves daily versus UTC controls', async () => {

@@ -67,6 +67,11 @@ source authority, issue public warnings, or select events.
   It requires a unique non-generic name, onset, and track-proximity match, remains
   provisional, and is not an independent live-event authority because its agency
   inputs can overlap GDACS.
+- NOAA NHC/CPHC optionally attaches exact forecast-track and cone-of-uncertainty KMZ
+  layers after a GDACS cyclone is selected. It requires one unique active name and
+  source-center proximity match and covers only active Atlantic, Eastern North Pacific,
+  and Central North Pacific advisories. These layers remain separate from event
+  geometry and are not observed footprints, wind fields, warnings, or impact forecasts.
 - GDACS also provides secondary named-country and worldwide discovery for floods,
   wildfires, and volcanic eruptions. Flood records retain GloFAS/FloodList lineage and
   overlap the Copernicus/EC-JRC family used by GFM; wildfire records retain GWIS

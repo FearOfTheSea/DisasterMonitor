@@ -233,6 +233,7 @@ def compose_report(
             source=packet.event.source,
             provider_ids=packet.event.provider_ids,
             geography_status=packet.event.geography_status,
+            supplemental_geometry=packet.supplemental_geometry,
         ),
         retrieval_time=retrieved_at,
         sources=packet.sources,

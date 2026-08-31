@@ -24,9 +24,11 @@ import type {
 } from '@/features/map/model/activeIncidentMap';
 import type { DisasterType } from '@/features/incidents/model/activeIncidents';
 import type { MapAreaBounds } from '@/features/map/model/assistantMapFocus';
+import { cycloneStyleSemantics } from '@/features/map/model/cycloneMapLayers';
 import type {
   CommonOperationalPicture,
   CopGeometry,
+  CycloneMapLayer,
   MapView,
 } from '@/shared/types/assistant';
 
@@ -59,6 +61,7 @@ export class OpenLayersMapAdapter {
   private readonly activeIncidentLayer: VectorLayer<VectorSource<Feature<Geometry>>>;
   private satelliteLayer?: TileLayer<XYZ>;
   private copLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
+  private cycloneLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
   private pendingArea?: PendingArea;
   private pendingIncidentId?: string;
 
@@ -118,6 +121,7 @@ export class OpenLayersMapAdapter {
     this.activeIncidentSource.clear();
     this.clearSatelliteImagery();
     this.clearCommonOperationalPicture();
+    this.clearCycloneMapLayers();
     this.map.setTarget(undefined);
   }
 
@@ -155,6 +159,31 @@ export class OpenLayersMapAdapter {
       layer.setZIndex(20);
       this.map.addLayer(layer);
       this.copLayers.push(layer);
+    }
+  }
+
+  setCycloneMapLayers(layers: readonly CycloneMapLayer[]): void {
+    this.clearCycloneMapLayers();
+    for (const layerDefinition of layers) {
+      const source = new VectorSource<Feature<Geometry>>({
+        features: [
+          new Feature({
+            geometry: toCycloneMapGeometry(layerDefinition),
+            layerId: layerDefinition.layer_id,
+            semanticRole: layerDefinition.semantic_role,
+            stormId: layerDefinition.storm_id,
+          }),
+        ],
+      });
+      const layer = new VectorLayer({
+        source,
+        style: () => styleForCycloneLayer(layerDefinition.semantic_role),
+      });
+      layer.set('dmLayerType', 'supplemental-cyclone');
+      layer.set('dmCycloneLayerId', layerDefinition.layer_id);
+      layer.setZIndex(15);
+      this.map.addLayer(layer);
+      this.cycloneLayers.push(layer);
     }
   }
 
@@ -285,6 +314,11 @@ export class OpenLayersMapAdapter {
     this.copLayers = [];
   }
 
+  private clearCycloneMapLayers(): void {
+    for (const layer of this.cycloneLayers) this.map.removeLayer(layer);
+    this.cycloneLayers = [];
+  }
+
   private clearSatelliteImagery(): void {
     if (this.satelliteLayer) this.map.removeLayer(this.satelliteLayer);
     this.satelliteLayer = undefined;
@@ -367,6 +401,15 @@ function toActiveIncidentGeometry(geometry: RenderableIncidentGeometry): Geometr
   return new Polygon([coordinates]);
 }
 
+function toCycloneMapGeometry(layer: CycloneMapLayer): Geometry {
+  const coordinates = layer.coordinates.map((point) =>
+    fromLonLat([point.longitude, point.latitude]),
+  );
+  if (layer.geometry_kind === 'point') return new Point(coordinates[0]);
+  if (layer.geometry_kind === 'track') return new LineString(coordinates);
+  return new Polygon([coordinates]);
+}
+
 function styleForAuthority(value: unknown): Style {
   const authority: CopAuthority =
     value === 'official_source' || value === 'source_supplied'
@@ -409,6 +452,23 @@ function styleForActiveIncident(value: unknown, selected = false): Style {
       radius: selected ? 10 : 7,
       fill: new Fill({ color }),
       stroke: new Stroke({ color: '#ffffff', width: selected ? 4 : 2 }),
+    }),
+  });
+}
+
+function styleForCycloneLayer(semanticRole: CycloneMapLayer['semantic_role']): Style {
+  const semantics = cycloneStyleSemantics(semanticRole);
+  return new Style({
+    stroke: new Stroke({
+      color: semantics.strokeColor,
+      width: semanticRole === 'provisional_track' ? 3 : 2.5,
+      lineDash: semantics.lineDash,
+    }),
+    fill: new Fill({ color: semantics.fillColor }),
+    image: new CircleStyle({
+      radius: semanticRole === 'forecast_track' ? 5 : 4,
+      fill: new Fill({ color: semantics.fillColor }),
+      stroke: new Stroke({ color: semantics.strokeColor, width: 2 }),
     }),
   });
 }

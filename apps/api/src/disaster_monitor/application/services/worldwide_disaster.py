@@ -1,6 +1,7 @@
 """Capability-selected orchestration for bounded worldwide disaster lookups."""
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from disaster_monitor.application.disaster import (
@@ -27,6 +28,7 @@ from disaster_monitor.application.services.worldwide_disaster_policy import (
     default_worldwide_disaster_policy_registry,
 )
 from disaster_monitor.domain.disaster import (
+    CycloneMapLayer,
     EventGeographyStatus,
     ProviderTier,
     SituationReport,
@@ -198,6 +200,10 @@ class WorldwideDisasterReportService:
                 "Configured worldwide situation sources returned no usable evidence."
             )
         complete = bool(situation_reports) and not capability_gaps
+        summary = replace(
+            summary,
+            supplemental_geometry=_supplemental_geometry(tuple(situation_reports)),
+        )
         limitation = (
             "Worldwide event and situation evidence were obtained from configured "
             "sources."
@@ -257,6 +263,17 @@ def _failed_report(detail: str, now: datetime, warnings: list[str]) -> DisasterR
         investigation_actions=("Attempted the configured worldwide event lookup.",),
         termination_reason="worldwide_event_verification_failed",
     )
+
+
+def _supplemental_geometry(
+    reports: tuple[SituationReport, ...],
+) -> tuple[CycloneMapLayer, ...]:
+    layers = {
+        layer.layer_id: layer
+        for report in reports
+        for layer in report.supplemental_geometry
+    }
+    return tuple(layers[layer_id] for layer_id in sorted(layers))
 
 
 def _utc_text(value: datetime) -> str:

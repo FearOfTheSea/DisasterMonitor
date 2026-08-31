@@ -1,5 +1,5 @@
 {
-  "version": "2.6.0",
+  "version": "2.7.0",
   "sources": [
     {
       "source_id": "cems-gfm-floods",
@@ -254,6 +254,36 @@
       "provider_registration_name": "NOAA IBTrACS track reconciliation",
       "implementation_status": "implemented",
       "allowed_hosts": ["www.ncei.noaa.gov"]
+    },
+    {
+      "source_id": "noaa-nhc-cyclone-forecast",
+      "organization_name": "NOAA National Hurricane Center / Central Pacific Hurricane Center",
+      "display_name": "NOAA NHC/CPHC cyclone forecast layers",
+      "jurisdiction": "Atlantic, Eastern North Pacific, and Central North Pacific operational tropical-cyclone basins",
+      "authority_level": "national_authority",
+      "information_roles": ["map_layers"],
+      "supported_disasters": ["tropical_cyclone"],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_rss_and_kmz_advisory_products",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "updated with NHC/CPHC advisories; exact issue and publication latency is source-dependent",
+      "attribution_guidance": "Credit NOAA NHC/CPHC and retain the ATCF storm identifier, advisory number, product issue time, validity interval, and direct official product URL. Present forecast tracks and cones as advisory geometry, never as observed storm footprints.",
+      "limitations": [
+        "This provider performs no event discovery and runs only after a GDACS tropical cyclone with a source-backed point is selected.",
+        "Coverage is limited to active NHC/CPHC products for the Atlantic, Eastern North Pacific, and Central North Pacific basins; absence is reported as unsupported or unavailable forecast context, not as no cyclone.",
+        "A layer is attached only when one active storm uniquely matches the selected source name and has an advisory center within 500 km; zero or multiple candidates fail closed.",
+        "Only exact source-published forecast positions and cone polygon coordinates are retained. Connecting track segments are a rendering aid and are not forecasts between official points.",
+        "The cone depicts probable track-center uncertainty and is not a storm-size, wind, hazard, impact, warning, evacuation, or observed-footprint boundary.",
+        "Wind-field shapefiles and unsupported products are excluded; no wind radii or missing geometry are inferred.",
+        "NHC/CPHC products can be upstream of GDACS, so agreement is not treated as independent corroboration."
+      ],
+      "registered_tool_names": ["retrieve_situation_evidence"],
+      "provider_registration_name": "NOAA NHC/CPHC cyclone forecasts",
+      "implementation_status": "implemented",
+      "allowed_hosts": ["www.nhc.noaa.gov"]
     },
     {
       "source_id": "gdacs-floods",

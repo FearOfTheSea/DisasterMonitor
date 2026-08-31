@@ -14,6 +14,7 @@ from disaster_monitor.application.ports.source_evidence import (
 )
 from disaster_monitor.domain.disaster import (
     Country,
+    CycloneMapLayer,
     Disaster,
     DisasterEvent,
     EventGeometry,
@@ -113,6 +114,11 @@ def validate_situation_evidence(
     if not isinstance(record.facts, tuple):
         raise SourceEvidencePolicyError("The situation fact collection is invalid.")
     _validate_measurements(record.measurements, record.source)
+    _validate_supplemental_geometry(
+        record.supplemental_geometry,
+        source_id=source_id,
+        allowed_hosts=allowed_hosts,
+    )
     if record.disaster is not None and (
         not isinstance(record.disaster, Disaster) or record.disaster != query.disaster
     ):
@@ -165,6 +171,11 @@ def validate_worldwide_situation_evidence(
     if not isinstance(record.narrative, str):
         raise SourceEvidencePolicyError("The worldwide situation narrative is invalid.")
     _validate_measurements(record.measurements, record.source)
+    _validate_supplemental_geometry(
+        record.supplemental_geometry,
+        source_id=source_id,
+        allowed_hosts=allowed_hosts,
+    )
     if record.disaster is not None and record.disaster != query.disaster:
         raise SourceEvidencePolicyError(
             "The worldwide situation disaster is outside the selected scope."
@@ -340,3 +351,20 @@ def _validate_measurements(
             measurement.value
         ):
             raise SourceEvidencePolicyError("An event measurement value is invalid.")
+
+
+def _validate_supplemental_geometry(
+    layers: object, *, source_id: str, allowed_hosts: frozenset[str]
+) -> None:
+    if not isinstance(layers, tuple) or any(
+        not isinstance(layer, CycloneMapLayer) for layer in layers
+    ):
+        raise SourceEvidencePolicyError(
+            "The supplemental cyclone geometry collection is invalid."
+        )
+    for layer in layers:
+        _validate_source(
+            layer.source,
+            source_id=source_id,
+            allowed_hosts=allowed_hosts,
+        )

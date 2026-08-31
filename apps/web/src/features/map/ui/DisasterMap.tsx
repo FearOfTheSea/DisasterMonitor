@@ -11,6 +11,10 @@ import type { ActiveIncident } from '@/features/incidents/model/activeIncidents'
 import type { AssistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import { activeIncidentMapFeatures } from '@/features/map/model/activeIncidentMap';
 import { copStyleSemantics } from '@/features/map/model/copRenderPlan';
+import {
+  cycloneMapLayers,
+  cycloneStyleSemantics,
+} from '@/features/map/model/cycloneMapLayers';
 import { DEFAULT_MAP_VIEW } from '@/features/map/model/mapView';
 import {
   buildProtectedSatelliteTileUrl,
@@ -24,7 +28,11 @@ import {
   type SatelliteSourceId,
   validObservationTime,
 } from '@/features/map/model/satelliteImagery';
-import type { CommonOperationalPicture, MapView } from '@/shared/types/assistant';
+import type {
+  CommonOperationalPicture,
+  MapView,
+  SelectedEvent,
+} from '@/shared/types/assistant';
 
 const DEFAULT_SATELLITE_SOURCE: SatelliteSourceId = 'nasa-viirs-snpp-true-color';
 const DEFAULT_SATELLITE_OPACITY = 0.75;
@@ -36,6 +44,7 @@ type DisasterMapProps = {
   areaOfInterest?: AssistantMapAreaOfInterest;
   activeIncidents?: ActiveIncident[];
   selectedIncidentId?: string;
+  selectedEvent?: SelectedEvent;
 };
 
 export function DisasterMap({
@@ -45,6 +54,7 @@ export function DisasterMap({
   areaOfInterest,
   activeIncidents = [],
   selectedIncidentId,
+  selectedEvent,
 }: DisasterMapProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const adapter = useRef<OpenLayersMapAdapter | null>(null);
@@ -71,6 +81,7 @@ export function DisasterMap({
     () => activeIncidentMapFeatures(activeIncidents),
     [activeIncidents],
   );
+  const cycloneLayers = useMemo(() => cycloneMapLayers(selectedEvent), [selectedEvent]);
   const selectedSatelliteSource = useMemo(
     () =>
       satelliteSources.find((source) => source.id === satelliteSourceId) ??
@@ -164,6 +175,10 @@ export function DisasterMap({
   useEffect(() => {
     adapter.current?.setCommonOperationalPicture(commonOperationalPicture);
   }, [commonOperationalPicture]);
+
+  useEffect(() => {
+    adapter.current?.setCycloneMapLayers(cycloneLayers);
+  }, [cycloneLayers]);
 
   useEffect(() => {
     adapter.current?.setActiveIncidents(incidentFeatures);
@@ -321,6 +336,34 @@ export function DisasterMap({
               }),
             )}
           </ul>
+        </aside>
+      )}
+      {cycloneLayers.length > 0 && (
+        <aside className="cyclone-legend" aria-label="Cyclone forecast layers">
+          <strong>Cyclone layers</strong>
+          <ul>
+            {cycloneLayers.map((layer) => {
+              const semantics = cycloneStyleSemantics(layer.semantic_role);
+              const label =
+                layer.semantic_role === 'wind_radii' && layer.wind_threshold
+                  ? `${semantics.label} · ${layer.wind_threshold} ${layer.wind_threshold_unit}`
+                  : semantics.label;
+              return (
+                <li key={layer.layer_id}>
+                  <span
+                    className={`cyclone-legend-mark cyclone-legend-${layer.semantic_role}`}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    <b>{label}</b>
+                    <small>{layer.source.publisher}</small>
+                    <small>{layer.limitation}</small>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <p>Forecast and uncertainty geometry are not observed storm footprints.</p>
         </aside>
       )}
     </>

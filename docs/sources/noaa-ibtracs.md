@@ -23,7 +23,10 @@ The proximity bound accommodates update latency between a moving GDACS endpoint 
 archive updated about three times weekly. It is never sufficient on its own. Zero or
 multiple candidates fail closed with `identity_not_reconciled`. A unique result is a
 `matched` situation report containing SID, interval, point count, agency lineage, and
-ATCF IDs. Wind, pressure, category, and landfall columns are not promoted.
+ATCF IDs. The same exact timestamped points are exposed as a separate
+`provisional_track` supplemental map layer. They never replace the selected event's
+occurrence geometry and are never labeled as forecasts. Wind, pressure, category, and
+landfall columns are not promoted.
 
 IBTrACS merges tracks supplied by WMO Regional Specialized Meteorological Centres,
 Tropical Cyclone Warning Centres, JTWC, and other agencies. GDACS can use the same
@@ -48,4 +51,3 @@ References checked 2026-08-24:
 - `https://www.ncei.noaa.gov/sites/g/files/anmtlf171/files/2025-04/IBTrACS_version4r01_Technical_Details.pdf`
 - `https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/`
 - `https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ACTIVE.list.v04r01.csv`
-

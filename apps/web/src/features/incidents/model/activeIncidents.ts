@@ -55,6 +55,7 @@ export type IncidentMeasurement = {
 
 export type ActiveIncident = {
   event_id: string;
+  physical_event_id?: string | null;
   disaster: DisasterType;
   location: string;
   event_time: string;
@@ -64,6 +65,13 @@ export type ActiveIncident = {
   provider_tier: 'primary' | 'secondary';
   source_authority: IncidentSourceAuthority;
   source: IncidentSource;
+};
+
+export type CompoundHazardCorrelation = Omit<
+  CompoundHazardCorrelationResponse,
+  'source_ids'
+> & {
+  source_ids: string[];
 };
 
 export type DisasterIncidentCoverage = {
@@ -79,4 +87,6 @@ export type ActiveIncidentsSnapshot = {
   incidents: ActiveIncident[];
   coverage: DisasterIncidentCoverage[];
   warnings: string[];
+  correlations?: CompoundHazardCorrelation[];
 };
+import type { CompoundHazardCorrelationResponse } from '@/shared/api/generated/assistant';

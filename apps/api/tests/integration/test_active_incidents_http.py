@@ -14,6 +14,11 @@ from disaster_monitor.application.services.active_incidents import (
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
+from disaster_monitor.application.services.event_policies import (
+    ASSOCIATION_LIMITATION,
+    CompoundHazardCorrelation,
+    CompoundHazardRelationship,
+)
 from disaster_monitor.application.services.provider_registry import (
     ProviderCapabilities,
     ProviderRole,
@@ -181,6 +186,7 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
         "provider_ids": ["fixture:fire-1"],
         "provider_tier": "primary",
         "source_authority": "scientific_authority",
+        "physical_event_id": None,
         "source": {
             "source_id": "fixture-wildfires",
             "publisher": "Fixture Fire Authority",
@@ -192,7 +198,100 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
             "snapshot_id": "snapshot:fire-1",
         },
     }
+    assert body["correlations"] == []
     assert body["warnings"] == ["Fixture provider returned a partial response."]
+
+
+@pytest.mark.asyncio
+async def test_active_incidents_serializes_resolvable_compound_correlations() -> None:
+    source = _snapshot().incidents[0].source
+    first = ActiveIncident(
+        event_id="quake-1",
+        disaster=Disaster.EARTHQUAKE,
+        location="Fixture coast",
+        event_time=NOW,
+        geometry=None,
+        measurements=(),
+        provider_ids=("fixture:quake-1",),
+        provider_tier=ProviderTier.SECONDARY,
+        source_authority=source.authority,
+        source=source,
+        physical_event_id="physical-event:quake-1",
+    )
+    second = ActiveIncident(
+        event_id="slide-1",
+        disaster=Disaster.LANDSLIDE,
+        location="Fixture slope",
+        event_time=NOW,
+        geometry=None,
+        measurements=(),
+        provider_ids=("fixture:slide-1",),
+        provider_tier=ProviderTier.SECONDARY,
+        source_authority=source.authority,
+        source=source,
+    )
+    correlation = CompoundHazardCorrelation(
+        correlation_id="compound-correlation:v1:fixture",
+        rule_id="compound-hazard:earthquake-landslide:v1",
+        relationship=CompoundHazardRelationship.SPATIOTEMPORAL_ASSOCIATION,
+        first_event_id=first.event_id,
+        first_physical_event_id=first.physical_event_id,
+        first_disaster=first.disaster,
+        second_event_id=second.event_id,
+        second_physical_event_id=None,
+        second_disaster=second.disaster,
+        distance_km=42.5,
+        time_delta_seconds=7200,
+        source_ids=(source.source_id,),
+        summary=(
+            "Earthquake quake-1 and landslide slide-1 are approximately "
+            "42.5 km and 2 hours apart."
+        ),
+    )
+    base = _snapshot()
+    correlated_snapshot = ActiveIncidentsSnapshot(
+        retrieved_at=base.retrieved_at,
+        incidents=(first, second),
+        coverage=base.coverage,
+        warnings=(),
+        correlations=(correlation,),
+    )
+
+    class CorrelatedService:
+        async def execute(self, query=None):
+            return correlated_snapshot
+
+    app = create_app(
+        model=FakeLanguageModel(),
+        current_disaster_report=_current_service(),
+        active_incidents_service=CorrelatedService(),  # type: ignore[arg-type]
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/incidents")
+
+    assert response.status_code == 200
+    body = response.json()
+    incident_ids = {item["event_id"] for item in body["incidents"]}
+    item = body["correlations"][0]
+    assert {item["first_event_id"], item["second_event_id"]} <= incident_ids
+    assert item == {
+        "correlation_id": "compound-correlation:v1:fixture",
+        "rule_id": "compound-hazard:earthquake-landslide:v1",
+        "relationship": "spatiotemporal_association",
+        "first_event_id": "quake-1",
+        "first_physical_event_id": "physical-event:quake-1",
+        "first_disaster": "earthquake",
+        "second_event_id": "slide-1",
+        "second_physical_event_id": None,
+        "second_disaster": "landslide",
+        "distance_km": 42.5,
+        "time_delta_seconds": 7200,
+        "source_ids": ["fixture-wildfires"],
+        "summary": correlation.summary,
+        "limitation": ASSOCIATION_LIMITATION,
+    }
 
 
 @pytest.mark.asyncio

@@ -507,6 +507,128 @@ const apiSchemas = {
     required: ['conversation_id', 'created_at', 'updated_at', 'preview'],
     type: 'object',
   },
+  CycloneMapCoordinateResponse: {
+    properties: {
+      latitude: {
+        maximum: 90,
+        minimum: -90,
+        type: 'number',
+      },
+      longitude: {
+        maximum: 180,
+        minimum: -180,
+        type: 'number',
+      },
+      valid_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: ['latitude', 'longitude'],
+    type: 'object',
+  },
+  CycloneMapLayerResponse: {
+    properties: {
+      coordinates: {
+        items: {
+          $ref: '#/components/schemas/CycloneMapCoordinateResponse',
+        },
+        type: 'array',
+      },
+      geometry_kind: {
+        enum: ['point', 'track', 'area'],
+        type: 'string',
+      },
+      issued_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      layer_id: {
+        type: 'string',
+      },
+      limitation: {
+        type: 'string',
+      },
+      provisional: {
+        type: 'boolean',
+      },
+      reconciliation: {
+        type: 'string',
+      },
+      semantic_role: {
+        enum: ['provisional_track', 'forecast_track', 'uncertainty_area', 'wind_radii'],
+        type: 'string',
+      },
+      source: {
+        $ref: '#/components/schemas/SourceResponse',
+      },
+      storm_id: {
+        type: 'string',
+      },
+      valid_from: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      valid_to: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      wind_threshold: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      wind_threshold_unit: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: [
+      'layer_id',
+      'semantic_role',
+      'geometry_kind',
+      'coordinates',
+      'source',
+      'issued_at',
+      'storm_id',
+      'provisional',
+      'limitation',
+      'reconciliation',
+    ],
+    type: 'object',
+  },
   DecisionEstimateResponse: {
     properties: {
       contradicting_evidence_ids: {
@@ -1651,6 +1773,12 @@ const apiSchemas = {
       source: {
         $ref: '#/components/schemas/SourceResponse',
       },
+      supplemental_geometry: {
+        items: {
+          $ref: '#/components/schemas/CycloneMapLayerResponse',
+        },
+        type: 'array',
+      },
     },
     required: [
       'event_id',
@@ -2054,6 +2182,7 @@ export type ActiveIncidentResponse = {
   geometry?: EventGeometryResponse | null;
   location: string;
   measurements?: Array<EventMeasurementResponse>;
+  physical_event_id?: string | null;
   provider_ids?: Array<string>;
   provider_tier: ProviderTier;
   source: SourceResponse;
@@ -2061,6 +2190,7 @@ export type ActiveIncidentResponse = {
 };
 
 export type ActiveIncidentsSnapshotResponse = {
+  correlations?: Array<CompoundHazardCorrelationResponse>;
   coverage?: Array<DisasterIncidentCoverageResponse>;
   incidents?: Array<ActiveIncidentResponse>;
   retrieved_at: string;
@@ -2155,6 +2285,23 @@ export type CommonOperationalPictureResponse = {
   updated_at: string;
 };
 
+export type CompoundHazardCorrelationResponse = {
+  correlation_id: string;
+  distance_km: number;
+  first_disaster: Disaster;
+  first_event_id: string;
+  first_physical_event_id?: string | null;
+  limitation: string;
+  relationship: 'spatiotemporal_association';
+  rule_id: string;
+  second_disaster: Disaster;
+  second_event_id: string;
+  second_physical_event_id?: string | null;
+  source_ids?: Array<string>;
+  summary: string;
+  time_delta_seconds: number;
+};
+
 export type ConversationMessageResponse = {
   assistant_response?: AssistantResponse | null;
   content: string;
@@ -2201,6 +2348,30 @@ export type CountryCatalogUpdateResponse = {
 export type CountryIncidentWatchScopeRequest = {
   country: string;
   kind: 'country';
+};
+
+export type CycloneMapCoordinateResponse = {
+  latitude: number;
+  longitude: number;
+  valid_at?: string | null;
+};
+
+export type CycloneMapLayerResponse = {
+  coordinates: Array<CycloneMapCoordinateResponse>;
+  geometry_kind: 'point' | 'track' | 'area';
+  issued_at: string;
+  layer_id: string;
+  limitation: string;
+  provisional: boolean;
+  reconciliation: string;
+  semantic_role:
+    'provisional_track' | 'forecast_track' | 'uncertainty_area' | 'wind_radii';
+  source: SourceResponse;
+  storm_id: string;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  wind_threshold?: number | null;
+  wind_threshold_unit?: string | null;
 };
 
 export type DecisionEstimateResponse = {
@@ -2638,6 +2809,7 @@ export type SelectedEventResponse = {
   measurements?: Array<EventMeasurementResponse>;
   provider_ids?: Array<string>;
   source: SourceResponse;
+  supplemental_geometry?: Array<CycloneMapLayerResponse>;
 };
 
 export type SourceAuthority =

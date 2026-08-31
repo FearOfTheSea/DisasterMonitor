@@ -8,6 +8,8 @@ import pytest
 from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
+    CycloneMapGeometryKind,
+    CycloneMapSemanticRole,
     Disaster,
     DisasterEvent,
     FactStatus,
@@ -118,6 +120,26 @@ async def test_ibtracs_reconciles_identity_from_name_start_and_track_proximity()
     assert report.provider_event_ids == (
         "ibtracs:2026231N08155",
         "atcf:WP172026",
+    )
+    assert len(report.supplemental_geometry) == 1
+    track = report.supplemental_geometry[0]
+    assert track.semantic_role is CycloneMapSemanticRole.PROVISIONAL_TRACK
+    assert track.geometry_kind is CycloneMapGeometryKind.TRACK
+    assert track.provisional is True
+    assert track.storm_id == "2026231N08155"
+    assert [
+        (item.latitude, item.longitude, item.valid_at) for item in track.coordinates
+    ] == [
+        (7.9, 154.9, datetime(2026, 8, 18, 12, tzinfo=UTC)),
+        (20.4, 143.6, datetime(2026, 8, 22, 18, tzinfo=UTC)),
+        (21.0, 142.3, datetime(2026, 8, 23, 0, tzinfo=UTC)),
+    ]
+    assert track.valid_from == datetime(2026, 8, 18, 12, tzinfo=UTC)
+    assert track.valid_to == datetime(2026, 8, 23, 0, tzinfo=UTC)
+    assert "not a forecast" in track.limitation
+    assert all(
+        item.semantic_role is not CycloneMapSemanticRole.FORECAST_TRACK
+        for item in report.supplemental_geometry
     )
     assert len(requests) == 1
     assert len(snapshots) == 1

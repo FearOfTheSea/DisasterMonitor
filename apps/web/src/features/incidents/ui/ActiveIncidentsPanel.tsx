@@ -137,6 +137,12 @@ function formatTime(value: string): string {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 3_600) return 'less than 1 hour';
+  const hours = Math.round(seconds / 3_600);
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+}
+
 function coverageFor(
   snapshot: ActiveIncidentsSnapshot,
   disaster: DisasterType,
@@ -272,6 +278,46 @@ export function ActiveIncidentsPanel({
                 <li key={warning}>{warning}</li>
               ))}
             </ul>
+          </section>
+        )}
+        {snapshot && (snapshot.correlations?.length ?? 0) > 0 && (
+          <section
+            className="incident-correlations"
+            aria-labelledby="incident-correlations-heading"
+          >
+            <div className="incident-section-heading">
+              <h3 id="incident-correlations-heading">Related hazard context</h3>
+              <span>{snapshot.correlations?.length}</span>
+            </div>
+            <p>
+              Rule-bounded proximity between distinct records. These are descriptive
+              associations, not merged incidents.
+            </p>
+            <div className="incident-correlation-list">
+              {snapshot.correlations?.map((correlation) => (
+                <article key={correlation.correlation_id}>
+                  <strong>
+                    {disasterLabel(correlation.first_disaster)} →{' '}
+                    {disasterLabel(correlation.second_disaster)}
+                  </strong>
+                  <p>{correlation.summary}</p>
+                  <dl>
+                    <div>
+                      <dt>Approx. distance</dt>
+                      <dd>{correlation.distance_km.toLocaleString()} km</dd>
+                    </div>
+                    <div>
+                      <dt>Time apart</dt>
+                      <dd>{formatDuration(correlation.time_delta_seconds)}</dd>
+                    </div>
+                  </dl>
+                  <small>Sources: {correlation.source_ids.join(', ')}</small>
+                  <small className="incident-correlation-limitation">
+                    {correlation.limitation}
+                  </small>
+                </article>
+              ))}
+            </div>
           </section>
         )}
         {snapshot && (

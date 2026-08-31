@@ -110,6 +110,9 @@ export default function Home() {
     .reverse()
     .find((message) => message.report?.commonOperationalPicture)
     ?.report?.commonOperationalPicture;
+  const selectedEvent = [...conversation.messages]
+    .reverse()
+    .find((message) => message.report)?.report?.selectedEvent;
   const evidenceStateVersion = [...conversation.messages]
     .reverse()
     .find((message) => message.report?.decisionSupport?.evidence_state_version)?.report
@@ -178,6 +181,7 @@ export default function Home() {
             areaOfInterest={areaOfInterest}
             activeIncidents={mapIncidents}
             selectedIncidentId={selectedIncidentId}
+            selectedEvent={selectedEvent}
           />
           <div className="map-overlay" role="status" aria-live="polite">
             <PositionIcon className="map-overlay-icon" />

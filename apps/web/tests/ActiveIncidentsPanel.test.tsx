@@ -68,6 +68,7 @@ function snapshot(incidents: ActiveIncident[] = [INCIDENT]): ActiveIncidentsSnap
             : 'Configured providers returned no matching records; this is not evidence that no disaster occurred.',
     })),
     warnings: ['Fixture provider returned a partial response.'],
+    correlations: [],
   };
 }
 
@@ -154,6 +155,61 @@ describe('ActiveIncidentsPanel', () => {
     );
 
     expect(screen.getByText('estimated')).toBeInTheDocument();
+  });
+
+  it('renders bounded compound-hazard context with its non-causation limit', () => {
+    const correlated = snapshot();
+    correlated.correlations = [
+      {
+        correlation_id: 'compound-correlation:v1:fixture',
+        rule_id: 'compound-hazard:tropical-cyclone-flood:v1',
+        relationship: 'spatiotemporal_association',
+        first_event_id: 'cyclone-1',
+        first_physical_event_id: 'physical:cyclone-1',
+        first_disaster: 'tropical_cyclone',
+        second_event_id: 'flood-1',
+        second_physical_event_id: 'physical:flood-1',
+        second_disaster: 'flood',
+        distance_km: 82.4,
+        time_delta_seconds: 18_000,
+        source_ids: ['gdacs-tropical-cyclones', 'cems-gfm-floods'],
+        summary:
+          'Tropical cyclone cyclone-1 and flood flood-1 are approximately 82.4 km and 5 hours apart.',
+        limitation: 'Spatial and temporal proximity does not establish causation.',
+      },
+    ];
+
+    const { rerender } = render(
+      <ActiveIncidentsPanel
+        snapshot={correlated}
+        status="success"
+        selectedIncidentId={undefined}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    const section = screen.getByRole('region', { name: 'Related hazard context' });
+    expect(section).toHaveTextContent('Tropical cyclone → Flood');
+    expect(section).toHaveTextContent('82.4 km');
+    expect(section).toHaveTextContent('5 hours');
+    expect(section).toHaveTextContent('gdacs-tropical-cyclones');
+    expect(section).toHaveTextContent(
+      'Spatial and temporal proximity does not establish causation.',
+    );
+
+    rerender(
+      <ActiveIncidentsPanel
+        snapshot={snapshot()}
+        status="success"
+        selectedIncidentId={undefined}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole('region', { name: 'Related hazard context' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows loading, failed, and successful-empty states honestly', () => {

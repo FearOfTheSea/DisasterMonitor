@@ -265,6 +265,35 @@ class EventMeasurementResponse(BaseModel):
     source_id: str
 
 
+class CycloneMapCoordinateResponse(BaseModel):
+    """Exact WGS84 coordinate from a supplemental cyclone product."""
+
+    latitude: Annotated[float, Field(ge=-90, le=90)]
+    longitude: Annotated[float, Field(ge=-180, le=180)]
+    valid_at: datetime | None = None
+
+
+class CycloneMapLayerResponse(BaseModel):
+    """Explicitly typed cyclone geometry separate from event occurrence."""
+
+    layer_id: str
+    semantic_role: Literal[
+        "provisional_track", "forecast_track", "uncertainty_area", "wind_radii"
+    ]
+    geometry_kind: Literal["point", "track", "area"]
+    coordinates: list[CycloneMapCoordinateResponse]
+    source: SourceResponse
+    issued_at: datetime
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    storm_id: str
+    provisional: bool
+    limitation: str
+    reconciliation: str
+    wind_threshold: float | None = None
+    wind_threshold_unit: str | None = None
+
+
 class SelectedEventResponse(BaseModel):
     """The specific event covered by a current-disaster report."""
 
@@ -277,12 +306,14 @@ class SelectedEventResponse(BaseModel):
     source: SourceResponse
     provider_ids: list[str] = Field(default_factory=list)
     geography_status: str
+    supplemental_geometry: list[CycloneMapLayerResponse] = Field(default_factory=list)
 
 
 class ActiveIncidentResponse(BaseModel):
     """One worldwide event with exact provider evidence and authority."""
 
     event_id: str
+    physical_event_id: str | None = None
     disaster: Disaster
     location: str
     event_time: datetime
@@ -292,6 +323,25 @@ class ActiveIncidentResponse(BaseModel):
     provider_tier: ProviderTier
     source_authority: SourceAuthority
     source: SourceResponse
+
+
+class CompoundHazardCorrelationResponse(BaseModel):
+    """One bounded descriptive association between incidents in this snapshot."""
+
+    correlation_id: str
+    rule_id: str
+    relationship: Literal["spatiotemporal_association"]
+    first_event_id: str
+    first_physical_event_id: str | None = None
+    first_disaster: Disaster
+    second_event_id: str
+    second_physical_event_id: str | None = None
+    second_disaster: Disaster
+    distance_km: Annotated[float, Field(ge=0)]
+    time_delta_seconds: Annotated[int, Field(ge=0)]
+    source_ids: list[str] = Field(default_factory=list)
+    summary: str
+    limitation: str
 
 
 class DisasterIncidentCoverageResponse(BaseModel):
@@ -311,6 +361,7 @@ class ActiveIncidentsSnapshotResponse(BaseModel):
     incidents: list[ActiveIncidentResponse] = Field(default_factory=list)
     coverage: list[DisasterIncidentCoverageResponse] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    correlations: list[CompoundHazardCorrelationResponse] = Field(default_factory=list)
 
 
 class CountryIncidentWatchScopeRequest(BaseModel):

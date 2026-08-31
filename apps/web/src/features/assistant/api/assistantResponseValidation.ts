@@ -2,6 +2,7 @@ import type {
   AssistantResponse as ApiAssistantResponse,
   ConversationResponse as ApiConversationResponse,
   DecisionSupportResponse,
+  CycloneMapLayerResponse,
   DisasterMediaGalleryResponse,
   EventGeometryResponse,
   InvestigationResponse,
@@ -78,6 +79,15 @@ function assistantSemanticsAreValid(response: AssistantResponse): boolean {
     return false;
   }
   if (
+    response.selected_event &&
+    !cycloneLayersAreConsistent(
+      response.selected_event.disaster,
+      response.selected_event.supplemental_geometry ?? [],
+    )
+  ) {
+    return false;
+  }
+  if (
     response.decision_support &&
     !decisionSupportIsConsistent(response.decision_support)
   ) {
@@ -101,6 +111,67 @@ function assistantSemanticsAreValid(response: AssistantResponse): boolean {
     !response.media_gallery ||
     mediaGalleryIsConsistent(response.media_gallery, response.selected_event?.event_id)
   );
+}
+
+function cycloneLayersAreConsistent(
+  disaster: string,
+  layers: CycloneMapLayerResponse[],
+): boolean {
+  if (layers.length === 0) return true;
+  if (disaster !== 'tropical_cyclone') return false;
+  if (new Set(layers.map((layer) => layer.storm_id)).size !== 1) return false;
+  return layers.every((layer) => {
+    const minimumCoordinates = layer.geometry_kind === 'area' ? 3 : 2;
+    const validTimes = [layer.issued_at, layer.valid_from, layer.valid_to].filter(
+      (value): value is string => Boolean(value),
+    );
+    if (
+      layer.coordinates.length < minimumCoordinates ||
+      validTimes.some((value) => Number.isNaN(new Date(value).getTime())) ||
+      (layer.valid_from &&
+        layer.valid_to &&
+        new Date(layer.valid_to).getTime() < new Date(layer.valid_from).getTime()) ||
+      layer.coordinates.some(
+        (point) =>
+          point.latitude < -90 ||
+          point.latitude > 90 ||
+          point.longitude < -180 ||
+          point.longitude > 180 ||
+          (point.valid_at !== null &&
+            point.valid_at !== undefined &&
+            Number.isNaN(new Date(point.valid_at).getTime())),
+      )
+    ) {
+      return false;
+    }
+    if (layer.semantic_role === 'provisional_track') {
+      return (
+        layer.geometry_kind === 'track' &&
+        layer.provisional === true &&
+        layer.coordinates.every((point) => Boolean(point.valid_at))
+      );
+    }
+    if (layer.provisional) return false;
+    if (layer.semantic_role === 'forecast_track') {
+      return (
+        layer.geometry_kind === 'track' &&
+        layer.coordinates.every((point) => Boolean(point.valid_at))
+      );
+    }
+    if (layer.semantic_role === 'uncertainty_area') {
+      return (
+        layer.geometry_kind === 'area' &&
+        layer.wind_threshold == null &&
+        layer.wind_threshold_unit == null
+      );
+    }
+    return (
+      layer.geometry_kind === 'area' &&
+      typeof layer.wind_threshold === 'number' &&
+      layer.wind_threshold > 0 &&
+      Boolean(layer.wind_threshold_unit?.trim())
+    );
+  });
 }
 
 function eventGeometryIsConsistent(geometry: EventGeometryResponse): boolean {
@@ -195,6 +266,12 @@ function normalizeAssistantResponse(value: ApiAssistantResponse): AssistantRespo
             : value.selected_event.geometry,
           measurements: value.selected_event.measurements ?? [],
           provider_ids: value.selected_event.provider_ids ?? [],
+          supplemental_geometry: (value.selected_event.supplemental_geometry ?? []).map(
+            (layer) => ({
+              ...layer,
+              coordinates: layer.coordinates ?? [],
+            }),
+          ),
         }
       : value.selected_event,
     investigation: value.investigation

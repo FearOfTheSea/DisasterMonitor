@@ -42,6 +42,14 @@ not provider completeness, timely global detection, alert usefulness, or operati
 response outcomes. Those claims remain promotion-pending and require locked live
 episodes plus supervised human evaluation.
 
+Compound Hazard Correlation v1 and cyclone supplemental map layers are implemented as
+bounded descriptive context with deterministic fixture coverage. The former supports
+only the documented earthquake/landslide and tropical-cyclone/flood point/time gates
+and does not perform causal inference. The latter distinguishes provisional IBTrACS
+points from NHC/CPHC forecast tracks and uncertainty cones. These automated paths do
+not demonstrate causal validity, prediction accuracy, global forecast completeness,
+warning authority, impact prediction, population exposure, or evacuation utility.
+
 Run the relevant evaluator from the repository root:
 
 ```powershell
@@ -53,7 +61,7 @@ Multimodal preparation and operator-study commands are documented in
 
 ## Unsupported
 
-Automatic imagery retrieval, live weather, geocoding, arbitrary source crawling,
+Automatic imagery retrieval, generic live weather, geocoding, arbitrary source crawling,
 automatic source trust promotion, hosted models, production authentication/TLS,
 multi-user persistence, cloud deployment, public warnings, evacuation directives, and
 resource orders remain unsupported. Email, SMS, browser/OS push, and externally routed

@@ -50,6 +50,7 @@ describe('incidentsClient', () => {
       incidents: [],
       coverage: [],
       warnings: [],
+      correlations: [],
     };
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(responseBody), {
@@ -140,6 +141,7 @@ describe('incidentsClient', () => {
             : 'One usable event record was returned.',
       })),
       warnings: ['Flood fixture coverage is intentionally degraded.'],
+      correlations: [],
     };
     vi.stubGlobal(
       'fetch',

@@ -27,5 +27,12 @@ export async function fetchActiveIncidents({
     }
     throw new Error(detail);
   }
-  return (await response.json()) as ActiveIncidentsSnapshot;
+  const body = (await response.json()) as ActiveIncidentsSnapshot;
+  return {
+    ...body,
+    correlations: (body.correlations ?? []).map((correlation) => ({
+      ...correlation,
+      source_ids: correlation.source_ids ?? [],
+    })),
+  };
 }

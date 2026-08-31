@@ -55,6 +55,7 @@ from disaster_monitor.application.use_cases.run_conversation_turn import (
 )
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import (
+    CycloneMapLayer,
     EventGeometry,
     IncidentWatch,
     IncidentWatchChange,
@@ -76,11 +77,14 @@ from disaster_monitor.presentation.http.schemas import (
     ActiveIncidentsSnapshotResponse,
     AssistantRequest,
     AssistantResponse,
+    CompoundHazardCorrelationResponse,
     ConversationMessageResponse,
     ConversationResponse,
     ConversationSummaryResponse,
     CountryCatalogSourceResponse,
     CountryCatalogUpdateResponse,
+    CycloneMapCoordinateResponse,
+    CycloneMapLayerResponse,
     DecisionEstimateResponse,
     DecisionFactResponse,
     DecisionSupportResponse,
@@ -171,6 +175,32 @@ def _event_geometry_response(
         description=geometry.description,
         source_id=geometry.source.source_id,
         estimated=geometry.estimated,
+    )
+
+
+def _cyclone_map_layer_response(layer: CycloneMapLayer) -> CycloneMapLayerResponse:
+    return CycloneMapLayerResponse(
+        layer_id=layer.layer_id,
+        semantic_role=layer.semantic_role.value,
+        geometry_kind=layer.geometry_kind.value,
+        coordinates=[
+            CycloneMapCoordinateResponse(
+                latitude=point.latitude,
+                longitude=point.longitude,
+                valid_at=point.valid_at,
+            )
+            for point in layer.coordinates
+        ],
+        source=_source_response(layer.source),
+        issued_at=layer.issued_at,
+        valid_from=layer.valid_from,
+        valid_to=layer.valid_to,
+        storm_id=layer.storm_id,
+        provisional=layer.provisional,
+        limitation=layer.limitation,
+        reconciliation=layer.reconciliation,
+        wind_threshold=layer.wind_threshold,
+        wind_threshold_unit=layer.wind_threshold_unit,
     )
 
 
@@ -394,6 +424,7 @@ async def active_incidents(
         incidents=[
             ActiveIncidentResponse(
                 event_id=incident.event_id,
+                physical_event_id=incident.physical_event_id,
                 disaster=incident.disaster,
                 location=incident.location,
                 event_time=incident.event_time,
@@ -425,6 +456,25 @@ async def active_incidents(
             for item in snapshot.coverage
         ],
         warnings=list(snapshot.warnings),
+        correlations=[
+            CompoundHazardCorrelationResponse(
+                correlation_id=item.correlation_id,
+                rule_id=item.rule_id,
+                relationship=item.relationship.value,
+                first_event_id=item.first_event_id,
+                first_physical_event_id=item.first_physical_event_id,
+                first_disaster=item.first_disaster,
+                second_event_id=item.second_event_id,
+                second_physical_event_id=item.second_physical_event_id,
+                second_disaster=item.second_disaster,
+                distance_km=item.distance_km,
+                time_delta_seconds=item.time_delta_seconds,
+                source_ids=list(item.source_ids),
+                summary=item.summary,
+                limitation=item.limitation,
+            )
+            for item in snapshot.correlations
+        ],
     )
 
 
@@ -930,6 +980,10 @@ def _assistant_response(
                 ],
                 provider_ids=list(selected_event.provider_ids),
                 geography_status=selected_event.geography_status,
+                supplemental_geometry=[
+                    _cyclone_map_layer_response(layer)
+                    for layer in selected_event.supplemental_geometry
+                ],
                 source=SourceResponse(
                     source_id=selected_event.source.source_id,
                     publisher=selected_event.source.publisher,

@@ -6,6 +6,7 @@ from enum import StrEnum
 
 from disaster_monitor.domain.disaster import (
     Country,
+    CycloneMapLayer,
     Disaster,
     DisasterEvent,
     EventGeographyStatus,
@@ -173,6 +174,7 @@ class EvidencePacket:
     completeness: str = "partial"
     partial: bool = True
     world_state: EvidenceWorldState | None = None
+    supplemental_geometry: tuple[CycloneMapLayer, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +198,7 @@ class SelectedEventSummary:
     source: SourceReference
     geography_status: EventGeographyStatus
     provider_ids: tuple[str, ...] = ()
+    supplemental_geometry: tuple[CycloneMapLayer, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

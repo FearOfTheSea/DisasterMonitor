@@ -30,6 +30,9 @@ from disaster_monitor.infrastructure.disaster.registrations.nasa_eonet import (
 from disaster_monitor.infrastructure.disaster.registrations.nasa_firms import (
     build as build_nasa_firms,
 )
+from disaster_monitor.infrastructure.disaster.registrations.nhc_forecast import (
+    build as build_nhc_forecast,
+)
 from disaster_monitor.infrastructure.disaster.registrations.reliefweb import (
     build as build_reliefweb,
 )
@@ -64,6 +67,7 @@ def build_provider_registrations(
         *copernicus_ems_mapping.build(context),
         gdacs.tropical_cyclones,
         *build_ibtracs(context),
+        *build_nhc_forecast(context),
         *build_smithsonian_gvp(context),
         gdacs.volcanic_eruptions,
         *build_reliefweb(context),

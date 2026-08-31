@@ -11,6 +11,7 @@ import type {
   DecisionEstimateResponse,
   DecisionFactResponse,
   DecisionSupportResponse,
+  CycloneMapLayerResponse,
   DisasterMediaGalleryResponse,
   DisasterMediaItemResponse,
   EventCoordinateResponse,
@@ -73,9 +74,16 @@ export type EventCoordinate = EventCoordinateResponse;
 export type EventGeometry = Omit<EventGeometryResponse, 'coordinates'> & {
   coordinates: EventCoordinate[];
 };
-export type SelectedEvent = Omit<SelectedEventResponse, 'geometry' | 'measurements'> & {
+export type CycloneMapLayer = Omit<CycloneMapLayerResponse, 'coordinates'> & {
+  coordinates: CycloneMapLayerResponse['coordinates'];
+};
+export type SelectedEvent = Omit<
+  SelectedEventResponse,
+  'geometry' | 'measurements' | 'supplemental_geometry'
+> & {
   geometry?: EventGeometry | null;
   measurements: EventMeasurement[];
+  supplemental_geometry?: CycloneMapLayer[];
 };
 export type ReportSection = ReportSectionResponse;
 export type DecisionFact = DecisionFactResponse;

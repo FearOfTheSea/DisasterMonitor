@@ -31,6 +31,7 @@ never dynamically imports or constructs providers.
 | Copernicus EMS Rapid Mapping landslides            | Secondary | Mapping evidence                             | Landslide                                                                   | Selected named-country or worldwide event       | EMSR Mass movement; time/centroid match; delivered feasible DEL/GRA product   |
 | GDACS tropical cyclones                            | Secondary | Event discovery                              | Tropical cyclone                                                            | Named countries and worldwide                   | None                                                                          |
 | NOAA IBTrACS track reconciliation                  | Secondary | Scientific verification and map layers       | Tropical cyclone                                                            | Selected GDACS named-country or worldwide event | Unique name/start/track match against v04r01 active subset                    |
+| NOAA NHC/CPHC cyclone forecasts                    | Primary   | Operational forecast map layers               | Tropical cyclone                                                            | Selected GDACS named-country or worldwide event | Active Atlantic/Eastern/Central Pacific product; unique name/center match     |
 | Smithsonian / USGS Weekly Volcanic Activity Report | Primary   | Event discovery                              | Volcanic eruption                                                           | Named countries and worldwide                   | Explicit WVAR eruptive-activity classification and day-precise start          |
 | GDACS volcanic eruptions                           | Secondary | Event discovery                              | Volcanic eruption                                                           | Named countries and worldwide                   | VAA/Smithsonian-derived event records; volcano point only                     |
 | ReliefWeb                                          | Secondary | Situation evidence                           | Earthquake, flood, wildfire, landslide, tropical cyclone, volcanic eruption | Named countries                                 | `RELIEFWEB_APP_NAME`                                                          |
@@ -60,6 +61,27 @@ does not infer a centroid, bounding box, polygon, severity, casualty count, impa
 warning. This surface is bounded event discovery, not complete global surveillance,
 continuous polling, incident management, or proof of current operational impact; the
 assistant and report-selection workflows remain separate.
+
+### Compound Hazard Correlation v1
+
+The Active Incidents response also carries a bounded, deterministic `correlations`
+collection after provider evidence admission and per-hazard physical-event resolution.
+It never changes event identity, provider precedence, evidence status, event selection,
+or coverage. A correlation is only a `spatiotemporal_association` between two already
+distinct records:
+
+- earthquake → landslide: source-backed points no more than 150 km apart, with the
+  landslide at or after the earthquake and no more than 72 hours later; and
+- tropical cyclone ↔ flood: source-backed points no more than 300 km apart and no more
+  than 72 hours apart in either temporal direction.
+
+No other pair is admitted in v1. Area, track, descriptive, missing, or inferred
+representative geometry is not converted to a point. Stable physical-event IDs are
+used when available; otherwise the existing source ID and event ID provide a
+source-qualified participant identity. Pair IDs and ordering are input-order
+independent, reversed pairs are deduplicated, and no transitive cluster is synthesized.
+Spatial and temporal proximity does not establish causation. The absence of a
+correlation is not evidence that hazards are unrelated or independent.
 
 ## Incident Watches
 
@@ -120,7 +142,18 @@ NOAA IBTrACS does not add a second live tropical-cyclone feed. It is queried onl
 GDACS selects a cyclone and attaches one active track only when name, onset, and track
 proximity uniquely reconcile identity. Its agency inputs can overlap GDACS, so the
 matched track is not independent event corroboration and all active points remain
-provisional.
+provisional. The selected-event API exposes those exact timestamped points only as a
+separate `provisional_track` layer, never as event-occurrence or forecast geometry.
+NOAA NHC/CPHC is independently queried for operational map context after selection. It
+supports exact KMZ forecast positions and the official cone polygon for active storms
+in the Atlantic, Eastern North Pacific, and Central North Pacific. One active advisory
+must uniquely match the GDACS source name and have a published center within 500 km.
+Zero or multiple matches fail closed. Forecast-track points retain their validity
+times; the cone retains its advisory validity interval. Wind-field shapefiles are not
+admitted and missing cones or wind radii are never inferred. The cone is forecast
+track-center uncertainty, not storm size, wind extent, an impact boundary, or an
+observed footprint. NHC/CPHC can also be upstream of GDACS, so this context does not
+become independent corroboration.
 `country_codes=None` permits every admitted named country only with the explicit country
 scope; worldwide requests require the explicit worldwide scope. News requests are
 deterministically routed to event discovery. Country names remain case-insensitive,
@@ -134,7 +167,8 @@ provider query and the selected disaster policy. Earthquake policy selects the l
 event by default or the strongest event when requested; other disasters use the shared
 latest policy unless they register another policy. Worldwide requests do not invent a
 country for offshore events. Worldwide scope provides bounded event discovery plus
-narrowly selected-event FIRMS, Copernicus mapping, or IBTrACS evidence where eligible.
+narrowly selected-event FIRMS, Copernicus mapping, IBTrACS, or NHC/CPHC forecast
+evidence where eligible.
 It does not provide globally complete casualty, damage, warning, or response evidence,
 and every response states that gap.
 

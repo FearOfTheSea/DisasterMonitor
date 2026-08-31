@@ -21,6 +21,7 @@ from disaster_monitor.application.services.source_evidence_policy import (
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
+    CycloneMapLayer,
     Disaster,
     DisasterEvent,
     EvidenceDisposition,
@@ -318,7 +319,19 @@ def build_evidence_packet(
         completeness=completeness,
         partial=partial,
         world_state=world_state,
+        supplemental_geometry=_supplemental_geometry(projection_reports),
     )
+
+
+def _supplemental_geometry(
+    reports: tuple[SituationReport, ...],
+) -> tuple[CycloneMapLayer, ...]:
+    layers = {
+        layer.layer_id: layer
+        for report in reports
+        for layer in report.supplemental_geometry
+    }
+    return tuple(layers[layer_id] for layer_id in sorted(layers))
 
 
 class EvidenceReconciler:

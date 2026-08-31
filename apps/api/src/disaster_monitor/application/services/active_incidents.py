@@ -19,6 +19,10 @@ from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.source_evidence import (
     SourceEvidencePolicyError,
 )
+from disaster_monitor.application.services.event_policies import (
+    CompoundHazardCorrelation,
+    CompoundHazardCorrelationService,
+)
 from disaster_monitor.application.services.event_resolution import (
     EventPolicyRegistry,
     default_event_policy_registry,
@@ -120,6 +124,7 @@ class ActiveIncidentsSnapshot:
     incidents: tuple[ActiveIncident, ...]
     coverage: tuple[DisasterIncidentCoverage, ...]
     warnings: tuple[str, ...]
+    correlations: tuple[CompoundHazardCorrelation, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,12 +148,16 @@ class ActiveIncidentsService:
         country_event_provider: DisasterEventProvider | None = None,
         country_catalog: CountryCatalog | None = None,
         event_policies: EventPolicyRegistry | None = None,
+        correlation_service: CompoundHazardCorrelationService | None = None,
     ) -> None:
         self._provider_registry = provider_registry
         self._clock = clock
         self._country_event_provider = country_event_provider
         self._country_catalog = country_catalog
         self._event_policies = event_policies or default_event_policy_registry()
+        self._correlation_service = (
+            correlation_service or CompoundHazardCorrelationService()
+        )
 
     async def execute(
         self, query: ActiveIncidentsQuery | None = None
@@ -181,6 +190,7 @@ class ActiveIncidentsService:
                     warning for result in results for warning in result.warnings
                 )
             ),
+            correlations=self._correlation_service.correlate(incidents),
         )
 
     async def observe_watch(self, watch: IncidentWatch) -> IncidentWatchObservation:

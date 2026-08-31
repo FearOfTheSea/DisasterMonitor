@@ -446,6 +446,8 @@ summary:focus-visible {
 .active-incidents-header p,
 .incident-coverage-section h3,
 .incident-list-section h3,
+.incident-correlations h3,
+.incident-correlations p,
 .incident-warnings h3,
 .incident-warnings p,
 .incident-empty p {
@@ -524,6 +526,10 @@ summary:focus-visible {
   order: 4;
 }
 
+.incident-correlations {
+  order: 5;
+}
+
 .incident-loading,
 .operations-loading {
   align-items: center;
@@ -589,6 +595,7 @@ summary:focus-visible {
 }
 
 .incident-section-heading h3,
+.incident-correlations h3,
 .incident-warnings h3 {
   color: var(--ink);
   font-size: 0.78rem;
@@ -714,6 +721,68 @@ summary:focus-visible {
 .incident-warnings ul {
   margin: 0;
   padding-left: 17px;
+}
+
+.incident-correlations {
+  background: #f6f8fb;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 9px;
+  padding: 14px 16px;
+}
+
+.incident-correlations > p {
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.incident-correlation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.incident-correlation-list article {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid #7c3aed;
+  border-radius: var(--radius-sm);
+  display: grid;
+  font-size: 0.68rem;
+  gap: 6px;
+  line-height: 1.4;
+  padding: 9px;
+}
+
+.incident-correlation-list article > p,
+.incident-correlation-list article > small,
+.incident-correlation-list dl,
+.incident-correlation-list dd {
+  margin: 0;
+}
+
+.incident-correlation-list dl {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.incident-correlation-list dl > div {
+  background: var(--surface-soft);
+  border-radius: 3px;
+  padding: 5px 6px;
+}
+
+.incident-correlation-list dt,
+.incident-correlation-list small {
+  color: var(--muted);
+  font-size: 0.61rem;
+}
+
+.incident-correlation-limitation {
+  border-top: 1px solid var(--line);
+  color: #7c2d12 !important;
+  padding-top: 6px;
 }
 
 .incident-empty {
@@ -997,6 +1066,81 @@ summary:focus-visible {
 .legend-line-dashed {
   border-color: #b45309;
   border-top-style: dashed;
+}
+
+.cyclone-legend {
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  bottom: 18px;
+  box-shadow: var(--shadow-overlay);
+  display: grid;
+  font-size: 0.7rem;
+  gap: 5px;
+  left: 14px;
+  max-height: 42vh;
+  max-width: min(390px, calc(100% - 28px));
+  overflow-y: auto;
+  padding: 10px 12px;
+  position: absolute;
+  z-index: 4;
+}
+
+.cyclone-legend ul {
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.cyclone-legend li {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 30px minmax(0, 1fr);
+}
+
+.cyclone-legend li > span:last-child,
+.cyclone-legend small {
+  display: block;
+}
+
+.cyclone-legend small,
+.cyclone-legend p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.cyclone-legend p {
+  border-top: 1px solid var(--line);
+  color: #7c2d12;
+  line-height: 1.4;
+  padding-top: 7px;
+}
+
+.cyclone-legend-mark {
+  border-top: 3px solid #5b21b6;
+  margin-top: 7px;
+}
+
+.cyclone-legend-forecast_track {
+  border-color: #0369a1;
+  border-top-style: dashed;
+}
+
+.cyclone-legend-uncertainty_area {
+  background: #f59e0b2e;
+  border: 2px dashed #b45309;
+  height: 13px;
+  margin-top: 2px;
+}
+
+.cyclone-legend-wind_radii {
+  background: #14b8a626;
+  border: 2px dotted #0f766e;
+  height: 13px;
+  margin-top: 2px;
 }
 
 .assistant-panel,

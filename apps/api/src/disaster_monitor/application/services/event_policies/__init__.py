@@ -16,6 +16,13 @@ from disaster_monitor.application.services.event_policies.wildfire import (
 from disaster_monitor.application.services.event_resolution_core import EventPolicy
 from disaster_monitor.domain.disaster import Disaster
 
+from .compound_hazard_correlation import (
+    ASSOCIATION_LIMITATION,
+    CompoundHazardCorrelation,
+    CompoundHazardCorrelationService,
+    CompoundHazardRelationship,
+)
+
 
 class EventPolicyRegistry:
     """Resolve a typed disaster to a dedicated or conservative event policy."""
@@ -43,6 +50,10 @@ def default_event_policy_registry() -> EventPolicyRegistry:
 
 
 __all__ = [
+    "ASSOCIATION_LIMITATION",
+    "CompoundHazardCorrelation",
+    "CompoundHazardCorrelationService",
+    "CompoundHazardRelationship",
     "DefaultEventPolicy",
     "EarthquakeEventPolicy",
     "EventPolicyRegistry",

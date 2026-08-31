@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from io import StringIO
-from math import asin, cos, isfinite, radians, sin, sqrt
+from math import isfinite
 
 import httpx
 
@@ -21,14 +21,20 @@ from disaster_monitor.application.ports.temporal_normalization import (
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
+    CycloneMapCoordinate,
+    CycloneMapGeometryKind,
+    CycloneMapLayer,
+    CycloneMapSemanticRole,
     Disaster,
     DisasterEvent,
+    EventCoordinate,
     EventGeometryKind,
     FactStatus,
     ReportedFact,
     SituationReport,
     SourceAuthority,
     SourceReference,
+    geographic_distance_km,
 )
 from disaster_monitor.infrastructure.disaster.http import (
     SourcePayloadRecorder,
@@ -252,6 +258,38 @@ class IbtracsTrackAdapter:
             country_codes=country_codes,
             disaster=Disaster.TROPICAL_CYCLONE,
             provider_event_ids=provider_ids,
+            supplemental_geometry=(
+                CycloneMapLayer(
+                    layer_id=(
+                        f"noaa-ibtracs:{track.sid}:provisional-track:"
+                        f"{track.end.isoformat()}"
+                    ),
+                    semantic_role=CycloneMapSemanticRole.PROVISIONAL_TRACK,
+                    geometry_kind=CycloneMapGeometryKind.TRACK,
+                    coordinates=tuple(
+                        CycloneMapCoordinate(
+                            item.latitude,
+                            item.longitude,
+                            item.observed_at,
+                        )
+                        for item in track.points
+                    ),
+                    source=source,
+                    issued_at=track.end,
+                    valid_from=track.start,
+                    valid_to=track.end,
+                    storm_id=track.sid,
+                    provisional=True,
+                    limitation=(
+                        "IBTrACS active points are provisional best-track context, "
+                        "not a forecast or an observed storm footprint."
+                    ),
+                    reconciliation=(
+                        "Unique GDACS name, onset, and retained-point proximity "
+                        "match; provider inputs may overlap."
+                    ),
+                ),
+            ),
         )
         return ProviderBatch((report,), tuple(issues))
 
@@ -425,14 +463,10 @@ def _distance_km(
     second_latitude: float,
     second_longitude: float,
 ) -> float:
-    latitude_delta = radians(second_latitude - first_latitude)
-    longitude_delta = radians(second_longitude - first_longitude)
-    start_latitude = radians(first_latitude)
-    end_latitude = radians(second_latitude)
-    value = sin(latitude_delta / 2) ** 2 + (
-        cos(start_latitude) * cos(end_latitude) * sin(longitude_delta / 2) ** 2
+    return geographic_distance_km(
+        EventCoordinate(first_latitude, first_longitude),
+        EventCoordinate(second_latitude, second_longitude),
     )
-    return 2 * 6_371.0088 * asin(min(1.0, sqrt(value)))
 
 
 def _geometry_unavailable() -> ProviderIssue:

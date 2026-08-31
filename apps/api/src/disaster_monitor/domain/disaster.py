@@ -7,8 +7,12 @@ import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
-from math import isfinite
+from math import asin, cos, isfinite, radians, sin, sqrt
 from typing import Any, cast
+
+
+def _is_aware(value: datetime) -> bool:
+    return value.tzinfo is not None and value.utcoffset() is not None
 
 
 class Disaster(StrEnum):
@@ -362,6 +366,143 @@ class EventCoordinate:
             raise ValueError("An event coordinate is outside the WGS84 extent.")
 
 
+def geographic_distance_km(first: EventCoordinate, second: EventCoordinate) -> float:
+    """Return deterministic great-circle distance between source coordinates."""
+    first_latitude = radians(first.latitude)
+    second_latitude = radians(second.latitude)
+    latitude_delta = radians(second.latitude - first.latitude)
+    longitude_delta = radians(second.longitude - first.longitude)
+    value = sin(latitude_delta / 2) ** 2 + (
+        cos(first_latitude) * cos(second_latitude) * sin(longitude_delta / 2) ** 2
+    )
+    return 2 * 6_371.0088 * asin(min(1.0, sqrt(value)))
+
+
+class CycloneMapSemanticRole(StrEnum):
+    """Explicit meaning of geometry supplemental to a selected cyclone."""
+
+    PROVISIONAL_TRACK = "provisional_track"
+    FORECAST_TRACK = "forecast_track"
+    UNCERTAINTY_AREA = "uncertainty_area"
+    WIND_RADII = "wind_radii"
+
+
+class CycloneMapGeometryKind(StrEnum):
+    """Renderable geometry kinds admitted for supplemental cyclone context."""
+
+    POINT = "point"
+    TRACK = "track"
+    AREA = "area"
+
+
+@dataclass(frozen=True, slots=True)
+class CycloneMapCoordinate:
+    """One exact source coordinate and its product validity time, when supplied."""
+
+    latitude: float
+    longitude: float
+    valid_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        EventCoordinate(self.latitude, self.longitude)
+        if self.valid_at is not None and not _is_aware(self.valid_at):
+            raise ValueError("A cyclone map coordinate time must be timezone-aware.")
+
+
+@dataclass(frozen=True, slots=True)
+class CycloneMapLayer:
+    """Source-backed map context kept separate from event occurrence geometry."""
+
+    layer_id: str
+    semantic_role: CycloneMapSemanticRole
+    geometry_kind: CycloneMapGeometryKind
+    coordinates: tuple[CycloneMapCoordinate, ...]
+    source: SourceReference
+    issued_at: datetime
+    valid_from: datetime | None
+    valid_to: datetime | None
+    storm_id: str
+    provisional: bool
+    limitation: str
+    reconciliation: str
+    wind_threshold: float | None = None
+    wind_threshold_unit: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.layer_id.strip() or not self.storm_id.strip():
+            raise ValueError("A cyclone map layer requires stable layer and storm IDs.")
+        if not isinstance(self.semantic_role, CycloneMapSemanticRole):
+            raise TypeError("A cyclone map layer requires a typed semantic role.")
+        if not isinstance(self.geometry_kind, CycloneMapGeometryKind):
+            raise TypeError("A cyclone map layer requires a typed geometry kind.")
+        if not isinstance(self.source, SourceReference):
+            raise TypeError("A cyclone map layer requires source provenance.")
+        if not _is_aware(self.issued_at) or any(
+            value is not None and not _is_aware(value)
+            for value in (self.valid_from, self.valid_to)
+        ):
+            raise ValueError("Cyclone map layer timestamps must be timezone-aware.")
+        if (
+            self.valid_from is not None
+            and self.valid_to is not None
+            and self.valid_to < self.valid_from
+        ):
+            raise ValueError("A cyclone map layer validity interval is reversed.")
+        if not isinstance(self.provisional, bool):
+            raise TypeError("Cyclone map provisional metadata must be boolean.")
+        if not self.limitation.strip() or not self.reconciliation.strip():
+            raise ValueError(
+                "A cyclone map layer requires limitation and reconciliation text."
+            )
+        if self.geometry_kind is CycloneMapGeometryKind.POINT:
+            valid_geometry = len(self.coordinates) == 1
+        elif self.geometry_kind is CycloneMapGeometryKind.TRACK:
+            valid_geometry = len(self.coordinates) >= 2
+        else:
+            valid_geometry = len(self.coordinates) >= 3
+        if not valid_geometry:
+            raise ValueError("Cyclone map layer coordinate cardinality is invalid.")
+        if any(not isinstance(item, CycloneMapCoordinate) for item in self.coordinates):
+            raise TypeError("A cyclone map layer requires typed coordinates.")
+        if self.semantic_role is CycloneMapSemanticRole.PROVISIONAL_TRACK:
+            if (
+                self.geometry_kind is not CycloneMapGeometryKind.TRACK
+                or not self.provisional
+            ):
+                raise ValueError(
+                    "Provisional track layers require track geometry and a "
+                    "provisional flag."
+                )
+        elif self.provisional:
+            raise ValueError("Forecast and uncertainty layers cannot be provisional.")
+        if self.semantic_role is CycloneMapSemanticRole.FORECAST_TRACK:
+            if self.geometry_kind is not CycloneMapGeometryKind.TRACK:
+                raise ValueError("Forecast track layers require track geometry.")
+            if any(item.valid_at is None for item in self.coordinates):
+                raise ValueError("Forecast track points require source validity times.")
+        if (
+            self.semantic_role is CycloneMapSemanticRole.UNCERTAINTY_AREA
+            and self.geometry_kind is not CycloneMapGeometryKind.AREA
+        ):
+            raise ValueError("Uncertainty layers require area geometry.")
+        if self.semantic_role is CycloneMapSemanticRole.WIND_RADII:
+            if (
+                self.geometry_kind is not CycloneMapGeometryKind.AREA
+                or self.wind_threshold is None
+                or isinstance(self.wind_threshold, bool)
+                or not isfinite(self.wind_threshold)
+                or self.wind_threshold <= 0
+                or not self.wind_threshold_unit
+                or not self.wind_threshold_unit.strip()
+            ):
+                raise ValueError(
+                    "Wind-radii layers require area geometry and a positive "
+                    "source threshold with units."
+                )
+        elif self.wind_threshold is not None or self.wind_threshold_unit is not None:
+            raise ValueError("Only wind-radii layers may carry wind thresholds.")
+
+
 @dataclass(frozen=True, slots=True)
 class EventGeometry:
     """A source-backed point, area, track, or descriptive-only location."""
@@ -557,6 +698,7 @@ class SituationReport:
     disaster: Disaster | None = None
     measurements: tuple[EventMeasurement, ...] = ()
     provider_event_ids: tuple[str, ...] = ()
+    supplemental_geometry: tuple[CycloneMapLayer, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -77,12 +77,14 @@ def _event(
     event_time: datetime,
     *,
     descriptive: bool = False,
+    latitude: float = 10.5,
+    longitude: float = 20.25,
 ) -> WorldwideDisasterEvent:
     source = _source(source_id, event_time)
     geometry = (
         descriptive_event_geometry("Provider supplied location text", source)
         if descriptive
-        else point_event_geometry(10.5, 20.25, source)
+        else point_event_geometry(latitude, longitude, source)
     )
     return WorldwideDisasterEvent(
         event_id=event_id,
@@ -514,3 +516,41 @@ async def test_descriptive_geometry_remains_without_coordinates() -> None:
     assert snapshot.incidents[0].source_authority is (
         SourceAuthority.SCIENTIFIC_AUTHORITY
     )
+
+
+@pytest.mark.asyncio
+async def test_active_incidents_correlate_only_retained_cross_hazard_records() -> None:
+    earthquake = FakeWorldwideProvider(
+        "earthquakes",
+        ProviderBatch((_event("earthquakes", Disaster.EARTHQUAKE, "quake", NOW),)),
+    )
+    landslide = FakeWorldwideProvider(
+        "landslides",
+        ProviderBatch(
+            (
+                _event(
+                    "landslides",
+                    Disaster.LANDSLIDE,
+                    "slide",
+                    NOW + timedelta(hours=2),
+                    longitude=20.5,
+                ),
+            )
+        ),
+    )
+    service = ActiveIncidentsService(
+        ProviderRegistry(
+            (
+                _registration("Earthquakes", earthquake, Disaster.EARTHQUAKE),
+                _registration("Landslides", landslide, Disaster.LANDSLIDE),
+            )
+        ),
+        clock=lambda: NOW,
+    )
+
+    snapshot = await service.execute()
+
+    assert len(snapshot.correlations) == 1
+    assert snapshot.correlations[0].first_event_id == "quake"
+    assert snapshot.correlations[0].second_event_id == "slide"
+    assert snapshot.correlations[0].source_ids == ("earthquakes", "landslides")

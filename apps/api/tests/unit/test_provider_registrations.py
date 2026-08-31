@@ -162,6 +162,16 @@ def test_aggregate_provider_registration_order_and_identities_are_stable() -> No
             True,
         ),
         (
+            "noaa-nhc-cyclone-forecast",
+            "primary",
+            ("situation_evidence",),
+            ("tropical_cyclone",),
+            ("www.nhc.noaa.gov",),
+            False,
+            False,
+            True,
+        ),
+        (
             "smithsonian-usgs-volcanic-activity",
             "primary",
             ("event_discovery",),

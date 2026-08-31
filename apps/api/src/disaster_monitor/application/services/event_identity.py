@@ -5,7 +5,6 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC
 from hashlib import sha256
-from math import asin, cos, radians, sin, sqrt
 
 from disaster_monitor.domain.disaster import (
     DisasterEvent,
@@ -16,6 +15,7 @@ from disaster_monitor.domain.disaster import (
     MeasurementKind,
     PhysicalEventIdentity,
     PhysicalEventIdentityResult,
+    geographic_distance_km,
 )
 
 
@@ -31,15 +31,7 @@ def distance_km(first: DisasterEvent, second: DisasterEvent) -> float | None:
     second_point = event_point(second)
     if first_point is None or second_point is None:
         return None
-    first_lat = radians(first_point.latitude)
-    second_lat = radians(second_point.latitude)
-    delta_lat = radians(second_point.latitude - first_point.latitude)
-    delta_lon = radians(second_point.longitude - first_point.longitude)
-    value = (
-        sin(delta_lat / 2) ** 2
-        + cos(first_lat) * cos(second_lat) * sin(delta_lon / 2) ** 2
-    )
-    return 6371 * 2 * asin(sqrt(value))
+    return geographic_distance_km(first_point, second_point)
 
 
 def distance_to_coordinates(

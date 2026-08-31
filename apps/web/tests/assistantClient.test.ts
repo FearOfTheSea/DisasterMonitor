@@ -252,7 +252,83 @@ describe('AssistantClient', () => {
         zoom: 2,
       }),
     ).resolves.toMatchObject({
-      selected_event: { disaster: 'earthquake', measurements: [] },
+      selected_event: {
+        disaster: 'earthquake',
+        measurements: [],
+        supplemental_geometry: [],
+      },
+    });
+  });
+
+  it('accepts valid cyclone layers and rejects semantic mixing or invalid times', async () => {
+    const source = {
+      source_id: 'noaa-nhc-cyclone-forecast',
+      publisher: 'NOAA NHC/CPHC',
+      title: 'Advisory forecast track',
+      canonical_url: 'https://www.nhc.noaa.gov/fixture.kmz',
+      published_at: '2026-08-31T03:00:00Z',
+      updated_at: '2026-08-31T03:00:00Z',
+      retrieved_at: '2026-08-31T03:05:00Z',
+    };
+    const layer = {
+      layer_id: 'noaa-nhc:EP112026:advisory-016:forecast-track',
+      semantic_role: 'forecast_track',
+      geometry_kind: 'track',
+      coordinates: [
+        { latitude: 17.2, longitude: -124.4, valid_at: '2026-08-31T12:00:00Z' },
+        { latitude: 17.8, longitude: -127, valid_at: '2026-09-01T00:00:00Z' },
+      ],
+      source,
+      issued_at: '2026-08-31T03:00:00Z',
+      valid_from: '2026-08-31T12:00:00Z',
+      valid_to: '2026-09-01T00:00:00Z',
+      storm_id: 'EP112026',
+      provisional: false,
+      limitation: 'Forecast positions are not an observed storm footprint.',
+      reconciliation: 'Unique identity match.',
+    };
+    const event = {
+      event_id: 'gdacs:tc:42',
+      disaster: 'tropical_cyclone',
+      location: 'Pacific Ocean',
+      event_time: '2026-08-31T03:00:00Z',
+      geography_status: 'worldwide',
+      source,
+      supplemental_geometry: [layer],
+    };
+    const response = (selectedEvent: object) =>
+      new Response(
+        JSON.stringify({
+          message: 'Forecast context.',
+          conversation_id: 'session-cyclone',
+          model: 'source-backed-agent',
+          selected_event: selectedEvent,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response(event))
+      .mockResolvedValueOnce(response({ ...event, disaster: 'earthquake' }))
+      .mockResolvedValueOnce(
+        response({
+          ...event,
+          supplemental_geometry: [{ ...layer, issued_at: 'not-a-time' }],
+        }),
+      );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+    const view = { centerLatitude: 0, centerLongitude: 0, zoom: 2 };
+
+    await expect(client.ask('Forecast?', null, view)).resolves.toMatchObject({
+      selected_event: {
+        disaster: 'tropical_cyclone',
+        supplemental_geometry: [{ semantic_role: 'forecast_track' }],
+      },
+    });
+    await expect(client.ask('Mixed?', null, view)).rejects.toMatchObject({
+      status: 502,
+    });
+    await expect(client.ask('Invalid?', null, view)).rejects.toMatchObject({
+      status: 502,
     });
   });
 

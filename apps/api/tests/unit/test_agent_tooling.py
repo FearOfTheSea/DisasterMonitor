@@ -533,6 +533,7 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
         "nasa-eonet-wildfires",
         "nasa-firms-observations",
         "noaa-ibtracs-tracks",
+        "noaa-nhc-cyclone-forecast",
         "reliefweb-situation-reports",
         "smithsonian-usgs-volcanic-activity",
         "usgs-earthquakes",
