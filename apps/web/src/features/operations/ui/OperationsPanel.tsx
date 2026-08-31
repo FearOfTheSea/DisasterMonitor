@@ -29,6 +29,16 @@ function formatTime(value: string | null) {
   return Number.isNaN(time.getTime()) ? value : time.toLocaleString();
 }
 
+function formatDuration(seconds: number | null) {
+  if (seconds === null) return 'Not available';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
 export function OperationsPanel({
   evidenceStateVersion,
   onClose,
@@ -44,6 +54,15 @@ export function OperationsPanel({
   const [rationale, setRationale] = useState('');
   const [reviewStatus, setReviewStatus] = useState<string | null>(null);
   const [catalogUpdating, setCatalogUpdating] = useState(false);
+  const orderedProviders = [...providers].sort((left, right) => {
+    const healthOrder =
+      Number(left.state === 'fresh') - Number(right.state === 'fresh');
+    return healthOrder || left.source_id.localeCompare(right.source_id);
+  });
+  const providerCounts = providers.reduce<Record<ProviderFreshness['state'], number>>(
+    (counts, provider) => ({ ...counts, [provider.state]: counts[provider.state] + 1 }),
+    { fresh: 0, stale: 0, unavailable: 0, never_ingested: 0 },
+  );
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -190,26 +209,57 @@ export function OperationsPanel({
         </section>
         <section className="operations-section">
           <div className="operations-heading">
-            <h3>Provider freshness</h3>
-            <button type="button" onClick={() => void refresh()} disabled={loading}>
+            <h3>Source health &amp; coverage</h3>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={loading}
+              aria-label="Refresh source health"
+            >
               Refresh
             </button>
           </div>
+          {providers.length > 0 && (
+            <div className="provider-summary" aria-label="Source health summary">
+              <span>Sources {providers.length}</span>
+              <span className="summary-fresh">Fresh {providerCounts.fresh}</span>
+              <span className="summary-stale">Stale {providerCounts.stale}</span>
+              <span className="summary-unavailable">
+                Unavailable {providerCounts.unavailable}
+              </span>
+              <span className="summary-never">
+                Never ingested {providerCounts.never_ingested}
+              </span>
+            </div>
+          )}
           <div className="provider-grid">
-            {providers.map((provider) => (
+            {orderedProviders.map((provider) => (
               <article key={provider.source_id} className="provider-status">
                 <div>
-                  <strong>{provider.source_id}</strong>
+                  <strong data-testid="provider-source">{provider.source_id}</strong>
                   <span className={`freshness freshness-${provider.state}`}>
                     Status: {provider.state.replaceAll('_', ' ')}
                   </span>
                 </div>
                 <small>Evidence time: {formatTime(provider.effective_at)}</small>
+                <small>Evidence age: {formatDuration(provider.age_seconds)}</small>
+                <small>Last attempt: {formatTime(provider.last_attempt_at)}</small>
+                <small>Last success: {formatTime(provider.last_success_at)}</small>
+                <small>
+                  Expected interval:{' '}
+                  {formatDuration(provider.expected_freshness_seconds)}
+                </small>
+                <small>Consecutive failures: {provider.consecutive_failures}</small>
                 {provider.latest_error_code && (
                   <small>Latest error: {provider.latest_error_code}</small>
                 )}
               </article>
             ))}
+            {!loading && providers.length === 0 && (
+              <p className="provider-empty">
+                No provider freshness records are available.
+              </p>
+            )}
           </div>
         </section>
         <section className="operations-section">

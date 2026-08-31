@@ -1685,6 +1685,38 @@ summary:focus-visible {
   gap: 0;
 }
 
+.provider-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.provider-summary span {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.67rem;
+  padding: 4px 8px;
+}
+
+.provider-summary .summary-fresh {
+  color: var(--success);
+}
+.provider-summary .summary-stale,
+.provider-summary .summary-unavailable {
+  color: var(--danger);
+}
+.provider-summary .summary-never {
+  color: var(--warning);
+}
+
+.provider-empty {
+  border: 1px dashed var(--line-strong);
+  color: var(--muted);
+  padding: 12px;
+}
+
 .provider-status,
 .snapshot-card {
   border-bottom: 1px solid #e8edf3;

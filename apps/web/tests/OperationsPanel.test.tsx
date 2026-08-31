@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
 import {
@@ -31,6 +31,8 @@ vi.mock('@/features/operations/ui/IncidentWatches', () => ({
 }));
 
 describe('OperationsPanel', () => {
+  afterEach(() => cleanup());
+
   beforeEach(() => {
     vi.mocked(fetchProviderFreshness).mockResolvedValue([
       {
@@ -134,5 +136,88 @@ describe('OperationsPanel', () => {
     expect(
       await screen.findByText('Review recorded for operator-7.'),
     ).toBeInTheDocument();
+  });
+
+  it('summarizes and orders source health without implying coverage for degraded states', async () => {
+    vi.mocked(fetchProviderFreshness).mockResolvedValue([
+      {
+        source_id: 'zulu-fresh',
+        state: 'fresh',
+        last_attempt_at: '2026-08-13T08:01:00Z',
+        last_success_at: '2026-08-13T08:00:00Z',
+        effective_at: '2026-08-13T08:00:00Z',
+        age_seconds: 60,
+        expected_freshness_seconds: 3600,
+        consecutive_failures: 0,
+        latest_error_code: null,
+      },
+      {
+        source_id: 'alpha-never',
+        state: 'never_ingested',
+        last_attempt_at: null,
+        last_success_at: null,
+        effective_at: null,
+        age_seconds: null,
+        expected_freshness_seconds: 900,
+        consecutive_failures: 0,
+        latest_error_code: null,
+      },
+      {
+        source_id: 'bravo-unavailable',
+        state: 'unavailable',
+        last_attempt_at: '2026-08-13T07:55:00Z',
+        last_success_at: '2026-08-13T06:00:00Z',
+        effective_at: '2026-08-13T06:00:00Z',
+        age_seconds: 7260,
+        expected_freshness_seconds: 3600,
+        consecutive_failures: 3,
+        latest_error_code: 'timeout',
+      },
+      {
+        source_id: 'charlie-stale',
+        state: 'stale',
+        last_attempt_at: '2026-08-13T07:59:00Z',
+        last_success_at: '2026-08-13T06:30:00Z',
+        effective_at: '2026-08-13T06:30:00Z',
+        age_seconds: 5460,
+        expected_freshness_seconds: 1800,
+        consecutive_failures: 1,
+        latest_error_code: null,
+      },
+    ]);
+
+    render(<OperationsPanel onClose={vi.fn()} onSelectWatchIncident={vi.fn()} />);
+
+    expect(await screen.findByText(/Sources 4/)).toBeInTheDocument();
+    expect(screen.getByText(/Fresh 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Stale 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Unavailable 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Never ingested 1/)).toBeInTheDocument();
+    const sourceNames = screen
+      .getAllByTestId('provider-source')
+      .map((node) => node.textContent);
+    expect(sourceNames).toEqual([
+      'alpha-never',
+      'bravo-unavailable',
+      'charlie-stale',
+      'zulu-fresh',
+    ]);
+    expect(screen.getByText('Evidence age: 1h 31m')).toBeInTheDocument();
+    expect(screen.getAllByText('Expected interval: 1h')).toHaveLength(2);
+    expect(screen.getByText('Consecutive failures: 3')).toBeInTheDocument();
+    expect(screen.getByText('Latest error: timeout')).toBeInTheDocument();
+    expect(screen.getByText('Evidence time: Never')).toBeInTheDocument();
+    expect(screen.getByText('Status: never ingested')).toBeInTheDocument();
+  });
+
+  it('shows an empty state and refreshes the existing provider request', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchProviderFreshness).mockResolvedValue([]);
+    render(<OperationsPanel onClose={vi.fn()} onSelectWatchIncident={vi.fn()} />);
+    expect(
+      await screen.findByText('No provider freshness records are available.'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Refresh source health' }));
+    expect(fetchProviderFreshness).toHaveBeenCalled();
   });
 });
