@@ -12,12 +12,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
 import type { WeatherAlertsSnapshot } from '@/features/weather/model/weatherAlert';
-import type { SelectedEvent } from '@/shared/types/assistant';
+import type { MapView, SelectedEvent } from '@/shared/types/assistant';
 
 const adapterMocks = vi.hoisted(() => ({
   destroy: vi.fn(),
   fitArea: vi.fn(),
   focusActiveIncident: vi.fn(),
+  onViewChange: undefined as ((view: MapView) => void) | undefined,
   onSelectIncidentCluster: undefined as ((incidentIds: string[]) => void) | undefined,
   onSelectIncident: undefined as ((incidentId: string) => void) | undefined,
   setActiveIncidents: vi.fn(),
@@ -47,9 +48,11 @@ vi.mock('@/features/map/api/satelliteImageryClient', async (importOriginal) => {
 vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
   OpenLayersMapAdapter: class {
     constructor(options: {
+      onViewChange: (view: MapView) => void;
       onSelectIncident: (incidentId: string) => void;
       onSelectIncidentCluster?: (incidentIds: string[]) => void;
     }) {
+      adapterMocks.onViewChange = options.onViewChange;
       adapterMocks.onSelectIncident = options.onSelectIncident;
       adapterMocks.onSelectIncidentCluster = options.onSelectIncidentCluster;
     }
@@ -125,6 +128,30 @@ describe('DisasterMap assistant focus', () => {
 
     unmount();
     expect(adapterMocks.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reapply a view that the map has just reported', () => {
+    const initialView = { centerLatitude: 21.03, centerLongitude: 105.85, zoom: 10 };
+    const reportedView = { centerLatitude: 37.02, centerLongitude: 137.01, zoom: 10 };
+    const { rerender } = render(
+      <DisasterMap
+        onViewChange={vi.fn()}
+        onSelectIncident={vi.fn()}
+        view={initialView}
+      />,
+    );
+
+    adapterMocks.setView.mockClear();
+    adapterMocks.onViewChange?.(reportedView);
+    rerender(
+      <DisasterMap
+        onViewChange={vi.fn()}
+        onSelectIncident={vi.fn()}
+        view={reportedView}
+      />,
+    );
+
+    expect(adapterMocks.setView).not.toHaveBeenCalled();
   });
 
   it('hands exact renderable incident geometries to a distinct map layer', () => {

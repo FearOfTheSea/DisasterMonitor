@@ -52,6 +52,14 @@ const DEFAULT_SATELLITE_SOURCE: SatelliteSourceId = 'nasa-viirs-snpp-true-color'
 const DEFAULT_SATELLITE_OPACITY = 0.75;
 const EMPTY_ACTIVE_INCIDENTS: ActiveIncident[] = [];
 
+function sameMapView(first: MapView, second: MapView): boolean {
+  return (
+    Math.abs(first.centerLatitude - second.centerLatitude) < 0.0001 &&
+    Math.abs(first.centerLongitude - second.centerLongitude) < 0.0001 &&
+    Math.abs(first.zoom - second.zoom) < 0.01
+  );
+}
+
 export type SatelliteMapState = {
   sourceId: SatelliteSourceId;
   observationTime?: string;
@@ -154,6 +162,14 @@ export function DisasterMap({
   );
   const requestedObservationTime = satelliteState.observationTime;
   const initialView = useRef(view ?? DEFAULT_MAP_VIEW);
+  const lastReportedView = useRef(view ?? DEFAULT_MAP_VIEW);
+  const handleViewChange = useCallback(
+    (nextView: MapView) => {
+      lastReportedView.current = nextView;
+      onViewChange(nextView);
+    },
+    [onViewChange],
+  );
   const satelliteLayerConfiguration = useMemo<
     SatelliteLayerConfiguration | undefined
   >(() => {
@@ -200,7 +216,7 @@ export function DisasterMap({
     adapter.current = new OpenLayersMapAdapter({
       target: mapElement.current,
       initialView: initialView.current,
-      onViewChange,
+      onViewChange: handleViewChange,
       onSelectIncident,
       onSelectIncidentCluster: setClusterIncidentIds,
     });
@@ -209,7 +225,7 @@ export function DisasterMap({
       adapter.current = null;
       fittedAreaKey.current = undefined;
     };
-  }, [onSelectIncident, onViewChange]);
+  }, [handleViewChange, onSelectIncident]);
 
   useEffect(() => {
     const target = mapElement.current;
@@ -238,7 +254,11 @@ export function DisasterMap({
   }, [weatherAlerts]);
 
   useEffect(() => {
-    if (view) adapter.current?.setView(view);
+    if (!view || sameMapView(view, lastReportedView.current)) {
+      return;
+    }
+    adapter.current?.setView(view);
+    lastReportedView.current = view;
   }, [view]);
 
   useEffect(() => {
