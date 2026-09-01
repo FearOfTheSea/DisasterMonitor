@@ -1527,9 +1527,9 @@ summary:focus-visible {
   display: grid;
   font-size: 0.68rem;
   gap: 6px;
-  max-height: 320px;
+  max-height: none;
   max-width: none;
-  overflow-y: auto;
+  overflow-y: visible;
   padding: 10px 12px;
   position: static;
 }
@@ -1655,6 +1655,7 @@ summary:focus-visible {
 }
 
 .source-catalog-scroll {
+  align-content: start;
   display: grid;
   flex: 1;
   gap: 12px;
@@ -2758,6 +2759,14 @@ summary:focus-visible {
     overflow: visible;
   }
 
+  .workspace-assistant-open,
+  .workspace-operations-open,
+  .workspace-source-catalog-open {
+    height: calc(100dvh - var(--header-height));
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .active-incidents-panel {
     border-bottom: 1px solid var(--line);
     border-right: 0;
@@ -2805,7 +2814,7 @@ summary:focus-visible {
 
 @media (max-width: 700px) {
   :root {
-    --header-height: 104px;
+    --header-height: 144px;
   }
 
   .app-header {
