@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AssistantPanel } from '@/features/assistant/ui/AssistantPanel';
 import { useAssistantConversation } from '@/features/assistant/hooks/useAssistantConversation';
@@ -9,13 +9,36 @@ import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPan
 import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import {
+  buildCommandRegistry,
+  type CommandRegistryContext,
+} from '@/features/commands/model/commandRegistry';
+import { CommandPalette } from '@/features/commands/ui/CommandPalette';
+import {
   createDefaultMapLayerState,
   filterCorrelationsForDisplay,
   filterIncidentsForDisplay,
   setMapLayerVisibility,
 } from '@/features/map/model/mapLayerState';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
+import type { SatelliteMapState } from '@/features/map/ui/DisasterMap';
+import {
+  createMapUrlStateHistory,
+  type MapUrlState,
+  type MapUrlStateHistory,
+} from '@/features/map/model/mapUrlState';
+import {
+  applyRegionalPreset,
+  regionalPresetAfterViewChange,
+  type RegionalPresetId,
+  type RegionalSelection,
+} from '@/features/map/model/regionalPresets';
+import {
+  observationTimeForSource,
+  SATELLITE_IMAGERY_SOURCES,
+} from '@/features/map/model/satelliteImagery';
 import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
+import { SourceCatalog } from '@/features/sources/ui/SourceCatalog';
+import { useWeatherAlerts } from '@/features/weather/hooks/useWeatherAlerts';
 import { DEFAULT_MAP_VIEW } from '@/shared/config/runtime';
 import type { MapView } from '@/shared/types/assistant';
 
@@ -80,16 +103,58 @@ function PositionIcon({ className }: IconProps) {
 export default function Home() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [operationsOpen, setOperationsOpen] = useState(false);
+  const [sourceCatalogOpen, setSourceCatalogOpen] = useState(false);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>();
   const [watchFocusIncident, setWatchFocusIncident] = useState<ActiveIncident>();
   const [mapLayerState, setMapLayerState] = useState(createDefaultMapLayerState);
   const [mapView, setMapView] = useState<MapView>(DEFAULT_MAP_VIEW);
+  const [regionalSelection, setRegionalSelection] =
+    useState<RegionalSelection>('custom');
+  const [satelliteState, setSatelliteState] = useState<SatelliteMapState>(() => {
+    const source = SATELLITE_IMAGERY_SOURCES[0];
+    return {
+      sourceId: source.id,
+      observationTime: observationTimeForSource(source),
+    };
+  });
+  const [focusRequestToken, setFocusRequestToken] = useState(0);
+  const mapUrlHistory = useRef<MapUrlStateHistory | undefined>(undefined);
+  const skipNextUrlWrite = useRef(false);
+  const [defaultUrlState] = useState<MapUrlState>(() => {
+    return {
+      view: DEFAULT_MAP_VIEW,
+      regionalPreset: 'custom',
+      selectedIncidentId: undefined,
+      layerState: createDefaultMapLayerState(),
+      satelliteSourceId: satelliteState.sourceId,
+      satelliteObservationTime: satelliteState.observationTime,
+    };
+  });
   const conversation = useAssistantConversation();
   const activeIncidents = useActiveIncidents();
-  const handleViewChange = useCallback((view: MapView) => setMapView(view), []);
+  const weatherAlerts = useWeatherAlerts();
+  const usableSelectedIncidentId =
+    activeIncidents.status === 'success' &&
+    selectedIncidentId &&
+    !watchFocusIncident &&
+    !activeIncidents.snapshot?.incidents.some(
+      (incident) => incident.event_id === selectedIncidentId,
+    )
+      ? undefined
+      : selectedIncidentId;
+  const handleViewChange = useCallback((view: MapView) => {
+    setMapView(view);
+    setRegionalSelection((current) => regionalPresetAfterViewChange(current, view));
+  }, []);
+  const handleSelectRegion = useCallback((region: RegionalPresetId) => {
+    const next = applyRegionalPreset(region);
+    setRegionalSelection(next.regionalPreset);
+    setMapView(next.view);
+  }, []);
   const handleSelectActiveIncident = useCallback((incidentId: string) => {
     setWatchFocusIncident(undefined);
     setSelectedIncidentId(incidentId);
+    setFocusRequestToken((current) => current + 1);
     setMapLayerState((current) =>
       setMapLayerVisibility(current, 'active-incidents', true),
     );
@@ -97,6 +162,7 @@ export default function Home() {
   const handleSelectWatchIncident = useCallback((incident: ActiveIncident) => {
     setWatchFocusIncident(incident);
     setSelectedIncidentId(incident.event_id);
+    setFocusRequestToken((current) => current + 1);
     setMapLayerState((current) =>
       setMapLayerVisibility(current, 'active-incidents', true),
     );
@@ -104,17 +170,79 @@ export default function Home() {
   const handleToggleAssistant = useCallback(() => {
     setAssistantOpen((open) => {
       const nextOpen = !open;
-      if (nextOpen) setOperationsOpen(false);
+      if (nextOpen) {
+        setOperationsOpen(false);
+        setSourceCatalogOpen(false);
+      }
       return nextOpen;
     });
   }, []);
   const handleToggleOperations = useCallback(() => {
     setOperationsOpen((open) => {
       const nextOpen = !open;
-      if (nextOpen) setAssistantOpen(false);
+      if (nextOpen) {
+        setAssistantOpen(false);
+        setSourceCatalogOpen(false);
+      }
       return nextOpen;
     });
   }, []);
+  const handleToggleSourceCatalog = useCallback(() => {
+    setSourceCatalogOpen((open) => {
+      const nextOpen = !open;
+      if (nextOpen) {
+        setAssistantOpen(false);
+        setOperationsOpen(false);
+      }
+      return nextOpen;
+    });
+  }, []);
+
+  useEffect(() => {
+    const history = createMapUrlStateHistory(
+      defaultUrlState,
+      (restored) => {
+        skipNextUrlWrite.current = true;
+        setMapView(restored.view);
+        setRegionalSelection(restored.regionalPreset);
+        setSelectedIncidentId(restored.selectedIncidentId);
+        setWatchFocusIncident(undefined);
+        setMapLayerState(restored.layerState);
+        setSatelliteState({
+          sourceId: restored.satelliteSourceId,
+          observationTime: restored.satelliteObservationTime,
+        });
+      },
+      window,
+    );
+    mapUrlHistory.current = history;
+    history.start();
+    return () => {
+      history.stop();
+      mapUrlHistory.current = undefined;
+    };
+  }, [defaultUrlState]);
+
+  useEffect(() => {
+    if (skipNextUrlWrite.current) {
+      skipNextUrlWrite.current = false;
+      return;
+    }
+    mapUrlHistory.current?.schedule({
+      view: mapView,
+      regionalPreset: regionalSelection,
+      selectedIncidentId: usableSelectedIncidentId,
+      layerState: mapLayerState,
+      satelliteSourceId: satelliteState.sourceId,
+      satelliteObservationTime: satelliteState.observationTime,
+    });
+  }, [
+    mapLayerState,
+    mapView,
+    regionalSelection,
+    satelliteState,
+    usableSelectedIncidentId,
+  ]);
   const areaOfInterest = useMemo(
     () => assistantMapAreaOfInterest(conversation.messages),
     [conversation.messages],
@@ -175,6 +303,42 @@ export default function Home() {
       ),
     ];
   }, [displayedIncidents, watchFocusIncident]);
+  const openOperationsAt = useCallback((headingId?: string) => {
+    setOperationsOpen(true);
+    setAssistantOpen(false);
+    setSourceCatalogOpen(false);
+    if (headingId) {
+      window.setTimeout(() => document.getElementById(headingId)?.focus(), 0);
+    }
+  }, []);
+  const commands = useMemo(
+    () =>
+      buildCommandRegistry({
+        incidents: activeIncidents.snapshot?.incidents ?? [],
+        layerState: mapLayerState,
+        selectedIncidentId: usableSelectedIncidentId,
+        onSelectIncident: handleSelectActiveIncident,
+        onFocusSelectedIncident: () => setFocusRequestToken((current) => current + 1),
+        onSelectRegion: handleSelectRegion,
+        onLayerStateChange: setMapLayerState,
+        onOpenFindings: () => openOperationsAt('findings-center-heading'),
+        onOpenSourceCatalog: () => {
+          setSourceCatalogOpen(true);
+          setAssistantOpen(false);
+          setOperationsOpen(false);
+        },
+        onOpenIncidentWatches: () => openOperationsAt('incident-watches-heading'),
+        onOpenOperations: () => openOperationsAt(),
+      } satisfies CommandRegistryContext),
+    [
+      activeIncidents.snapshot?.incidents,
+      handleSelectActiveIncident,
+      handleSelectRegion,
+      mapLayerState,
+      openOperationsAt,
+      usableSelectedIncidentId,
+    ],
+  );
 
   return (
     <main className="app-shell">
@@ -189,6 +353,15 @@ export default function Home() {
           </div>
         </div>
         <div className="header-actions">
+          <CommandPalette commands={commands} />
+          <button
+            type="button"
+            aria-expanded={sourceCatalogOpen}
+            aria-controls="source-catalog-panel"
+            onClick={handleToggleSourceCatalog}
+          >
+            Source Catalog
+          </button>
           <button
             type="button"
             aria-expanded={operationsOpen}
@@ -211,14 +384,14 @@ export default function Home() {
         </div>
       </header>
       <section
-        className={`workspace${assistantOpen ? ' workspace-assistant-open' : ''}${operationsOpen ? ' workspace-operations-open' : ''}`}
+        className={`workspace${assistantOpen ? ' workspace-assistant-open' : ''}${operationsOpen ? ' workspace-operations-open' : ''}${sourceCatalogOpen ? ' workspace-source-catalog-open' : ''}`}
       >
         <ActiveIncidentsPanel
           snapshot={displayedSnapshot}
           coverageSnapshot={activeIncidents.snapshot}
           status={activeIncidents.status}
           error={activeIncidents.error}
-          selectedIncidentId={selectedIncidentId}
+          selectedIncidentId={usableSelectedIncidentId}
           displayTimeWindow={mapLayerState.timeWindow}
           onSelectIncident={handleSelectActiveIncident}
           onRefresh={activeIncidents.refresh}
@@ -230,11 +403,18 @@ export default function Home() {
             commonOperationalPicture={commonOperationalPicture}
             areaOfInterest={areaOfInterest}
             activeIncidents={mapIncidents}
-            selectedIncidentId={selectedIncidentId}
+            selectedIncidentId={usableSelectedIncidentId}
             selectedEvent={selectedEvent}
             layerState={mapLayerState}
             onLayerStateChange={setMapLayerState}
             correlationCount={displayedCorrelations.length}
+            view={mapView}
+            regionalSelection={regionalSelection}
+            onRegionalSelectionChange={handleSelectRegion}
+            satelliteState={satelliteState}
+            onSatelliteStateChange={setSatelliteState}
+            weatherAlerts={weatherAlerts.snapshot}
+            focusRequestToken={focusRequestToken}
           />
           <div className="map-overlay" role="status" aria-live="polite">
             <PositionIcon className="map-overlay-icon" />
@@ -270,6 +450,9 @@ export default function Home() {
             onSelectWatchIncident={handleSelectWatchIncident}
             onClose={() => setOperationsOpen(false)}
           />
+        )}
+        {sourceCatalogOpen && (
+          <SourceCatalog onClose={() => setSourceCatalogOpen(false)} />
         )}
       </section>
     </main>

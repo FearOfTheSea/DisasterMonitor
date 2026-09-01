@@ -1,0 +1,128 @@
+{
+  "@context": ["https://geojson.org/geojson-ld/geojson-context.jsonld"],
+  "type": "FeatureCollection",
+  "title": "Current watches, warnings, and advisories for the United States",
+  "updated": "2026-09-01T02:30:00+00:00",
+  "features": [
+    {
+      "id": "https://api.weather.gov/alerts/urn:oid:fixture-severe-update",
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-112.93, 37.0],
+            [-112.9, 37.08],
+            [-113.1, 37.0],
+            [-112.93, 37.0]
+          ]
+        ]
+      },
+      "properties": {
+        "id": "urn:oid:fixture-severe-update",
+        "areaDesc": "Washington County, Utah",
+        "sent": "2026-09-01T01:18:00Z",
+        "effective": "2026-09-01T01:18:00Z",
+        "onset": "2026-09-01T01:20:00Z",
+        "expires": "2026-09-01T04:30:00Z",
+        "status": "Actual",
+        "messageType": "Update",
+        "category": "Met",
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Immediate",
+        "event": "Flash Flood Warning",
+        "senderName": "NWS Salt Lake City UT",
+        "headline": "Flash Flood Warning for part of Washington County"
+      }
+    },
+    {
+      "id": "https://api.weather.gov/alerts/urn:oid:fixture-unknown-no-geometry",
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "urn:oid:fixture-unknown-no-geometry",
+        "areaDesc": "Central County forecast zone",
+        "sent": "2026-09-01T01:00:00Z",
+        "effective": "2026-09-01T01:00:00Z",
+        "onset": null,
+        "expires": "2026-09-01T08:00:00Z",
+        "status": "Actual",
+        "messageType": "Alert",
+        "category": "Met",
+        "severity": "Unknown",
+        "certainty": "Unknown",
+        "urgency": "Unknown",
+        "event": "Special Weather Statement",
+        "senderName": "NWS Fixture Office",
+        "headline": null
+      }
+    },
+    {
+      "id": "https://api.weather.gov/alerts/urn:oid:fixture-expired",
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "urn:oid:fixture-expired",
+        "areaDesc": "Expired County",
+        "sent": "2026-08-31T20:00:00Z",
+        "effective": "2026-08-31T20:00:00Z",
+        "onset": null,
+        "expires": "2026-09-01T01:59:59Z",
+        "status": "Actual",
+        "messageType": "Alert",
+        "category": "Met",
+        "severity": "Moderate",
+        "certainty": "Likely",
+        "urgency": "Expected",
+        "event": "Weather Advisory",
+        "senderName": "NWS Fixture Office",
+        "headline": "Expired fixture"
+      }
+    },
+    {
+      "id": "https://api.weather.gov/alerts/urn:oid:fixture-cancelled",
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "urn:oid:fixture-cancelled",
+        "areaDesc": "Cancelled County",
+        "sent": "2026-09-01T01:30:00Z",
+        "effective": "2026-09-01T01:30:00Z",
+        "onset": null,
+        "expires": "2026-09-01T05:00:00Z",
+        "status": "Actual",
+        "messageType": "Cancel",
+        "category": "Met",
+        "severity": "Moderate",
+        "certainty": "Likely",
+        "urgency": "Past",
+        "event": "Weather Advisory",
+        "senderName": "NWS Fixture Office",
+        "headline": "Cancelled fixture"
+      }
+    },
+    {
+      "id": "https://api.weather.gov/alerts/urn:oid:fixture-non-weather",
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "id": "urn:oid:fixture-non-weather",
+        "areaDesc": "Fixture County",
+        "sent": "2026-09-01T01:30:00Z",
+        "effective": "2026-09-01T01:30:00Z",
+        "onset": null,
+        "expires": "2026-09-01T05:00:00Z",
+        "status": "Actual",
+        "messageType": "Alert",
+        "category": "Safety",
+        "severity": "Severe",
+        "certainty": "Observed",
+        "urgency": "Immediate",
+        "event": "Civil Emergency Message",
+        "senderName": "Fixture Emergency Management",
+        "headline": "Non-weather fixture"
+      }
+    }
+  ]
+}

@@ -229,6 +229,10 @@ summary:focus-visible {
   grid-template-columns: var(--incident-rail) minmax(320px, 1fr) var(--operations-rail);
 }
 
+.workspace-source-catalog-open {
+  grid-template-columns: var(--incident-rail) minmax(320px, 1fr) var(--operations-rail);
+}
+
 .map-region {
   background: #e9eef5;
   grid-column: 2;
@@ -427,6 +431,49 @@ summary:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: #ffffff;
+}
+
+.regional-preset-controls {
+  border: 0;
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+}
+
+.regional-preset-controls legend {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0;
+}
+
+.regional-preset-controls > div {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.regional-preset-controls button {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+  font-weight: 680;
+  min-height: 29px;
+  padding: 4px;
+}
+
+.regional-preset-controls button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: #9ebfe8;
+  color: var(--accent);
+}
+
+.regional-preset-controls small {
+  color: var(--muted);
+  font-size: 0.61rem;
+  line-height: 1.4;
 }
 
 .map-time-filter {
@@ -1472,8 +1519,70 @@ summary:focus-visible {
   margin-top: 2px;
 }
 
+.weather-alerts-legend {
+  background: #fffdf7;
+  border: 1px solid #e3a52d;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  display: grid;
+  font-size: 0.68rem;
+  gap: 6px;
+  max-height: 320px;
+  max-width: none;
+  overflow-y: auto;
+  padding: 10px 12px;
+  position: static;
+}
+
+.weather-alerts-legend header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.weather-alerts-legend header span {
+  background: #fff3cd;
+  border-radius: 999px;
+  color: #7c4a03;
+  font-size: 0.59rem;
+  font-weight: 750;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.weather-alerts-legend p,
+.weather-alerts-legend ul {
+  margin: 0;
+}
+
+.weather-alerts-legend p,
+.weather-alerts-legend small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.weather-alerts-legend ul {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 8px 0 0;
+}
+
+.weather-alerts-legend li {
+  display: grid;
+  gap: 2px;
+}
+
+.weather-alerts-legend a {
+  color: #0b58ad;
+  font-weight: 680;
+}
+
 .assistant-panel,
-.operations-panel {
+.operations-panel,
+.source-catalog-panel {
   background: var(--surface);
   border-left: 1px solid var(--line);
   display: flex;
@@ -1490,7 +1599,8 @@ summary:focus-visible {
 }
 
 .assistant-panel-header,
-.operations-panel-header {
+.operations-panel-header,
+.source-catalog-header {
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
   padding: 16px;
@@ -1506,6 +1616,216 @@ summary:focus-visible {
   display: flex;
   gap: 12px;
   justify-content: space-between;
+}
+
+.source-catalog-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.source-catalog-header h2,
+.source-catalog-header p {
+  margin: 0;
+}
+
+.source-catalog-header h2 {
+  font-size: 0.96rem;
+}
+
+.source-catalog-header p,
+.source-catalog-panel p,
+.source-catalog-panel li,
+.source-catalog-panel dd {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.source-catalog-panel button {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  font-weight: 680;
+  min-height: 32px;
+  padding: 6px 9px;
+}
+
+.source-catalog-scroll {
+  display: grid;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.source-catalog-summary {
+  align-items: center;
+  display: flex;
+  font-size: 0.68rem;
+  justify-content: space-between;
+}
+
+.source-catalog-boundary {
+  background: #eef5ff;
+  border: 1px solid #bfd5ef;
+  border-radius: var(--radius-sm);
+  margin: 0;
+  padding: 9px;
+}
+
+.source-catalog-list {
+  display: grid;
+  gap: 10px;
+}
+
+.source-catalog-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+}
+
+.source-catalog-card > header {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.source-catalog-card h3,
+.source-catalog-card header p,
+.source-catalog-card dl,
+.source-catalog-card dd {
+  margin: 0;
+}
+
+.source-catalog-card h3 {
+  font-size: 0.78rem;
+}
+
+.source-catalog-card header > span {
+  background: var(--surface-soft);
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 750;
+  padding: 3px 7px;
+}
+
+.source-catalog-card dl {
+  display: grid;
+  gap: 7px;
+}
+
+.source-catalog-card dl > div {
+  display: grid;
+  gap: 1px;
+}
+
+.source-catalog-card dt {
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+  font-weight: 720;
+}
+
+.source-catalog-card details {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.source-catalog-card summary {
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.source-catalog-card ul {
+  margin-bottom: 0;
+  padding-left: 17px;
+}
+
+.command-palette-trigger kbd {
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.62rem;
+}
+
+.command-palette-backdrop {
+  align-items: flex-start;
+  background: rgba(15, 23, 42, 0.46);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: min(16vh, 140px) 16px 16px;
+  position: fixed;
+  z-index: 100;
+}
+
+.command-palette {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: 0 22px 70px rgba(15, 32, 57, 0.3);
+  display: grid;
+  gap: 10px;
+  max-height: min(620px, 75vh);
+  max-width: 620px;
+  overflow: hidden;
+  padding: 13px;
+  width: 100%;
+}
+
+.command-palette header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.command-palette header label {
+  font-size: 0.78rem;
+  font-weight: 730;
+}
+
+.command-palette input {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  font: inherit;
+  padding: 11px 12px;
+  width: 100%;
+}
+
+.command-palette [role='listbox'] {
+  display: grid;
+  gap: 3px;
+  overflow-y: auto;
+}
+
+.command-palette [role='option'] {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.command-palette [role='option'][aria-selected='true'] {
+  background: var(--accent-soft);
+  border-color: #9ebfe8;
+}
+
+.command-palette [role='option'] small {
+  color: var(--muted);
 }
 
 .panel-heading,
@@ -2388,12 +2708,14 @@ summary:focus-visible {
 
 @media (max-width: 1080px) and (min-width: 851px) {
   .workspace-assistant-open,
-  .workspace-operations-open {
+  .workspace-operations-open,
+  .workspace-source-catalog-open {
     grid-template-columns: var(--incident-rail) minmax(0, 1fr);
   }
 
   .assistant-panel,
-  .operations-panel {
+  .operations-panel,
+  .source-catalog-panel {
     bottom: 0;
     box-shadow: -12px 0 30px rgba(15, 32, 57, 0.16);
     grid-column: auto;
@@ -2407,6 +2729,10 @@ summary:focus-visible {
   }
 
   .operations-panel {
+    width: min(var(--operations-rail), calc(100% - var(--incident-rail)));
+  }
+
+  .source-catalog-panel {
     width: min(var(--operations-rail), calc(100% - var(--incident-rail)));
   }
 }
@@ -2423,7 +2749,8 @@ summary:focus-visible {
 
   .workspace,
   .workspace-assistant-open,
-  .workspace-operations-open {
+  .workspace-operations-open,
+  .workspace-source-catalog-open {
     display: flex;
     flex-direction: column;
     height: auto;
@@ -2462,7 +2789,8 @@ summary:focus-visible {
   }
 
   .assistant-panel,
-  .operations-panel {
+  .operations-panel,
+  .source-catalog-panel {
     bottom: 0;
     box-shadow: none;
     height: calc(100dvh - var(--header-height));
@@ -2659,6 +2987,7 @@ summary:focus-visible {
 
   .assistant-panel-header,
   .operations-panel-header,
+  .source-catalog-header,
   .operations-section {
     padding-left: 14px;
     padding-right: 14px;

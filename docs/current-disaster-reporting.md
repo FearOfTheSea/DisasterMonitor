@@ -57,6 +57,13 @@ Hypotheses, triage, decision support, specialist coordination, multimodal observ
 and contextual media are typed artifacts. They cannot create verified facts, expand
 source authority, issue public warnings, or select events.
 
+The NOAA/NWS weather-alert layer is another separate typed artifact. Its dedicated
+port and endpoint retain official CAP warning semantics, exact supplied polygons, and
+explicit United States coverage state. It is not registered for physical-event
+discovery or situation evidence, cannot become an `ActiveIncident`, and cannot enter
+event reconciliation, selection, or compound-hazard correlation. See
+[noaa-nws-weather-alerts.md](sources/noaa-nws-weather-alerts.md).
+
 ## Providers
 
 - EMSC SeismicPortal and USGS provide bounded named-country and worldwide scientific

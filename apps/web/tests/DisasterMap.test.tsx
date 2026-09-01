@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
+import type { WeatherAlertsSnapshot } from '@/features/weather/model/weatherAlert';
 import type { SelectedEvent } from '@/shared/types/assistant';
 
 const adapterMocks = vi.hoisted(() => ({
@@ -26,6 +27,8 @@ const adapterMocks = vi.hoisted(() => ({
   setSatelliteImagery: vi.fn(),
   setSatelliteOpacity: vi.fn(),
   setSelectedIncident: vi.fn(),
+  setView: vi.fn(),
+  setWeatherAlerts: vi.fn(),
 }));
 
 const satelliteClientMocks = vi.hoisted(() => ({
@@ -61,6 +64,8 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
     setSatelliteImagery = adapterMocks.setSatelliteImagery;
     setSatelliteOpacity = adapterMocks.setSatelliteOpacity;
     setSelectedIncident = adapterMocks.setSelectedIncident;
+    setView = adapterMocks.setView;
+    setWeatherAlerts = adapterMocks.setWeatherAlerts;
   },
 }));
 
@@ -497,5 +502,67 @@ describe('DisasterMap assistant focus', () => {
       screen.getByRole('option', { name: 'Planet configured mosaic' }),
     ).toBeDisabled();
     expect(screen.getByLabelText('Interactive map')).toBeInTheDocument();
+  });
+
+  it('passes only source weather alert geometry to its layer and labels alert semantics', () => {
+    const snapshot: WeatherAlertsSnapshot = {
+      retrieved_at: '2026-09-01T02:00:00Z',
+      alerts: [
+        {
+          provider_alert_id: 'alert-1',
+          source_id: 'nws-weather-alerts',
+          publisher: 'NOAA/National Weather Service',
+          event: 'Tornado Warning',
+          headline: 'Tornado Warning issued September 1',
+          severity: 'extreme',
+          urgency: 'immediate',
+          certainty: 'observed',
+          sent: '2026-09-01T01:45:00Z',
+          effective: '2026-09-01T01:45:00Z',
+          onset: '2026-09-01T01:45:00Z',
+          expires: '2026-09-01T02:30:00Z',
+          affected_area: 'Fixture County',
+          geometry: {
+            kind: 'polygon',
+            rings: [
+              [
+                { latitude: 35, longitude: -98 },
+                { latitude: 36, longitude: -98 },
+                { latitude: 35, longitude: -98 },
+              ],
+            ],
+          },
+          canonical_url: 'https://api.weather.gov/alerts/urn:fixture',
+          retrieved_at: '2026-09-01T02:00:00Z',
+          attribution: 'NOAA/National Weather Service',
+          limitations: [],
+        },
+      ],
+      coverage: {
+        source_id: 'nws-weather-alerts',
+        publisher: 'NOAA/National Weather Service',
+        state: 'alerts_found',
+        detail: 'One active alert was returned.',
+        geographic_scope: 'United States land areas served by NWS.',
+        limitations: [],
+      },
+      warnings: [],
+    };
+
+    render(
+      <DisasterMap
+        onViewChange={vi.fn()}
+        onSelectIncident={vi.fn()}
+        weatherAlerts={snapshot}
+      />,
+    );
+
+    expect(adapterMocks.setWeatherAlerts).toHaveBeenLastCalledWith(snapshot.alerts);
+    expect(
+      screen.getByRole('complementary', { name: 'Weather alert coverage' }),
+    ).toHaveTextContent(
+      'official warning areas, not observed disaster event footprints',
+    );
+    expect(screen.getByText('Tornado Warning')).toBeVisible();
   });
 });

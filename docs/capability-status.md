@@ -50,6 +50,15 @@ coverage states and warnings, and compound-hazard correlations; they do not crea
 facts, rankings, alerts, provider-health guarantees, causal claims, or consequential
 recommendations. These presentation changes do not strengthen the OP promotion claim.
 
+P1 operational-awareness adds an informational Source Catalog, dataset-specific
+hidden-tab-aware polling, bounded shareable presentation URL state, deterministic
+regional navigation, a keyboard-only in-memory command index, and a dedicated
+NOAA/NWS alert-artifact layer. The alert adapter is bounded and automatically tested
+for CAP fields, expiry/cancellation, exact-or-missing geometry, empty/failure coverage,
+and separation from physical incidents. This does not establish global warning
+coverage, delivery timeliness, public-warning utility, impact prediction, evacuation
+utility, or a physical disaster event.
+
 Compound Hazard Correlation v1 and cyclone supplemental map layers are implemented as
 bounded descriptive context with deterministic fixture coverage. The former supports
 only the documented earthquake/landslide and tropical-cyclone/flood point/time gates
@@ -69,7 +78,8 @@ Multimodal preparation and operator-study commands are documented in
 
 ## Unsupported
 
-Automatic imagery retrieval, generic live weather, geocoding, arbitrary source crawling,
+Automatic imagery retrieval, generic live weather/forecasting/radar, geocoding,
+arbitrary source crawling,
 automatic source trust promotion, hosted models, production authentication/TLS,
 multi-user persistence, cloud deployment, public warnings, evacuation directives, and
 resource orders remain unsupported. Email, SMS, browser/OS push, and externally routed

@@ -758,6 +758,17 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  Disaster: {
+    enum: [
+      'earthquake',
+      'flood',
+      'wildfire',
+      'landslide',
+      'tropical_cyclone',
+      'volcanic_eruption',
+    ],
+    type: 'string',
+  },
   DisasterMediaGalleryResponse: {
     properties: {
       event_id: {
@@ -1790,6 +1801,118 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  SourceCatalogItemResponse: {
+    properties: {
+      attribution: {
+        type: 'string',
+      },
+      authority: {
+        type: 'string',
+      },
+      country_codes: {
+        anyOf: [
+          {
+            items: {
+              type: 'string',
+            },
+            type: 'array',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      coverage_description: {
+        type: 'string',
+      },
+      documentation_path: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      freshness_semantics: {
+        type: 'string',
+      },
+      geographic_scopes: {
+        items: {
+          enum: ['country', 'worldwide'],
+          type: 'string',
+        },
+        type: 'array',
+      },
+      information_roles: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      operational_state: {
+        $ref: '#/components/schemas/SourceOperationalStateResponse',
+      },
+      provider: {
+        type: 'string',
+      },
+      publisher: {
+        type: 'string',
+      },
+      source_id: {
+        type: 'string',
+      },
+      stale_threshold_seconds: {
+        anyOf: [
+          {
+            type: 'integer',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      supported_disasters: {
+        items: {
+          $ref: '#/components/schemas/Disaster',
+        },
+        type: 'array',
+      },
+    },
+    required: [
+      'source_id',
+      'provider',
+      'publisher',
+      'authority',
+      'coverage_description',
+      'freshness_semantics',
+      'attribution',
+      'operational_state',
+    ],
+    type: 'object',
+  },
+  SourceCatalogResponse: {
+    properties: {
+      catalog_version: {
+        type: 'string',
+      },
+      sources: {
+        items: {
+          $ref: '#/components/schemas/SourceCatalogItemResponse',
+        },
+        type: 'array',
+      },
+    },
+    required: ['catalog_version'],
+    type: 'object',
+  },
   SourceMapFeatureResponse: {
     properties: {
       attribution: {
@@ -1946,6 +2069,42 @@ const apiSchemas = {
       'uncertainty',
       'attribution',
     ],
+    type: 'object',
+  },
+  SourceOperationalStateResponse: {
+    properties: {
+      availability: {
+        enum: ['available', 'unconfigured', 'maintained_only'],
+        type: 'string',
+      },
+      availability_detail: {
+        type: 'string',
+      },
+      configured: {
+        type: 'boolean',
+      },
+      execution_roles: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      provider_tier: {
+        anyOf: [
+          {
+            enum: ['primary', 'secondary'],
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      registered: {
+        type: 'boolean',
+      },
+    },
+    required: ['registered', 'configured', 'availability', 'availability_detail'],
     type: 'object',
   },
   SourceResponse: {
@@ -2165,6 +2324,242 @@ const apiSchemas = {
       'configuration',
       'created_at',
     ],
+    type: 'object',
+  },
+  WeatherAlertCoordinateResponse: {
+    properties: {
+      latitude: {
+        maximum: 90,
+        minimum: -90,
+        type: 'number',
+      },
+      longitude: {
+        maximum: 180,
+        minimum: -180,
+        type: 'number',
+      },
+    },
+    required: ['latitude', 'longitude'],
+    type: 'object',
+  },
+  WeatherAlertCoverageResponse: {
+    properties: {
+      detail: {
+        type: 'string',
+      },
+      geographic_scope: {
+        type: 'string',
+      },
+      limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      publisher: {
+        type: 'string',
+      },
+      source_id: {
+        type: 'string',
+      },
+      state: {
+        enum: ['alerts_found', 'no_active_alerts', 'degraded', 'unavailable'],
+        type: 'string',
+      },
+    },
+    required: ['source_id', 'publisher', 'state', 'detail', 'geographic_scope'],
+    type: 'object',
+  },
+  WeatherAlertGeometryResponse: {
+    properties: {
+      kind: {
+        const: 'polygon',
+        type: 'string',
+      },
+      rings: {
+        items: {
+          items: {
+            $ref: '#/components/schemas/WeatherAlertCoordinateResponse',
+          },
+          type: 'array',
+        },
+        type: 'array',
+      },
+    },
+    type: 'object',
+  },
+  WeatherAlertResponse: {
+    properties: {
+      affected_area: {
+        type: 'string',
+      },
+      attribution: {
+        type: 'string',
+      },
+      canonical_url: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      certainty: {
+        enum: ['observed', 'likely', 'possible', 'unlikely', 'unknown'],
+        type: 'string',
+      },
+      effective: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      event: {
+        type: 'string',
+      },
+      expires: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      geometry: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/WeatherAlertGeometryResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      headline: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      onset: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      provider_alert_id: {
+        type: 'string',
+      },
+      publisher: {
+        type: 'string',
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      sent: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      severity: {
+        enum: ['extreme', 'severe', 'moderate', 'minor', 'unknown'],
+        type: 'string',
+      },
+      source_id: {
+        type: 'string',
+      },
+      urgency: {
+        enum: ['immediate', 'expected', 'future', 'past', 'unknown'],
+        type: 'string',
+      },
+    },
+    required: [
+      'provider_alert_id',
+      'source_id',
+      'publisher',
+      'event',
+      'severity',
+      'urgency',
+      'certainty',
+      'affected_area',
+      'retrieved_at',
+      'attribution',
+    ],
+    type: 'object',
+  },
+  WeatherAlertsSnapshotResponse: {
+    properties: {
+      alerts: {
+        items: {
+          $ref: '#/components/schemas/WeatherAlertResponse',
+        },
+        type: 'array',
+      },
+      coverage: {
+        $ref: '#/components/schemas/WeatherAlertCoverageResponse',
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      warnings: {
+        items: {
+          $ref: '#/components/schemas/WeatherAlertWarningResponse',
+        },
+        type: 'array',
+      },
+    },
+    required: ['retrieved_at', 'coverage'],
+    type: 'object',
+  },
+  WeatherAlertWarningResponse: {
+    properties: {
+      detail: {
+        type: 'string',
+      },
+      partial: {
+        type: 'boolean',
+      },
+      reason_code: {
+        type: 'string',
+      },
+      retryable: {
+        type: 'boolean',
+      },
+    },
+    required: ['reason_code', 'detail', 'retryable', 'partial'],
     type: 'object',
   },
 } as const;
@@ -2818,6 +3213,29 @@ export type SourceAuthority =
   | 'humanitarian_aggregator'
   | 'secondary';
 
+export type SourceCatalogItemResponse = {
+  attribution: string;
+  authority: string;
+  country_codes?: Array<string> | null;
+  coverage_description: string;
+  documentation_path?: string | null;
+  freshness_semantics: string;
+  geographic_scopes?: Array<'country' | 'worldwide'>;
+  information_roles?: Array<string>;
+  limitations?: Array<string>;
+  operational_state: SourceOperationalStateResponse;
+  provider: string;
+  publisher: string;
+  source_id: string;
+  stale_threshold_seconds?: number | null;
+  supported_disasters?: Array<Disaster>;
+};
+
+export type SourceCatalogResponse = {
+  catalog_version: string;
+  sources?: Array<SourceCatalogItemResponse>;
+};
+
 export type SourceMapFeatureResponse = {
   attribution: string;
   authority: 'official_source' | 'source_supplied';
@@ -2850,6 +3268,15 @@ export type SourceMapLayerResponse = {
   title: string;
   uncertainty: string;
   updated_at: string;
+};
+
+export type SourceOperationalStateResponse = {
+  availability: 'available' | 'unconfigured' | 'maintained_only';
+  availability_detail: string;
+  configured: boolean;
+  execution_roles?: Array<string>;
+  provider_tier?: 'primary' | 'secondary' | null;
+  registered: boolean;
 };
 
 export type SourceResponse = {
@@ -2902,6 +3329,60 @@ export type VisualObservationResponse = {
   truth_status: 'analytical';
   uncertainty: string;
   visual_cues?: Array<string>;
+};
+
+export type WeatherAlertCoordinateResponse = {
+  latitude: number;
+  longitude: number;
+};
+
+export type WeatherAlertCoverageResponse = {
+  detail: string;
+  geographic_scope: string;
+  limitations?: Array<string>;
+  publisher: string;
+  source_id: string;
+  state: 'alerts_found' | 'no_active_alerts' | 'degraded' | 'unavailable';
+};
+
+export type WeatherAlertGeometryResponse = {
+  kind?: 'polygon';
+  rings?: Array<Array<WeatherAlertCoordinateResponse>>;
+};
+
+export type WeatherAlertResponse = {
+  affected_area: string;
+  attribution: string;
+  canonical_url?: string | null;
+  certainty: 'observed' | 'likely' | 'possible' | 'unlikely' | 'unknown';
+  effective?: string | null;
+  event: string;
+  expires?: string | null;
+  geometry?: WeatherAlertGeometryResponse | null;
+  headline?: string | null;
+  limitations?: Array<string>;
+  onset?: string | null;
+  provider_alert_id: string;
+  publisher: string;
+  retrieved_at: string;
+  sent?: string | null;
+  severity: 'extreme' | 'severe' | 'moderate' | 'minor' | 'unknown';
+  source_id: string;
+  urgency: 'immediate' | 'expected' | 'future' | 'past' | 'unknown';
+};
+
+export type WeatherAlertsSnapshotResponse = {
+  alerts?: Array<WeatherAlertResponse>;
+  coverage: WeatherAlertCoverageResponse;
+  retrieved_at: string;
+  warnings?: Array<WeatherAlertWarningResponse>;
+};
+
+export type WeatherAlertWarningResponse = {
+  detail: string;
+  partial: boolean;
+  reason_code: string;
+  retryable: boolean;
 };
 
 export type WorldwideIncidentWatchScopeRequest = {

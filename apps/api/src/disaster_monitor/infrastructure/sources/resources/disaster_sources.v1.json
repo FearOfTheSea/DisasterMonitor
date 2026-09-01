@@ -1,5 +1,5 @@
 {
-  "version": "2.7.0",
+  "version": "2.8.0",
   "sources": [
     {
       "source_id": "cems-gfm-floods",
@@ -39,6 +39,7 @@
       ],
       "provider_registration_name": "CEMS Global Flood Monitoring (GFM)",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/cems-gfm.md",
       "allowed_hosts": [
         "data.eodc.eu",
         "stac.eodc.eu",
@@ -82,6 +83,7 @@
       ],
       "provider_registration_name": "NASA EONET Wildfires",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/nasa-eonet-wildfires.md",
       "allowed_hosts": [
         "eonet.gsfc.nasa.gov"
       ]
@@ -112,6 +114,7 @@
       "registered_tool_names": ["retrieve_situation_evidence"],
       "provider_registration_name": "NASA FIRMS observations",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/nasa-firms-observations.md",
       "allowed_hosts": ["firms.modaps.eosdis.nasa.gov"]
     },
     {
@@ -151,6 +154,7 @@
       ],
       "provider_registration_name": "NASA COOLR Landslides",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/nasa-coolr-landslides.md",
       "allowed_hosts": [
         "gis.earthdata.nasa.gov"
       ]
@@ -182,6 +186,7 @@
       "registered_tool_names": ["retrieve_situation_evidence"],
       "provider_registration_name": "Copernicus EMS Rapid Mapping landslides",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/copernicus-ems-mapping.md",
       "allowed_hosts": ["rapidmapping.emergency.copernicus.eu"]
     },
     {
@@ -219,6 +224,7 @@
       ],
       "provider_registration_name": "GDACS tropical cyclones",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/gdacs-secondary-events.md",
       "allowed_hosts": [
         "www.gdacs.org"
       ]
@@ -253,6 +259,7 @@
       "registered_tool_names": ["retrieve_situation_evidence"],
       "provider_registration_name": "NOAA IBTrACS track reconciliation",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/noaa-ibtracs.md",
       "allowed_hosts": ["www.ncei.noaa.gov"]
     },
     {
@@ -283,6 +290,7 @@
       "registered_tool_names": ["retrieve_situation_evidence"],
       "provider_registration_name": "NOAA NHC/CPHC cyclone forecasts",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/noaa-nhc-cyclone-forecast.md",
       "allowed_hosts": ["www.nhc.noaa.gov"]
     },
     {
@@ -311,6 +319,7 @@
       "registered_tool_names": ["find_disaster_event"],
       "provider_registration_name": "GDACS floods",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/gdacs-secondary-events.md",
       "allowed_hosts": ["www.gdacs.org"]
     },
     {
@@ -339,6 +348,7 @@
       "registered_tool_names": ["find_disaster_event"],
       "provider_registration_name": "GDACS wildfires",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/gdacs-secondary-events.md",
       "allowed_hosts": ["www.gdacs.org"]
     },
     {
@@ -367,6 +377,7 @@
       "registered_tool_names": ["find_disaster_event"],
       "provider_registration_name": "GDACS volcanic eruptions",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/gdacs-secondary-events.md",
       "allowed_hosts": ["www.gdacs.org"]
     },
     {
@@ -406,6 +417,7 @@
       ],
       "provider_registration_name": "EMSC SeismicPortal",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/emsc-earthquakes.md",
       "allowed_hosts": [
         "www.seismicportal.eu"
       ]
@@ -444,6 +456,7 @@
       ],
       "provider_registration_name": "USGS",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/usgs-earthquakes.md",
       "allowed_hosts": [
         "earthquake.usgs.gov"
       ]
@@ -489,6 +502,7 @@
       ],
       "provider_registration_name": "ReliefWeb",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/reliefweb.md",
       "allowed_hosts": [
         "api.reliefweb.int",
         "reliefweb.int",
@@ -533,9 +547,48 @@
       ],
       "provider_registration_name": "Smithsonian / USGS Weekly Volcanic Activity Report",
       "implementation_status": "implemented",
+      "documentation_path": "docs/sources/smithsonian-usgs-volcanic-activity.md",
       "allowed_hosts": [
         "volcano.si.edu",
         "webservices.volcano.si.edu"
+      ]
+    },
+    {
+      "source_id": "nws-weather-alerts",
+      "organization_name": "NOAA/National Weather Service",
+      "display_name": "NWS active weather alerts",
+      "jurisdiction": "United States land areas served by the National Weather Service",
+      "authority_level": "national_authority",
+      "information_roles": [
+        "official_warning"
+      ],
+      "supported_disasters": [],
+      "country_codes": [
+        "USA"
+      ],
+      "geographic_scopes": [
+        "country"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_cap_geojson_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "active pull feed; NWS recommends requesting no more often than every 30 seconds, while alert issue and retrieval times remain distinct",
+      "attribution_guidance": "Attribute warning artifacts to NOAA/National Weather Service and retain the issuing NWS office shown on each alert.",
+      "limitations": [
+        "Coverage is limited to active NWS alerts for United States land areas and is not global.",
+        "Many zone-based alerts and watches have no polygon geometry; missing geometry is not reconstructed from place names or zone labels.",
+        "The pull API can be delayed or unavailable and is not a replacement for official local warning channels.",
+        "Alerts are separate warning artifacts and never confirm or discover a physical disaster event, impact, casualty, or evacuation."
+      ],
+      "registered_tool_names": [],
+      "provider_registration_name": "NOAA/NWS weather alerts",
+      "implementation_status": "implemented_weather_alerts",
+      "documentation_path": "docs/sources/noaa-nws-weather-alerts.md",
+      "allowed_hosts": [
+        "api.weather.gov"
       ]
     }
   ]

@@ -3,10 +3,11 @@ export type MapLayerId =
   | 'satellite-imagery'
   | 'cop-evidence'
   | 'cyclone-supplemental'
+  | 'authoritative-weather-alerts'
   | 'compound-correlations';
 
 export type MapLayerCategory =
-  'incidents' | 'imagery' | 'evidence' | 'forecast' | 'context';
+  'incidents' | 'imagery' | 'evidence' | 'forecast' | 'warnings' | 'context';
 
 export type MapLayerDefinition = {
   id: MapLayerId;
@@ -92,6 +93,26 @@ export const MAP_LAYER_REGISTRY = [
     limitations: [
       'Forecast and uncertainty geometry are not observed storm footprints.',
       'These layers are not wind fields, public warnings, impact forecasts, or complete global forecast coverage.',
+    ],
+  },
+  {
+    id: 'authoritative-weather-alerts',
+    label: 'Authoritative weather alerts',
+    category: 'warnings',
+    defaultVisible: true,
+    purpose:
+      'Displays source-supplied polygons for active NOAA/NWS meteorological alerts and lists non-geometric alert context separately.',
+    sourceDescription:
+      'The official NOAA/National Weather Service active CAP/GeoJSON alert interface for United States land areas.',
+    freshnessSemantics:
+      'Alert sent, effective, onset, expiry, and retrieval timestamps retain their source meanings. Client polling is not a source publication guarantee.',
+    authorityDescription:
+      'Each record is an authoritative warning artifact. It is not converted into a physical disaster event and does not participate in event selection or correlation.',
+    attribution: 'NOAA/National Weather Service',
+    limitations: [
+      'Coverage is limited to United States land areas served by NWS and is not global.',
+      'Many zone-based alerts have no polygon geometry; missing geometry is not reconstructed.',
+      'This pull layer is not a replacement for official local warning channels.',
     ],
   },
   {

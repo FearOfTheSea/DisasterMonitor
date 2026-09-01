@@ -30,6 +30,8 @@ INFRASTRUCTURE_APPLICATION_SURFACE = {
     "disaster_monitor.application.prompts.visual_analysis",
     "disaster_monitor.application.satellite_imagery",
     "disaster_monitor.application.source_intelligence",
+    "disaster_monitor.application.source_catalog",
+    "disaster_monitor.application.weather_alerts",
 }
 
 DISASTER_POLICY_MODULES = {

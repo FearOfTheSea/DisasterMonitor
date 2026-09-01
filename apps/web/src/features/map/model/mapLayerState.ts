@@ -15,6 +15,7 @@ export const MAP_LAYER_PRESETS = [
   'incidents',
   'evidence',
   'forecasts',
+  'warnings',
   'satellite',
   'all',
 ] as const;
@@ -33,6 +34,7 @@ const PRESET_LAYERS: Record<MapLayerPreset, readonly MapLayerId[]> = {
   incidents: ['active-incidents', 'compound-correlations'],
   evidence: ['active-incidents', 'cop-evidence'],
   forecasts: ['active-incidents', 'cyclone-supplemental'],
+  warnings: ['active-incidents', 'authoritative-weather-alerts'],
   satellite: ['active-incidents', 'satellite-imagery'],
   all: MAP_LAYER_REGISTRY.map((layer) => layer.id),
 };

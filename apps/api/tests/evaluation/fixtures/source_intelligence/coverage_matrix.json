@@ -21,9 +21,9 @@
     {"country": "JPN", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]},
     {"country": "VNM", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]},
     {"country": "VEN", "disaster": "tropical_cyclone", "role": "event_discovery", "source_ids": ["gdacs-tropical-cyclones"]},
-    {"country": "JPN", "disaster": "tropical_cyclone", "role": "situation_evidence", "source_ids": ["noaa-ibtracs-tracks"]},
-    {"country": "VNM", "disaster": "tropical_cyclone", "role": "situation_evidence", "source_ids": ["noaa-ibtracs-tracks"]},
-    {"country": "VEN", "disaster": "tropical_cyclone", "role": "situation_evidence", "source_ids": ["noaa-ibtracs-tracks"]},
+    {"country": "JPN", "disaster": "tropical_cyclone", "role": "situation_evidence", "source_ids": ["noaa-nhc-cyclone-forecast", "noaa-ibtracs-tracks"]},
+    {"country": "VNM", "disaster": "tropical_cyclone", "role": "situation_evidence", "source_ids": ["noaa-nhc-cyclone-forecast", "noaa-ibtracs-tracks"]},
+    {"country": "VEN", "disaster": "tropical_cyclone", "role": "situation_evidence", "source_ids": ["noaa-nhc-cyclone-forecast", "noaa-ibtracs-tracks"]},
     {"country": "JPN", "disaster": "volcanic_eruption", "role": "event_discovery", "source_ids": ["smithsonian-usgs-volcanic-activity", "gdacs-volcanic-eruptions"]},
     {"country": "VNM", "disaster": "volcanic_eruption", "role": "event_discovery", "source_ids": ["smithsonian-usgs-volcanic-activity", "gdacs-volcanic-eruptions"]},
     {"country": "VEN", "disaster": "volcanic_eruption", "role": "event_discovery", "source_ids": ["smithsonian-usgs-volcanic-activity", "gdacs-volcanic-eruptions"]}

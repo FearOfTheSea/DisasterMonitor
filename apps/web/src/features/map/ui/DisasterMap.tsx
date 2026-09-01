@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'ol/ol.css';
 
 import {
@@ -34,14 +34,28 @@ import {
   validObservationTime,
 } from '@/features/map/model/satelliteImagery';
 import type {
+  RegionalPresetId,
+  RegionalSelection,
+} from '@/features/map/model/regionalPresets';
+import type { WeatherAlertsSnapshot } from '@/features/weather/model/weatherAlert';
+import type {
   CommonOperationalPicture,
   MapView,
   SelectedEvent,
 } from '@/shared/types/assistant';
+import {
+  createRefreshController,
+  REFRESH_POLICIES,
+} from '@/shared/model/refreshPolicy';
 
 const DEFAULT_SATELLITE_SOURCE: SatelliteSourceId = 'nasa-viirs-snpp-true-color';
 const DEFAULT_SATELLITE_OPACITY = 0.75;
 const EMPTY_ACTIVE_INCIDENTS: ActiveIncident[] = [];
+
+export type SatelliteMapState = {
+  sourceId: SatelliteSourceId;
+  observationTime?: string;
+};
 
 type DisasterMapProps = {
   onViewChange: (view: MapView) => void;
@@ -54,6 +68,13 @@ type DisasterMapProps = {
   layerState?: MapLayerState;
   onLayerStateChange?: (state: MapLayerState) => void;
   correlationCount?: number;
+  view?: MapView;
+  regionalSelection?: RegionalSelection;
+  onRegionalSelectionChange?: (preset: RegionalPresetId) => void;
+  satelliteState?: SatelliteMapState;
+  onSatelliteStateChange?: (state: SatelliteMapState) => void;
+  weatherAlerts?: WeatherAlertsSnapshot;
+  focusRequestToken?: number;
 };
 
 export function DisasterMap({
@@ -67,6 +88,13 @@ export function DisasterMap({
   layerState: controlledLayerState,
   onLayerStateChange,
   correlationCount = 0,
+  view,
+  regionalSelection = 'custom',
+  onRegionalSelectionChange,
+  satelliteState: controlledSatelliteState,
+  onSatelliteStateChange,
+  weatherAlerts,
+  focusRequestToken = 0,
 }: DisasterMapProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const adapter = useRef<OpenLayersMapAdapter | null>(null);
@@ -78,23 +106,41 @@ export function DisasterMap({
   const changeLayerState = onLayerStateChange ?? setUncontrolledLayerState;
   const satelliteEnabled = layerState.visibility['satellite-imagery'];
   const [clusterIncidentIds, setClusterIncidentIds] = useState<string[]>([]);
-  const [satelliteSourceId, setSatelliteSourceId] = useState<SatelliteSourceId>(
-    DEFAULT_SATELLITE_SOURCE,
-  );
+  const [uncontrolledSatelliteState, setUncontrolledSatelliteState] =
+    useState<SatelliteMapState>(() => {
+      const source = SATELLITE_IMAGERY_SOURCES.find(
+        (item) => item.id === DEFAULT_SATELLITE_SOURCE,
+      ) as SatelliteImagerySource;
+      return {
+        sourceId: source.id,
+        observationTime: observationTimeForSource(source),
+      };
+    });
+  const satelliteState = controlledSatelliteState ?? uncontrolledSatelliteState;
+  const changeSatelliteState = onSatelliteStateChange ?? setUncontrolledSatelliteState;
+  const satelliteSourceId = satelliteState.sourceId;
   const [satelliteOpacity, setSatelliteOpacity] = useState(DEFAULT_SATELLITE_OPACITY);
-  const [dailyObservationDate, setDailyObservationDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
-  const [subdailyObservationTime, setSubdailyObservationTime] = useState(() => {
-    const source = SATELLITE_IMAGERY_SOURCES.find(
-      (item) => item.id === 'nasa-goes-east-geocolor',
-    ) as SatelliteImagerySource;
-    return observationTimeForSource(source)?.slice(0, 16) ?? '';
-  });
   const [satelliteSources, setSatelliteSources] = useState(() =>
     SATELLITE_IMAGERY_SOURCES.map((source) => ({ ...source })),
   );
   const [catalogUnavailable, setCatalogUnavailable] = useState(false);
+  const loadSatelliteCatalog = useCallback(async (signal: AbortSignal) => {
+    try {
+      const availability = await fetchSatelliteImageryCatalog(signal);
+      if (signal.aborted) return;
+      const byId = new Map(availability.map((item) => [item.sourceId, item.available]));
+      setSatelliteSources((current) =>
+        current.map((source) => ({
+          ...source,
+          available: byId.get(source.id) ?? source.available,
+        })),
+      );
+      setCatalogUnavailable(false);
+    } catch {
+      if (signal.aborted) return;
+      setCatalogUnavailable(true);
+    }
+  }, []);
   const incidentFeatures = useMemo(
     () => activeIncidentMapFeatures(activeIncidents),
     [activeIncidents],
@@ -106,12 +152,8 @@ export function DisasterMap({
       satelliteSources[0],
     [satelliteSourceId, satelliteSources],
   );
-  const requestedObservationTime =
-    selectedSatelliteSource.temporalMode === 'daily'
-      ? dailyObservationDate
-      : selectedSatelliteSource.temporalMode === 'subdaily'
-        ? `${subdailyObservationTime}:00Z`
-        : undefined;
+  const requestedObservationTime = satelliteState.observationTime;
+  const initialView = useRef(view ?? DEFAULT_MAP_VIEW);
   const satelliteLayerConfiguration = useMemo<
     SatelliteLayerConfiguration | undefined
   >(() => {
@@ -142,26 +184,14 @@ export function DisasterMap({
   }, [satelliteEnabled, requestedObservationTime, selectedSatelliteSource]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchSatelliteImageryCatalog(controller.signal)
-      .then((availability) => {
-        const byId = new Map(
-          availability.map((item) => [item.sourceId, item.available]),
-        );
-        setSatelliteSources((current) =>
-          current.map((source) => ({
-            ...source,
-            available: byId.get(source.id) ?? source.available,
-          })),
-        );
-        setCatalogUnavailable(false);
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        setCatalogUnavailable(true);
-      });
-    return () => controller.abort();
-  }, []);
+    const controller = createRefreshController(
+      REFRESH_POLICIES['satellite-availability'],
+      loadSatelliteCatalog,
+      document,
+    );
+    controller.start();
+    return () => controller.stop();
+  }, [loadSatelliteCatalog]);
 
   useEffect(() => {
     if (!mapElement.current) {
@@ -169,7 +199,7 @@ export function DisasterMap({
     }
     adapter.current = new OpenLayersMapAdapter({
       target: mapElement.current,
-      initialView: DEFAULT_MAP_VIEW,
+      initialView: initialView.current,
       onViewChange,
       onSelectIncident,
       onSelectIncidentCluster: setClusterIncidentIds,
@@ -204,12 +234,20 @@ export function DisasterMap({
   }, [incidentFeatures]);
 
   useEffect(() => {
+    adapter.current?.setWeatherAlerts(weatherAlerts?.alerts ?? []);
+  }, [weatherAlerts]);
+
+  useEffect(() => {
+    if (view) adapter.current?.setView(view);
+  }, [view]);
+
+  useEffect(() => {
     adapter.current?.setLayerVisibility(layerState.visibility);
   }, [layerState.visibility]);
 
   useEffect(() => {
     adapter.current?.setSelectedIncident(selectedIncidentId);
-  }, [selectedIncidentId]);
+  }, [focusRequestToken, selectedIncidentId]);
 
   useEffect(() => {
     adapter.current?.setSatelliteImagery(satelliteLayerConfiguration);
@@ -252,6 +290,21 @@ export function DisasterMap({
       freshnessDetail: `Requested observation: ${requestedObservationTime ?? 'configured mosaic period'}. Available observation time is not reported by this client.`,
       attribution: selectedSatelliteSource.attribution,
     },
+    'authoritative-weather-alerts': {
+      available:
+        weatherAlerts?.coverage.state === 'alerts_found' ||
+        weatherAlerts?.coverage.state === 'no_active_alerts',
+      availabilityLabel: weatherAlerts
+        ? `${weatherAlerts.alerts.length} active alert${weatherAlerts.alerts.length === 1 ? '' : 's'} · ${weatherAlerts.coverage.state.replaceAll('_', ' ')}`
+        : 'Coverage not loaded',
+      sourceDetail: weatherAlerts
+        ? `${weatherAlerts.coverage.publisher}. ${weatherAlerts.coverage.geographic_scope}`
+        : undefined,
+      freshnessDetail: weatherAlerts
+        ? `Retrieved ${weatherAlerts.retrieved_at}. ${weatherAlerts.coverage.detail}`
+        : undefined,
+      attribution: weatherAlerts?.coverage.publisher,
+    },
     'cop-evidence': {
       available: Boolean(commonOperationalPicture),
       availabilityLabel: commonOperationalPicture
@@ -285,6 +338,58 @@ export function DisasterMap({
     );
     return incident ? [{ incidentId, incident }] : [];
   });
+  const weatherAlertContext =
+    weatherAlerts && layerState.visibility['authoritative-weather-alerts'] ? (
+      <aside className="weather-alerts-legend" aria-label="Weather alert coverage">
+        <header>
+          <strong>Authoritative weather alerts</strong>
+          <span>{weatherAlerts.coverage.state.replaceAll('_', ' ')}</span>
+        </header>
+        <p>{weatherAlerts.coverage.detail}</p>
+        <p>{weatherAlerts.coverage.geographic_scope}</p>
+        <p>
+          These polygons are official warning areas, not observed disaster event
+          footprints. Alerts without source geometry remain listed but are not drawn.
+        </p>
+        {weatherAlerts.alerts.length > 0 ? (
+          <ul>
+            {weatherAlerts.alerts.slice(0, 8).map((alert) => (
+              <li key={alert.provider_alert_id}>
+                <strong>{alert.event}</strong>
+                <span>{alert.affected_area}</span>
+                <small>
+                  {alert.severity} severity · {alert.urgency} urgency ·{' '}
+                  {alert.certainty} certainty
+                </small>
+                <small>
+                  Effective {alert.effective ?? 'not reported'} · expires{' '}
+                  {alert.expires ?? 'not reported'}
+                </small>
+                <small>
+                  {alert.geometry
+                    ? 'Source polygon displayed'
+                    : 'No source polygon supplied'}
+                </small>
+                {alert.canonical_url ? (
+                  <a href={alert.canonical_url} target="_blank" rel="noreferrer">
+                    Open source alert
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {weatherAlerts.alerts.length > 8 ? (
+          <small>
+            {weatherAlerts.alerts.length - 8} additional active alerts omitted from this
+            compact list.
+          </small>
+        ) : null}
+        {weatherAlerts.warnings.map((warning) => (
+          <p key={`${warning.reason_code}:${warning.detail}`}>{warning.detail}</p>
+        ))}
+      </aside>
+    ) : null;
 
   return (
     <>
@@ -293,6 +398,9 @@ export function DisasterMap({
         state={layerState}
         onChange={changeLayerState}
         runtimeDetails={runtimeDetails}
+        regionalSelection={regionalSelection}
+        onRegionalSelectionChange={onRegionalSelectionChange}
+        supplemental={weatherAlertContext}
       >
         <fieldset className="satellite-controls">
           <legend>Satellite imagery source</legend>
@@ -304,9 +412,15 @@ export function DisasterMap({
             <span>Satellite source</span>
             <select
               value={satelliteSourceId}
-              onChange={(event) =>
-                setSatelliteSourceId(event.target.value as SatelliteSourceId)
-              }
+              onChange={(event) => {
+                const sourceId = event.target.value as SatelliteSourceId;
+                const source = satelliteSources.find((item) => item.id === sourceId);
+                if (!source) return;
+                changeSatelliteState({
+                  sourceId,
+                  observationTime: observationTimeForSource(source),
+                });
+              }}
             >
               {satelliteSources.map((source) => (
                 <option key={source.id} value={source.id} disabled={!source.available}>
@@ -333,9 +447,14 @@ export function DisasterMap({
               <span>Observation date</span>
               <input
                 type="date"
-                value={dailyObservationDate}
+                value={requestedObservationTime ?? ''}
                 disabled={!satelliteEnabled}
-                onChange={(event) => setDailyObservationDate(event.target.value)}
+                onChange={(event) =>
+                  changeSatelliteState({
+                    sourceId: satelliteSourceId,
+                    observationTime: event.target.value,
+                  })
+                }
               />
             </label>
           ) : selectedSatelliteSource.temporalMode === 'subdaily' ? (
@@ -344,9 +463,16 @@ export function DisasterMap({
               <input
                 type="datetime-local"
                 step="600"
-                value={subdailyObservationTime}
+                value={requestedObservationTime?.slice(0, 16) ?? ''}
                 disabled={!satelliteEnabled}
-                onChange={(event) => setSubdailyObservationTime(event.target.value)}
+                onChange={(event) =>
+                  changeSatelliteState({
+                    sourceId: satelliteSourceId,
+                    observationTime: event.target.value
+                      ? `${event.target.value}:00Z`
+                      : undefined,
+                  })
+                }
               />
             </label>
           ) : (

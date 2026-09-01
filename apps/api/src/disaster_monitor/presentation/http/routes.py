@@ -38,6 +38,7 @@ from disaster_monitor.application.services.active_incidents import (
 from disaster_monitor.application.services.provider_freshness import (
     ProviderFreshnessService,
 )
+from disaster_monitor.application.source_catalog import SourceCatalogService
 from disaster_monitor.application.use_cases.delete_conversation import (
     DeleteConversation,
 )
@@ -53,6 +54,7 @@ from disaster_monitor.application.use_cases.record_operator_action import (
 from disaster_monitor.application.use_cases.run_conversation_turn import (
     RunConversationTurn,
 )
+from disaster_monitor.application.weather_alerts import WeatherAlertsService
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import (
     CycloneMapLayer,
@@ -114,7 +116,16 @@ from disaster_monitor.presentation.http.schemas import (
     SatelliteImageryCatalogResponse,
     SatelliteImageryProductResponse,
     SelectedEventResponse,
+    SourceCatalogItemResponse,
+    SourceCatalogResponse,
+    SourceOperationalStateResponse,
     SourceResponse,
+    WeatherAlertCoordinateResponse,
+    WeatherAlertCoverageResponse,
+    WeatherAlertGeometryResponse,
+    WeatherAlertResponse,
+    WeatherAlertsSnapshotResponse,
+    WeatherAlertWarningResponse,
 )
 
 router = APIRouter()
@@ -156,6 +167,14 @@ def get_satellite_imagery_service(request: Request) -> SatelliteImageryService:
     return cast(
         SatelliteImageryService, request.app.state.dependencies.satellite_imagery
     )
+
+
+def get_source_catalog_service(request: Request) -> SourceCatalogService:
+    return cast(SourceCatalogService, request.app.state.dependencies.source_catalog)
+
+
+def get_weather_alerts_service(request: Request) -> WeatherAlertsService:
+    return cast(WeatherAlertsService, request.app.state.dependencies.weather_alerts)
 
 
 def _event_geometry_response(
@@ -367,6 +386,120 @@ async def satellite_imagery_catalog(
             )
             for product in service.catalog()
         ]
+    )
+
+
+@router.get(
+    "/sources",
+    response_model=SourceCatalogResponse,
+    tags=["sources"],
+)
+async def source_catalog(
+    service: Annotated[SourceCatalogService, Depends(get_source_catalog_service)],
+) -> SourceCatalogResponse:
+    """Return maintained source metadata plus separately labelled runtime state."""
+    snapshot = service.read()
+    return SourceCatalogResponse(
+        catalog_version=snapshot.catalog_version,
+        sources=[
+            SourceCatalogItemResponse(
+                source_id=item.source_id,
+                provider=item.provider,
+                publisher=item.publisher,
+                authority=item.authority,
+                information_roles=list(item.information_roles),
+                supported_disasters=list(item.supported_disasters),
+                geographic_scopes=list(item.geographic_scopes),
+                country_codes=(
+                    list(item.country_codes) if item.country_codes is not None else None
+                ),
+                coverage_description=item.coverage_description,
+                documentation_path=item.documentation_path,
+                freshness_semantics=item.freshness_semantics,
+                stale_threshold_seconds=item.stale_threshold_seconds,
+                attribution=item.attribution,
+                limitations=list(item.limitations),
+                operational_state=SourceOperationalStateResponse(
+                    registered=item.operational_state.registered,
+                    configured=item.operational_state.configured,
+                    availability=item.operational_state.availability,
+                    availability_detail=item.operational_state.availability_detail,
+                    provider_tier=item.operational_state.provider_tier,
+                    execution_roles=list(item.operational_state.execution_roles),
+                ),
+            )
+            for item in snapshot.sources
+        ],
+    )
+
+
+@router.get(
+    "/weather-alerts",
+    response_model=WeatherAlertsSnapshotResponse,
+    tags=["weather-alerts"],
+)
+async def weather_alerts(
+    service: Annotated[WeatherAlertsService, Depends(get_weather_alerts_service)],
+) -> WeatherAlertsSnapshotResponse:
+    """Return bounded authoritative warnings without physical-event conversion."""
+    snapshot = await service.execute()
+    return WeatherAlertsSnapshotResponse(
+        retrieved_at=snapshot.retrieved_at,
+        alerts=[
+            WeatherAlertResponse(
+                provider_alert_id=alert.provider_alert_id,
+                source_id=alert.source_id,
+                publisher=alert.publisher,
+                event=alert.event,
+                headline=alert.headline,
+                severity=alert.severity.value,
+                urgency=alert.urgency.value,
+                certainty=alert.certainty.value,
+                sent=alert.sent,
+                effective=alert.effective,
+                onset=alert.onset,
+                expires=alert.expires,
+                affected_area=alert.affected_area,
+                geometry=(
+                    WeatherAlertGeometryResponse(
+                        rings=[
+                            [
+                                WeatherAlertCoordinateResponse(
+                                    latitude=coordinate.latitude,
+                                    longitude=coordinate.longitude,
+                                )
+                                for coordinate in ring
+                            ]
+                            for ring in alert.geometry.rings
+                        ]
+                    )
+                    if alert.geometry is not None
+                    else None
+                ),
+                canonical_url=alert.canonical_url,
+                retrieved_at=alert.retrieved_at,
+                attribution=alert.attribution,
+                limitations=list(alert.limitations),
+            )
+            for alert in snapshot.alerts
+        ],
+        coverage=WeatherAlertCoverageResponse(
+            source_id=snapshot.coverage.source_id,
+            publisher=snapshot.coverage.publisher,
+            state=snapshot.coverage.state.value,
+            detail=snapshot.coverage.detail,
+            geographic_scope=snapshot.coverage.geographic_scope,
+            limitations=list(snapshot.coverage.limitations),
+        ),
+        warnings=[
+            WeatherAlertWarningResponse(
+                reason_code=warning.reason_code,
+                detail=warning.detail,
+                retryable=warning.retryable,
+                partial=warning.partial,
+            )
+            for warning in snapshot.warnings
+        ],
     )
 
 

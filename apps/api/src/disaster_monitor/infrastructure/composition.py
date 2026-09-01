@@ -88,6 +88,7 @@ from disaster_monitor.application.services.visual_analysis import VisualAnalysis
 from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
+from disaster_monitor.application.source_catalog import SourceCatalogService
 from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.application.use_cases.delete_conversation import (
     DeleteConversation,
@@ -102,6 +103,7 @@ from disaster_monitor.application.use_cases.run_conversation_turn import (
     RunConversationTurn,
 )
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
+from disaster_monitor.application.weather_alerts import WeatherAlertsService
 from disaster_monitor.infrastructure.app_dependencies import (
     AppDependencies,
     AppLifecycle,
@@ -171,6 +173,7 @@ from disaster_monitor.infrastructure.sources.static_source_catalog import (
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
     OllamaVisionAdapter,
 )
+from disaster_monitor.infrastructure.weather.nws_alerts import NwsWeatherAlertsAdapter
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +208,8 @@ class AppDependencyOverrides:
     active_incidents_service: ActiveIncidentsService | None = None
     conversation_repository: ConversationStore | None = None
     satellite_imagery_service: SatelliteImageryService | None = None
+    source_catalog_service: SourceCatalogService | None = None
+    weather_alerts_service: WeatherAlertsService | None = None
     specialist_model: SpecialistModel | None = None
     memory_repository: MemoryStore | None = None
     conversation_deletion_store: ConversationDeletionStore | None = None
@@ -280,6 +285,28 @@ def build_app_dependencies(
         country_catalog
     )
     source_catalog = build_source_catalog(settings)
+    configured_weather_alerts = (
+        configured.weather_alerts_service
+        or build_weather_alerts_service(
+            settings,
+            snapshot_recorder=operational.snapshots.persist,
+        )
+    )
+    configured_source_catalog = (
+        configured.source_catalog_service
+        or SourceCatalogService(
+            source_catalog,
+            disaster_report.provider_registry,
+            additional_runtime_sources={
+                "nws-weather-alerts": {
+                    "registered": True,
+                    "configured": True,
+                    "provider_tier": "primary",
+                    "execution_roles": ("weather_alerts",),
+                }
+            },
+        )
+    )
     configured_agent_model = (
         configured.agent_model
         if configured.agent_model is not None
@@ -371,6 +398,8 @@ def build_app_dependencies(
         delete_conversation=DeleteConversation(conversation_deletion),
         language_model=language_model,
         active_incidents=configured_active_incidents,
+        source_catalog=configured_source_catalog,
+        weather_alerts=configured_weather_alerts,
         incident_watches=ManageIncidentWatches(
             cast(IncidentWatchStore, operational.repository),
             country_catalog,
@@ -396,6 +425,7 @@ def build_app_dependencies(
                 lambda: close_resource(configured_visual_analyzer),
                 lambda: close_resource(media_services.discovery),
                 configured_satellite_imagery.aclose,
+                lambda: close_resource(configured_weather_alerts),
             ),
         ),
     )
@@ -578,6 +608,22 @@ def build_satellite_imagery_service(settings: Settings) -> SatelliteImageryServi
                 timeout_seconds=settings.disaster_provider_timeout_seconds,
                 maximum_response_bytes=(settings.disaster_provider_max_response_bytes),
             ),
+        )
+    )
+
+
+def build_weather_alerts_service(
+    settings: Settings,
+    *,
+    snapshot_recorder: SourcePayloadRecorder | None = None,
+) -> WeatherAlertsService:
+    """Construct the separately registered authoritative warning provider."""
+    return WeatherAlertsService(
+        NwsWeatherAlertsAdapter(
+            snapshot_recorder=snapshot_recorder,
+            timeout_seconds=settings.disaster_provider_timeout_seconds,
+            maximum_response_bytes=settings.weather_alert_max_response_bytes,
+            maximum_records=settings.weather_alert_max_records,
         )
     )
 

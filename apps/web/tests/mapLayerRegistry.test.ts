@@ -70,6 +70,7 @@ describe('map layer registry', () => {
       'satellite-imagery',
       'cop-evidence',
       'cyclone-supplemental',
+      'authoritative-weather-alerts',
       'compound-correlations',
     ]);
 
@@ -91,6 +92,9 @@ describe('map layer registry', () => {
     expect(mapLayerDefinition('cyclone-supplemental').limitations.join(' ')).toMatch(
       /not observed.*footprint/i,
     );
+    expect(
+      mapLayerDefinition('authoritative-weather-alerts').limitations.join(' '),
+    ).toMatch(/not global/i);
     expect(mapLayerDefinition('compound-correlations').limitations.join(' ')).toMatch(
       /does not establish causation/i,
     );
@@ -105,6 +109,7 @@ describe('map layer registry', () => {
       'satellite-imagery': true,
       'cop-evidence': false,
       'cyclone-supplemental': false,
+      'authoritative-weather-alerts': false,
       'compound-correlations': false,
     });
     expect(satellite.timeWindow).toBe(initial.timeWindow);
@@ -114,6 +119,12 @@ describe('map layer registry', () => {
       activePreset: undefined,
       visibility: { ...satellite.visibility, 'cop-evidence': true },
     });
+
+    expect(
+      applyMapLayerPreset(initial, 'warnings').visibility[
+        'authoritative-weather-alerts'
+      ],
+    ).toBe(true);
 
     expect(applyMapLayerPreset(initial, 'all').visibility).toEqual(
       Object.fromEntries(MAP_LAYER_REGISTRY.map((layer) => [layer.id, true])),

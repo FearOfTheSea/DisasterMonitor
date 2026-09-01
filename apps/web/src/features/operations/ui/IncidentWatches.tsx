@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   createIncidentWatch,
@@ -17,6 +17,11 @@ import type {
   IncidentWatchEvent,
 } from '@/features/operations/model/incidentWatch';
 import type { DisasterType } from '@/features/incidents/model/activeIncidents';
+import {
+  createRefreshController,
+  REFRESH_POLICIES,
+  type RefreshController,
+} from '@/shared/model/refreshPolicy';
 
 type IncidentWatchesProps = {
   onSelectIncident: (incident: IncidentWatchEvent) => void;
@@ -82,6 +87,7 @@ export function IncidentWatches({
   const [country, setCountry] = useState('');
   const [interval, setInterval] = useState(900);
   const [saving, setSaving] = useState(false);
+  const refreshController = useRef<RefreshController | undefined>(undefined);
 
   const loadWatches = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -98,20 +104,21 @@ export function IncidentWatches({
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    void fetchIncidentWatches(controller.signal)
-      .then(setWatches)
-      .catch((caught: unknown) => {
-        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-          setError(
-            caught instanceof Error ? caught.message : 'Incident watches failed.',
-          );
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
+    const controller = createRefreshController(
+      REFRESH_POLICIES['incident-watches'],
+      loadWatches,
+      document,
+    );
+    refreshController.current = controller;
+    controller.start();
+    return () => {
+      controller.stop();
+      refreshController.current = undefined;
+    };
+  }, [loadWatches]);
+
+  useEffect(() => {
+    if (refreshToken > 0) void refreshController.current?.refreshNow();
   }, [refreshToken]);
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
@@ -216,10 +223,16 @@ export function IncidentWatches({
     <section className="incident-watches" aria-labelledby="incident-watches-heading">
       <div className="operations-heading">
         <div>
-          <h3 id="incident-watches-heading">Incident watches</h3>
+          <h3 id="incident-watches-heading" tabIndex={-1}>
+            Incident watches
+          </h3>
           <p>Bounded scheduled monitoring; not complete global surveillance.</p>
         </div>
-        <button type="button" onClick={() => void loadWatches()} disabled={loading}>
+        <button
+          type="button"
+          onClick={() => void refreshController.current?.refreshNow()}
+          disabled={loading}
+        >
           Refresh watches
         </button>
       </div>

@@ -19,6 +19,7 @@ from disaster_monitor.application.services.active_incidents import (
 from disaster_monitor.application.services.provider_freshness import (
     ProviderFreshnessService,
 )
+from disaster_monitor.application.source_catalog import SourceCatalogService
 from disaster_monitor.application.use_cases.delete_conversation import (
     DeleteConversation,
 )
@@ -31,6 +32,7 @@ from disaster_monitor.application.use_cases.record_operator_action import (
 from disaster_monitor.application.use_cases.run_conversation_turn import (
     RunConversationTurn,
 )
+from disaster_monitor.application.weather_alerts import WeatherAlertsService
 
 AsyncHook = Callable[[], Awaitable[None]]
 
@@ -82,6 +84,8 @@ class AppDependencies:
     delete_conversation: DeleteConversation
     language_model: LanguageModel
     active_incidents: ActiveIncidentsService
+    source_catalog: SourceCatalogService
+    weather_alerts: WeatherAlertsService
     incident_watches: ManageIncidentWatches
     satellite_imagery: SatelliteImageryService
     media_assets: MediaAssetStore

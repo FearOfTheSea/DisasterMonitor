@@ -95,9 +95,11 @@ export function FindingsCenter({
       if (signal?.aborted) return;
       setWatches(result.watches);
       setWatchChanges(result.changes);
-      if (result.timelineError) {
-        setError(`Some watch findings are unavailable: ${result.timelineError}`);
-      }
+      setError(
+        result.timelineError
+          ? `Some watch findings are unavailable: ${result.timelineError}`
+          : undefined,
+      );
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
         setError(caught instanceof Error ? caught.message : 'Findings failed to load.');
@@ -175,7 +177,9 @@ export function FindingsCenter({
     <section className="findings-center" aria-labelledby="findings-center-heading">
       <div className="operations-heading">
         <div>
-          <h3 id="findings-center-heading">Findings</h3>
+          <h3 id="findings-center-heading" tabIndex={-1}>
+            Findings
+          </h3>
           <p>Deterministic views of retained changes, coverage, and correlations.</p>
         </div>
         <button type="button" onClick={() => void load()} disabled={loading}>

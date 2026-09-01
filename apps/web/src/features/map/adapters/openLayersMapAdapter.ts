@@ -39,6 +39,7 @@ import type {
   CycloneMapLayer,
   MapView,
 } from '@/shared/types/assistant';
+import type { WeatherAlert } from '@/features/weather/model/weatherAlert';
 
 type MapAdapterOptions = {
   target: HTMLElement;
@@ -74,12 +75,15 @@ export class OpenLayersMapAdapter {
   private readonly sourceGeometryIncidentLayer: VectorLayer<
     VectorSource<Feature<Geometry>>
   >;
+  private readonly weatherAlertSource: VectorSource<Feature<Geometry>>;
+  private readonly weatherAlertLayer: VectorLayer<VectorSource<Feature<Geometry>>>;
   private satelliteLayer?: TileLayer<XYZ>;
   private copLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
   private cycloneLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
   private pendingArea?: PendingArea;
   private pendingIncidentId?: string;
   private layerVisibility: MapLayerVisibility = createDefaultMapLayerState().visibility;
+  private applyingView = false;
 
   constructor(private readonly options: MapAdapterOptions) {
     const baseLayer = new TileLayer({ source: new OSM() });
@@ -126,12 +130,24 @@ export class OpenLayersMapAdapter {
     this.sourceGeometryIncidentLayer.set('dmLayerId', 'active-incidents');
     this.sourceGeometryIncidentLayer.set('dmIncidentRepresentation', 'source-geometry');
     this.sourceGeometryIncidentLayer.setZIndex(11);
+    this.weatherAlertSource = new VectorSource<Feature<Geometry>>();
+    this.weatherAlertLayer = new VectorLayer({
+      source: this.weatherAlertSource,
+      style: (feature) => styleForWeatherAlert(feature.get('severity')),
+    });
+    this.weatherAlertLayer.set('dmLayerType', 'authoritative-weather-alerts');
+    this.weatherAlertLayer.set('dmLayerId', 'authoritative-weather-alerts');
+    this.weatherAlertLayer.setVisible(
+      this.layerVisibility['authoritative-weather-alerts'],
+    );
+    this.weatherAlertLayer.setZIndex(14);
     this.map = new Map({
       target: options.target,
       layers: [
         baseLayer,
         this.clusteredIncidentLayer,
         this.sourceGeometryIncidentLayer,
+        this.weatherAlertLayer,
       ],
       view,
     });
@@ -170,14 +186,16 @@ export class OpenLayersMapAdapter {
       this.applyPendingIncidentFocus();
       this.applyPendingArea();
     });
-    view.on('change:center', () => this.reportView());
+    view.on('change:center', () => {
+      if (!this.applyingView) this.reportView();
+    });
     view.on('change:resolution', () => {
       this.clusteredIncidentSource.setDistance(
         (view.getZoom() ?? options.initialView.zoom) < INCIDENT_CLUSTER_MAX_ZOOM
           ? 44
           : 0,
       );
-      this.reportView();
+      if (!this.applyingView) this.reportView();
     });
   }
 
@@ -186,6 +204,7 @@ export class OpenLayersMapAdapter {
     this.pendingIncidentId = undefined;
     this.pointIncidentSource.clear();
     this.sourceGeometryIncidentSource.clear();
+    this.weatherAlertSource.clear();
     this.clearSatelliteImagery();
     this.clearCommonOperationalPicture();
     this.clearCycloneMapLayers();
@@ -296,6 +315,51 @@ export class OpenLayersMapAdapter {
       partition.sourceGeometries.map(toActiveIncidentFeature),
     );
     this.applyPendingIncidentFocus();
+  }
+
+  setWeatherAlerts(alerts: readonly WeatherAlert[]): void {
+    this.weatherAlertSource.clear();
+    this.weatherAlertSource.addFeatures(
+      alerts.flatMap((alert) => {
+        if (!alert.geometry) return [];
+        return [
+          new Feature({
+            geometry: new Polygon(
+              alert.geometry.rings.map((ring) =>
+                ring.map((point) => fromLonLat([point.longitude, point.latitude])),
+              ),
+            ),
+            alertId: alert.provider_alert_id,
+            severity: alert.severity,
+            event: alert.event,
+            publisher: alert.publisher,
+          }),
+        ];
+      }),
+    );
+  }
+
+  setView(next: MapView): void {
+    if (!validMapView(next)) return;
+    const view = this.map.getView();
+    const currentCenter = view.getCenter();
+    const current = currentCenter ? toLonLat(currentCenter) : undefined;
+    const currentZoom = view.getZoom();
+    if (
+      current &&
+      currentZoom !== undefined &&
+      Math.abs(current[0] - next.centerLongitude) < 0.0001 &&
+      Math.abs(current[1] - next.centerLatitude) < 0.0001 &&
+      Math.abs(currentZoom - next.zoom) < 0.01
+    ) {
+      return;
+    }
+    this.applyingView = true;
+    view.cancelAnimations();
+    view.setCenter(fromLonLat([next.centerLongitude, next.centerLatitude]));
+    view.setZoom(next.zoom);
+    this.applyingView = false;
+    this.reportView();
   }
 
   setSelectedIncident(incidentId?: string): void {
@@ -453,6 +517,20 @@ function validMaxZoom(maxZoom: number): boolean {
   return Number.isFinite(maxZoom) && maxZoom >= 2 && maxZoom <= 18;
 }
 
+function validMapView(view: MapView): boolean {
+  return (
+    Number.isFinite(view.centerLatitude) &&
+    view.centerLatitude >= -90 &&
+    view.centerLatitude <= 90 &&
+    Number.isFinite(view.centerLongitude) &&
+    view.centerLongitude >= -180 &&
+    view.centerLongitude <= 180 &&
+    Number.isFinite(view.zoom) &&
+    view.zoom >= 2 &&
+    view.zoom <= 18
+  );
+}
+
 function projectedExtent(bounds: MapAreaBounds): number[] | undefined {
   const [minLongitude, minLatitude, maxLongitude, maxLatitude] = bounds;
   const minimum = fromLonLat([
@@ -598,6 +676,23 @@ function styleForIncidentCluster(members: readonly Feature<Geometry>[]): Style {
       fill: new Fill({ color: '#ffffff' }),
       font: '700 12px system-ui, sans-serif',
     }),
+  });
+}
+
+function styleForWeatherAlert(value: unknown): Style {
+  const color =
+    value === 'extreme'
+      ? '#991b1b'
+      : value === 'severe'
+        ? '#b45309'
+        : value === 'moderate'
+          ? '#a16207'
+          : value === 'minor'
+            ? '#4d7c0f'
+            : '#475569';
+  return new Style({
+    stroke: new Stroke({ color, width: 2.5, lineDash: [8, 4] }),
+    fill: new Fill({ color: `${color}24` }),
   });
 }
 

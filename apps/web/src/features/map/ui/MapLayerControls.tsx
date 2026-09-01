@@ -17,6 +17,11 @@ import {
   type MapLayerState,
 } from '@/features/map/model/mapLayerState';
 import { LayerExplanation } from '@/features/map/ui/LayerExplanation';
+import {
+  REGIONAL_PRESETS,
+  type RegionalPresetId,
+  type RegionalSelection,
+} from '@/features/map/model/regionalPresets';
 
 type LayerRuntimeDetail = {
   available: boolean;
@@ -31,6 +36,9 @@ type MapLayerControlsProps = {
   onChange: (state: MapLayerState) => void;
   runtimeDetails?: Partial<Record<MapLayerId, LayerRuntimeDetail>>;
   children?: ReactNode;
+  supplemental?: ReactNode;
+  regionalSelection?: RegionalSelection;
+  onRegionalSelectionChange?: (preset: RegionalPresetId) => void;
 };
 
 const PRESET_LABELS: Record<MapLayerPreset, string> = {
@@ -38,6 +46,7 @@ const PRESET_LABELS: Record<MapLayerPreset, string> = {
   incidents: 'Incidents',
   evidence: 'Evidence',
   forecasts: 'Forecasts',
+  warnings: 'Warnings',
   satellite: 'Satellite',
   all: 'All',
 };
@@ -47,6 +56,9 @@ export function MapLayerControls({
   onChange,
   runtimeDetails,
   children,
+  supplemental,
+  regionalSelection = 'custom',
+  onRegionalSelectionChange,
 }: MapLayerControlsProps) {
   const [explainedLayerId, setExplainedLayerId] = useState<MapLayerId>();
   const explainedLayer = explainedLayerId
@@ -78,6 +90,27 @@ export function MapLayerControls({
           </button>
         ))}
       </div>
+      {onRegionalSelectionChange ? (
+        <fieldset className="regional-preset-controls">
+          <legend>Regional navigation</legend>
+          <div>
+            {REGIONAL_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                aria-label={`Focus ${preset.label}`}
+                aria-pressed={regionalSelection === preset.id}
+                onClick={() => onRegionalSelectionChange(preset.id)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <small>
+            Presentation-only navigation; presets do not define disaster geography.
+          </small>
+        </fieldset>
+      ) : null}
       <fieldset className="map-time-filter">
         <legend>Display time</legend>
         <div>
@@ -138,6 +171,7 @@ export function MapLayerControls({
           {children}
         </details>
       ) : null}
+      {supplemental}
       {explainedLayer ? (
         <LayerExplanation
           layer={explainedLayer}

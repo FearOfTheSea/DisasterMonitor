@@ -59,8 +59,8 @@ The application surface available to infrastructure adapters is deliberately nar
 
 - `application/ports/**`
 - boundary data models in `application/agent/models.py`, `disaster.py`, `dto.py`,
-  `media.py`, `multimodal.py`, `satellite_imagery.py`, and
-  `source_intelligence.py`
+  `media.py`, `multimodal.py`, `satellite_imagery.py`, `source_catalog.py`,
+  `source_intelligence.py`, and `weather_alerts.py`
 - the visual-analysis prompt contract in `application/prompts/visual_analysis.py`
 
 Ports include stable boundary normalization and admission primitives when both an
@@ -84,12 +84,19 @@ apps/web/src/
   app/             Next.js application and composition
   features/
     assistant/     Assistant UI and conversation behavior
+    commands/      Deterministic in-memory operator commands
     map/           Map UI and OpenLayers integration
     operations/    Operations UI
+    sources/       Read-only source-catalog projection
+    weather/       Authoritative warning-artifact transport and UI
   shared/          Code shared across features
 ```
 
 The frontend communicates with the backend through typed API clients. External disaster providers and Ollama are backend concerns.
+The application root owns bounded URL presentation state and composes the existing map,
+operations, source, and weather surfaces. Weather alerts use a dedicated application
+port and infrastructure adapter; they do not enter the disaster-provider registry or
+the physical-event domain.
 Generated frontend contract output includes both TypeScript types and the backend
 OpenAPI component schemas used for runtime structural validation. Handwritten client
 validation is limited to semantic, cross-field, provenance, and geometry invariants.

@@ -534,13 +534,15 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
         "nasa-firms-observations",
         "noaa-ibtracs-tracks",
         "noaa-nhc-cyclone-forecast",
+        "nws-weather-alerts",
         "reliefweb-situation-reports",
         "smithsonian-usgs-volcanic-activity",
         "usgs-earthquakes",
     }
-    assert all(
-        item.implementation_status == "implemented" for item in catalog.sources()
-    )
+    assert {item.implementation_status for item in catalog.sources()} == {
+        "implemented",
+        "implemented_weather_alerts",
+    }
     assert all(
         SourceInformationRole.IMAGERY not in item.information_roles
         for item in catalog.sources()

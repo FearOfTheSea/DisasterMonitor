@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     disaster_provider_max_response_bytes: int = Field(
         default=1_000_000, ge=10_000, le=5_000_000
     )
+    weather_alert_max_response_bytes: int = Field(
+        default=3_000_000, ge=100_000, le=5_000_000
+    )
+    weather_alert_max_records: int = Field(default=500, ge=1, le=500)
     copernicus_sentinel_hub_instance_id: SecretStr | None = Field(
         default=None, repr=False
     )

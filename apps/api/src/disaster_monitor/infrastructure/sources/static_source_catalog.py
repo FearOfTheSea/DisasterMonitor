@@ -77,4 +77,9 @@ def _descriptor(item: dict[str, object]) -> SourceDescriptor:
         provider_registration_name=str(item["provider_registration_name"]),
         implementation_status=str(item["implementation_status"]),
         allowed_hosts=tuple(allowed_hosts),
+        documentation_path=(
+            str(item["documentation_path"])
+            if item.get("documentation_path") is not None
+            else None
+        ),
     )

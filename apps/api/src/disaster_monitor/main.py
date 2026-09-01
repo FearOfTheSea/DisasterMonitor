@@ -39,6 +39,8 @@ from disaster_monitor.application.services.disaster_query_parser import (
 from disaster_monitor.application.services.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
+from disaster_monitor.application.source_catalog import SourceCatalogService
+from disaster_monitor.application.weather_alerts import WeatherAlertsService
 from disaster_monitor.infrastructure.app_dependencies import AppDependencies
 from disaster_monitor.infrastructure.composition import (
     AppDependencyOverrides,
@@ -65,6 +67,8 @@ def create_app(
     active_incidents_service: ActiveIncidentsService | None = None,
     conversation_repository: ConversationStore | None = None,
     satellite_imagery_service: SatelliteImageryService | None = None,
+    source_catalog_service: SourceCatalogService | None = None,
+    weather_alerts_service: WeatherAlertsService | None = None,
     specialist_model: SpecialistModel | None = None,
     memory_repository: MemoryStore | None = None,
     conversation_deletion_store: ConversationDeletionStore | None = None,
@@ -88,6 +92,8 @@ def create_app(
         active_incidents_service=active_incidents_service,
         conversation_repository=conversation_repository,
         satellite_imagery_service=satellite_imagery_service,
+        source_catalog_service=source_catalog_service,
+        weather_alerts_service=weather_alerts_service,
         specialist_model=specialist_model,
         memory_repository=memory_repository,
         conversation_deletion_store=conversation_deletion_store,
@@ -108,6 +114,8 @@ def create_app(
             active_incidents_service,
             conversation_repository,
             satellite_imagery_service,
+            source_catalog_service,
+            weather_alerts_service,
             specialist_model,
             memory_repository,
             conversation_deletion_store,

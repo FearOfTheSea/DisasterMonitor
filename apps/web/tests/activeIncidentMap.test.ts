@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { toLonLat } from 'ol/proj';
 
 import type {
   ActiveIncident,
@@ -10,6 +11,7 @@ import {
   partitionActiveIncidentMapFeatures,
 } from '@/features/map/model/activeIncidentMap';
 import { OpenLayersMapAdapter } from '@/features/map/adapters/openLayersMapAdapter';
+import type { WeatherAlert } from '@/features/weather/model/weatherAlert';
 
 const SOURCE = {
   source_id: 'six-hazard-fixture',
@@ -201,6 +203,7 @@ describe('OpenLayers active incident clustering', () => {
       'satellite-imagery': false,
       'cop-evidence': true,
       'cyclone-supplemental': true,
+      'authoritative-weather-alerts': true,
       'compound-correlations': true,
     });
 
@@ -247,6 +250,96 @@ describe('OpenLayers active incident clustering', () => {
     ]);
     expect(clusteredPoints?.getVisible()).toBe(false);
     expect(sourceGeometry?.getVisible()).toBe(false);
+
+    adapter.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it('draws only exact source-supplied weather polygons on a distinct layer', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const target = document.createElement('div');
+    document.body.append(target);
+    const adapter = new OpenLayersMapAdapter({
+      target,
+      initialView: { centerLatitude: 0, centerLongitude: 0, zoom: 2 },
+      onViewChange: vi.fn(),
+      onSelectIncident: vi.fn(),
+    });
+    const base: Omit<WeatherAlert, 'provider_alert_id' | 'geometry'> = {
+      source_id: 'nws-weather-alerts',
+      publisher: 'NOAA/National Weather Service',
+      event: 'Tornado Warning',
+      headline: null,
+      severity: 'extreme',
+      urgency: 'immediate',
+      certainty: 'observed',
+      sent: null,
+      effective: null,
+      onset: null,
+      expires: null,
+      affected_area: 'Fixture County',
+      canonical_url: null,
+      retrieved_at: '2026-09-01T02:00:00Z',
+      attribution: 'NOAA/National Weather Service',
+      limitations: [],
+    };
+    const ring = [
+      { latitude: 35, longitude: -98 },
+      { latitude: 36, longitude: -98 },
+      { latitude: 36, longitude: -97 },
+      { latitude: 35, longitude: -98 },
+    ];
+
+    adapter.setWeatherAlerts([
+      {
+        ...base,
+        provider_alert_id: 'with-geometry',
+        geometry: { kind: 'polygon', rings: [ring] },
+      },
+      { ...base, provider_alert_id: 'without-geometry', geometry: null },
+    ]);
+
+    type LayerView = {
+      get: (key: string) => unknown;
+      getSource: () => {
+        getFeatures: () => Array<{
+          get: (key: string) => unknown;
+          getGeometry: () => { getCoordinates: () => number[][][] } | undefined;
+        }>;
+      };
+    };
+    type AdapterView = {
+      map: { getLayers: () => { getArray: () => LayerView[] } };
+    };
+    const layer = (adapter as unknown as AdapterView).map
+      .getLayers()
+      .getArray()
+      .find(
+        (candidate) => candidate.get('dmLayerId') === 'authoritative-weather-alerts',
+      );
+    const features = layer?.getSource().getFeatures() ?? [];
+    const coordinates = features[0]
+      ?.getGeometry()
+      ?.getCoordinates()[0]
+      .map((point) => toLonLat(point));
+
+    expect(features).toHaveLength(1);
+    expect(features[0]?.get('alertId')).toBe('with-geometry');
+    expect(coordinates).toEqual(
+      ring.map((point) =>
+        expect.arrayContaining([
+          expect.closeTo(point.longitude, 8),
+          expect.closeTo(point.latitude, 8),
+        ]),
+      ),
+    );
 
     adapter.destroy();
     vi.unstubAllGlobals();

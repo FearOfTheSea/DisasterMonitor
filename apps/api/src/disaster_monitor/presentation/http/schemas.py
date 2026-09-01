@@ -534,6 +534,96 @@ class SatelliteImageryCatalogResponse(BaseModel):
     products: list[SatelliteImageryProductResponse]
 
 
+class SourceOperationalStateResponse(BaseModel):
+    """Credential-free executable state kept separate from maintained metadata."""
+
+    registered: bool
+    configured: bool
+    availability: Literal["available", "unconfigured", "maintained_only"]
+    availability_detail: str
+    provider_tier: Literal["primary", "secondary"] | None = None
+    execution_roles: list[str] = Field(default_factory=list)
+
+
+class SourceCatalogItemResponse(BaseModel):
+    source_id: str
+    provider: str
+    publisher: str
+    authority: str
+    information_roles: list[str] = Field(default_factory=list)
+    supported_disasters: list[Disaster] = Field(default_factory=list)
+    geographic_scopes: list[Literal["country", "worldwide"]] = Field(
+        default_factory=list
+    )
+    country_codes: list[str] | None = None
+    coverage_description: str
+    documentation_path: str | None = None
+    freshness_semantics: str
+    stale_threshold_seconds: int | None = None
+    attribution: str
+    limitations: list[str] = Field(default_factory=list)
+    operational_state: SourceOperationalStateResponse
+
+
+class SourceCatalogResponse(BaseModel):
+    catalog_version: str
+    sources: list[SourceCatalogItemResponse] = Field(default_factory=list)
+
+
+class WeatherAlertCoordinateResponse(BaseModel):
+    latitude: Annotated[float, Field(ge=-90, le=90)]
+    longitude: Annotated[float, Field(ge=-180, le=180)]
+
+
+class WeatherAlertGeometryResponse(BaseModel):
+    kind: Literal["polygon"] = "polygon"
+    rings: list[list[WeatherAlertCoordinateResponse]] = Field(default_factory=list)
+
+
+class WeatherAlertResponse(BaseModel):
+    provider_alert_id: str
+    source_id: str
+    publisher: str
+    event: str
+    headline: str | None = None
+    severity: Literal["extreme", "severe", "moderate", "minor", "unknown"]
+    urgency: Literal["immediate", "expected", "future", "past", "unknown"]
+    certainty: Literal["observed", "likely", "possible", "unlikely", "unknown"]
+    sent: datetime | None = None
+    effective: datetime | None = None
+    onset: datetime | None = None
+    expires: datetime | None = None
+    affected_area: str
+    geometry: WeatherAlertGeometryResponse | None = None
+    canonical_url: str | None = None
+    retrieved_at: datetime
+    attribution: str
+    limitations: list[str] = Field(default_factory=list)
+
+
+class WeatherAlertCoverageResponse(BaseModel):
+    source_id: str
+    publisher: str
+    state: Literal["alerts_found", "no_active_alerts", "degraded", "unavailable"]
+    detail: str
+    geographic_scope: str
+    limitations: list[str] = Field(default_factory=list)
+
+
+class WeatherAlertWarningResponse(BaseModel):
+    reason_code: str
+    detail: str
+    retryable: bool
+    partial: bool
+
+
+class WeatherAlertsSnapshotResponse(BaseModel):
+    retrieved_at: datetime
+    alerts: list[WeatherAlertResponse] = Field(default_factory=list)
+    coverage: WeatherAlertCoverageResponse
+    warnings: list[WeatherAlertWarningResponse] = Field(default_factory=list)
+
+
 class CountryCatalogSourceResponse(BaseModel):
     """Immutable upstream revision admitted to the active catalog."""
 

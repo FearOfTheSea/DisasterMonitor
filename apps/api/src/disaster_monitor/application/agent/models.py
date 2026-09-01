@@ -318,3 +318,4 @@ class SourceDescriptor:
     implementation_status: str
     geographic_scopes: tuple[GeographicScope, ...]
     allowed_hosts: tuple[str, ...] = ()
+    documentation_path: str | None = None

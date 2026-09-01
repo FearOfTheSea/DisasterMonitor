@@ -10,15 +10,20 @@ facts. See [docs/agent-runtime.md](docs/agent-runtime.md).
 ## Included
 
 - Next.js/OpenLayers map with a typed layer registry, operator presets and display-time
-  filters, source-backed Active Incidents, dense point clustering, layer provenance,
-  and an assistant UI with session-local conversation state.
+  filters, regional navigation, shareable bounded URL state, source-backed Active
+  Incidents, dense point clustering, layer provenance, and an assistant UI with
+  session-local conversation state.
+- Read-only Source Catalog, dataset-specific hidden-tab-aware refresh, and a
+  deterministic keyboard command palette for existing operator controls.
+- Bounded authoritative NOAA/NWS active weather-alert context for United States land
+  areas, kept separate from physical incident discovery and correlation.
 - Persistent local Incident Watches with bounded scheduled refresh, deterministic
   source-backed change timelines, unread/read state, exact-evidence map focus, and a
   deterministic Findings view shared with coverage and compound-hazard context.
 - Selectable NASA GIBS satellite imagery plus optional server-proxied Copernicus
   Sentinel-2 and one configured Planet mosaic.
-- FastAPI health, readiness, active-incidents, incident-watch, assistant, and operations
-  endpoints.
+- FastAPI health, readiness, active-incidents, weather-alert, source-catalog,
+  incident-watch, assistant, and operations endpoints.
 - Optional local Qwen text and vision adapters.
 - Deterministic request normalization, event selection, evidence reconciliation, and
   source-attributed reports.
@@ -38,10 +43,10 @@ Unsupported combinations and missing configuration are reported explicitly. See
 
 ## Deferred
 
-Live weather, geocoding, dynamic satellite scene discovery, broad news aggregation,
-hosted models, production identity/TLS, cloud deployment, and consequential analytics
-remain deferred. External datasets, human evaluations, and pilot evidence remain
-release gates.
+Generic live weather, forecasts, radar, geocoding, dynamic satellite scene discovery,
+broad news aggregation, hosted models, production identity/TLS, cloud deployment, and
+consequential analytics remain deferred. External datasets, human evaluations, and
+pilot evidence remain release gates.
 
 ## Repository layout
 
@@ -97,6 +102,8 @@ Useful checks:
 Invoke-RestMethod http://localhost:8001/api/v1/health
 Invoke-RestMethod http://localhost:8001/api/v1/ready
 Invoke-RestMethod 'http://localhost:8001/api/v1/incidents?time_window_days=7&limit_per_disaster=10'
+Invoke-RestMethod http://localhost:8001/api/v1/weather-alerts
+Invoke-RestMethod http://localhost:8001/api/v1/sources
 Invoke-RestMethod http://localhost:8001/api/v1/incident-watches
 Invoke-RestMethod http://localhost:8001/api/v1/satellite-imagery
 ```
@@ -113,6 +120,14 @@ registry with inspectable provenance and limitations. Its 1-hour through 7-day f
 change displayed incident and correlation records only; they do not rewrite backend
 coverage or turn a filtered view into an absence claim. Dense point records cluster at
 lower zoom while source-backed area and track geometry stays unclustered.
+
+The weather-alert endpoint makes one size- and record-bounded request to the official
+NOAA/NWS active-alert GeoJSON API. Alerts retain CAP authority, timestamps, coverage,
+attribution, and exact source polygons; missing geometry remains missing. They are
+warning artifacts, never Active Incidents or compound-hazard inputs. The frontend also
+keeps maintained Source Catalog metadata separate from separately labelled runtime
+registration/configuration state. Neither the catalog nor command palette can change
+provider authority.
 
 Incident Watches monitor one disaster type in one canonical country or worldwide at a
 bounded 5-minute to 24-hour interval. The existing scheduler/worker uses the registered

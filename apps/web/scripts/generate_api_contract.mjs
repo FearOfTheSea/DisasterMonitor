@@ -161,6 +161,8 @@ const runtimeSchemaNames = new Set([
   'AssistantResponse',
   'ConversationResponse',
   'ConversationSummaryResponse',
+  'SourceCatalogResponse',
+  'WeatherAlertsSnapshotResponse',
 ]);
 const pendingRuntimeSchemas = [...runtimeSchemaNames];
 while (pendingRuntimeSchemas.length) {
