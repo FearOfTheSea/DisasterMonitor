@@ -16,16 +16,16 @@ complete global surveillance or impact evidence.
 
 ## Family status
 
-| Family | Implemented                                                                                            | Automated gate                                             | Promotion                                                                        |
-| ------ | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| SI     | Versioned trusted-source catalog, registry, bounded acquisition, candidate review                      | SI-A/B/C passing                                           | Passed for the bounded runtime; candidate trust remains human-only               |
-| EW     | Physical-event identity, temporal claims, conflicts, omissions, hypotheses                             | EW-A/B/C passing                                           | Pending locked external episodes and adjudicated outcomes                        |
-| MM     | Operator image admission, local analysis, analytical COP                                               | Safety and browser tests passing                           | Pending licensed held-out benchmark and legitimate operator study                |
-| TR     | Typed routing, priority, ambiguity escalation, bounded internal actions                                | TR-A/B/C passing                                           | Pending blinded SME labels and historical episodes                               |
-| DS     | Typed advisory options, lineage, constraints, reversible internal actions                              | DS-A/B/C passing                                           | Pending blind expert review and held outcomes                                    |
-| CO     | Typed least-privilege handoffs and bounded deterministic merge                                         | CO-A/B/C passing                                           | Passed for bounded analytical coordination                                       |
-| CL     | Allowlisted reversible analytical ordering with rollback                                               | CL-A/B/C passing                                           | Pending real trajectories and reviewer corrections                               |
-| OP     | Snapshots, history, workers, freshness, retention, backup tooling, persistent bounded Incident Watches | Local operational and deterministic browser checks passing | Pending rights, recovery, identity, watch-utility, and supervised-pilot evidence |
+| Family | Implemented                                                                                                                                           | Automated gate                                             | Promotion                                                                        |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| SI     | Versioned trusted-source catalog, registry, bounded acquisition, candidate review                                                                     | SI-A/B/C passing                                           | Passed for the bounded runtime; candidate trust remains human-only               |
+| EW     | Physical-event identity, temporal claims, conflicts, omissions, hypotheses                                                                            | EW-A/B/C passing                                           | Pending locked external episodes and adjudicated outcomes                        |
+| MM     | Operator image admission, local analysis, analytical COP                                                                                              | Safety and browser tests passing                           | Pending licensed held-out benchmark and legitimate operator study                |
+| TR     | Typed routing, priority, ambiguity escalation, bounded internal actions                                                                               | TR-A/B/C passing                                           | Pending blinded SME labels and historical episodes                               |
+| DS     | Typed advisory options, lineage, constraints, reversible internal actions                                                                             | DS-A/B/C passing                                           | Pending blind expert review and held outcomes                                    |
+| CO     | Typed least-privilege handoffs and bounded deterministic merge                                                                                        | CO-A/B/C passing                                           | Passed for bounded analytical coordination                                       |
+| CL     | Allowlisted reversible analytical ordering with rollback                                                                                              | CL-A/B/C passing                                           | Pending real trajectories and reviewer corrections                               |
+| OP     | Snapshots, history, workers, freshness, retention, backup tooling, persistent bounded Incident Watches, and deterministic situational-awareness views | Local operational and deterministic browser checks passing | Pending rights, recovery, identity, watch-utility, and supervised-pilot evidence |
 
 ## Evidence rules
 
@@ -41,6 +41,14 @@ contracts, and in-app timeline behavior. This demonstrates the bounded local mec
 not provider completeness, timely global detection, alert usefulness, or operational
 response outcomes. Those claims remain promotion-pending and require locked live
 episodes plus supervised human evaluation.
+
+The situational-awareness frontend adds a typed registry for existing map layers,
+display-only time filters and presets, inspectable layer provenance and limitations,
+visible Active Incidents coverage/freshness transport data, point-marker clustering,
+and a deterministic Findings center. Findings only aggregate returned watch changes,
+coverage states and warnings, and compound-hazard correlations; they do not create
+facts, rankings, alerts, provider-health guarantees, causal claims, or consequential
+recommendations. These presentation changes do not strengthen the OP promotion claim.
 
 Compound Hazard Correlation v1 and cyclone supplemental map layers are implemented as
 bounded descriptive context with deterministic fixture coverage. The former supports

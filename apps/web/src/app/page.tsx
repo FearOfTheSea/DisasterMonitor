@@ -6,10 +6,16 @@ import { AssistantPanel } from '@/features/assistant/ui/AssistantPanel';
 import { useAssistantConversation } from '@/features/assistant/hooks/useAssistantConversation';
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
+import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
+import {
+  createDefaultMapLayerState,
+  filterCorrelationsForDisplay,
+  filterIncidentsForDisplay,
+  setMapLayerVisibility,
+} from '@/features/map/model/mapLayerState';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
 import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
-import type { IncidentWatchEvent } from '@/features/operations/model/incidentWatch';
 import { DEFAULT_MAP_VIEW } from '@/shared/config/runtime';
 import type { MapView } from '@/shared/types/assistant';
 
@@ -75,7 +81,8 @@ export default function Home() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [operationsOpen, setOperationsOpen] = useState(false);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>();
-  const [watchFocusIncident, setWatchFocusIncident] = useState<IncidentWatchEvent>();
+  const [watchFocusIncident, setWatchFocusIncident] = useState<ActiveIncident>();
+  const [mapLayerState, setMapLayerState] = useState(createDefaultMapLayerState);
   const [mapView, setMapView] = useState<MapView>(DEFAULT_MAP_VIEW);
   const conversation = useAssistantConversation();
   const activeIncidents = useActiveIncidents();
@@ -83,10 +90,16 @@ export default function Home() {
   const handleSelectActiveIncident = useCallback((incidentId: string) => {
     setWatchFocusIncident(undefined);
     setSelectedIncidentId(incidentId);
+    setMapLayerState((current) =>
+      setMapLayerVisibility(current, 'active-incidents', true),
+    );
   }, []);
-  const handleSelectWatchIncident = useCallback((incident: IncidentWatchEvent) => {
+  const handleSelectWatchIncident = useCallback((incident: ActiveIncident) => {
     setWatchFocusIncident(incident);
     setSelectedIncidentId(incident.event_id);
+    setMapLayerState((current) =>
+      setMapLayerVisibility(current, 'active-incidents', true),
+    );
   }, []);
   const handleToggleAssistant = useCallback(() => {
     setAssistantOpen((open) => {
@@ -117,16 +130,51 @@ export default function Home() {
     .reverse()
     .find((message) => message.report?.decisionSupport?.evidence_state_version)?.report
     ?.decisionSupport?.evidence_state_version;
+  const displayedIncidents = useMemo(() => {
+    const snapshot = activeIncidents.snapshot;
+    return snapshot
+      ? filterIncidentsForDisplay(
+          snapshot.incidents,
+          snapshot.retrieved_at,
+          mapLayerState.timeWindow,
+        )
+      : [];
+  }, [activeIncidents.snapshot, mapLayerState.timeWindow]);
+  const timeFilteredCorrelations = useMemo(() => {
+    const snapshot = activeIncidents.snapshot;
+    return snapshot
+      ? filterCorrelationsForDisplay(
+          snapshot.correlations ?? [],
+          snapshot.incidents,
+          snapshot.retrieved_at,
+          mapLayerState.timeWindow,
+        )
+      : [];
+  }, [activeIncidents.snapshot, mapLayerState.timeWindow]);
+  const displayedCorrelations = useMemo(
+    () =>
+      mapLayerState.visibility['compound-correlations'] ? timeFilteredCorrelations : [],
+    [mapLayerState.visibility, timeFilteredCorrelations],
+  );
+  const displayedSnapshot = useMemo(() => {
+    const snapshot = activeIncidents.snapshot;
+    return snapshot
+      ? {
+          ...snapshot,
+          incidents: displayedIncidents,
+          correlations: displayedCorrelations,
+        }
+      : undefined;
+  }, [activeIncidents.snapshot, displayedCorrelations, displayedIncidents]);
   const mapIncidents = useMemo(() => {
-    const incidents = activeIncidents.snapshot?.incidents ?? [];
-    if (!watchFocusIncident) return incidents;
+    if (!watchFocusIncident) return displayedIncidents;
     return [
       watchFocusIncident,
-      ...incidents.filter(
+      ...displayedIncidents.filter(
         (incident) => incident.event_id !== watchFocusIncident.event_id,
       ),
     ];
-  }, [activeIncidents.snapshot?.incidents, watchFocusIncident]);
+  }, [displayedIncidents, watchFocusIncident]);
 
   return (
     <main className="app-shell">
@@ -166,10 +214,12 @@ export default function Home() {
         className={`workspace${assistantOpen ? ' workspace-assistant-open' : ''}${operationsOpen ? ' workspace-operations-open' : ''}`}
       >
         <ActiveIncidentsPanel
-          snapshot={activeIncidents.snapshot}
+          snapshot={displayedSnapshot}
+          coverageSnapshot={activeIncidents.snapshot}
           status={activeIncidents.status}
           error={activeIncidents.error}
           selectedIncidentId={selectedIncidentId}
+          displayTimeWindow={mapLayerState.timeWindow}
           onSelectIncident={handleSelectActiveIncident}
           onRefresh={activeIncidents.refresh}
         />
@@ -182,6 +232,9 @@ export default function Home() {
             activeIncidents={mapIncidents}
             selectedIncidentId={selectedIncidentId}
             selectedEvent={selectedEvent}
+            layerState={mapLayerState}
+            onLayerStateChange={setMapLayerState}
+            correlationCount={displayedCorrelations.length}
           />
           <div className="map-overlay" role="status" aria-live="polite">
             <PositionIcon className="map-overlay-icon" />
@@ -211,6 +264,9 @@ export default function Home() {
         {operationsOpen && (
           <OperationsPanel
             evidenceStateVersion={evidenceStateVersion}
+            activeIncidentsSnapshot={activeIncidents.snapshot}
+            displayedIncidents={displayedIncidents}
+            displayedCorrelations={displayedCorrelations}
             onSelectWatchIncident={handleSelectWatchIncident}
             onClose={() => setOperationsOpen(false)}
           />

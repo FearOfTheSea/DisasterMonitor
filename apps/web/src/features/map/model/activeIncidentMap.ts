@@ -38,3 +38,20 @@ export function activeIncidentMapFeatures(
       : [],
   );
 }
+
+export type ActiveIncidentMapPartition = {
+  clusteredPoints: ActiveIncidentMapFeature[];
+  sourceGeometries: ActiveIncidentMapFeature[];
+};
+
+export function partitionActiveIncidentMapFeatures(
+  features: readonly ActiveIncidentMapFeature[],
+): ActiveIncidentMapPartition {
+  const clusteredPoints: ActiveIncidentMapFeature[] = [];
+  const sourceGeometries: ActiveIncidentMapFeature[] = [];
+  for (const feature of features) {
+    if (feature.geometry.kind === 'point') clusteredPoints.push(feature);
+    else sourceGeometries.push(feature);
+  }
+  return { clusteredPoints, sourceGeometries };
+}

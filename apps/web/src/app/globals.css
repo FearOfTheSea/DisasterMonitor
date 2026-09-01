@@ -79,6 +79,7 @@ textarea:disabled {
 
 button:focus-visible,
 a:focus-visible,
+input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
@@ -246,22 +247,17 @@ summary:focus-visible {
 }
 
 .satellite-controls {
-  background: rgba(255, 255, 255, 0.97);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-overlay);
+  background: var(--surface-soft);
+  border: 0;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  box-shadow: none;
   display: grid;
   font-size: 0.7rem;
   gap: 8px;
   margin: 0;
-  max-height: calc(100% - 28px);
-  overflow-y: auto;
-  padding: 10px 12px 12px;
-  position: absolute;
-  right: 14px;
-  top: 14px;
-  width: min(320px, calc(100% - 28px));
-  z-index: 5;
+  padding: 10px;
+  position: static;
+  width: 100%;
 }
 
 .satellite-controls legend {
@@ -333,6 +329,314 @@ summary:focus-visible {
 
 .satellite-source-details strong {
   color: var(--ink-soft);
+}
+
+.map-layer-controls {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+  display: grid;
+  gap: 10px;
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  padding: 12px;
+  position: absolute;
+  right: 14px;
+  scrollbar-color: #aeb9c8 transparent;
+  scrollbar-width: thin;
+  top: 14px;
+  width: min(360px, calc(100% - 28px));
+  z-index: 6;
+}
+
+.map-layer-controls-heading,
+.map-layer-controls-heading > div,
+.layer-explanation header,
+.layer-explanation header > div,
+.incident-cluster-picker header,
+.finding-heading,
+.finding-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.map-layer-controls-heading {
+  justify-content: space-between;
+}
+
+.map-layer-controls-heading > div,
+.layer-explanation header > div {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.map-layer-controls-heading h2,
+.map-layer-controls-heading span,
+.layer-explanation h3,
+.layer-explanation header span {
+  margin: 0;
+}
+
+.map-layer-controls-heading h2 {
+  font-size: 0.9rem;
+}
+
+.map-layer-controls-heading span,
+.layer-explanation header span {
+  color: var(--muted);
+  font-size: 0.59rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-layer-controls-heading output {
+  background: var(--accent-soft);
+  border: 1px solid #c5d8f2;
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.65rem;
+  font-weight: 750;
+  padding: 4px 8px;
+}
+
+.map-layer-presets {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.map-layer-presets button,
+.map-layer-row > button,
+.layer-explanation button,
+.incident-cluster-picker button {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: 0.65rem;
+  font-weight: 680;
+  min-height: 30px;
+  padding: 5px 7px;
+}
+
+.map-layer-presets button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.map-time-filter {
+  border: 0;
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+}
+
+.map-time-filter legend {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0;
+}
+
+.map-time-filter > div {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.map-time-filter label {
+  position: relative;
+}
+
+.map-time-filter input {
+  inset: 0;
+  opacity: 0;
+  position: absolute;
+}
+
+.map-time-filter label span {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  font-size: 0.64rem;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 29px;
+}
+
+.map-time-filter input:checked + span {
+  background: var(--accent-soft);
+  border-color: #9ebfe8;
+  color: var(--accent);
+}
+
+.map-time-filter input:focus-visible + span {
+  outline: 3px solid rgba(23, 105, 210, 0.38);
+  outline-offset: 1px;
+}
+
+.map-time-filter small,
+.map-layer-row small,
+.layer-explanation,
+.incident-cluster-picker p {
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.map-layer-list {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  overflow: hidden;
+}
+
+.map-layer-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 7px 8px;
+}
+
+.map-layer-row:last-child {
+  border-bottom: 0;
+}
+
+.map-layer-row label,
+.map-layer-row label > span {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+}
+
+.map-layer-row label > span {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.map-layer-row input {
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.map-layer-row b {
+  font-size: 0.68rem;
+}
+
+.map-layer-row > button {
+  min-height: 27px;
+}
+
+.map-layer-satellite-controls {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.map-layer-satellite-controls summary {
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.layer-explanation {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.layer-explanation header,
+.incident-cluster-picker header {
+  justify-content: space-between;
+}
+
+.layer-explanation h3 {
+  color: var(--ink);
+  font-size: 0.76rem;
+}
+
+.layer-explanation > p,
+.layer-explanation dl,
+.layer-explanation dd,
+.layer-explanation-limitations ul {
+  margin: 0;
+}
+
+.layer-explanation dl {
+  display: grid;
+  gap: 7px;
+}
+
+.layer-explanation dl > div {
+  display: grid;
+  gap: 2px;
+}
+
+.layer-explanation dt,
+.layer-explanation-limitations strong {
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.layer-explanation-limitations {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+  padding-top: 7px;
+}
+
+.layer-explanation-limitations ul {
+  padding-left: 16px;
+}
+
+.incident-cluster-picker {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+  display: grid;
+  gap: 7px;
+  left: 54px;
+  max-height: 42vh;
+  overflow-y: auto;
+  padding: 10px;
+  position: absolute;
+  top: 58px;
+  width: min(300px, calc(100% - 420px));
+  z-index: 7;
+}
+
+.incident-cluster-picker p,
+.incident-cluster-picker ul {
+  margin: 0;
+}
+
+.incident-cluster-picker ul {
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  padding: 0;
+}
+
+.incident-cluster-picker li button {
+  text-align: left;
+  width: 100%;
 }
 
 .map-overlay {
@@ -580,11 +884,36 @@ summary:focus-visible {
 }
 
 .incident-coverage-section,
+.incident-coverage-status,
 .incident-list-section {
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 10px;
   padding: 15px 16px 16px;
+}
+
+.incident-coverage-status {
+  order: 1;
+}
+
+.incident-coverage-status > .incident-section-heading {
+  align-items: flex-start;
+}
+
+.incident-coverage-status .incident-retrieval-time {
+  border: 0;
+  margin-top: 3px;
+  padding: 0;
+}
+
+.incident-display-filter-note {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  line-height: 1.4;
+  margin: 0;
+  padding: 7px 8px;
 }
 
 .incident-section-heading {
@@ -1629,6 +1958,98 @@ summary:focus-visible {
   padding: 15px 16px;
 }
 
+.findings-center {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  padding: 15px 16px;
+}
+
+.findings-center h3,
+.findings-center p {
+  margin: 0;
+}
+
+.findings-center h3 {
+  font-size: 0.82rem;
+}
+
+.findings-center .operations-heading p,
+.findings-empty,
+.findings-limitation {
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+  margin-top: 3px;
+}
+
+.findings-list {
+  display: grid;
+  gap: 7px;
+}
+
+.finding {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+}
+
+.finding-watch-coverage,
+.finding-active-coverage,
+.finding-active-warning {
+  border-left-color: var(--warning-icon);
+}
+
+.finding-compound-correlation {
+  border-left-color: #7c3aed;
+}
+
+.finding-heading {
+  justify-content: space-between;
+}
+
+.finding-heading span {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.finding-heading time,
+.finding small {
+  color: var(--muted);
+  font-size: 0.61rem;
+}
+
+.finding > strong {
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.finding > p {
+  color: var(--ink-soft);
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+
+.finding-actions {
+  flex-wrap: wrap;
+}
+
+.finding-actions button {
+  min-height: 30px;
+}
+
+.findings-limitation {
+  border-top: 1px solid var(--line);
+  padding-top: 7px;
+}
+
 .incident-watches {
   border-bottom: 1px solid var(--line);
   display: grid;
@@ -1963,10 +2384,6 @@ summary:focus-visible {
     --assistant-rail: 380px;
     --operations-rail: 440px;
   }
-
-  .coverage-item small {
-    display: none;
-  }
 }
 
 @media (max-width: 1080px) and (min-width: 851px) {
@@ -2095,7 +2512,8 @@ summary:focus-visible {
   }
 
   .incident-list-section,
-  .incident-coverage-section {
+  .incident-coverage-section,
+  .incident-coverage-status {
     padding: 14px 16px 15px;
   }
 
@@ -2119,10 +2537,6 @@ summary:focus-visible {
     gap: 6px;
   }
 
-  .coverage-item small {
-    display: none;
-  }
-
   .coverage-state {
     margin-left: auto;
     padding-left: 0;
@@ -2142,9 +2556,19 @@ summary:focus-visible {
   }
 
   .satellite-controls {
+    max-height: none;
+  }
+
+  .map-layer-controls {
     max-height: calc(100% - 122px);
     right: 12px;
     top: 104px;
+  }
+
+  .incident-cluster-picker {
+    left: 12px;
+    top: 104px;
+    width: min(300px, calc(100% - 400px));
   }
 
   .map-region .ol-zoom {
@@ -2208,6 +2632,20 @@ summary:focus-visible {
 
   .incident-coverage-grid {
     column-gap: 10px;
+  }
+
+  .map-layer-controls {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .incident-cluster-picker {
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    width: auto;
   }
 
   .coverage-item:nth-child(odd) {

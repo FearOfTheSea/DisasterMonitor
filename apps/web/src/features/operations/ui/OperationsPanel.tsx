@@ -14,13 +14,21 @@ import type {
   EvidenceSnapshot,
   ProviderFreshness,
 } from '@/shared/types/operations';
-import type { IncidentWatchEvent } from '@/features/operations/model/incidentWatch';
+import type {
+  ActiveIncident,
+  ActiveIncidentsSnapshot,
+  CompoundHazardCorrelation,
+} from '@/features/incidents/model/activeIncidents';
+import { FindingsCenter } from '@/features/operations/ui/FindingsCenter';
 import { IncidentWatches } from '@/features/operations/ui/IncidentWatches';
 
 type OperationsPanelProps = {
   evidenceStateVersion?: string;
   onClose: () => void;
-  onSelectWatchIncident: (incident: IncidentWatchEvent) => void;
+  onSelectWatchIncident: (incident: ActiveIncident) => void;
+  activeIncidentsSnapshot?: ActiveIncidentsSnapshot;
+  displayedIncidents?: readonly ActiveIncident[];
+  displayedCorrelations?: readonly CompoundHazardCorrelation[];
 };
 
 function formatTime(value: string | null) {
@@ -43,6 +51,9 @@ export function OperationsPanel({
   evidenceStateVersion,
   onClose,
   onSelectWatchIncident,
+  activeIncidentsSnapshot,
+  displayedIncidents = [],
+  displayedCorrelations = [],
 }: OperationsPanelProps) {
   const [providers, setProviders] = useState<ProviderFreshness[]>([]);
   const [history, setHistory] = useState<EvidenceSnapshot[]>([]);
@@ -54,6 +65,11 @@ export function OperationsPanel({
   const [rationale, setRationale] = useState('');
   const [reviewStatus, setReviewStatus] = useState<string | null>(null);
   const [catalogUpdating, setCatalogUpdating] = useState(false);
+  const [watchRefreshToken, setWatchRefreshToken] = useState(0);
+  const handleWatchDataChange = useCallback(
+    () => setWatchRefreshToken((current) => current + 1),
+    [],
+  );
   const orderedProviders = [...providers].sort((left, right) => {
     const healthOrder =
       Number(left.state === 'fresh') - Number(right.state === 'fresh');
@@ -155,7 +171,19 @@ export function OperationsPanel({
         </button>
       </header>
       <div className="operations-scroll">
-        <IncidentWatches onSelectIncident={onSelectWatchIncident} />
+        <FindingsCenter
+          activeSnapshot={activeIncidentsSnapshot}
+          displayedIncidents={displayedIncidents}
+          displayedCorrelations={displayedCorrelations}
+          onSelectIncident={onSelectWatchIncident}
+          onWatchDataChange={handleWatchDataChange}
+          refreshToken={watchRefreshToken}
+        />
+        <IncidentWatches
+          onSelectIncident={onSelectWatchIncident}
+          onDataChange={handleWatchDataChange}
+          refreshToken={watchRefreshToken}
+        />
         {loading && (
           <div className="operations-loading" role="status">
             <span className="loading-indicator" aria-hidden="true" />

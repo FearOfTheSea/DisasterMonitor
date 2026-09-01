@@ -4,17 +4,19 @@ import type { ActiveIncidentsStatus } from '@/features/incidents/hooks/useActive
 import type {
   ActiveIncident,
   ActiveIncidentsSnapshot,
-  DisasterIncidentCoverage,
   DisasterType,
-  IncidentCoverageState,
   IncidentSourceAuthority,
 } from '@/features/incidents/model/activeIncidents';
+import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
+import type { MapTimeWindow } from '@/features/map/model/mapLayerState';
 
 type ActiveIncidentsPanelProps = {
   snapshot?: ActiveIncidentsSnapshot;
+  coverageSnapshot?: ActiveIncidentsSnapshot;
   status: ActiveIncidentsStatus;
   error?: string;
   selectedIncidentId?: string;
+  displayTimeWindow?: MapTimeWindow;
   onSelectIncident: (eventId: string) => void;
   onRefresh: () => void | Promise<void>;
 };
@@ -27,13 +29,6 @@ const DISASTERS: { value: DisasterType; label: string }[] = [
   { value: 'tropical_cyclone', label: 'Tropical cyclone' },
   { value: 'volcanic_eruption', label: 'Volcanic eruption' },
 ];
-
-const COVERAGE_LABELS: Record<IncidentCoverageState, string> = {
-  events_found: 'Events found',
-  no_matching_records: 'No matching records',
-  degraded: 'Degraded',
-  unavailable: 'Unavailable',
-};
 
 const AUTHORITY_LABELS: Record<IncidentSourceAuthority, string> = {
   national_authority: 'National authority',
@@ -90,31 +85,6 @@ function DisasterIcon({ disaster }: { disaster: DisasterType }) {
   );
 }
 
-function CoverageStatusIcon({ state }: { state: IncidentCoverageState }) {
-  if (state === 'events_found') {
-    return (
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <circle cx="8" cy="8" r="7" />
-        <path d="m4.5 8.1 2.1 2.1 4.9-4.9" />
-      </svg>
-    );
-  }
-  if (state === 'no_matching_records') {
-    return (
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <circle cx="8" cy="8" r="7" />
-        <path d="M4.5 8h7" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M8 1.5 15 14H1Z" />
-      <path d="M8 5v4.5M8 12h.01" />
-    </svg>
-  );
-}
-
 function SelectedIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -143,21 +113,6 @@ function formatDuration(seconds: number): string {
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
 }
 
-function coverageFor(
-  snapshot: ActiveIncidentsSnapshot,
-  disaster: DisasterType,
-): DisasterIncidentCoverage {
-  return (
-    snapshot.coverage.find((item) => item.disaster === disaster) ?? {
-      disaster,
-      state: 'unavailable',
-      incident_count: 0,
-      providers: [],
-      detail: 'The API returned no coverage result for this disaster.',
-    }
-  );
-}
-
 function disasterLabel(disaster: DisasterType): string {
   return DISASTERS.find((item) => item.value === disaster)?.label ?? disaster;
 }
@@ -174,15 +129,14 @@ function sourceTimestamp(incident: ActiveIncident): { label: string; value: stri
 
 export function ActiveIncidentsPanel({
   snapshot,
+  coverageSnapshot,
   status,
   error,
   selectedIncidentId,
+  displayTimeWindow,
   onSelectIncident,
   onRefresh,
 }: ActiveIncidentsPanelProps) {
-  const partial = snapshot?.coverage.some(
-    (item) => item.state === 'degraded' || item.state === 'unavailable',
-  );
   const incidents = [...(snapshot?.incidents ?? [])].sort((first, second) => {
     const timeDifference =
       new Date(second.event_time).getTime() - new Date(first.event_time).getTime();
@@ -209,14 +163,6 @@ export function ActiveIncidentsPanel({
         </button>
       </header>
       <div className="active-incidents-scroll">
-        {snapshot && (
-          <p className="incident-retrieval-time">
-            Retrieved:{' '}
-            <time dateTime={snapshot.retrieved_at}>
-              {formatTime(snapshot.retrieved_at)}
-            </time>
-          </p>
-        )}
         {status === 'loading' && !snapshot && (
           <div className="incident-loading" role="status">
             <span className="loading-indicator" aria-hidden="true" />
@@ -229,57 +175,9 @@ export function ActiveIncidentsPanel({
             {error}
           </div>
         )}
-        {snapshot && (
-          <section
-            className="incident-coverage-section"
-            aria-labelledby="coverage-heading"
-          >
-            <div className="incident-section-heading">
-              <h3 id="coverage-heading">Provider coverage</h3>
-              {partial && <span className="incident-partial">Coverage is partial</span>}
-            </div>
-            <div className="incident-coverage-grid">
-              {DISASTERS.map((definition) => {
-                const coverage = coverageFor(snapshot, definition.value);
-                return (
-                  <article
-                    key={definition.value}
-                    className={`coverage-item coverage-item-${coverage.state}`}
-                    data-testid="incident-coverage"
-                  >
-                    <div>
-                      <strong>
-                        <DisasterIcon disaster={definition.value} />
-                        {definition.label}
-                      </strong>
-                      <span className={`coverage-state coverage-${coverage.state}`}>
-                        <CoverageStatusIcon state={coverage.state} />
-                        {COVERAGE_LABELS[coverage.state]}
-                      </span>
-                    </div>
-                    <small>{coverage.detail}</small>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        )}
-        {snapshot && snapshot.warnings.length > 0 && (
-          <section
-            className="incident-warnings"
-            aria-labelledby="incident-warnings-heading"
-          >
-            <h3 id="incident-warnings-heading">Retrieval warnings</h3>
-            <p>
-              Provider notices describe coverage limits; they are not disaster claims.
-            </p>
-            <ul>
-              {snapshot.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          </section>
-        )}
+        {snapshot ? (
+          <IncidentCoverageStatus snapshot={coverageSnapshot ?? snapshot} />
+        ) : null}
         {snapshot && (snapshot.correlations?.length ?? 0) > 0 && (
           <section
             className="incident-correlations"
@@ -329,6 +227,12 @@ export function ActiveIncidentsPanel({
               <h3 id="incident-list-heading">Recent source records</h3>
               <span>{incidents.length}</span>
             </div>
+            {displayTimeWindow ? (
+              <p className="incident-display-filter-note">
+                Showing records in the {displayTimeWindow} display window. Provider
+                coverage above is unchanged.
+              </p>
+            ) : null}
             {incidents.length === 0 ? (
               <div className="incident-empty">
                 <strong>No incident records matched this bounded retrieval.</strong>

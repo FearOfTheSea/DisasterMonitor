@@ -9,10 +9,12 @@ facts. See [docs/agent-runtime.md](docs/agent-runtime.md).
 
 ## Included
 
-- Next.js/OpenLayers map with a default-visible, source-backed Active Incidents
-  sidebar plus an assistant UI with session-local conversation state.
+- Next.js/OpenLayers map with a typed layer registry, operator presets and display-time
+  filters, source-backed Active Incidents, dense point clustering, layer provenance,
+  and an assistant UI with session-local conversation state.
 - Persistent local Incident Watches with bounded scheduled refresh, deterministic
-  source-backed change timelines, unread/read state, and exact-evidence map focus.
+  source-backed change timelines, unread/read state, exact-evidence map focus, and a
+  deterministic Findings view shared with coverage and compound-hazard context.
 - Selectable NASA GIBS satellite imagery plus optional server-proxied Copernicus
   Sentinel-2 and one configured Planet mosaic.
 - FastAPI health, readiness, active-incidents, incident-watch, assistant, and operations
@@ -104,7 +106,13 @@ directly; it does not call Qwen. Its defaults are a 7-day window and at most 10
 records per disaster. Each of the six hazards has a separate coverage state so an
 upstream failure, unavailable provider, or successful empty result cannot be mistaken
 for proof that no disaster occurred. Map features are drawn only from source-backed
-point, track, or area geometry returned by the endpoint.
+point, track, or area geometry returned by the endpoint. The map control surface keeps
+Active Incidents, satellite imagery, Common Operational Picture evidence, cyclone
+supplemental geometry, and descriptive compound-hazard correlations in one typed
+registry with inspectable provenance and limitations. Its 1-hour through 7-day filters
+change displayed incident and correlation records only; they do not rewrite backend
+coverage or turn a filtered view into an absence claim. Dense point records cluster at
+lower zoom while source-backed area and track geometry stays unclustered.
 
 Incident Watches monitor one disaster type in one canonical country or worldwide at a
 bounded 5-minute to 24-hour interval. The existing scheduler/worker uses the registered
@@ -112,8 +120,12 @@ provider path and deterministic typed-state hashes; Qwen does not decide changes
 alerts. With Compose, watches and timelines are durable in PostgreSQL. A standalone API
 uses the non-durable in-memory fallback. Open Evidence operations to create watches,
 inspect coverage and source-attributed timelines, focus retained geometry on the map,
-and mark changes read. This is bounded monitoring, not complete global surveillance or
-an external warning/notification system.
+and mark changes read. The Findings center is a deterministic frontend aggregation of
+unread watch changes, watch and Active Incidents coverage limitations, retrieval
+warnings, and returned compound-hazard correlations. It does not use Qwen to generate,
+rank, or rewrite findings, and watch read state still uses the Incident Watch API. This
+is bounded monitoring, not complete global surveillance or an external
+warning/notification system.
 
 ### Optional protected satellite imagery
 

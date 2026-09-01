@@ -8,10 +8,12 @@ import LineString from 'ol/geom/LineString';
 import Point from 'ol/geom/Point';
 import Polygon from 'ol/geom/Polygon';
 import OSM from 'ol/source/OSM';
+import Cluster from 'ol/source/Cluster';
 import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import { fromLonLat, toLonLat } from 'ol/proj';
-import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
+import { createEmpty, extend } from 'ol/extent';
+import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 
 import {
   buildCopRenderPlan,
@@ -22,9 +24,15 @@ import type {
   ActiveIncidentMapFeature,
   RenderableIncidentGeometry,
 } from '@/features/map/model/activeIncidentMap';
+import { partitionActiveIncidentMapFeatures } from '@/features/map/model/activeIncidentMap';
 import type { DisasterType } from '@/features/incidents/model/activeIncidents';
 import type { MapAreaBounds } from '@/features/map/model/assistantMapFocus';
 import { cycloneStyleSemantics } from '@/features/map/model/cycloneMapLayers';
+import type { MapLayerId } from '@/features/map/model/mapLayerRegistry';
+import {
+  createDefaultMapLayerState,
+  type MapLayerVisibility,
+} from '@/features/map/model/mapLayerState';
 import type {
   CommonOperationalPicture,
   CopGeometry,
@@ -37,6 +45,7 @@ type MapAdapterOptions = {
   initialView: MapView;
   onViewChange: (view: MapView) => void;
   onSelectIncident: (incidentId: string) => void;
+  onSelectIncidentCluster?: (incidentIds: string[]) => void;
 };
 
 export type SatelliteLayerConfiguration = {
@@ -49,6 +58,7 @@ export type SatelliteLayerConfiguration = {
 
 const DEFAULT_FIT_PADDING = 56;
 const WEB_MERCATOR_MAX_LATITUDE = 85.0511287798066;
+const INCIDENT_CLUSTER_MAX_ZOOM = 9;
 
 type PendingArea = {
   bounds: MapAreaBounds;
@@ -57,13 +67,19 @@ type PendingArea = {
 
 export class OpenLayersMapAdapter {
   private readonly map: Map;
-  private readonly activeIncidentSource: VectorSource<Feature<Geometry>>;
-  private readonly activeIncidentLayer: VectorLayer<VectorSource<Feature<Geometry>>>;
+  private readonly pointIncidentSource: VectorSource<Feature<Geometry>>;
+  private readonly clusteredIncidentSource: Cluster<Feature<Geometry>>;
+  private readonly clusteredIncidentLayer: VectorLayer<Cluster<Feature<Geometry>>>;
+  private readonly sourceGeometryIncidentSource: VectorSource<Feature<Geometry>>;
+  private readonly sourceGeometryIncidentLayer: VectorLayer<
+    VectorSource<Feature<Geometry>>
+  >;
   private satelliteLayer?: TileLayer<XYZ>;
   private copLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
   private cycloneLayers: VectorLayer<VectorSource<Feature<Geometry>>>[] = [];
   private pendingArea?: PendingArea;
   private pendingIncidentId?: string;
+  private layerVisibility: MapLayerVisibility = createDefaultMapLayerState().visibility;
 
   constructor(private readonly options: MapAdapterOptions) {
     const baseLayer = new TileLayer({ source: new OSM() });
@@ -80,29 +96,72 @@ export class OpenLayersMapAdapter {
       projection: 'EPSG:3857',
       constrainResolution: true,
     });
-    this.activeIncidentSource = new VectorSource<Feature<Geometry>>();
-    this.activeIncidentLayer = new VectorLayer({
-      source: this.activeIncidentSource,
+    this.pointIncidentSource = new VectorSource<Feature<Geometry>>();
+    this.clusteredIncidentSource = new Cluster({
+      distance: 44,
+      minDistance: 12,
+      source: this.pointIncidentSource,
+    });
+    this.clusteredIncidentLayer = new VectorLayer({
+      source: this.clusteredIncidentSource,
+      style: (feature) =>
+        styleForIncidentCluster(
+          feature instanceof Feature ? clusterMembers(feature) : [],
+        ),
+    });
+    this.clusteredIncidentLayer.set('dmLayerType', 'active-incidents');
+    this.clusteredIncidentLayer.set('dmLayerId', 'active-incidents');
+    this.clusteredIncidentLayer.set('dmIncidentRepresentation', 'clustered-points');
+    this.clusteredIncidentLayer.setZIndex(10);
+    this.sourceGeometryIncidentSource = new VectorSource<Feature<Geometry>>();
+    this.sourceGeometryIncidentLayer = new VectorLayer({
+      source: this.sourceGeometryIncidentSource,
       style: (feature) =>
         styleForActiveIncident(
           feature.get('disaster'),
           feature.get('selected') === true,
         ),
     });
-    this.activeIncidentLayer.set('dmLayerType', 'active-incidents');
-    this.activeIncidentLayer.setZIndex(10);
+    this.sourceGeometryIncidentLayer.set('dmLayerType', 'active-incidents');
+    this.sourceGeometryIncidentLayer.set('dmLayerId', 'active-incidents');
+    this.sourceGeometryIncidentLayer.set('dmIncidentRepresentation', 'source-geometry');
+    this.sourceGeometryIncidentLayer.setZIndex(11);
     this.map = new Map({
       target: options.target,
-      layers: [baseLayer, this.activeIncidentLayer],
+      layers: [
+        baseLayer,
+        this.clusteredIncidentLayer,
+        this.sourceGeometryIncidentLayer,
+      ],
       view,
     });
     this.map.on('singleclick', (event) => {
-      const feature = this.map.forEachFeatureAtPixel(
+      const hit = this.map.forEachFeatureAtPixel(
         event.pixel,
-        (candidate) => candidate,
-        { layerFilter: (layer) => layer === this.activeIncidentLayer },
+        (feature, layer) => ({ feature, layer }),
+        {
+          layerFilter: (layer) =>
+            layer === this.clusteredIncidentLayer ||
+            layer === this.sourceGeometryIncidentLayer,
+        },
       );
-      const incidentId = feature?.get('incidentId');
+      if (!hit) return;
+      if (!(hit.feature instanceof Feature)) return;
+      if (hit.layer === this.clusteredIncidentLayer) {
+        const members = clusterMembers(hit.feature);
+        const incidentIds = members
+          .map((feature) => feature.get('incidentId'))
+          .filter((value): value is string => typeof value === 'string')
+          .toSorted();
+        if (incidentIds.length === 1) {
+          options.onSelectIncident(incidentIds[0]);
+        } else if (incidentIds.length > 1) {
+          this.expandIncidentCluster(members);
+          options.onSelectIncidentCluster?.(incidentIds);
+        }
+        return;
+      }
+      const incidentId = hit.feature.get('incidentId');
       if (typeof incidentId === 'string') {
         options.onSelectIncident(incidentId);
       }
@@ -112,13 +171,21 @@ export class OpenLayersMapAdapter {
       this.applyPendingArea();
     });
     view.on('change:center', () => this.reportView());
-    view.on('change:resolution', () => this.reportView());
+    view.on('change:resolution', () => {
+      this.clusteredIncidentSource.setDistance(
+        (view.getZoom() ?? options.initialView.zoom) < INCIDENT_CLUSTER_MAX_ZOOM
+          ? 44
+          : 0,
+      );
+      this.reportView();
+    });
   }
 
   destroy(): void {
     this.pendingArea = undefined;
     this.pendingIncidentId = undefined;
-    this.activeIncidentSource.clear();
+    this.pointIncidentSource.clear();
+    this.sourceGeometryIncidentSource.clear();
     this.clearSatelliteImagery();
     this.clearCommonOperationalPicture();
     this.clearCycloneMapLayers();
@@ -156,6 +223,8 @@ export class OpenLayersMapAdapter {
       });
       layer.set('dmCopId', cop.cop_id);
       layer.set('dmLayerType', 'common-operational-picture');
+      layer.set('dmLayerId', 'cop-evidence');
+      layer.setVisible(this.layerVisibility['cop-evidence']);
       layer.setZIndex(20);
       this.map.addLayer(layer);
       this.copLayers.push(layer);
@@ -180,7 +249,9 @@ export class OpenLayersMapAdapter {
         style: () => styleForCycloneLayer(layerDefinition.semantic_role),
       });
       layer.set('dmLayerType', 'supplemental-cyclone');
+      layer.set('dmLayerId', 'cyclone-supplemental');
       layer.set('dmCycloneLayerId', layerDefinition.layer_id);
+      layer.setVisible(this.layerVisibility['cyclone-supplemental']);
       layer.setZIndex(15);
       this.map.addLayer(layer);
       this.cycloneLayers.push(layer);
@@ -200,7 +271,9 @@ export class OpenLayersMapAdapter {
       }),
     });
     layer.set('dmLayerType', 'satellite-imagery');
+    layer.set('dmLayerId', 'satellite-imagery');
     layer.set('dmSatelliteSourceId', configuration.sourceId);
+    layer.setVisible(this.layerVisibility['satellite-imagery']);
     layer.setZIndex(1);
     this.map.getLayers().insertAt(1, layer);
     this.satelliteLayer = layer;
@@ -213,23 +286,31 @@ export class OpenLayersMapAdapter {
   }
 
   setActiveIncidents(incidents: readonly ActiveIncidentMapFeature[]): void {
-    this.activeIncidentSource.clear();
-    this.activeIncidentSource.addFeatures(
-      incidents.map(
-        (incident) =>
-          new Feature({
-            geometry: toActiveIncidentGeometry(incident.geometry),
-            incidentId: incident.incidentId,
-            disaster: incident.disaster,
-          }),
-      ),
+    const partition = partitionActiveIncidentMapFeatures(incidents);
+    this.pointIncidentSource.clear();
+    this.sourceGeometryIncidentSource.clear();
+    this.pointIncidentSource.addFeatures(
+      partition.clusteredPoints.map(toActiveIncidentFeature),
+    );
+    this.sourceGeometryIncidentSource.addFeatures(
+      partition.sourceGeometries.map(toActiveIncidentFeature),
     );
     this.applyPendingIncidentFocus();
   }
 
   setSelectedIncident(incidentId?: string): void {
-    for (const feature of this.activeIncidentSource.getFeatures()) {
+    for (const feature of this.incidentFeatures()) {
       feature.set('selected', feature.get('incidentId') === incidentId);
+    }
+    this.clusteredIncidentLayer.changed();
+    this.sourceGeometryIncidentLayer.changed();
+  }
+
+  setLayerVisibility(visibility: MapLayerVisibility): void {
+    this.layerVisibility = { ...visibility };
+    for (const layer of this.map.getLayers().getArray()) {
+      const layerId = layer.get('dmLayerId') as MapLayerId | undefined;
+      if (layerId) layer.setVisible(visibility[layerId]);
     }
   }
 
@@ -275,9 +356,9 @@ export class OpenLayersMapAdapter {
 
   private applyPendingIncidentFocus(): void {
     if (!this.pendingIncidentId) return;
-    const feature = this.activeIncidentSource
-      .getFeatures()
-      .find((item) => item.get('incidentId') === this.pendingIncidentId);
+    const feature = this.incidentFeatures().find(
+      (item) => item.get('incidentId') === this.pendingIncidentId,
+    );
     if (!feature) {
       this.pendingIncidentId = undefined;
       return;
@@ -306,6 +387,31 @@ export class OpenLayersMapAdapter {
       centerLatitude: latitude,
       centerLongitude: longitude,
       zoom: this.map.getView().getZoom() ?? this.options.initialView.zoom,
+    });
+  }
+
+  private incidentFeatures(): Feature<Geometry>[] {
+    return [
+      ...this.pointIncidentSource.getFeatures(),
+      ...this.sourceGeometryIncidentSource.getFeatures(),
+    ];
+  }
+
+  private expandIncidentCluster(features: readonly Feature<Geometry>[]): void {
+    const size = this.map.getSize();
+    if (!size || size[0] <= 0 || size[1] <= 0) return;
+    const extent = createEmpty();
+    for (const feature of features) {
+      const geometry = feature.getGeometry();
+      if (geometry) extend(extent, geometry.getExtent());
+    }
+    const view = this.map.getView();
+    view.cancelAnimations();
+    view.fit(extent, {
+      duration: reducedMotionPreferred() ? 0 : 300,
+      padding: fitPadding(size),
+      maxZoom: 12,
+      size,
     });
   }
 
@@ -392,6 +498,23 @@ function toOpenLayersGeometry(geometry: CopGeometry): Geometry {
   );
 }
 
+function toActiveIncidentFeature(
+  incident: ActiveIncidentMapFeature,
+): Feature<Geometry> {
+  return new Feature({
+    geometry: toActiveIncidentGeometry(incident.geometry),
+    incidentId: incident.incidentId,
+    disaster: incident.disaster,
+  });
+}
+
+function clusterMembers(feature: Feature<Geometry>): Feature<Geometry>[] {
+  const members = feature.get('features');
+  return Array.isArray(members)
+    ? members.filter((member): member is Feature<Geometry> => member instanceof Feature)
+    : [];
+}
+
 function toActiveIncidentGeometry(geometry: RenderableIncidentGeometry): Geometry {
   const coordinates = geometry.coordinates.map((point) =>
     fromLonLat([point.longitude, point.latitude]),
@@ -452,6 +575,28 @@ function styleForActiveIncident(value: unknown, selected = false): Style {
       radius: selected ? 10 : 7,
       fill: new Fill({ color }),
       stroke: new Stroke({ color: '#ffffff', width: selected ? 4 : 2 }),
+    }),
+  });
+}
+
+function styleForIncidentCluster(members: readonly Feature<Geometry>[]): Style {
+  if (members.length === 1) {
+    return styleForActiveIncident(
+      members[0].get('disaster'),
+      members[0].get('selected') === true,
+    );
+  }
+  const selected = members.some((member) => member.get('selected') === true);
+  return new Style({
+    image: new CircleStyle({
+      radius: selected ? 17 : 15,
+      fill: new Fill({ color: '#172554' }),
+      stroke: new Stroke({ color: selected ? '#fbbf24' : '#ffffff', width: 3 }),
+    }),
+    text: new Text({
+      text: String(members.length),
+      fill: new Fill({ color: '#ffffff' }),
+      font: '700 12px system-ui, sans-serif',
     }),
   });
 }

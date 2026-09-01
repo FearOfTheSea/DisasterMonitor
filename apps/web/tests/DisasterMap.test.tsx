@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,10 +17,12 @@ const adapterMocks = vi.hoisted(() => ({
   destroy: vi.fn(),
   fitArea: vi.fn(),
   focusActiveIncident: vi.fn(),
+  onSelectIncidentCluster: undefined as ((incidentIds: string[]) => void) | undefined,
   onSelectIncident: undefined as ((incidentId: string) => void) | undefined,
   setActiveIncidents: vi.fn(),
   setCommonOperationalPicture: vi.fn(),
   setCycloneMapLayers: vi.fn(),
+  setLayerVisibility: vi.fn(),
   setSatelliteImagery: vi.fn(),
   setSatelliteOpacity: vi.fn(),
   setSelectedIncident: vi.fn(),
@@ -34,8 +43,12 @@ vi.mock('@/features/map/api/satelliteImageryClient', async (importOriginal) => {
 
 vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
   OpenLayersMapAdapter: class {
-    constructor(options: { onSelectIncident: (incidentId: string) => void }) {
+    constructor(options: {
+      onSelectIncident: (incidentId: string) => void;
+      onSelectIncidentCluster?: (incidentIds: string[]) => void;
+    }) {
       adapterMocks.onSelectIncident = options.onSelectIncident;
+      adapterMocks.onSelectIncidentCluster = options.onSelectIncidentCluster;
     }
 
     destroy = adapterMocks.destroy;
@@ -44,6 +57,7 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
     setActiveIncidents = adapterMocks.setActiveIncidents;
     setCommonOperationalPicture = adapterMocks.setCommonOperationalPicture;
     setCycloneMapLayers = adapterMocks.setCycloneMapLayers;
+    setLayerVisibility = adapterMocks.setLayerVisibility;
     setSatelliteImagery = adapterMocks.setSatelliteImagery;
     setSatelliteOpacity = adapterMocks.setSatelliteOpacity;
     setSelectedIncident = adapterMocks.setSelectedIncident;
@@ -229,6 +243,57 @@ describe('DisasterMap assistant focus', () => {
     adapterMocks.onSelectIncident?.('flood-1');
 
     expect(onSelectIncident).toHaveBeenCalledWith('flood-1');
+  });
+
+  it('lets an operator choose every canonical incident exposed by a cluster', async () => {
+    const user = userEvent.setup();
+    const onSelectIncident = vi.fn();
+    const source = {
+      source_id: 'fixture-source',
+      publisher: 'Fixture publisher',
+      title: 'Fixture source',
+      canonical_url: 'https://example.test/incidents',
+      published_at: '2026-08-20T02:00:00Z',
+      updated_at: null,
+      retrieved_at: '2026-08-20T04:00:00Z',
+      snapshot_id: null,
+    };
+    const incidents: ActiveIncident[] = ['first', 'second'].map((eventId, index) => ({
+      event_id: eventId,
+      disaster: 'earthquake',
+      location: `${eventId} location`,
+      event_time: '2026-08-20T03:00:00Z',
+      geometry: {
+        kind: 'point',
+        coordinates: [{ latitude: 10 + index / 100, longitude: 20 }],
+        description: null,
+        source_id: source.source_id,
+        estimated: false,
+      },
+      measurements: [],
+      provider_ids: [`fixture:${eventId}`],
+      provider_tier: 'primary',
+      source_authority: 'scientific_authority',
+      source,
+    }));
+    render(
+      <DisasterMap
+        onViewChange={vi.fn()}
+        onSelectIncident={onSelectIncident}
+        activeIncidents={incidents}
+      />,
+    );
+
+    act(() => adapterMocks.onSelectIncidentCluster?.(['first', 'second']));
+
+    expect(
+      screen.getByRole('complementary', { name: 'Clustered incidents' }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'second location' }));
+    expect(onSelectIncident).toHaveBeenCalledWith('second');
+    expect(
+      screen.queryByRole('complementary', { name: 'Clustered incidents' }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders distinct cyclone layer semantics and clears stale layers', () => {

@@ -14,6 +14,9 @@ import {
 const incidentWatchUi = vi.hoisted(() => ({
   onSelectIncident: undefined as unknown,
 }));
+const findingsUi = vi.hoisted(() => ({
+  props: undefined as unknown,
+}));
 
 vi.mock('@/features/operations/api/operationsClient', () => ({
   fetchProviderFreshness: vi.fn(),
@@ -27,6 +30,13 @@ vi.mock('@/features/operations/ui/IncidentWatches', () => ({
   IncidentWatches: (props: { onSelectIncident: unknown }) => {
     incidentWatchUi.onSelectIncident = props.onSelectIncident;
     return <section aria-label="Incident watches fixture" />;
+  },
+}));
+
+vi.mock('@/features/operations/ui/FindingsCenter', () => ({
+  FindingsCenter: (props: unknown) => {
+    findingsUi.props = props;
+    return <section aria-label="Findings center fixture" />;
   },
 }));
 
@@ -114,7 +124,13 @@ describe('OperationsPanel', () => {
     );
 
     expect(screen.getByLabelText('Incident watches fixture')).toBeInTheDocument();
+    expect(screen.getByLabelText('Findings center fixture')).toBeInTheDocument();
     expect(incidentWatchUi.onSelectIncident).toBe(onSelectWatchIncident);
+    expect(findingsUi.props).toMatchObject({
+      displayedIncidents: [],
+      displayedCorrelations: [],
+      onSelectIncident: onSelectWatchIncident,
+    });
     expect(await screen.findAllByText('global-warnings-vietnam-warnings')).toHaveLength(
       2,
     );

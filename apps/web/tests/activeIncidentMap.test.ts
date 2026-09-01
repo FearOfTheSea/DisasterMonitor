@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   ActiveIncident,
   DisasterType,
   IncidentGeometry,
 } from '@/features/incidents/model/activeIncidents';
-import { activeIncidentMapFeatures } from '@/features/map/model/activeIncidentMap';
+import {
+  activeIncidentMapFeatures,
+  partitionActiveIncidentMapFeatures,
+} from '@/features/map/model/activeIncidentMap';
+import { OpenLayersMapAdapter } from '@/features/map/adapters/openLayersMapAdapter';
 
 const SOURCE = {
   source_id: 'six-hazard-fixture',
@@ -143,5 +147,108 @@ describe('activeIncidentMapFeatures', () => {
     ];
 
     expect(activeIncidentMapFeatures(nonRenderable)).toEqual([]);
+  });
+
+  it('partitions only point incidents for clustering without replacing source geometry', () => {
+    const features = activeIncidentMapFeatures(SIX_HAZARD_INCIDENTS);
+
+    const partition = partitionActiveIncidentMapFeatures(features);
+
+    expect(partition.clusteredPoints.map((item) => item.incidentId)).toEqual([
+      'fixture-earthquake',
+      'fixture-flood',
+      'fixture-landslide',
+      'fixture-volcano',
+    ]);
+    expect(partition.sourceGeometries.map((item) => item.incidentId)).toEqual([
+      'fixture-wildfire',
+      'fixture-cyclone',
+    ]);
+    expect(partition.sourceGeometries.map((item) => item.geometry.kind)).toEqual([
+      'area',
+      'track',
+    ]);
+  });
+});
+
+describe('OpenLayers active incident clustering', () => {
+  afterEach(() => document.body.replaceChildren());
+
+  it('clusters only point records while retaining area and track source geometry', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const target = document.createElement('div');
+    target.style.width = '800px';
+    target.style.height = '600px';
+    document.body.append(target);
+    const adapter = new OpenLayersMapAdapter({
+      target,
+      initialView: { centerLatitude: 0, centerLongitude: 0, zoom: 2 },
+      onViewChange: vi.fn(),
+      onSelectIncident: vi.fn(),
+    });
+
+    adapter.setActiveIncidents(activeIncidentMapFeatures(SIX_HAZARD_INCIDENTS));
+    adapter.setSelectedIncident('fixture-flood');
+    adapter.setLayerVisibility({
+      'active-incidents': false,
+      'satellite-imagery': false,
+      'cop-evidence': true,
+      'cyclone-supplemental': true,
+      'compound-correlations': true,
+    });
+
+    type LayerView = {
+      get: (key: string) => unknown;
+      getVisible: () => boolean;
+      getSource: () => {
+        getFeatures: () => Array<{ get: (key: string) => unknown }>;
+        getSource?: () => {
+          getFeatures: () => Array<{ get: (key: string) => unknown }>;
+        };
+      };
+    };
+    type AdapterView = {
+      map: { getLayers: () => { getArray: () => LayerView[] } };
+    };
+    const layers = (adapter as unknown as AdapterView).map.getLayers().getArray();
+    const clusteredPoints = layers.find(
+      (layer) => layer.get('dmIncidentRepresentation') === 'clustered-points',
+    );
+    const sourceGeometry = layers.find(
+      (layer) => layer.get('dmIncidentRepresentation') === 'source-geometry',
+    );
+    const pointFeatures =
+      clusteredPoints?.getSource().getSource?.().getFeatures() ?? [];
+    const geometryFeatures = sourceGeometry?.getSource().getFeatures() ?? [];
+
+    expect(
+      pointFeatures.map((feature) => feature.get('incidentId')).toSorted(),
+    ).toEqual([
+      'fixture-earthquake',
+      'fixture-flood',
+      'fixture-landslide',
+      'fixture-volcano',
+    ]);
+    expect(
+      pointFeatures
+        .find((feature) => feature.get('incidentId') === 'fixture-flood')
+        ?.get('selected'),
+    ).toBe(true);
+    expect(geometryFeatures.map((feature) => feature.get('incidentId'))).toEqual([
+      'fixture-wildfire',
+      'fixture-cyclone',
+    ]);
+    expect(clusteredPoints?.getVisible()).toBe(false);
+    expect(sourceGeometry?.getVisible()).toBe(false);
+
+    adapter.destroy();
+    vi.unstubAllGlobals();
   });
 });

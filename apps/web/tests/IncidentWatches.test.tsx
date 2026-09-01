@@ -135,7 +135,13 @@ describe('IncidentWatches', () => {
   it('shows degraded coverage, unread timeline, map selection, read, toggle, delete', async () => {
     const user = userEvent.setup();
     const onSelectIncident = vi.fn();
-    render(<IncidentWatches onSelectIncident={onSelectIncident} />);
+    const onDataChange = vi.fn();
+    render(
+      <IncidentWatches
+        onSelectIncident={onSelectIncident}
+        onDataChange={onDataChange}
+      />,
+    );
 
     expect(await screen.findByText('Vietnam')).toBeInTheDocument();
     expect(screen.getByText('Degraded')).toBeInTheDocument();
@@ -157,6 +163,7 @@ describe('IncidentWatches', () => {
       ]),
     );
     expect(await screen.findByText('0 unread')).toBeInTheDocument();
+    expect(onDataChange).toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Disable Vietnam watch' }));
     expect(setIncidentWatchEnabled).toHaveBeenCalledWith(WATCH.watch_id, false);

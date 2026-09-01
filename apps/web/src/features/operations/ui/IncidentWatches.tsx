@@ -20,6 +20,8 @@ import type { DisasterType } from '@/features/incidents/model/activeIncidents';
 
 type IncidentWatchesProps = {
   onSelectIncident: (incident: IncidentWatchEvent) => void;
+  refreshToken?: number;
+  onDataChange?: () => void;
 };
 
 const DISASTERS: { value: DisasterType; label: string }[] = [
@@ -64,7 +66,11 @@ function hasMappableGeometry(incident: IncidentWatchEvent | null): boolean {
   return incident.geometry.coordinates.length >= 3;
 }
 
-export function IncidentWatches({ onSelectIncident }: IncidentWatchesProps) {
+export function IncidentWatches({
+  onSelectIncident,
+  refreshToken = 0,
+  onDataChange,
+}: IncidentWatchesProps) {
   const [watches, setWatches] = useState<IncidentWatch[]>([]);
   const [selectedWatchId, setSelectedWatchId] = useState<string>();
   const [timeline, setTimeline] = useState<IncidentWatchChange[]>([]);
@@ -106,7 +112,7 @@ export function IncidentWatches({ onSelectIncident }: IncidentWatchesProps) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [refreshToken]);
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,6 +130,7 @@ export function IncidentWatches({ onSelectIncident }: IncidentWatchesProps) {
       });
       setWatches((current) => [created, ...current]);
       setCountry('');
+      onDataChange?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Watch creation failed.');
     } finally {
@@ -152,6 +159,7 @@ export function IncidentWatches({ onSelectIncident }: IncidentWatchesProps) {
       setWatches((current) =>
         current.map((item) => (item.watch_id === updated.watch_id ? updated : item)),
       );
+      onDataChange?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Watch update failed.');
     }
@@ -168,6 +176,7 @@ export function IncidentWatches({ onSelectIncident }: IncidentWatchesProps) {
         setSelectedWatchId(undefined);
         setTimeline([]);
       }
+      onDataChange?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Watch deletion failed.');
     }
@@ -195,6 +204,7 @@ export function IncidentWatches({ onSelectIncident }: IncidentWatchesProps) {
             : item,
         ),
       );
+      onDataChange?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Timeline update failed.');
     }

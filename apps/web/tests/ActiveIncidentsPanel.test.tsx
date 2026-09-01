@@ -119,7 +119,7 @@ describe('ActiveIncidentsPanel', () => {
     expect(
       screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
     ).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/Source updated/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Source updated/)).toHaveLength(2);
     expect(
       screen.getByRole('link', { name: 'Fixture wildfire perimeter' }),
     ).toHaveAttribute('href', 'https://wildfires.example/incidents/fire-1');
@@ -238,6 +238,7 @@ describe('ActiveIncidentsPanel', () => {
       <ActiveIncidentsPanel
         snapshot={snapshot([])}
         status="success"
+        displayTimeWindow="1h"
         selectedIncidentId={undefined}
         onSelectIncident={vi.fn()}
         onRefresh={vi.fn()}
@@ -249,5 +250,29 @@ describe('ActiveIncidentsPanel', () => {
     expect(
       screen.getByText(/does not prove that no disaster occurred/i),
     ).toBeInTheDocument();
+    expect(screen.getByText(/1h display window/i)).toHaveTextContent(
+      'Provider coverage above is unchanged',
+    );
+  });
+
+  it('keeps coverage freshness from the unfiltered snapshot while filtering records', () => {
+    const view = render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot([])}
+        coverageSnapshot={snapshot([INCIDENT])}
+        status="success"
+        displayTimeWindow="1h"
+        selectedIncidentId={undefined}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    const panel = within(view.container);
+    expect(panel.getByText(/fixture-wildfires.*Source updated/)).toBeInTheDocument();
+    expect(
+      panel.getByText('No incident records matched this bounded retrieval.'),
+    ).toBeInTheDocument();
+    expect(panel.getByText(/Provider coverage above is unchanged/)).toBeVisible();
   });
 });
