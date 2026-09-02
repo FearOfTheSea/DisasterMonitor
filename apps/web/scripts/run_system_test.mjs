@@ -11,17 +11,18 @@ const stackProcess = spawn(
 async function waitForApplication(url, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // The local stack is still starting.
-    }
+    if (await applicationIsReady(url)) return;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(`Timed out waiting for ${url}`);
+}
+
+async function applicationIsReady(url) {
+  try {
+    return (await fetch(url)).ok;
+  } catch {
+    return false;
+  }
 }
 
 function stopStack() {

@@ -5,45 +5,32 @@ import type {
   OperatorReviewResult,
   ProviderFreshness,
 } from '@/shared/types/operations';
-
-async function responseJson<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    let detail = `Request failed with status ${response.status}.`;
-    try {
-      const body = (await response.json()) as { detail?: string };
-      if (body.detail) detail = body.detail;
-    } catch {
-      // The stable status remains useful when an intermediary returns non-JSON.
-    }
-    throw new Error(detail);
-  }
-  return (await response.json()) as T;
-}
+import { readJsonResponse } from '@/shared/api/http';
 
 export async function fetchProviderFreshness(signal?: AbortSignal) {
   const response = await fetch(`${API_BASE_URL}/operations/providers`, { signal });
-  return responseJson<ProviderFreshness[]>(response);
+  return readJsonResponse<ProviderFreshness[]>(response);
 }
 
 export async function fetchEvidenceHistory(signal?: AbortSignal) {
   const response = await fetch(`${API_BASE_URL}/operations/evidence-history?limit=25`, {
     signal,
   });
-  return responseJson<EvidenceSnapshot[]>(response);
+  return readJsonResponse<EvidenceSnapshot[]>(response);
 }
 
 export async function fetchCountryCatalogStatus(signal?: AbortSignal) {
   const response = await fetch(`${API_BASE_URL}/operations/country-catalog`, {
     signal,
   });
-  return responseJson<CountryCatalogStatus>(response);
+  return readJsonResponse<CountryCatalogStatus>(response);
 }
 
 export async function requestCountryCatalogUpdate() {
   const response = await fetch(`${API_BASE_URL}/operations/country-catalog/update`, {
     method: 'POST',
   });
-  return responseJson<CountryCatalogStatus>(response);
+  return readJsonResponse<CountryCatalogStatus>(response);
 }
 
 export async function recordOperatorReview(stateVersion: string, rationale: string) {
@@ -57,5 +44,5 @@ export async function recordOperatorReview(stateVersion: string, rationale: stri
       policy_ids: ['human-review-v1'],
     }),
   });
-  return responseJson<OperatorReviewResult>(response);
+  return readJsonResponse<OperatorReviewResult>(response);
 }

@@ -170,10 +170,9 @@ export function useAssistantConversation() {
             ...(report ? { report } : {}),
           },
         ]);
-        try {
-          setConversations(await client.listConversations());
-        } catch {
-          // The completed turn remains visible if a background list refresh fails.
+        const refreshedConversations = await tryLoadConversations(client);
+        if (refreshedConversations) {
+          setConversations(refreshedConversations);
         }
         setStatus('idle');
         return response;
@@ -201,4 +200,14 @@ export function useAssistantConversation() {
     selectConversation,
     deleteConversation,
   };
+}
+
+async function tryLoadConversations(
+  client: AssistantClient,
+): Promise<ConversationSummary[] | undefined> {
+  try {
+    return await client.listConversations();
+  } catch {
+    return undefined;
+  }
 }

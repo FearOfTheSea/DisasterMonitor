@@ -5,6 +5,8 @@ from pathlib import Path
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_ENV_FILE_LOCATIONS = (".env", "apps/api/.env")
+
 
 class Settings(BaseSettings):
     """Configuration required to run the local API."""
@@ -65,9 +67,7 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        # Support both direct API development from apps/api and the documented
-        # repository-root command without requiring callers to change cwd.
-        env_file=(".env", "apps/api/.env"),
+        env_file=_ENV_FILE_LOCATIONS,
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,

@@ -163,4 +163,31 @@ describe('useAssistantConversation', () => {
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.conversations).toEqual([]);
   });
+
+  it('keeps the completed turn when the background conversation refresh fails', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        message: 'Answer from the assistant.',
+        conversation_id: 'conversation-1',
+        model: 'fake-model',
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response('upstream unavailable', { status: 503 }),
+    );
+
+    const { result } = renderHook(() => useAssistantConversation());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await result.current.submit('What happened?');
+    });
+
+    expect(result.current.messages.at(-1)?.content).toBe('Answer from the assistant.');
+    expect(result.current.conversations).toEqual([]);
+    expect(result.current.status).toBe('idle');
+    expect(result.current.error).toBeNull();
+  });
 });

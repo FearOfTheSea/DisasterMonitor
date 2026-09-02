@@ -161,6 +161,21 @@ def validate_plan(
     return plan
 
 
+def validate_follow_up_plan(
+    plan: InvestigationPlan,
+    *,
+    allowed_tools: frozenset[str],
+    prior_tools: frozenset[str],
+) -> InvestigationPlan:
+    return validate_plan(
+        plan,
+        allowed_tools=allowed_tools,
+        prior_tools=prior_tools,
+        allow_followup=True,
+        require_composition=False,
+    )
+
+
 def follow_up_plan(
     option_id: str,
     *,

@@ -169,7 +169,6 @@ def _assessment(
     return EvidenceSufficiencyAssessment(status, ordered_gaps, options)
 
 
-# Short aliases make the policy easy to discover without multiplying concepts.
 SufficiencyState = EvidenceSufficiencyState
 GapCode = EvidenceGapCode
 

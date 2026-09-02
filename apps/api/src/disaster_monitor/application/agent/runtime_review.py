@@ -8,7 +8,10 @@ from disaster_monitor.application.agent.models import (
     EvidenceWorkspace,
     ReviewDecision,
 )
-from disaster_monitor.application.agent.planning import follow_up_plan, validate_plan
+from disaster_monitor.application.agent.planning import (
+    follow_up_plan,
+    validate_follow_up_plan,
+)
 from disaster_monitor.application.agent.sufficiency import (
     EvidenceSufficiencyAssessment,
     EvidenceSufficiencyState,
@@ -133,15 +136,10 @@ class AgentReviewCoordinator:
             return
         try:
             candidate = follow_up_plan(selected_id, replan_number=1)
-            validated = validate_plan(
+            validated = validate_follow_up_plan(
                 candidate,
                 allowed_tools=self._tools.names,
-                # The initial plan already passed the multimodal safety gate;
-                # recovery only reruns the source/evidence stages.
-                requires_multimodal=False,
                 prior_tools=frozenset(step.tool_name for step in state.plan.steps),
-                allow_followup=True,
-                require_composition=False,
             )
         except Exception:
             self._reject_follow_up(state, selected_id)

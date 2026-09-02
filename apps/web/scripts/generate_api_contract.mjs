@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format } from 'prettier';
@@ -213,12 +213,7 @@ const output = await format(unformattedOutput, {
 });
 
 if (check) {
-  let existing = '';
-  try {
-    existing = readFileSync(outputPath, 'utf8');
-  } catch {
-    // The comparison below reports the actionable stale-file message.
-  }
+  const existing = existsSync(outputPath) ? readFileSync(outputPath, 'utf8') : '';
   if (existing !== output) {
     process.stderr.write(
       'Generated assistant API contract is stale. Run npm run generate:api-contract.\n',
