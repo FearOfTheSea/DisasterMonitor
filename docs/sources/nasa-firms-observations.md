@@ -1,37 +1,55 @@
 # NASA FIRMS thermal-anomaly observations
 
 NASA FIRMS is optional, event-associated satellite observation evidence for wildfires.
-It is deliberately not an event-discovery provider. The adapter runs only after a
-wildfire has been selected from EONET or GDACS and only when that event has an exact
-source-backed point. It never creates one event per hotspot.
+It is not an event-discovery provider.
 
-The official FIRMS Area CSV API requires a free `MAP_KEY`. DisasterMonitor queries the
-global `VIIRS_SNPP_NRT` product for a three-day window and a bounding box around the
-selected point. When the 50 km search circle crosses the antimeridian, the adapter
-issues exactly two valid area requests, one on each longitude side. Both successful
-payloads are snapshotted, responses are merged in request order, exact duplicate
-detections are removed, and the distance check is applied after merging. At most 500
-detections are admitted across the complete search. They are aggregated into one
-`possible`-correlation situation record with a preliminary count and observation
-interval. No individual pixel becomes a physical-event identity, perimeter, ignition
-point, or confirmed fact.
+Run the adapter only after EONET or GDACS selects a wildfire with an exact
+source-backed point.
 
-FIRMS provides satellite fire and thermal anomaly pixels, generally within hours of
-overpass. A detection can represent a small intense source or a larger cooler source
-within the sensor pixel, including industrial or other non-wildfire heat sources.
-Polar-orbiting coverage is not continuous; clouds, overpass timing, fire intensity,
-resolution, and processing can produce gaps. Cumulative detections can overstate a
-fire’s area and do not align with official perimeters.
+Never create one event per hotspot.
 
-The MAP key is used only in the bounded request path. It is excluded from canonical
-source URLs, snapshot request identities, diagnostics, and normalized evidence. Source
-links use the public FIRMS map. Payload snapshots use rights identifier
+The official FIRMS Area CSV API requires a free `MAP_KEY`.
+
+DisasterMonitor queries the global `VIIRS_SNPP_NRT` product for three days in a
+bounding box around the selected point.
+
+When the 50 km search circle crosses the antimeridian, issue exactly two valid area
+requests, one on each longitude side.
+
+Snapshot both successful payloads. Merge them in request order. Remove exact duplicate
+detections. Apply the distance check after merging.
+
+Admit at most 500 detections across the complete search.
+
+Aggregate them into one `possible`-correlation situation record with a preliminary
+count and observation interval.
+
+No individual pixel becomes a physical-event identity, perimeter, ignition point, or
+confirmed fact.
+
+FIRMS provides satellite fire and thermal-anomaly pixels, generally within hours of
+overpass.
+
+A detection can represent a small intense source or a larger cooler source within the
+sensor pixel. It can also represent industrial or other non-wildfire heat.
+
+Polar-orbiting coverage is not continuous. Clouds, overpass timing, fire intensity,
+resolution, and processing can produce gaps.
+
+Cumulative detections can overstate fire area. They do not align with official
+perimeters.
+
+Use the MAP key only in the bounded request path. Exclude it from canonical source
+URLs, snapshot request identities, diagnostics, and normalized evidence.
+
+Use the public FIRMS map for source links. Payload snapshots use rights identifier
 `nasa-earth-science-data-use`.
 
 GDACS WF is downstream of JRC GWIS, which uses NASA FIRMS MODIS/VIIRS detections.
-Therefore a GDACS event plus nearby FIRMS pixels is not independent corroboration.
-The observations also do not establish impacts, warnings, evacuations, containment,
-damage, casualties, or response status.
+GDACS plus nearby FIRMS pixels are therefore not independent corroboration.
+
+The observations do not establish impacts, warnings, evacuations, containment, damage,
+casualties, or response status.
 
 Configuration:
 
@@ -39,14 +57,20 @@ Configuration:
 NASA_FIRMS_MAP_KEY=<free FIRMS map key>
 ```
 
-Without the key the provider is registered but unavailable, makes no network request,
-and is disclosed as a configuration gap. Deterministic tests cover configuration,
-secret non-disclosure, bounded geometry, distance filtering, aggregation, possible
-correlation, wrong-disaster exclusion, missing geometry, snapshots, and source policy.
-The 2026-08-24 validation environment had no `NASA_FIRMS_MAP_KEY`, so a live Area API
-behavior check could not be executed without obtaining new external credentials. The
-smallest prerequisite is supplying a free NASA FIRMS map key; the fixture-based HTTP
-integration and configuration/no-request paths are fully validated.
+Without the key, the provider remains registered but unavailable. It makes no network
+request and reports a configuration gap.
+
+The smallest prerequisite is a free NASA FIRMS map key.
+
+Fixture-based HTTP integration and configuration or no-request paths are fully
+validated.
+
+Deterministic tests cover configuration, secret non-disclosure, bounded geometry,
+distance filtering, aggregation, possible correlation, wrong-disaster exclusion,
+missing geometry, snapshots, and source policy.
+
+The 2026-08-24 validation environment had no `NASA_FIRMS_MAP_KEY`. A live Area API
+behavior check therefore could not run without new external credentials.
 
 References checked 2026-08-24:
 
