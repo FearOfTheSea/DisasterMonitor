@@ -2,6 +2,11 @@
 
 DisasterMonitor tests protect behavior, architecture, and research reproducibility.
 
+Tests also protect maintainability. They should let contributors restructure internals
+confidently, localize failures, and understand requirements without depending on
+private call sequences. Fast test authoring is secondary to a stable, expressive test
+boundary.
+
 Use this rule:
 
 `deterministic tests first; live systems supplement them`
@@ -20,6 +25,10 @@ a test first. Confirm a meaningful failure. Implement the smallest complete chan
 - Treat flaky tests as defects. Remove nondeterminism instead of retrying.
 - Keep fixtures local unless they represent a genuinely shared concept.
 - Name tests after the rule or behavior that they protect.
+- Prefer test APIs and fixtures that make ownership explicit and remain stable through
+  internal refactoring.
+- Treat hard-to-test code as design feedback. Improve the dependency seam rather than
+  relying on broader mocks or hidden setup for convenience.
 
 Qwen and live disaster providers validate real integrations. They do not replace
 deterministic automated tests.
@@ -195,8 +204,12 @@ A software change is complete when:
 - important boundary and failure behavior has coverage;
 - tests do not depend on uncontrolled live systems;
 - architecture constraints still pass;
+- changed units remain cohesive, explicitly named, and independently understandable;
+- the change does not duplicate policy, bypass dependency direction, or add known
+  maintainability debt for delivery speed;
 - relevant formatting, linting, type checking, tests, and builds pass; and
 - affected contracts and documentation are updated.
 
 A passing test suite is necessary but not sufficient. Tests should make future changes
-safer and failures easier to understand.
+safer and failures easier to understand. The complete quality decision framework is in
+[software-quality.md](software-quality.md).

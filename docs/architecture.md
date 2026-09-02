@@ -3,6 +3,17 @@
 This document maps the DisasterMonitor codebase. Detailed behavior belongs in the
 subsystem documentation and source code.
 
+## Architectural quality policy
+
+Clean Architecture is a repository invariant. It is not deferred in order to deliver
+faster and it is not weakened to make an implementation more convenient. Among valid
+solutions, prefer the design that makes ownership, dependencies, and future changes
+easiest to understand.
+
+The repository-wide decision order and quality attributes are defined in
+[software-quality.md](software-quality.md). This document defines how those priorities
+map to concrete boundaries.
+
 ## Repository
 
 ```text
@@ -39,6 +50,10 @@ infrastructure adapters --> application contracts --> domain
 ```
 
 Domain contains core concepts. It does not depend on frameworks or infrastructure.
+The stable `domain.disaster` module is an import facade; cohesive implementations live
+in `disaster_types`, `events`, `evidence_types`, `evidence`, `triage`, and
+`incident_watch`. Incident-watch canonical documents are isolated from the aggregate
+models in `incident_watch_documents`.
 
 Application owns use cases and defines the ports that it needs.
 
@@ -47,6 +62,15 @@ Infrastructure implements those ports and communicates with external systems.
 Presentation translates HTTP requests and responses.
 
 The composition boundary wires concrete dependencies.
+
+These layers describe ownership, not folders alone. Put a rule in the layer responsible
+for deciding it, even when another layer already has the required data. Do not duplicate
+business policy at HTTP, persistence, provider, or UI boundaries for convenience.
+
+The composition root is split by responsibility: `composition_models` owns typed
+inputs, `composition_builders` owns focused adapter/service factories, and
+`app_composition` assembles the complete runtime graph. `composition.py` remains a
+stable import facade.
 
 `AppDependencyOverrides` is the typed composition input. The production bootstrap
 can also accept a prebuilt `AppDependencies` container. Legacy individual test
@@ -59,6 +83,11 @@ presentation.
 The side-effect-free HTTP shell in `presentation/http/api.py` registers the same
 router and models as production. It is the only application factory for OpenAPI
 generation. It does not construct infrastructure adapters or runtime resources.
+
+HTTP endpoints are grouped into system, catalog, incident, and assistant routers.
+Request/response schemas and serializers follow the same resource boundaries;
+`routes.py`, `schemas.py`, and `response_serialization.py` are compatibility and
+composition facades only.
 
 The application surface for infrastructure adapters is deliberately narrow:
 
@@ -85,6 +114,24 @@ construct or expose the object graph and process entry points.
 
 Architecture boundaries are enforced by
 `apps/api/tests/unit/test_architecture_dependencies.py`.
+
+## Module design
+
+Modules should be cohesive around one responsibility and one reason to change. Public
+interfaces should be narrow, explicit, and named in the language of the capability they
+serve.
+
+- Keep deterministic policy separate from I/O and orchestration.
+- Keep provider-specific parsing and failure mapping inside the provider boundary.
+- Keep composition limited to constructing and exposing the object graph.
+- Centralize each invariant or mapping; do not copy it between layers.
+- Use stable compatibility facades only for re-exports and composition.
+- Review hand-maintained files above 500 LOC and split files above 700 LOC unless a
+  documented cohesion exception applies.
+
+File size is a diagnostic rather than an objective. A split must create a meaningful
+ownership or dependency seam; excessive fragmentation is no more maintainable than a
+monolith.
 
 ## Frontend
 
@@ -129,3 +176,7 @@ apps/web/tests/
 ```
 
 Tests follow the same architectural boundaries as production code.
+
+Architecture tests are executable design constraints. Change them only when an
+intentional architecture decision updates this document and the software-quality
+policy—not to accommodate a convenient dependency.

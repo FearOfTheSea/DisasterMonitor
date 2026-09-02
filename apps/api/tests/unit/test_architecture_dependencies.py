@@ -13,8 +13,11 @@ MEMORY_STORE = APPLICATION / "ports" / "memory_store.py"
 MAIN = SRC / "main.py"
 
 INFRASTRUCTURE_COMPOSITION_MODULES = {
+    "disaster_monitor.infrastructure.app_composition",
     "disaster_monitor.infrastructure.app_dependencies",
     "disaster_monitor.infrastructure.composition",
+    "disaster_monitor.infrastructure.composition_builders",
+    "disaster_monitor.infrastructure.composition_models",
     "disaster_monitor.infrastructure.operations.runtime",
 }
 INFRASTRUCTURE_COMPOSITION_PREFIXES = (
@@ -74,7 +77,33 @@ def test_domain_imports_only_standard_library() -> None:
         for path in _python_files(DOMAIN)
         for name in _imports(path)
         if name.split(".", 1)[0] not in standard_library
+        and not name.startswith("disaster_monitor.domain.")
     ]
+
+    assert violations == []
+
+
+def test_compatibility_facades_do_not_accumulate_implementations() -> None:
+    facades = (
+        DOMAIN / "disaster.py",
+        APPLICATION / "agent" / "task_normalization.py",
+        INFRASTRUCTURE / "composition.py",
+        INFRASTRUCTURE / "geography" / "country_catalog_updates.py",
+        PRESENTATION / "http" / "routes.py",
+        PRESENTATION / "http" / "schemas.py",
+    )
+    violations = []
+    for path in facades:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        implementations = [
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        if implementations:
+            violations.append(
+                f"{path.relative_to(SRC)} defines {', '.join(implementations)}"
+            )
 
     assert violations == []
 
@@ -159,7 +188,7 @@ def test_concrete_adapters_are_constructed_only_in_composition_modules() -> None
             and (node.name.endswith("Adapter") or node.name.startswith("Composite"))
         )
 
-    allowed_modules = {"disaster_monitor.infrastructure.composition"}
+    allowed_modules = INFRASTRUCTURE_COMPOSITION_MODULES
     violations = []
     for path in _python_files(SRC):
         module = _module_name(path)
