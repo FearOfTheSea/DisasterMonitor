@@ -338,6 +338,25 @@ const apiSchemas = {
           },
         ],
       },
+      operator_actions: {
+        items: {
+          oneOf: [
+            {
+              $ref: '#/components/schemas/OpenPanelOperatorActionResponse',
+            },
+            {
+              $ref: '#/components/schemas/SetTimeWindowOperatorActionResponse',
+            },
+            {
+              $ref: '#/components/schemas/ShowLayerOperatorActionResponse',
+            },
+            {
+              $ref: '#/components/schemas/CreateIncidentWatchOperatorActionResponse',
+            },
+          ],
+        },
+        type: 'array',
+      },
       partial: {
         type: 'boolean',
       },
@@ -505,6 +524,47 @@ const apiSchemas = {
       },
     },
     required: ['conversation_id', 'created_at', 'updated_at', 'preview'],
+    type: 'object',
+  },
+  CreateIncidentWatchOperatorActionResponse: {
+    additionalProperties: false,
+    properties: {
+      action_id: {
+        type: 'string',
+      },
+      action_type: {
+        const: 'create_incident_watch',
+        type: 'string',
+      },
+      disaster: {
+        $ref: '#/components/schemas/Disaster',
+      },
+      label: {
+        maxLength: 200,
+        minLength: 1,
+        type: 'string',
+      },
+      refresh_interval_seconds: {
+        enum: [900, 1800, 3600, 21600, 86400],
+        type: 'integer',
+      },
+      risk: {
+        const: 'confirmation_required',
+        type: 'string',
+      },
+      scope: {
+        $ref: '#/components/schemas/OperatorActionScopeResponse',
+      },
+    },
+    required: [
+      'action_id',
+      'action_type',
+      'risk',
+      'disaster',
+      'scope',
+      'refresh_interval_seconds',
+      'label',
+    ],
     type: 'object',
   },
   CycloneMapCoordinateResponse: {
@@ -1669,6 +1729,80 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  OpenPanelOperatorActionResponse: {
+    additionalProperties: false,
+    properties: {
+      action_id: {
+        type: 'string',
+      },
+      action_type: {
+        const: 'open_panel',
+        type: 'string',
+      },
+      label: {
+        maxLength: 160,
+        minLength: 1,
+        type: 'string',
+      },
+      operation: {
+        const: 'open',
+        type: 'string',
+      },
+      risk: {
+        const: 'automatic',
+        type: 'string',
+      },
+      target: {
+        const: 'panel',
+        type: 'string',
+      },
+      value: {
+        enum: ['findings', 'sources', 'watches', 'operations'],
+        type: 'string',
+      },
+    },
+    required: [
+      'action_id',
+      'action_type',
+      'risk',
+      'operation',
+      'target',
+      'value',
+      'label',
+    ],
+    type: 'object',
+  },
+  OperatorActionScopeResponse: {
+    additionalProperties: false,
+    properties: {
+      country_code: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      country_name: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      kind: {
+        enum: ['country', 'worldwide'],
+        type: 'string',
+      },
+    },
+    required: ['kind'],
+    type: 'object',
+  },
   PointGeometryResponse: {
     properties: {
       coordinates: {
@@ -1798,6 +1932,99 @@ const apiSchemas = {
       'event_time',
       'source',
       'geography_status',
+    ],
+    type: 'object',
+  },
+  SetTimeWindowOperatorActionResponse: {
+    additionalProperties: false,
+    properties: {
+      action_id: {
+        type: 'string',
+      },
+      action_type: {
+        const: 'set_time_window',
+        type: 'string',
+      },
+      label: {
+        maxLength: 160,
+        minLength: 1,
+        type: 'string',
+      },
+      operation: {
+        const: 'set',
+        type: 'string',
+      },
+      risk: {
+        const: 'automatic',
+        type: 'string',
+      },
+      target: {
+        const: 'time_window',
+        type: 'string',
+      },
+      value: {
+        enum: ['1h', '6h', '24h', '48h', '7d'],
+        type: 'string',
+      },
+    },
+    required: [
+      'action_id',
+      'action_type',
+      'risk',
+      'operation',
+      'target',
+      'value',
+      'label',
+    ],
+    type: 'object',
+  },
+  ShowLayerOperatorActionResponse: {
+    additionalProperties: false,
+    properties: {
+      action_id: {
+        type: 'string',
+      },
+      action_type: {
+        const: 'show_layer',
+        type: 'string',
+      },
+      label: {
+        maxLength: 160,
+        minLength: 1,
+        type: 'string',
+      },
+      operation: {
+        const: 'show',
+        type: 'string',
+      },
+      risk: {
+        const: 'automatic',
+        type: 'string',
+      },
+      target: {
+        const: 'map_layer',
+        type: 'string',
+      },
+      value: {
+        enum: [
+          'active-incidents',
+          'satellite-imagery',
+          'cop-evidence',
+          'cyclone-supplemental',
+          'authoritative-weather-alerts',
+          'compound-correlations',
+        ],
+        type: 'string',
+      },
+    },
+    required: [
+      'action_id',
+      'action_type',
+      'risk',
+      'operation',
+      'target',
+      'value',
+      'label',
     ],
     type: 'object',
   },
@@ -2659,6 +2886,12 @@ export type AssistantResponse = {
   message: string;
   model: string;
   multimodal?: MultimodalStateResponse | null;
+  operator_actions?: Array<
+    | OpenPanelOperatorActionResponse
+    | SetTimeWindowOperatorActionResponse
+    | ShowLayerOperatorActionResponse
+    | CreateIncidentWatchOperatorActionResponse
+  >;
   partial?: boolean;
   response_type?: string;
   retrieval_time?: string | null;
@@ -2743,6 +2976,16 @@ export type CountryCatalogUpdateResponse = {
 export type CountryIncidentWatchScopeRequest = {
   country: string;
   kind: 'country';
+};
+
+export type CreateIncidentWatchOperatorActionResponse = {
+  action_id: string;
+  action_type: 'create_incident_watch';
+  disaster: Disaster;
+  label: string;
+  refresh_interval_seconds: 900 | 1800 | 3600 | 21600 | 86400;
+  risk: 'confirmation_required';
+  scope: OperatorActionScopeResponse;
 };
 
 export type CycloneMapCoordinateResponse = {
@@ -3120,6 +3363,16 @@ export type MultimodalStateResponse = {
   state_version: string;
 };
 
+export type OpenPanelOperatorActionResponse = {
+  action_id: string;
+  action_type: 'open_panel';
+  label: string;
+  operation: 'open';
+  risk: 'automatic';
+  target: 'panel';
+  value: 'findings' | 'sources' | 'watches' | 'operations';
+};
+
 export type OperatorActionRequest = {
   decision: OperatorDecision;
   evidence_ids?: Array<string>;
@@ -3135,6 +3388,12 @@ export type OperatorActionResponse = {
   operator_id: string;
   reviewed_at: string;
   state_version: string;
+};
+
+export type OperatorActionScopeResponse = {
+  country_code?: string | null;
+  country_name?: string | null;
+  kind: 'country' | 'worldwide';
 };
 
 export type OperatorDecision = 'reviewed' | 'approved_bounded' | 'rejected';
@@ -3205,6 +3464,32 @@ export type SelectedEventResponse = {
   provider_ids?: Array<string>;
   source: SourceResponse;
   supplemental_geometry?: Array<CycloneMapLayerResponse>;
+};
+
+export type SetTimeWindowOperatorActionResponse = {
+  action_id: string;
+  action_type: 'set_time_window';
+  label: string;
+  operation: 'set';
+  risk: 'automatic';
+  target: 'time_window';
+  value: '1h' | '6h' | '24h' | '48h' | '7d';
+};
+
+export type ShowLayerOperatorActionResponse = {
+  action_id: string;
+  action_type: 'show_layer';
+  label: string;
+  operation: 'show';
+  risk: 'automatic';
+  target: 'map_layer';
+  value:
+    | 'active-incidents'
+    | 'satellite-imagery'
+    | 'cop-evidence'
+    | 'cyclone-supplemental'
+    | 'authoritative-weather-alerts'
+    | 'compound-correlations';
 };
 
 export type SourceAuthority =

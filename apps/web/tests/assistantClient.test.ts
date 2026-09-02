@@ -147,6 +147,86 @@ describe('AssistantClient', () => {
     });
   });
 
+  it('accepts only semantically consistent typed operator actions', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Operator actions ready.',
+          conversation_id: 'session-actions',
+          model: 'source-backed-agent',
+          operator_actions: [
+            {
+              action_id: 'time:24h',
+              action_type: 'set_time_window',
+              risk: 'automatic',
+              operation: 'set',
+              target: 'time_window',
+              value: '24h',
+              label: 'Show a 24-hour display window',
+            },
+            {
+              action_id: 'create-watch:900',
+              action_type: 'create_incident_watch',
+              risk: 'confirmation_required',
+              disaster: 'earthquake',
+              scope: {
+                kind: 'country',
+                country_code: 'JPN',
+                country_name: 'Japan',
+              },
+              refresh_interval_seconds: 900,
+              label: 'Create a 15-minute earthquake watch for Japan',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    await expect(
+      client.ask('Show the last day and watch Japan.', null, {
+        centerLatitude: 0,
+        centerLongitude: 0,
+        zoom: 2,
+      }),
+    ).resolves.toMatchObject({
+      operator_actions: [
+        { action_type: 'set_time_window', value: '24h' },
+        { action_type: 'create_incident_watch', refresh_interval_seconds: 900 },
+      ],
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          message: 'Unsafe operator action.',
+          conversation_id: 'session-actions',
+          model: 'source-backed-agent',
+          operator_actions: [
+            {
+              action_id: 'open:watches',
+              action_type: 'open_panel',
+              risk: 'automatic',
+              operation: 'open',
+              target: 'panel',
+              value: 'operations',
+              label: 'Open Evidence Operations',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    await expect(
+      client.ask('Open it.', null, {
+        centerLatitude: 0,
+        centerLongitude: 0,
+        zoom: 2,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+  });
+
   it('rejects arbitrary or malformed assistant UI actions', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

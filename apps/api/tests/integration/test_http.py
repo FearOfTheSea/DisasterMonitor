@@ -367,6 +367,7 @@ async def test_readiness_and_assistant_use_injected_fake_model() -> None:
         "message": "The fake model can answer locally.",
         "conversation_id": response.json()["conversation_id"],
         "model": "fake-qwen",
+        "operator_actions": [],
     }
     assert "What is this map for?" in model.requests[0].messages[1].content
 
@@ -452,6 +453,7 @@ async def test_general_map_command_executes_the_agent_country_tool() -> None:
             "label": "Japan",
             "max_zoom": 10.0,
         },
+        "operator_actions": [],
     }
     assert [tool.name for tool in model.requests[0].tools] == ["fit_country"]
 
@@ -1116,6 +1118,7 @@ async def test_general_disaster_knowledge_delegates_without_live_source_claim() 
         "message": "Earthquakes result from fault movement.",
         "conversation_id": response.json()["conversation_id"],
         "model": "fake-qwen",
+        "operator_actions": [],
     }
     assert len(model.requests) == 1
 

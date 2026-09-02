@@ -2,10 +2,15 @@
 
 import base64
 import binascii
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
+from disaster_monitor.application.agent.operator_actions import (
+    IncidentWatchOperatorAction,
+    OperatorAction,
+    OperatorActionType,
+)
 from disaster_monitor.application.assistant_message_payload import (
     assistant_answer_from_payload,
 )
@@ -77,6 +82,7 @@ from disaster_monitor.presentation.http.multimodal_serialization import (
 from disaster_monitor.presentation.http.schemas import (
     ActiveIncidentResponse,
     ActiveIncidentsSnapshotResponse,
+    AssistantOperatorActionResponse,
     AssistantRequest,
     AssistantResponse,
     CompoundHazardCorrelationResponse,
@@ -85,6 +91,7 @@ from disaster_monitor.presentation.http.schemas import (
     ConversationSummaryResponse,
     CountryCatalogSourceResponse,
     CountryCatalogUpdateResponse,
+    CreateIncidentWatchOperatorActionResponse,
     CycloneMapCoordinateResponse,
     CycloneMapLayerResponse,
     DecisionEstimateResponse,
@@ -108,14 +115,18 @@ from disaster_monitor.presentation.http.schemas import (
     IncidentWatchScopeResponse,
     InvestigationResponse,
     MapNavigationActionResponse,
+    OpenPanelOperatorActionResponse,
     OperatorActionRequest,
     OperatorActionResponse,
+    OperatorActionScopeResponse,
     ProviderFreshnessResponse,
     ReadinessResponse,
     ReportSectionResponse,
     SatelliteImageryCatalogResponse,
     SatelliteImageryProductResponse,
     SelectedEventResponse,
+    SetTimeWindowOperatorActionResponse,
+    ShowLayerOperatorActionResponse,
     SourceCatalogItemResponse,
     SourceCatalogResponse,
     SourceOperationalStateResponse,
@@ -1080,11 +1091,13 @@ def _assistant_response(
                 conversation_id=result.conversation_id,
                 model=result.model,
                 map_action=map_action,
+                operator_actions=_operator_actions_response(result.operator_actions),
             )
         return AssistantResponse(
             message=result.message,
             conversation_id=result.conversation_id,
             model=result.model,
+            operator_actions=_operator_actions_response(result.operator_actions),
         )
     selected_event = result.selected_event
     return AssistantResponse(
@@ -1092,6 +1105,7 @@ def _assistant_response(
         conversation_id=result.conversation_id,
         model=result.model,
         map_action=_map_action_response(result.map_action),
+        operator_actions=_operator_actions_response(result.operator_actions),
         response_type=result.response_type,
         selected_event=(
             None
@@ -1289,6 +1303,76 @@ def _map_action_response(
         bounds=action.bounds,
         label=action.label,
         max_zoom=action.max_zoom,
+    )
+
+
+def _operator_actions_response(
+    actions: tuple[OperatorAction, ...],
+) -> list[AssistantOperatorActionResponse]:
+    return [_operator_action_response(action) for action in actions]
+
+
+def _operator_action_response(
+    action: OperatorAction,
+) -> AssistantOperatorActionResponse:
+    if isinstance(action, IncidentWatchOperatorAction):
+        return CreateIncidentWatchOperatorActionResponse(
+            action_id=action.action_id,
+            action_type="create_incident_watch",
+            risk="confirmation_required",
+            disaster=action.disaster,
+            scope=OperatorActionScopeResponse(
+                kind=action.scope.kind.value,
+                country_code=action.scope.country_code,
+                country_name=action.scope.country_name,
+            ),
+            refresh_interval_seconds=cast(
+                Literal[900, 1800, 3600, 21600, 86400],
+                action.refresh_interval_seconds,
+            ),
+            label=action.user_safe_label,
+        )
+    if action.action_type is OperatorActionType.OPEN_PANEL:
+        return OpenPanelOperatorActionResponse(
+            action_id=action.action_id,
+            action_type="open_panel",
+            risk="automatic",
+            operation="open",
+            target="panel",
+            value=cast(
+                Literal["findings", "sources", "watches", "operations"],
+                action.value,
+            ),
+            label=action.user_safe_label,
+        )
+    if action.action_type is OperatorActionType.SET_TIME_WINDOW:
+        return SetTimeWindowOperatorActionResponse(
+            action_id=action.action_id,
+            action_type="set_time_window",
+            risk="automatic",
+            operation="set",
+            target="time_window",
+            value=cast(Literal["1h", "6h", "24h", "48h", "7d"], action.value),
+            label=action.user_safe_label,
+        )
+    return ShowLayerOperatorActionResponse(
+        action_id=action.action_id,
+        action_type="show_layer",
+        risk="automatic",
+        operation="show",
+        target="map_layer",
+        value=cast(
+            Literal[
+                "active-incidents",
+                "satellite-imagery",
+                "cop-evidence",
+                "cyclone-supplemental",
+                "authoritative-weather-alerts",
+                "compound-correlations",
+            ],
+            action.value,
+        ),
+        label=action.user_safe_label,
     )
 
 

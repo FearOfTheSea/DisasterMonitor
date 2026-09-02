@@ -4,6 +4,14 @@ import httpx
 import pytest
 from conftest import FakeLanguageModel
 
+from disaster_monitor.application.agent.operator_actions import (
+    AutomaticOperatorAction,
+    IncidentWatchOperatorAction,
+    OperatorActionOperation,
+    OperatorActionRisk,
+    OperatorActionTarget,
+    OperatorActionType,
+)
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
 from disaster_monitor.application.media import (
     DisasterMediaGallery,
@@ -22,6 +30,7 @@ from disaster_monitor.domain.conversation import (
     ConversationMessage,
     ConversationRole,
 )
+from disaster_monitor.domain.disaster import Disaster, IncidentWatchScope
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.conversations.memory_repository import (
     InMemoryConversationRepository,
@@ -33,6 +42,88 @@ from disaster_monitor.main import create_app
 from disaster_monitor.presentation.http.routes import get_conversation_turn
 
 NOW = datetime(2026, 8, 21, 10, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_assistant_http_exposes_and_persists_typed_operator_actions() -> None:
+    repository = InMemoryConversationRepository()
+
+    class Assistant:
+        async def execute(self, question: str, *, conversation_id: str, **kwargs):
+            return AssistantAnswer(
+                message="Operator action proposal.",
+                conversation_id=conversation_id,
+                model="fixture-agent",
+                operator_actions=(
+                    AutomaticOperatorAction(
+                        action_id="open:watches",
+                        action_type=OperatorActionType.OPEN_PANEL,
+                        risk=OperatorActionRisk.AUTOMATIC,
+                        operation=OperatorActionOperation.OPEN,
+                        target=OperatorActionTarget.PANEL,
+                        value="watches",
+                        user_safe_label="Open Incident Watches",
+                    ),
+                    IncidentWatchOperatorAction(
+                        action_id="create-watch:900",
+                        action_type=OperatorActionType.CREATE_INCIDENT_WATCH,
+                        risk=OperatorActionRisk.CONFIRMATION_REQUIRED,
+                        disaster=Disaster.EARTHQUAKE,
+                        scope=IncidentWatchScope.country("JPN", "Japan"),
+                        refresh_interval_seconds=900,
+                        user_safe_label=(
+                            "Create a 15-minute earthquake watch for Japan"
+                        ),
+                    ),
+                ),
+            )
+
+    app = create_app(
+        model=FakeLanguageModel(),
+        conversation_repository=repository,
+    )
+    app.dependency_overrides[get_conversation_turn] = lambda: RunConversationTurn(
+        Assistant(), repository
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        created = await client.post(
+            "/api/v1/assistant", json={"question": "Open watches"}
+        )
+        conversation_id = created.json()["conversation_id"]
+        loaded = await client.get(f"/api/v1/conversations/{conversation_id}")
+
+    assert created.status_code == 200
+    assert created.json()["operator_actions"] == [
+        {
+            "action_id": "open:watches",
+            "action_type": "open_panel",
+            "risk": "automatic",
+            "operation": "open",
+            "target": "panel",
+            "value": "watches",
+            "label": "Open Incident Watches",
+        },
+        {
+            "action_id": "create-watch:900",
+            "action_type": "create_incident_watch",
+            "risk": "confirmation_required",
+            "disaster": "earthquake",
+            "scope": {
+                "kind": "country",
+                "country_code": "JPN",
+                "country_name": "Japan",
+            },
+            "refresh_interval_seconds": 900,
+            "label": "Create a 15-minute earthquake watch for Japan",
+        },
+    ]
+    assert (
+        loaded.json()["messages"][1]["assistant_response"]["operator_actions"]
+        == (created.json()["operator_actions"])
+    )
 
 
 @pytest.mark.asyncio

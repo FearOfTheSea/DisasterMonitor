@@ -145,6 +145,7 @@ class DisasterTaskDraft:
     requested_response_language: str | None = None
     response_language_explicit: bool = False
     worldwide_selection: str | None = None
+    operator_action_ids: tuple[str, ...] = ()
     canonical: bool = False
 
     def __post_init__(self) -> None:
@@ -157,6 +158,7 @@ class DisasterTaskDraft:
             or self.date_from is not None
             or self.date_to is not None
             or self.requested_response_language is not None
+            or self.operator_action_ids
         ):
             object.__setattr__(self, "canonical", True)
 
@@ -181,6 +183,7 @@ class ValidatedDisasterTask:
     worldwide_query: WorldwideDisasterQuery | None = None
     response_language: str | None = None
     response_language_explicit: bool = False
+    operator_action_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

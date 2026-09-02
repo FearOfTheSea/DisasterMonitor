@@ -44,6 +44,13 @@ Incident Watch v1 is implemented and automatically tested for deterministic chan
 classification, idempotency, queue retry, in-memory and PostgreSQL persistence, HTTP
 contracts, and in-app timeline behavior.
 
+Operator Agent v1 adds bounded, typed assistant proposals for opening existing
+panels, changing the display window, showing existing map layers, and requesting a
+confirmed Incident Watch. Automatic UI actions remain reversible presentation
+changes; watch creation remains confirmation-required and uses the existing bounded
+watch policy. The agent cannot invent providers, URLs, layers, scopes, or watch
+intervals.
+
 These tests demonstrate the bounded local mechanism. They do not demonstrate provider
 completeness, timely global detection, alert usefulness, or operational response
 outcomes.

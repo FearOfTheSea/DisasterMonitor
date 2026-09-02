@@ -13,7 +13,8 @@ from disaster_monitor.application.dto import AssistantAnswer
 from disaster_monitor.domain.conversation import AssistantMessagePayload, JsonValue
 from disaster_monitor.domain.disaster import Disaster
 
-ASSISTANT_ANSWER_SCHEMA_VERSION = "assistant-answer.v1"
+ASSISTANT_ANSWER_SCHEMA_VERSION = "assistant-answer.v2"
+LEGACY_ASSISTANT_ANSWER_SCHEMA_VERSION = "assistant-answer.v1"
 
 
 def assistant_message_payload(answer: AssistantAnswer) -> AssistantMessagePayload:
@@ -28,10 +29,16 @@ def assistant_answer_from_payload(
     payload: AssistantMessagePayload | None,
 ) -> AssistantAnswer | None:
     """Decode a recognized payload; unknown or invalid versions remain text-only."""
-    if payload is None or payload.schema_version != ASSISTANT_ANSWER_SCHEMA_VERSION:
+    if payload is None or payload.schema_version not in {
+        ASSISTANT_ANSWER_SCHEMA_VERSION,
+        LEGACY_ASSISTANT_ANSWER_SCHEMA_VERSION,
+    }:
         return None
     try:
-        decoded = _decode(AssistantAnswer, payload.data)
+        data = dict(payload.data)
+        if payload.schema_version == LEGACY_ASSISTANT_ANSWER_SCHEMA_VERSION:
+            data.setdefault("operator_actions", [])
+        decoded = _decode(AssistantAnswer, data)
     except (KeyError, TypeError, ValueError):
         return None
     return decoded if isinstance(decoded, AssistantAnswer) else None

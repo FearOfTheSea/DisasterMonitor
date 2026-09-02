@@ -16,6 +16,10 @@ from disaster_monitor.application.agent.models import (
     AgentStatus,
     TaskKind,
 )
+from disaster_monitor.application.agent.operator_actions import (
+    OperatorAction,
+    resolve_operator_actions,
+)
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.disaster import (
     DisasterReport,
@@ -110,6 +114,7 @@ class RunDisasterAgent:
                 map_view,
                 conversation_history,
                 response_language=state.task.response_language,
+                operator_actions=resolve_operator_actions(state.task),
             )
         report = state.workspace.report
         if report is None:
@@ -135,6 +140,7 @@ class RunDisasterAgent:
                 warnings=tuple(state.warnings),
                 partial=True,
                 investigation=_summary(state),
+                operator_actions=resolve_operator_actions(state.task),
             )
         report = await self._localize_grounded_report(
             report, state.task.response_language
@@ -173,6 +179,7 @@ class RunDisasterAgent:
             multimodal_state=state.workspace.multimodal_state,
             common_operational_picture=state.workspace.common_operational_picture,
             media_gallery=media_gallery,
+            operator_actions=resolve_operator_actions(state.task),
         )
 
     async def _discover_media(
@@ -305,6 +312,7 @@ class RunDisasterAgent:
         conversation_history: tuple[ConversationMessage, ...],
         *,
         response_language: str | None = None,
+        operator_actions: tuple[OperatorAction, ...] = (),
     ) -> AssistantAnswer:
         request = prepare_model_request(
             MapQuestion(question, conversation, map_view),
@@ -334,6 +342,8 @@ class RunDisasterAgent:
         message = clean_model_text(response.text)
         if not message and map_action is not None:
             message = f"Showing {map_action.label} on the map."
+        if not message and operator_actions:
+            message = "The requested operator actions are ready to apply."
         if not message and response.tool_calls:
             message = "I could not safely apply that map change."
         if not message:
@@ -343,6 +353,7 @@ class RunDisasterAgent:
             _conversation_id(conversation),
             response.model,
             map_action=map_action,
+            operator_actions=operator_actions,
         )
 
 

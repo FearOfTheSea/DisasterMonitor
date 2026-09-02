@@ -18,6 +18,7 @@ import type {
   PersistedConversation,
   PersistedConversationMessage,
 } from '@/shared/types/assistant';
+import { operatorActionsAreConsistent } from '@/features/assistant/model/operatorActions';
 import { isMapNavigationAction } from '@/shared/validation/mapNavigation';
 import {
   copMatchesMultimodalState,
@@ -72,6 +73,7 @@ export function validatedConversation(
 
 function assistantSemanticsAreValid(response: AssistantResponse): boolean {
   if (response.map_action && !isMapNavigationAction(response.map_action)) return false;
+  if (!operatorActionsAreConsistent(response.operator_actions ?? [])) return false;
   if (
     response.selected_event?.geometry &&
     !eventGeometryIsConsistent(response.selected_event.geometry)
@@ -283,6 +285,7 @@ function normalizeAssistantResponse(value: ApiAssistantResponse): AssistantRespo
     media_gallery: value.media_gallery
       ? normalizeMediaGallery(value.media_gallery)
       : value.media_gallery,
+    operator_actions: value.operator_actions ?? [],
   };
 }
 

@@ -39,9 +39,11 @@ class StructuredAgentModel:
         language_model: LanguageModel,
         *,
         owns_language_model: bool = False,
+        operator_action_ids: tuple[str, ...] = (),
     ) -> None:
         self._language_model = language_model
         self._owns_language_model = owns_language_model
+        self._operator_action_ids = operator_action_ids
 
     async def interpret(self, question: str) -> DisasterTaskDraft:
         allowed_needs = ", ".join(item.value for item in InformationNeed)
@@ -51,7 +53,8 @@ class StructuredAgentModel:
             "country_code, country_name, geographic_scope, place_mentions, "
             "current_or_event_specific, date_from, date_to, information_needs, "
             "output_modalities, event_discriminators, requested_response_language, "
-            "response_language_explicit, worldwide_selection, clarification_question. "
+            "response_language_explicit, worldwide_selection, clarification_question, "
+            "operator_action_ids. "
             "task_kind must be non_disaster, general_knowledge, or investigation. "
             "disaster must be one of earthquake, flood, wildfire, landslide, "
             "tropical_cyclone, volcanic_eruption, or null. geographic_scope must be "
@@ -77,6 +80,7 @@ class StructuredAgentModel:
             "All *_question, country_code, country_name, date_from, date_to, and "
             "requested_response_language values are either JSON strings or null; "
             "never arrays or objects. All enum fields are JSON string arrays. "
+            "operator_action_ids is a JSON string array. "
             "For a current earthquake request in Indonesia, the shape includes "
             "task_kind=investigation, disaster=earthquake, country_code=IDN, "
             "geographic_scope=country, current_or_event_specific=true, "
@@ -92,7 +96,14 @@ class StructuredAgentModel:
             "A named country always uses geographic_scope=country; use worldwide only "
             "when the user explicitly asks for worldwide/global coverage. If a named "
             "country cannot be resolved, keep country scope and return a bounded "
-            "country proposal for application catalog validation.\n"
+            "country proposal for application catalog validation. Operator actions "
+            "are exact IDs from this application-declared vocabulary: "
+            f"{', '.join(self._operator_action_ids)}. Select an operator action "
+            "only when the user explicitly requests that UI or action behavior; "
+            "otherwise return an empty array. Never select a persistent watch action "
+            "merely because monitoring might be useful. Select create-watch:* only "
+            "when the user explicitly requests monitoring or watching and specifies "
+            "the corresponding supported interval; do not guess an interval.\n"
             f"User request: {question}"
         )
         payload = await self._json_with_one_repair(prompt, self._parse_draft)
@@ -264,10 +275,20 @@ class StructuredAgentModel:
             "response_language_explicit",
             "worldwide_selection",
             "clarification_question",
+            "operator_action_ids",
+        }
+        canonical_required_without_operator_actions = canonical_required - {
+            "operator_action_ids"
         }
         if set(payload) == legacy_required:
             return _parse_legacy_draft(payload)
-        _exact_keys(payload, canonical_required)
+        if set(payload) == canonical_required_without_operator_actions:
+            operator_action_ids: tuple[str, ...] = ()
+        else:
+            _exact_keys(payload, canonical_required)
+            operator_action_ids = _operator_action_candidates(
+                payload["operator_action_ids"]
+            )
         if not isinstance(payload["current_or_event_specific"], bool):
             raise ValueError("Agent current-intent flag is invalid.")
         if not isinstance(payload["response_language_explicit"], bool):
@@ -304,6 +325,7 @@ class StructuredAgentModel:
             ),
             response_language_explicit=payload["response_language_explicit"],
             worldwide_selection=selection,
+            operator_action_ids=operator_action_ids,
             canonical=True,
         )
 
@@ -465,6 +487,18 @@ def _parse_legacy_draft(payload: dict[str, Any]) -> DisasterTaskDraft:
         ambiguities=_strings(payload["ambiguities"]),
         clarification_question=_optional_text(payload["clarification_question"]),
     )
+
+
+def _operator_action_candidates(value: object) -> tuple[str, ...]:
+    """Keep malformed candidates isolated from otherwise useful task intent."""
+    if not isinstance(value, list) or len(value) > 4:
+        return ()
+    if any(
+        not isinstance(item, str) or not item.strip() or len(item) > 100
+        for item in value
+    ):
+        return ()
+    return tuple(item.strip() for item in value)
 
 
 def _strings(value: object) -> tuple[str, ...]:

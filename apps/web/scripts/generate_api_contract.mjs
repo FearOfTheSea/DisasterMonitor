@@ -106,6 +106,7 @@ const validationKeywords = new Set([
 const annotationKeywords = new Set([
   'default',
   'deprecated',
+  'discriminator',
   'description',
   'example',
   'examples',

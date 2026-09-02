@@ -1,6 +1,7 @@
 """Deterministic safety gating and canonical disaster-task validation."""
 
 import re
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from disaster_monitor.application.agent.models import (
@@ -10,6 +11,9 @@ from disaster_monitor.application.agent.models import (
     TaskKind,
     ValidatedDisasterTask,
     ValidationStatus,
+)
+from disaster_monitor.application.agent.operator_actions import (
+    validate_operator_action_candidates,
 )
 from disaster_monitor.application.disaster import (
     DisasterQuery,
@@ -82,12 +86,23 @@ _WORLDWIDE_MARKERS = re.compile(
 _OBVIOUS_MAP_QUESTION = re.compile(
     r"\b(?:map|map\s+center|zoom|layers?|viewport)\b", re.I
 )
+_EXPLICIT_OPERATOR_UI_REQUEST = re.compile(
+    r"(?:\b(?:open|launch|go\s+to)\s+(?:findings|sources?|source\s+catalog|"
+    r"watches?|operations?)\b|"
+    r"\b(?:show|display|enable|turn\s+on)\b[^?.!]{0,80}\b(?:layer|layers|"
+    r"active\s+incidents?|satellite\s+imagery|cop\s+evidence)\b|"
+    r"\b(?:monitor|watch|keep\s+an\s+eye\s+on)\b|"
+    r"\b(?:1h|6h|24h|48h|7d)\b[^?.!]{0,40}\b(?:time|window|incidents?|map)\b)",
+    re.I,
+)
 
 
 def is_obvious_non_disaster_map_question(question: str) -> bool:
     """Preserve the map-only fast path when no maintained disaster is present."""
-    return bool(_OBVIOUS_MAP_QUESTION.search(question)) and not _disaster_mentions(
-        question
+    return (
+        bool(_OBVIOUS_MAP_QUESTION.search(question))
+        and not _disaster_mentions(question)
+        and not _EXPLICIT_OPERATOR_UI_REQUEST.search(question)
     )
 
 
@@ -148,6 +163,28 @@ def validate_disaster_task(
     query_parser: DisasterQueryParser,
 ) -> ValidatedDisasterTask:
     """Canonicalize only through maintained deterministic application metadata."""
+    task = _validate_disaster_task(
+        question,
+        draft,
+        country_catalog=country_catalog,
+        query_parser=query_parser,
+    )
+    return replace(
+        task,
+        operator_action_ids=validate_operator_action_candidates(
+            draft.operator_action_ids
+        ),
+    )
+
+
+def _validate_disaster_task(
+    question: str,
+    draft: DisasterTaskDraft,
+    *,
+    country_catalog: CountryCatalog,
+    query_parser: DisasterQueryParser,
+) -> ValidatedDisasterTask:
+    """Build a canonical task before attaching safe operator candidates."""
     if draft.canonical:
         return _validate_canonical_task(
             question,

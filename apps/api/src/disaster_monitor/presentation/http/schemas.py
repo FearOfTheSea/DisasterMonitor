@@ -53,6 +53,88 @@ class MapNavigationActionResponse(BaseModel):
     max_zoom: Annotated[float, Field(ge=2, le=18)] = 10
 
 
+class OpenPanelOperatorActionResponse(BaseModel):
+    """One bounded automatic panel-navigation action."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action_id: str
+    action_type: Literal["open_panel"]
+    risk: Literal["automatic"]
+    operation: Literal["open"]
+    target: Literal["panel"]
+    value: Literal["findings", "sources", "watches", "operations"]
+    label: Annotated[str, Field(min_length=1, max_length=160)]
+
+
+class SetTimeWindowOperatorActionResponse(BaseModel):
+    """One bounded automatic display-time action."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action_id: str
+    action_type: Literal["set_time_window"]
+    risk: Literal["automatic"]
+    operation: Literal["set"]
+    target: Literal["time_window"]
+    value: Literal["1h", "6h", "24h", "48h", "7d"]
+    label: Annotated[str, Field(min_length=1, max_length=160)]
+
+
+class ShowLayerOperatorActionResponse(BaseModel):
+    """One bounded automatic map-layer visibility action."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action_id: str
+    action_type: Literal["show_layer"]
+    risk: Literal["automatic"]
+    operation: Literal["show"]
+    target: Literal["map_layer"]
+    value: Literal[
+        "active-incidents",
+        "satellite-imagery",
+        "cop-evidence",
+        "cyclone-supplemental",
+        "authoritative-weather-alerts",
+        "compound-correlations",
+    ]
+    label: Annotated[str, Field(min_length=1, max_length=160)]
+
+
+class OperatorActionScopeResponse(BaseModel):
+    """Canonical scope resolved by application policy for a watch proposal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["country", "worldwide"]
+    country_code: str | None = None
+    country_name: str | None = None
+
+
+class CreateIncidentWatchOperatorActionResponse(BaseModel):
+    """One persistent Incident Watch proposal awaiting explicit confirmation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action_id: str
+    action_type: Literal["create_incident_watch"]
+    risk: Literal["confirmation_required"]
+    disaster: Disaster
+    scope: OperatorActionScopeResponse
+    refresh_interval_seconds: Literal[900, 1800, 3600, 21600, 86400]
+    label: Annotated[str, Field(min_length=1, max_length=200)]
+
+
+AssistantOperatorActionResponse = Annotated[
+    OpenPanelOperatorActionResponse
+    | SetTimeWindowOperatorActionResponse
+    | ShowLayerOperatorActionResponse
+    | CreateIncidentWatchOperatorActionResponse,
+    Field(discriminator="action_type"),
+]
+
+
 class AssistantResponse(BaseModel):
     """Stable assistant response returned to the frontend."""
 
@@ -72,6 +154,9 @@ class AssistantResponse(BaseModel):
     multimodal: MultimodalStateResponse | None = None
     common_operational_picture: CommonOperationalPictureResponse | None = None
     media_gallery: "DisasterMediaGalleryResponse | None" = None
+    operator_actions: list[AssistantOperatorActionResponse] = Field(
+        default_factory=list
+    )
 
 
 class ConversationMessageResponse(BaseModel):

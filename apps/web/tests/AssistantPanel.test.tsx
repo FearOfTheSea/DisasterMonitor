@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -70,6 +70,159 @@ describe('AssistantPanel', () => {
 
     expect(onSubmit).toHaveBeenCalledWith('What does this map show?');
     expect(screen.getByText('Ready.')).toBeInTheDocument();
+  });
+
+  it('shows the exact watch proposal and waits for explicit confirmation', async () => {
+    const user = userEvent.setup();
+    let releaseList!: (response: Response) => void;
+    const pendingList = new Promise<Response>((resolve) => {
+      releaseList = resolve;
+    });
+    let releaseCreate!: (response: Response) => void;
+    const pendingCreate = new Promise<Response>((resolve) => {
+      releaseCreate = resolve;
+    });
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((_input, init) => {
+        return init?.method === 'POST' ? pendingCreate : pendingList;
+      });
+
+    render(
+      <AssistantPanel
+        messages={[
+          {
+            id: 'watch-proposal',
+            role: 'assistant',
+            content: 'I can prepare that monitoring request.',
+            operatorActions: [
+              {
+                action_id: 'create-watch:900',
+                action_type: 'create_incident_watch',
+                risk: 'confirmation_required',
+                disaster: 'earthquake',
+                scope: {
+                  kind: 'country',
+                  country_code: 'JPN',
+                  country_name: 'Japan',
+                },
+                refresh_interval_seconds: 900,
+                label: 'Create a 15-minute earthquake watch for Japan',
+              },
+            ],
+          },
+        ]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('This creates persistent bounded monitoring.'),
+    ).toBeVisible();
+    const card = screen.getByRole('article', { name: 'Incident Watch confirmation' });
+    expect(card).toHaveTextContent('Japan');
+    expect(card).toHaveTextContent('JPN');
+    const confirm = screen.getByRole('button', {
+      name: 'Confirm and create Incident Watch',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(confirm);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(confirm).toBeDisabled();
+    releaseList(
+      new Response('[]', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('POST');
+    expect(fetchMock.mock.calls[1][1]?.body).toContain('"country":"Japan"');
+
+    releaseCreate(
+      new Response(
+        JSON.stringify({
+          watch_id: 'incident-watch:1',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Incident Watch created' }),
+      ).toBeDisabled(),
+    );
+    fetchMock.mockRestore();
+  });
+
+  it('does not create an exact existing watch and opens operations', async () => {
+    const user = userEvent.setup();
+    const onWatchReady = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            disaster: 'earthquake',
+            scope: {
+              kind: 'country',
+              country_code: 'JPN',
+              country_name: 'Japan',
+            },
+            refresh_interval_seconds: 900,
+          },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    render(
+      <AssistantPanel
+        messages={[
+          {
+            id: 'existing-watch-proposal',
+            role: 'assistant',
+            content: 'That watch already exists.',
+            operatorActions: [
+              {
+                action_id: 'create-watch:900',
+                action_type: 'create_incident_watch',
+                risk: 'confirmation_required',
+                disaster: 'earthquake',
+                scope: {
+                  kind: 'country',
+                  country_code: 'JPN',
+                  country_name: 'Japan',
+                },
+                refresh_interval_seconds: 900,
+                label: 'Create a 15-minute earthquake watch for Japan',
+              },
+            ],
+          },
+        ]}
+        status="idle"
+        error={null}
+        onSubmit={vi.fn()}
+        onClear={vi.fn()}
+        onWatchReady={onWatchReady}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Confirm and create Incident Watch' }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Incident Watch created' }),
+      ).toBeDisabled(),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1]?.method).toBeUndefined();
+    expect(onWatchReady).toHaveBeenCalledTimes(1);
+    fetchMock.mockRestore();
   });
 
   it('shows loading and error states', () => {

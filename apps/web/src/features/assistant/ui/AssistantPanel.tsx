@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 
+import { OperatorActionCard } from '@/features/assistant/ui/OperatorActionCard';
 import type {
   AssistantReport,
   CommonOperationalPicture,
@@ -26,6 +27,7 @@ type AssistantPanelProps = {
   onNewConversation?: () => void;
   onSelectConversation?: (conversationId: string | null) => void | Promise<void>;
   onDeleteConversation?: (conversationId: string) => void | Promise<void>;
+  onWatchReady?: () => void;
 };
 
 function formatTime(value: string | null | undefined) {
@@ -465,6 +467,7 @@ export function AssistantPanel({
   onNewConversation,
   onSelectConversation,
   onDeleteConversation,
+  onWatchReady,
 }: AssistantPanelProps) {
   const [question, setQuestion] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -554,6 +557,15 @@ export function AssistantPanel({
                 <DisasterReportView report={message.report} message={message.content} />
               ) : (
                 message.content
+              )}
+              {message.operatorActions?.map((action) =>
+                action.action_type === 'create_incident_watch' ? (
+                  <OperatorActionCard
+                    key={`${message.id}:${action.action_id}`}
+                    action={action}
+                    onWatchReady={onWatchReady}
+                  />
+                ) : null,
               )}
             </div>
           ))

@@ -174,8 +174,16 @@ try {
     response.url().endsWith('/api/v1/assistant'),
   );
   await page.getByRole('button', { name: 'Ask assistant' }).click();
-  if (!(await mapActionResponse).ok()) {
+  const mapAction = await mapActionResponse;
+  if (!mapAction.ok()) {
     throw new Error('The agent map-tool request failed.');
+  }
+  const mapActionPayload = await mapAction.json();
+  if (
+    !Array.isArray(mapActionPayload.operator_actions) ||
+    mapActionPayload.operator_actions.length !== 0
+  ) {
+    throw new Error('A request without an operator action produced a proposal.');
   }
   await page
     .locator('.message-assistant')
@@ -220,9 +228,75 @@ try {
     .getByText(/Fatalities: 2/)
     .first()
     .waitFor();
+  await page.getByRole('button', { name: 'New conversation' }).click();
+  await page
+    .getByLabel('Question')
+    .fill(
+      'Show me the latest flood in Japan, show the last 24 hours, and monitor floods there every hour.',
+    );
+  const floodActionResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/assistant') &&
+      response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Ask assistant' }).click();
+  if (!(await floodActionResponse).ok()) {
+    throw new Error('The Operator Agent flood scenario failed.');
+  }
+  await page.getByText('Hokkaido flood fixture', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Situation summary' }).waitFor();
+  if (!(await page.getByRole('radio', { name: '24h' }).isChecked())) {
+    throw new Error('The Operator Agent did not apply the 24-hour display window.');
+  }
+  await page
+    .getByText('This creates persistent bounded monitoring.', { exact: true })
+    .waitFor();
+  const watchesBeforeConfirmation = await page.request.get(
+    'http://127.0.0.1:8787/api/v1/incident-watches',
+  );
+  if (!watchesBeforeConfirmation.ok()) {
+    throw new Error('The pre-confirmation Incident Watch lookup failed.');
+  }
+  const watchesBefore = await watchesBeforeConfirmation.json();
+  const matchingWatchesBefore = watchesBefore.filter(
+    (watch) =>
+      watch.disaster === 'flood' &&
+      watch.scope.kind === 'country' &&
+      watch.scope.country_code === 'JPN' &&
+      watch.refresh_interval_seconds === 3600,
+  );
+  if (matchingWatchesBefore.length !== 0) {
+    throw new Error('The Operator Agent created the flood watch before confirmation.');
+  }
+  const confirmWatchResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/incident-watches') &&
+      response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Confirm and create Incident Watch' }).click();
+  if (!(await confirmWatchResponse).ok()) {
+    throw new Error('The confirmed Operator Agent Incident Watch failed.');
+  }
+  await page.getByRole('heading', { name: 'Incident watches' }).waitFor();
+  const watchesAfterConfirmationResponse = await page.request.get(
+    'http://127.0.0.1:8787/api/v1/incident-watches',
+  );
+  const watchesAfterConfirmation = await watchesAfterConfirmationResponse.json();
+  const matchingWatches = watchesAfterConfirmation.filter(
+    (watch) =>
+      watch.disaster === 'flood' &&
+      watch.scope.kind === 'country' &&
+      watch.scope.country_code === 'JPN' &&
+      watch.refresh_interval_seconds === 3600,
+  );
+  if (matchingWatches.length !== 1) {
+    throw new Error(
+      'The Operator Agent did not create exactly one bounded flood watch.',
+    );
+  }
   await browser.close();
   console.log(
-    'System test passed: all six Active Incidents hazards focused their own geometry, a scheduled Incident Watch refresh produced a visible source-backed timeline alert, and the existing assistant workflow rendered.',
+    'System test passed: all six Active Incidents hazards focused their own geometry, a scheduled Incident Watch refresh produced a visible source-backed timeline alert, the existing assistant workflow rendered, and Operator Agent v1 applied a 24-hour window while confirmation-gating one flood watch.',
   );
 } finally {
   stopStack();

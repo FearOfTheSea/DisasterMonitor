@@ -8,6 +8,7 @@ import {
 } from '@/features/assistant/api/assistantClient';
 import { DEFAULT_MAP_VIEW, API_BASE_URL } from '@/shared/config/runtime';
 import type {
+  AssistantResponse,
   ConversationMessage,
   ConversationSummary,
   ConversationStatus,
@@ -89,6 +90,9 @@ export function useAssistantConversation() {
               ...(assistant_response?.map_action
                 ? { mapAction: assistant_response.map_action }
                 : {}),
+              ...(assistant_response?.operator_actions?.length
+                ? { operatorActions: assistant_response.operator_actions }
+                : {}),
               ...(report ? { report } : {}),
             };
           }),
@@ -131,10 +135,13 @@ export function useAssistantConversation() {
   );
 
   const submit = useCallback(
-    async (question: string, mapView: MapView = DEFAULT_MAP_VIEW) => {
+    async (
+      question: string,
+      mapView: MapView = DEFAULT_MAP_VIEW,
+    ): Promise<AssistantResponse | undefined> => {
       const normalizedQuestion = question.trim();
       if (!normalizedQuestion || status === 'loading') {
-        return;
+        return undefined;
       }
 
       const userMessage: ConversationMessage = {
@@ -157,6 +164,9 @@ export function useAssistantConversation() {
             role: 'assistant',
             content: response.message,
             ...(response.map_action ? { mapAction: response.map_action } : {}),
+            ...(response.operator_actions?.length
+              ? { operatorActions: response.operator_actions }
+              : {}),
             ...(report ? { report } : {}),
           },
         ]);
@@ -166,9 +176,11 @@ export function useAssistantConversation() {
           // The completed turn remains visible if a background list refresh fails.
         }
         setStatus('idle');
+        return response;
       } catch (caught) {
         setStatus('error');
         setError(caught instanceof Error ? caught.message : 'The assistant failed.');
+        return undefined;
       }
     },
     [client, conversationId, status],

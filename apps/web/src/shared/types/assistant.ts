@@ -155,6 +155,10 @@ export type AssistantResponse = Omit<
   media_gallery?: DisasterMediaGallery | null;
 };
 
+export type OperatorAction = NonNullable<
+  ApiAssistantResponse['operator_actions']
+>[number];
+
 export type ConversationSummary = ConversationSummaryResponse;
 export type PersistedConversationMessage = Omit<
   ConversationMessageResponse,
@@ -171,6 +175,7 @@ export type ConversationMessage = {
   role: MessageRole;
   content: string;
   mapAction?: MapNavigationAction;
+  operatorActions?: OperatorAction[];
   report?: AssistantReport;
 };
 

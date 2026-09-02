@@ -10,6 +10,7 @@ from disaster_monitor.application.agent.multimodal_tools import (
     MultimodalToolDependencies,
     build_multimodal_agent_tools,
 )
+from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.conversation_deletion import (
@@ -558,11 +559,16 @@ def build_agent_model(
     settings: Settings, language_model: LanguageModel | None = None
 ) -> AgentModel:
     """Construct a separate structured-agent abstraction over local Qwen."""
+    operator_action_ids = tuple(sorted(OPERATOR_ACTION_IDS))
     if language_model is not None:
-        return StructuredAgentModel(language_model)
+        return StructuredAgentModel(
+            language_model,
+            operator_action_ids=operator_action_ids,
+        )
     return StructuredAgentModel(
         build_language_model(settings),
         owns_language_model=True,
+        operator_action_ids=operator_action_ids,
     )
 
 

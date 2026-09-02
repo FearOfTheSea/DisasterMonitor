@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AssistantPanel } from '@/features/assistant/ui/AssistantPanel';
 import { useAssistantConversation } from '@/features/assistant/hooks/useAssistantConversation';
+import { executeAutomaticOperatorActions } from '@/features/assistant/model/operatorActions';
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
 import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
@@ -131,6 +132,7 @@ export default function Home() {
     };
   });
   const conversation = useAssistantConversation();
+  const submitAssistant = conversation.submit;
   const activeIncidents = useActiveIncidents();
   const weatherAlerts = useWeatherAlerts();
   const usableSelectedIncidentId =
@@ -311,6 +313,34 @@ export default function Home() {
       window.setTimeout(() => document.getElementById(headingId)?.focus(), 0);
     }
   }, []);
+  const openSourceCatalog = useCallback(() => {
+    setSourceCatalogOpen(true);
+    setAssistantOpen(false);
+    setOperationsOpen(false);
+  }, []);
+  const handleAssistantSubmit = useCallback(
+    async (question: string) => {
+      const response = await submitAssistant(question, mapView);
+      if (!response) return;
+      const execution = executeAutomaticOperatorActions(
+        response.operator_actions ?? [],
+        mapLayerState,
+      );
+      setMapLayerState(execution.mapLayerState);
+      for (const panel of execution.openPanels) {
+        if (panel === 'sources') {
+          openSourceCatalog();
+        } else if (panel === 'findings') {
+          openOperationsAt('findings-center-heading');
+        } else if (panel === 'watches') {
+          openOperationsAt('incident-watches-heading');
+        } else {
+          openOperationsAt();
+        }
+      }
+    },
+    [mapLayerState, mapView, openOperationsAt, openSourceCatalog, submitAssistant],
+  );
   const commands = useMemo(
     () =>
       buildCommandRegistry({
@@ -322,11 +352,7 @@ export default function Home() {
         onSelectRegion: handleSelectRegion,
         onLayerStateChange: setMapLayerState,
         onOpenFindings: () => openOperationsAt('findings-center-heading'),
-        onOpenSourceCatalog: () => {
-          setSourceCatalogOpen(true);
-          setAssistantOpen(false);
-          setOperationsOpen(false);
-        },
+        onOpenSourceCatalog: openSourceCatalog,
         onOpenIncidentWatches: () => openOperationsAt('incident-watches-heading'),
         onOpenOperations: () => openOperationsAt(),
       } satisfies CommandRegistryContext),
@@ -336,6 +362,7 @@ export default function Home() {
       handleSelectRegion,
       mapLayerState,
       openOperationsAt,
+      openSourceCatalog,
       usableSelectedIncidentId,
     ],
   );
@@ -434,11 +461,12 @@ export default function Home() {
             messages={conversation.messages}
             status={conversation.status}
             error={conversation.error}
-            onSubmit={(question) => conversation.submit(question, mapView)}
+            onSubmit={handleAssistantSubmit}
             onClear={conversation.clear}
             onNewConversation={conversation.startNewConversation}
             onSelectConversation={conversation.selectConversation}
             onDeleteConversation={conversation.deleteConversation}
+            onWatchReady={() => openOperationsAt('incident-watches-heading')}
           />
         )}
         {operationsOpen && (

@@ -20,6 +20,7 @@ sys.path.insert(0, str(script_directory))
 from disaster_monitor.application.services.active_incidents import (
     ActiveIncidentsService,
 )
+from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -45,6 +46,9 @@ from disaster_monitor.infrastructure.disaster.composite import (
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
+from disaster_monitor.infrastructure.llm.structured_agent_model import (
+    StructuredAgentModel,
+)
 from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
 )
@@ -64,25 +68,30 @@ def main() -> int:
     )
     repository = InMemoryOperationalRepository()
     active_incidents = build_system_active_incidents_service()
+    fake_model = FakeSystemModel()
     app = create_app(
         settings=Settings(
             allowed_origins="http://127.0.0.1:4173",
             country_catalog_automatic_updates=False,
             country_catalog_root=Path(catalog_directory.name),
         ),
-        model=FakeSystemModel(),
+        model=fake_model,
+        agent_model=StructuredAgentModel(
+            fake_model,
+            operator_action_ids=tuple(sorted(OPERATOR_ACTION_IDS)),
+        ),
         current_disaster_report=CurrentDisasterReportService(
             CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
             FakeSystemSituationProvider(),
             provider_capabilities=(
                 ProviderCapabilities(
                     frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    frozenset({Disaster.EARTHQUAKE}),
+                    frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
                     None,
                 ),
                 ProviderCapabilities(
                     frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    frozenset({Disaster.EARTHQUAKE}),
+                    frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
                     None,
                 ),
             ),

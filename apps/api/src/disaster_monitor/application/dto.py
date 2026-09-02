@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from disaster_monitor.application.agent.operator_actions import OperatorAction
 from disaster_monitor.application.disaster import ReportSection, SelectedEventSummary
 from disaster_monitor.application.media import DisasterMediaGallery
 from disaster_monitor.domain.decision import DecisionSupportArtifact
@@ -139,3 +140,4 @@ class AssistantAnswer:
     multimodal_state: MultimodalEvidenceState | None = None
     common_operational_picture: CommonOperationalPicture | None = None
     media_gallery: DisasterMediaGallery | None = None
+    operator_actions: tuple[OperatorAction, ...] = ()

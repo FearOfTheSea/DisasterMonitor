@@ -66,6 +66,23 @@ reconcile_disaster_evidence
 compose_disaster_answer
 ```
 
+## Operator actions
+
+The interpretation response may include up to four exact IDs from the
+application-owned Operator Agent v1 vocabulary. The model can request UI state
+changes such as opening a panel, setting a display window, or showing a known map
+layer, but it cannot provide arbitrary operations, URLs, providers, or arguments.
+Deterministic application policy validates the IDs and resolves them into typed
+responses; the frontend applies only automatic actions after the response passes
+the same bounded consistency checks.
+
+Creating a persistent Incident Watch is a confirmation-required proposal. It is
+resolved only from a canonical supported disaster task and an exact country or
+worldwide scope, with one of the supported refresh intervals. The frontend makes
+no persistence request until the operator confirms the proposal. Operator action
+proposals are request-scoped and are not replayed from historical conversation
+payloads as executable instructions; older payloads decode with no actions.
+
 The runtime validates the initial plan, executes its pre-composition steps, and
 then performs an application-owned evidence-sufficiency assessment. The
 assessment has one of three stable states: `sufficient`,

@@ -1,5 +1,6 @@
 """Deterministic FastAPI server used by the Playwright system test."""
 
+import json
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -15,6 +16,7 @@ from disaster_monitor.application.disaster import (
     ProviderIssue,
     WorldwideDisasterEvent,
 )
+from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.dto import (
     ModelReadiness,
     ModelRequest,
@@ -52,6 +54,9 @@ from disaster_monitor.domain.disaster import (
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
+from disaster_monitor.infrastructure.llm.structured_agent_model import (
+    StructuredAgentModel,
+)
 from disaster_monitor.main import create_app
 
 NOW = datetime(2026, 8, 6, 3, 0, tzinfo=UTC)
@@ -73,6 +78,35 @@ class FakeSystemModel:
                 model="fake-qwen",
                 tool_calls=(ModelToolCall("fit_country", {"country_code": "JPN"}),),
             )
+        prompt = request.messages[-1].content.casefold()
+        if "latest flood in japan" in prompt:
+            return ModelResponse(
+                text=json.dumps(
+                    {
+                        "task_kind": "investigation",
+                        "disaster": "flood",
+                        "country_code": "JPN",
+                        "country_name": "Japan",
+                        "geographic_scope": "country",
+                        "place_mentions": ["Japan"],
+                        "current_or_event_specific": True,
+                        "date_from": None,
+                        "date_to": None,
+                        "information_needs": ["event_overview"],
+                        "output_modalities": ["text"],
+                        "event_discriminators": [],
+                        "requested_response_language": "en",
+                        "response_language_explicit": False,
+                        "worldwide_selection": None,
+                        "clarification_question": None,
+                        "operator_action_ids": [
+                            "time:24h",
+                            "create-watch:3600",
+                        ],
+                    }
+                ),
+                model="fake-qwen",
+            )
         raise AssertionError(f"{MODEL_SENTINEL}: source-backed request reached model")
 
     async def check_readiness(self) -> ModelReadiness:
@@ -81,6 +115,38 @@ class FakeSystemModel:
 
 class FakeSystemEventProvider:
     async def find_recent_events(self, _query, *, now):
+        if _query.disaster is Disaster.FLOOD:
+            source = SourceReference(
+                source_id="system-flood-events",
+                publisher="Deterministic flood fixture",
+                title="Hokkaido flood fixture event",
+                canonical_url="https://example.test/system-flood-event",
+                published_at=now - timedelta(minutes=30),
+                updated_at=now - timedelta(minutes=10),
+                retrieved_at=now,
+                authority=SourceAuthority.NATIONAL_AUTHORITY,
+            )
+            return ProviderBatch(
+                (
+                    DisasterEvent(
+                        event_id="system:flood-japan",
+                        disaster=Disaster.FLOOD,
+                        location="Hokkaido flood fixture",
+                        country=JAPAN,
+                        event_time=now - timedelta(minutes=30),
+                        source=source,
+                        geometry=point_event_geometry(43.0, 141.0, source),
+                        measurements=(
+                            EventMeasurement(
+                                MeasurementKind.SEVERITY,
+                                "high",
+                                source=source,
+                            ),
+                        ),
+                        provider_ids=("system:flood-japan",),
+                    ),
+                )
+            )
         usgs_history_source = SourceReference(
             source_id="system-usgs-events",
             publisher="USGS fixture",
@@ -216,6 +282,30 @@ class FakeSystemEventProvider:
 
 class FakeSystemSituationProvider:
     async def get_situation_reports(self, event, _query, *, now):
+        if event.disaster is Disaster.FLOOD:
+            source = SourceReference(
+                source_id="system-flood-situation",
+                publisher="Deterministic flood situation fixture",
+                title="Hokkaido flood fixture situation update",
+                canonical_url="https://example.test/system-flood-situation",
+                published_at=now - timedelta(minutes=20),
+                updated_at=now - timedelta(minutes=5),
+                retrieved_at=now,
+                authority=SourceAuthority.NATIONAL_AUTHORITY,
+            )
+            return ProviderBatch(
+                (
+                    SituationReport(
+                        source=source,
+                        narrative=(
+                            "The controlled Hokkaido flood fixture reports a bounded "
+                            "source-backed situation update."
+                        ),
+                        event_id=event.event_id,
+                        disaster=Disaster.FLOOD,
+                    ),
+                )
+            )
         source = SourceReference(
             source_id="system-situation-reports",
             publisher="Global situation fixture",
@@ -411,21 +501,26 @@ def build_system_active_incidents_service() -> ActiveIncidentsService:
 
 
 if __name__ == "__main__":
+    fake_model = FakeSystemModel()
     uvicorn.run(
         create_app(
-            model=FakeSystemModel(),
+            model=fake_model,
+            agent_model=StructuredAgentModel(
+                fake_model,
+                operator_action_ids=tuple(sorted(OPERATOR_ACTION_IDS)),
+            ),
             current_disaster_report=CurrentDisasterReportService(
                 FakeSystemEventProvider(),
                 FakeSystemSituationProvider(),
                 provider_capabilities=(
                     ProviderCapabilities(
                         frozenset({ProviderRole.EVENT_DISCOVERY}),
-                        frozenset({Disaster.EARTHQUAKE}),
+                        frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
                         None,
                     ),
                     ProviderCapabilities(
                         frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                        frozenset({Disaster.EARTHQUAKE}),
+                        frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
                         None,
                     ),
                 ),
