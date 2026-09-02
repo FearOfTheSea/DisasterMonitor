@@ -160,7 +160,7 @@ async def test_assistant_turn_persists_versioned_structured_answer() -> None:
     assistant_message = conversation.messages[-1]
     payload = getattr(assistant_message, "assistant_payload", None)
     assert payload is not None
-    assert payload.schema_version == "assistant-answer.v2"
+    assert payload.schema_version == "assistant-answer.v3"
     media_item = payload.data["media_gallery"]["items"][0]
     assert media_item["source_id"] == "source-1"
     assert media_item["caption"] == "Rescue crews after the earthquake."

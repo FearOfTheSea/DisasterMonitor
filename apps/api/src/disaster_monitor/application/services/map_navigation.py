@@ -110,6 +110,38 @@ class MapNavigationService:
             )
         return self.for_country(country) if country is not None else None
 
+    def for_investigation_case(
+        self,
+        *,
+        selected_events: tuple[SelectedEventSummary, ...],
+        country: Country | None,
+    ) -> MapNavigationAction | None:
+        """Fit source-backed geometry across the bounded two-hazard case."""
+        points = [
+            point
+            for event in selected_events
+            if event.geometry is not None
+            for point in event.geometry.coordinates
+        ]
+        if points:
+            min_longitude, max_longitude = _smallest_longitude_interval(
+                [point.longitude for point in points]
+            )
+            return MapNavigationAction(
+                (
+                    min_longitude,
+                    min(point.latitude for point in points),
+                    max_longitude,
+                    max(point.latitude for point in points),
+                ),
+                (
+                    f"Investigation case: {country.canonical_name}"
+                    if country is not None
+                    else "Investigation case"
+                ),
+            )
+        return self.for_country(country) if country is not None else None
+
     @staticmethod
     def for_country(country: Country) -> MapNavigationAction:
         area = country.geographic_area

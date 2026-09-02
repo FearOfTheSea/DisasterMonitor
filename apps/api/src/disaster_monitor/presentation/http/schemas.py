@@ -150,6 +150,7 @@ class AssistantResponse(BaseModel):
     sections: list["ReportSectionResponse"] = Field(default_factory=list)
     partial: bool = False
     investigation: "InvestigationResponse | None" = None
+    investigation_case: "InvestigationCaseResponse | None" = None
     decision_support: "DecisionSupportResponse | None" = None
     multimodal: MultimodalStateResponse | None = None
     common_operational_picture: CommonOperationalPictureResponse | None = None
@@ -427,6 +428,48 @@ class CompoundHazardCorrelationResponse(BaseModel):
     source_ids: list[str] = Field(default_factory=list)
     summary: str
     limitation: str
+
+
+class InvestigationCaseCountryResponse(BaseModel):
+    country_code: str
+    country_name: str
+
+
+class CrossHazardAssessmentResponse(BaseModel):
+    status: Literal[
+        "associated",
+        "not_established",
+        "unsupported_pair",
+        "insufficient_evidence",
+    ]
+    summary: str
+    limitation: str
+
+
+class InvestigationTargetResponse(BaseModel):
+    """One bounded branch safe for browser rendering."""
+
+    target_id: str
+    disaster: Disaster
+    status: Literal["completed", "partial", "coverage_unavailable", "failed"]
+    selected_event: "SelectedEventResponse | None" = None
+    sources: list["SourceResponse"] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    sections: list["ReportSectionResponse"] = Field(default_factory=list)
+    partial: bool
+    termination_reason: str
+
+
+class InvestigationCaseResponse(BaseModel):
+    """User-safe result of one bounded two-hazard investigation."""
+
+    case_id: str
+    country: InvestigationCaseCountryResponse
+    status: Literal["completed", "partial"]
+    partial: bool
+    targets: list[InvestigationTargetResponse] = Field(min_length=2, max_length=2)
+    cross_hazard_assessment: CrossHazardAssessmentResponse
+    correlations: list[CompoundHazardCorrelationResponse] = Field(default_factory=list)
 
 
 class DisasterIncidentCoverageResponse(BaseModel):

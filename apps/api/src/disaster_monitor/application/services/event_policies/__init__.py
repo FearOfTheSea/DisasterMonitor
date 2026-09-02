@@ -21,6 +21,7 @@ from .compound_hazard_correlation import (
     CompoundHazardCorrelation,
     CompoundHazardCorrelationService,
     CompoundHazardRelationship,
+    CorrelatableIncident,
 )
 
 
@@ -54,6 +55,7 @@ __all__ = [
     "CompoundHazardCorrelation",
     "CompoundHazardCorrelationService",
     "CompoundHazardRelationship",
+    "CorrelatableIncident",
     "DefaultEventPolicy",
     "EarthquakeEventPolicy",
     "EventPolicyRegistry",

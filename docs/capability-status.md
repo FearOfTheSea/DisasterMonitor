@@ -85,6 +85,13 @@ utility, impact prediction, evacuation utility, or a physical disaster event.
 Compound Hazard Correlation v1 and cyclone supplemental map layers are implemented as
 bounded descriptive context with deterministic fixture coverage.
 
+Investigation Agent v1 is implemented as one bounded, sequential, two-hazard,
+one-country current-evidence workflow. It reuses the source-backed branch pipeline,
+shares the request tool budget, presents partial branch outcomes, and exposes only
+the maintained descriptive cross-hazard rules. It does not support autonomous agents,
+multi-country or worldwide cases, admitted multimodal assets, historical/date-range
+two-hazard cases, causal inference, or multi-hazard Incident Watches.
+
 The correlation supports only the documented earthquake/landslide and
 tropical-cyclone/flood point and time gates. It does not perform causal inference.
 

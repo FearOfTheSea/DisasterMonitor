@@ -116,6 +116,34 @@ class RunDisasterAgent:
                 response_language=state.task.response_language,
                 operator_actions=resolve_operator_actions(state.task),
             )
+        investigation_case = state.workspace.investigation_case
+        case_report = state.workspace.investigation_case_report
+        if investigation_case is not None and case_report is not None:
+            return AssistantAnswer(
+                message=case_report.message,
+                conversation_id=_conversation_id(conversation),
+                model="source-backed-investigation-agent",
+                map_action=(
+                    self._map_navigation.for_investigation_case(
+                        selected_events=tuple(
+                            event
+                            for event in investigation_case.selected_events
+                            if event is not None
+                        ),
+                        country=state.task.country,
+                    )
+                    if self._map_navigation is not None
+                    else None
+                ),
+                response_type="current_disaster_investigation_case",
+                sources=case_report.sources,
+                warnings=case_report.warnings,
+                sections=case_report.sections,
+                partial=case_report.partial,
+                investigation=_summary(state),
+                operator_actions=resolve_operator_actions(state.task),
+                investigation_case=investigation_case,
+            )
         report = state.workspace.report
         if report is None:
             message = state.task.detail or (

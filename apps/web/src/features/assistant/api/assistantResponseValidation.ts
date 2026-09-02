@@ -6,6 +6,8 @@ import type {
   DisasterMediaGalleryResponse,
   EventGeometryResponse,
   InvestigationResponse,
+  InvestigationCaseResponse,
+  InvestigationTargetResponse,
   MultimodalStateResponse,
 } from '@/shared/api/generated/assistant';
 import { matchesApiSchema } from '@/shared/api/generated/assistant';
@@ -14,6 +16,8 @@ import type {
   ConversationSummary,
   DisasterMediaGallery,
   InvestigationSummary,
+  InvestigationCase,
+  InvestigationTarget,
   MultimodalEvidenceState,
   PersistedConversation,
   PersistedConversationMessage,
@@ -77,6 +81,12 @@ function assistantSemanticsAreValid(response: AssistantResponse): boolean {
   if (
     response.selected_event?.geometry &&
     !eventGeometryIsConsistent(response.selected_event.geometry)
+  ) {
+    return false;
+  }
+  if (
+    response.investigation_case &&
+    !investigationCaseIsConsistent(response.investigation_case)
   ) {
     return false;
   }
@@ -279,6 +289,9 @@ function normalizeAssistantResponse(value: ApiAssistantResponse): AssistantRespo
     investigation: value.investigation
       ? normalizeInvestigation(value.investigation)
       : value.investigation,
+    investigation_case: value.investigation_case
+      ? normalizeInvestigationCase(value.investigation_case)
+      : value.investigation_case,
     multimodal: value.multimodal
       ? normalizeMultimodalState(value.multimodal)
       : value.multimodal,
@@ -286,6 +299,104 @@ function normalizeAssistantResponse(value: ApiAssistantResponse): AssistantRespo
       ? normalizeMediaGallery(value.media_gallery)
       : value.media_gallery,
     operator_actions: value.operator_actions ?? [],
+  };
+}
+
+function investigationCaseIsConsistent(value: InvestigationCase): boolean {
+  if (
+    value.targets.length !== 2 ||
+    new Set(value.targets.map((target) => target.target_id)).size !== 2 ||
+    new Set(value.targets.map((target) => target.disaster)).size !== 2
+  ) {
+    return false;
+  }
+  if (
+    value.targets.some(
+      (target) =>
+        (target.selected_event !== null &&
+          target.selected_event !== undefined &&
+          (target.selected_event.disaster !== target.disaster ||
+            (target.selected_event.geometry !== null &&
+              target.selected_event.geometry !== undefined &&
+              !eventGeometryIsConsistent(target.selected_event.geometry)))) ||
+        !cycloneLayersAreConsistent(
+          target.disaster,
+          target.selected_event?.supplemental_geometry ?? [],
+        ),
+    )
+  ) {
+    return false;
+  }
+  const hasPartialBranch = value.targets.some((target) => target.partial);
+  if (
+    value.partial !== hasPartialBranch ||
+    value.status !== (value.partial ? 'partial' : 'completed')
+  ) {
+    return false;
+  }
+  if (
+    value.cross_hazard_assessment.status === 'associated' &&
+    value.correlations.length === 0
+  ) {
+    return false;
+  }
+  if (
+    value.cross_hazard_assessment.status !== 'associated' &&
+    value.correlations.length > 0
+  ) {
+    return false;
+  }
+  const disasters = new Set(value.targets.map((target) => target.disaster));
+  return value.correlations.every(
+    (correlation) =>
+      correlation.relationship === 'spatiotemporal_association' &&
+      correlation.first_disaster !== correlation.second_disaster &&
+      disasters.has(correlation.first_disaster) &&
+      disasters.has(correlation.second_disaster) &&
+      correlation.distance_km >= 0 &&
+      correlation.time_delta_seconds >= 0,
+  );
+}
+
+function normalizeInvestigationCase(
+  value: InvestigationCaseResponse,
+): InvestigationCase {
+  return {
+    ...value,
+    targets: (value.targets ?? []).map((target) =>
+      normalizeInvestigationTarget(target),
+    ),
+    correlations: (value.correlations ?? []).map((correlation) => ({
+      ...correlation,
+      source_ids: correlation.source_ids ?? [],
+    })),
+  };
+}
+
+function normalizeInvestigationTarget(
+  value: InvestigationTargetResponse,
+): InvestigationTarget {
+  return {
+    ...value,
+    selected_event: value.selected_event
+      ? {
+          ...value.selected_event,
+          geometry: value.selected_event.geometry
+            ? {
+                ...value.selected_event.geometry,
+                coordinates: value.selected_event.geometry.coordinates ?? [],
+              }
+            : value.selected_event.geometry,
+          measurements: value.selected_event.measurements ?? [],
+          provider_ids: value.selected_event.provider_ids ?? [],
+          supplemental_geometry: (value.selected_event.supplemental_geometry ?? []).map(
+            (layer) => ({ ...layer, coordinates: layer.coordinates ?? [] }),
+          ),
+        }
+      : value.selected_event,
+    sources: value.sources ?? [],
+    warnings: value.warnings ?? [],
+    sections: value.sections ?? [],
   };
 }
 

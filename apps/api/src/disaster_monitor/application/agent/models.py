@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from disaster_monitor.application.agent.sufficiency import (
     EvidenceSufficiencyAssessment as EvidenceSufficiencyAssessment,
@@ -45,6 +46,12 @@ from disaster_monitor.domain.multimodal import (
     MultimodalEvidenceState,
     VisualObservation,
 )
+
+if TYPE_CHECKING:
+    from disaster_monitor.application.agent.investigation_cases import (
+        InvestigationCaseArtifact,
+        InvestigationCaseReport,
+    )
 
 
 class TaskKind(StrEnum):
@@ -164,6 +171,30 @@ class DisasterTaskDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class InvestigationTarget:
+    """One application-owned branch of a bounded two-hazard investigation."""
+
+    target_id: str
+    disaster: Disaster
+    country: Country
+    query: DisasterQuery
+    information_needs: tuple[InformationNeed, ...]
+    output_modalities: tuple[OutputModality, ...]
+
+    def __post_init__(self) -> None:
+        if not self.target_id.strip():
+            raise ValueError("Investigation targets require stable IDs.")
+        if self.query.disaster is not self.disaster:
+            raise ValueError("Investigation target query disaster must match target.")
+        if self.query.country.alpha3_code != self.country.alpha3_code:
+            raise ValueError("Investigation target query country must match target.")
+        if not self.information_needs or not self.output_modalities:
+            raise ValueError(
+                "Investigation targets require needs and output modalities."
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class ValidatedDisasterTask:
     question: str
     kind: TaskKind
@@ -184,6 +215,28 @@ class ValidatedDisasterTask:
     response_language: str | None = None
     response_language_explicit: bool = False
     operator_action_ids: tuple[str, ...] = ()
+    investigation_targets: tuple[InvestigationTarget, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.investigation_targets:
+            return
+        if len(self.investigation_targets) != 2:
+            raise ValueError("Investigation Agent v1 requires exactly two targets.")
+        if self.disaster is not None or self.query is not None:
+            raise ValueError("Multi-hazard parent tasks cannot select one disaster.")
+        if self.country is None or self.geographic_scope is not GeographicScope.COUNTRY:
+            raise ValueError("Multi-hazard targets require one canonical country.")
+        if len({item.target_id for item in self.investigation_targets}) != 2:
+            raise ValueError("Investigation target IDs must be distinct.")
+        if len({item.disaster for item in self.investigation_targets}) != 2:
+            raise ValueError("Investigation target disasters must be distinct.")
+        if any(
+            item.country.alpha3_code != self.country.alpha3_code
+            for item in self.investigation_targets
+        ):
+            raise ValueError("Investigation targets must share one country.")
+        if len({item.query.time_intent for item in self.investigation_targets}) != 1:
+            raise ValueError("Investigation targets must share one time intent.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,6 +324,8 @@ class EvidenceWorkspace:
     multimodal_state: MultimodalEvidenceState | None = None
     common_operational_picture: CommonOperationalPicture | None = None
     memory_context: MemoryContextArtifact | None = None
+    investigation_case: "InvestigationCaseArtifact | None" = None
+    investigation_case_report: "InvestigationCaseReport | None" = None
     source_ids: list[str] = field(default_factory=list)
 
 
@@ -295,6 +350,7 @@ class AgentExecutionState:
     specialist_fallback_reason: str | None = None
     specialist_provenance_validation_failures: int = 0
     specialist_latency_ms: float = 0.0
+    allow_model_backed_specialists: bool = True
     sufficiency_assessment: EvidenceSufficiencyAssessment | None = None
     followup_plan: InvestigationPlan | None = None
     trace: ExecutionTrace = field(default_factory=ExecutionTrace)

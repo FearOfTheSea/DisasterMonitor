@@ -176,8 +176,10 @@ def _resolve_watch_action(
     action_id: str,
     task: ValidatedDisasterTask,
 ) -> IncidentWatchOperatorAction | None:
-    if not action_id.startswith("create-watch:") or not isinstance(
-        task.disaster, Disaster
+    if (
+        task.investigation_targets
+        or not action_id.startswith("create-watch:")
+        or not isinstance(task.disaster, Disaster)
     ):
         return None
     try:

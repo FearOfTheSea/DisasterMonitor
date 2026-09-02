@@ -5,6 +5,7 @@ import type {
   AssistantRequest as ApiAssistantRequest,
   AssistantResponse as ApiAssistantResponse,
   CommonOperationalPictureResponse,
+  CompoundHazardCorrelationResponse,
   ConversationMessageResponse,
   ConversationResponse,
   ConversationSummaryResponse,
@@ -18,6 +19,8 @@ import type {
   EventGeometryResponse,
   EventMeasurementResponse,
   InvestigationResponse,
+  InvestigationCaseResponse,
+  InvestigationTargetResponse,
   LineStringGeometryResponse,
   MapNavigationActionResponse,
   MeasurementKind as ApiMeasurementKind,
@@ -66,6 +69,28 @@ export type InvestigationSummary = Omit<
   source_ids: string[];
   evidence_count: number;
   capability_gaps: string[];
+};
+export type CompoundHazardCorrelation = Omit<
+  CompoundHazardCorrelationResponse,
+  'source_ids'
+> & {
+  source_ids: string[];
+};
+export type InvestigationTarget = Omit<
+  InvestigationTargetResponse,
+  'selected_event' | 'sources' | 'warnings' | 'sections'
+> & {
+  selected_event?: SelectedEvent | null;
+  sources: AssistantSource[];
+  warnings: string[];
+  sections: ReportSection[];
+};
+export type InvestigationCase = Omit<
+  InvestigationCaseResponse,
+  'targets' | 'correlations'
+> & {
+  targets: InvestigationTarget[];
+  correlations: CompoundHazardCorrelation[];
 };
 export type AssistantSource = SourceResponse;
 export type MeasurementKind = ApiMeasurementKind;
@@ -146,11 +171,17 @@ export type CommonOperationalPicture = CommonOperationalPictureResponse;
 
 export type AssistantResponse = Omit<
   ApiAssistantResponse,
-  'map_action' | 'selected_event' | 'investigation' | 'multimodal' | 'media_gallery'
+  | 'map_action'
+  | 'selected_event'
+  | 'investigation'
+  | 'investigation_case'
+  | 'multimodal'
+  | 'media_gallery'
 > & {
   map_action?: MapNavigationAction | null;
   selected_event?: SelectedEvent | null;
   investigation?: InvestigationSummary | null;
+  investigation_case?: InvestigationCase | null;
   multimodal?: MultimodalEvidenceState | null;
   media_gallery?: DisasterMediaGallery | null;
 };
@@ -188,6 +219,7 @@ export type AssistantReport = {
   sections: ReportSection[];
   partial: boolean;
   investigation?: InvestigationSummary;
+  investigationCase?: InvestigationCase;
   decisionSupport?: DecisionSupportArtifact;
   multimodal?: MultimodalEvidenceState;
   commonOperationalPicture?: CommonOperationalPicture;

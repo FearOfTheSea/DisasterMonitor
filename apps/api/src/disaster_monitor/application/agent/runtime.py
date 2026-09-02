@@ -104,6 +104,35 @@ class DisasterAgentRuntime:
             "no-plan", task.question, (), status=PlanStatus.COMPLETED
         )
 
+        if task.investigation_targets:
+            if multimodal_assets:
+                task = ValidatedDisasterTask(
+                    question=task.question,
+                    kind=TaskKind.INVESTIGATION,
+                    requires_evidence=True,
+                    validation_status=ValidationStatus.CLARIFICATION_REQUIRED,
+                    detail=(
+                        "Investigation Agent v1 does not admit multimodal assets for "
+                        "a two-hazard investigation."
+                    ),
+                    information_needs=task.information_needs,
+                    output_modalities=task.output_modalities,
+                    response_language=task.response_language,
+                    response_language_explicit=task.response_language_explicit,
+                    operator_action_ids=task.operator_action_ids,
+                )
+            else:
+                from disaster_monitor.application.agent.investigation_runtime import (
+                    InvestigationRuntime,
+                )
+
+                return await InvestigationRuntime(self).execute(
+                    task,
+                    conversation_id=conversation_id,
+                    model_call_count=model_calls,
+                    model_events=pending_model_events,
+                )
+
         if task.kind in {TaskKind.NON_DISASTER, TaskKind.GENERAL_KNOWLEDGE}:
             state = self._state(
                 task,
@@ -317,6 +346,98 @@ class DisasterAgentRuntime:
         self._terminate(state, state.termination_reason)
         return state
 
+    async def run_validated_task(
+        self,
+        task: ValidatedDisasterTask,
+        *,
+        conversation_id: str | None,
+        initial_tool_call_count: int = 0,
+        allow_model_backed_specialists: bool = True,
+    ) -> AgentExecutionState:
+        """Run one prevalidated single-hazard task without model orchestration.
+
+        Investigation Agent v1 uses this narrow entry point for each already-built
+        branch. It intentionally bypasses interpretation, planning proposals,
+        review/replanning, visual work, and model-backed specialist findings.
+        """
+        if (
+            task.validation_status is not ValidationStatus.VALID
+            or task.disaster is None
+            or task.query is None
+            or task.investigation_targets
+        ):
+            raise ValueError("A validated single-hazard task is required.")
+        plan = default_investigation_plan(task)
+        state = self._state(
+            task,
+            plan,
+            conversation_id=conversation_id,
+            model_call_count=0,
+            trace=ExecutionTrace(),
+        )
+        state.tool_call_count = initial_tool_call_count
+        state.allow_model_backed_specialists = allow_model_backed_specialists
+        self._record_task_and_models(state, [])
+        try:
+            validate_plan(
+                plan,
+                allowed_tools=self._tools.names,
+                requires_multimodal=False,
+            )
+        except Exception as error:
+            state.final_status = AgentStatus.FAILED
+            state.capability_gaps.append(
+                "The deterministic investigation plan is unavailable."
+            )
+            self._terminate(state, _safe_termination(error))
+            return state
+        state.trace.record(
+            TraceEventKind.INITIAL_PLAN_VALIDATED,
+            step_count=len(plan.steps),
+            tools=tuple(step.tool_name for step in plan.steps),
+        )
+        try:
+            await execute_plan(
+                state,
+                self._tools,
+                stop_before_composition=True,
+                trace_phase="investigation_branch",
+            )
+        except Exception as error:
+            state.final_status = AgentStatus.FAILED
+            state.warnings.append("The bounded investigation branch stopped safely.")
+            self._terminate(state, _safe_termination(error))
+            return state
+        self._assess(state, "initial")
+        state.trace.record(
+            TraceEventKind.REVIEW_DECISION,
+            decision=ReviewDecision.FINISH.value,
+            source="investigation_default_plan",
+        )
+        try:
+            composition_step = next(
+                step
+                for step in plan.steps
+                if step.tool_name == "compose_disaster_answer"
+            )
+            await execute_plan(
+                state,
+                self._tools,
+                step_ids=(composition_step.step_id,),
+                trace_phase="investigation_branch_composition",
+            )
+            state.trace.record(
+                TraceEventKind.COMPOSITION, step_id=composition_step.step_id
+            )
+        except Exception as error:
+            state.final_status = AgentStatus.FAILED
+            state.warnings.append("The bounded investigation branch stopped safely.")
+            self._terminate(state, _safe_termination(error))
+            return state
+        self._set_final_status_from_report(state)
+        self._terminate(state, state.termination_reason)
+        return state
+
     @staticmethod
     def _state(
         task: ValidatedDisasterTask,
@@ -333,6 +454,22 @@ class DisasterAgentRuntime:
             model_call_count=model_call_count,
             trace=trace,
         )
+
+    @staticmethod
+    def _set_final_status_from_report(state: AgentExecutionState) -> None:
+        report = state.workspace.report
+        if report is None:
+            state.final_status = AgentStatus.FAILED
+            state.termination_reason = "no_grounded_response"
+        elif report.response_type.endswith("coverage_unavailable"):
+            state.final_status = AgentStatus.COVERAGE_UNAVAILABLE
+            state.termination_reason = "coverage_unavailable"
+        elif report.partial:
+            state.final_status = AgentStatus.PARTIAL
+            state.termination_reason = "partial_evidence"
+        else:
+            state.final_status = AgentStatus.COMPLETED
+            state.termination_reason = "grounded_answer_composed"
 
     @staticmethod
     def _record_task_and_models(

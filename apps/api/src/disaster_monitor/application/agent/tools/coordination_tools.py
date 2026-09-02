@@ -68,7 +68,10 @@ class ComposeDisasterAnswerTool(_CoordinationTool):
     async def execute(self, state: AgentExecutionState) -> str:
         if state.workspace.evidence_state is not None:
             injected_findings: tuple[SpecialistFinding, ...] = ()
-            if self.dependencies.specialist_executor is not None:
+            if (
+                state.allow_model_backed_specialists
+                and self.dependencies.specialist_executor is not None
+            ):
                 specialist_result = await self.dependencies.specialist_executor.execute(
                     state.workspace.evidence_state,
                     state.workspace.specialist_handoffs,

@@ -146,7 +146,9 @@ export function toAssistantReport(
 ): AssistantReport | undefined {
   if (
     !response.response_type?.startsWith('current_disaster') ||
-    (!response.selected_event && !(response.sections?.length || 0))
+    (!response.investigation_case &&
+      !response.selected_event &&
+      !(response.sections?.length || 0))
   ) {
     return undefined;
   }
@@ -159,6 +161,7 @@ export function toAssistantReport(
     sections: response.sections ?? [],
     partial: response.partial ?? false,
     investigation: response.investigation ?? undefined,
+    investigationCase: response.investigation_case ?? undefined,
     decisionSupport: response.decision_support ?? undefined,
     multimodal: response.multimodal ?? undefined,
     commonOperationalPicture: response.common_operational_picture ?? undefined,

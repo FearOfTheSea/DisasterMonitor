@@ -66,6 +66,30 @@ reconcile_disaster_evidence
 compose_disaster_answer
 ```
 
+## Investigation Agent v1
+
+Investigation Agent v1 is a bounded extension for exactly two explicitly named,
+distinct supported hazards in one maintained country. It admits only current or
+event-specific country-scoped evidence requests and builds the two target identities,
+countries, and `DisasterQuery` values deterministically. The interpretation model may
+still propose response language and bounded Operator Agent actions, but it cannot
+choose hazards, providers, sources, or branch plans.
+
+The two branches run sequentially through the default five-step source-backed flow.
+They share the request-wide tool budget, consume at most ten trusted tool calls, and
+perform no branch interpretation, planning, review/replanning, visual-model work, or
+model-backed specialist findings. A failed branch retains its typed result and does
+not prevent the remaining branch from running while budget remains.
+
+Worldwide, multiple-country, ambiguous-geography, three-or-more-hazard, admitted
+multimodal, and explicit historical/date-range two-hazard requests fail closed with
+the existing typed limitation or clarification behavior. A case response does not
+promote either branch event to a top-level selected event.
+
+The case renderer deterministically combines grounded branch reports and applies only
+the maintained compound-hazard correlation rules. A spatiotemporal association is not
+causation; unsupported pairs and insufficient evidence remain explicit.
+
 ## Operator actions
 
 The interpretation response may include up to four exact IDs from the

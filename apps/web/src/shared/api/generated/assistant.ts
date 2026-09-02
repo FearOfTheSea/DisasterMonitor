@@ -302,6 +302,16 @@ const apiSchemas = {
           },
         ],
       },
+      investigation_case: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/InvestigationCaseResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       map_action: {
         anyOf: [
           {
@@ -453,6 +463,86 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  CompoundHazardCorrelationResponse: {
+    properties: {
+      correlation_id: {
+        type: 'string',
+      },
+      distance_km: {
+        minimum: 0,
+        type: 'number',
+      },
+      first_disaster: {
+        $ref: '#/components/schemas/Disaster',
+      },
+      first_event_id: {
+        type: 'string',
+      },
+      first_physical_event_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      limitation: {
+        type: 'string',
+      },
+      relationship: {
+        const: 'spatiotemporal_association',
+        type: 'string',
+      },
+      rule_id: {
+        type: 'string',
+      },
+      second_disaster: {
+        $ref: '#/components/schemas/Disaster',
+      },
+      second_event_id: {
+        type: 'string',
+      },
+      second_physical_event_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source_ids: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      summary: {
+        type: 'string',
+      },
+      time_delta_seconds: {
+        minimum: 0,
+        type: 'integer',
+      },
+    },
+    required: [
+      'correlation_id',
+      'rule_id',
+      'relationship',
+      'first_event_id',
+      'first_disaster',
+      'second_event_id',
+      'second_disaster',
+      'distance_km',
+      'time_delta_seconds',
+      'summary',
+      'limitation',
+    ],
+    type: 'object',
+  },
   ConversationMessageResponse: {
     properties: {
       assistant_response: {
@@ -565,6 +655,27 @@ const apiSchemas = {
       'refresh_interval_seconds',
       'label',
     ],
+    type: 'object',
+  },
+  CrossHazardAssessmentResponse: {
+    properties: {
+      limitation: {
+        type: 'string',
+      },
+      status: {
+        enum: [
+          'associated',
+          'not_established',
+          'unsupported_pair',
+          'insufficient_evidence',
+        ],
+        type: 'string',
+      },
+      summary: {
+        type: 'string',
+      },
+    },
+    required: ['status', 'summary', 'limitation'],
     type: 'object',
   },
   CycloneMapCoordinateResponse: {
@@ -1067,6 +1178,61 @@ const apiSchemas = {
     required: ['kind', 'value', 'source_id'],
     type: 'object',
   },
+  InvestigationCaseCountryResponse: {
+    properties: {
+      country_code: {
+        type: 'string',
+      },
+      country_name: {
+        type: 'string',
+      },
+    },
+    required: ['country_code', 'country_name'],
+    type: 'object',
+  },
+  InvestigationCaseResponse: {
+    properties: {
+      case_id: {
+        type: 'string',
+      },
+      correlations: {
+        items: {
+          $ref: '#/components/schemas/CompoundHazardCorrelationResponse',
+        },
+        type: 'array',
+      },
+      country: {
+        $ref: '#/components/schemas/InvestigationCaseCountryResponse',
+      },
+      cross_hazard_assessment: {
+        $ref: '#/components/schemas/CrossHazardAssessmentResponse',
+      },
+      partial: {
+        type: 'boolean',
+      },
+      status: {
+        enum: ['completed', 'partial'],
+        type: 'string',
+      },
+      targets: {
+        items: {
+          $ref: '#/components/schemas/InvestigationTargetResponse',
+        },
+        maxItems: 2,
+        minItems: 2,
+        type: 'array',
+      },
+    },
+    required: [
+      'case_id',
+      'country',
+      'status',
+      'partial',
+      'targets',
+      'cross_hazard_assessment',
+    ],
+    type: 'object',
+  },
   InvestigationResponse: {
     properties: {
       actions: {
@@ -1424,6 +1590,56 @@ const apiSchemas = {
       },
     },
     required: ['status', 'task_summary', 'termination_reason'],
+    type: 'object',
+  },
+  InvestigationTargetResponse: {
+    properties: {
+      disaster: {
+        $ref: '#/components/schemas/Disaster',
+      },
+      partial: {
+        type: 'boolean',
+      },
+      sections: {
+        items: {
+          $ref: '#/components/schemas/ReportSectionResponse',
+        },
+        type: 'array',
+      },
+      selected_event: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/SelectedEventResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      sources: {
+        items: {
+          $ref: '#/components/schemas/SourceResponse',
+        },
+        type: 'array',
+      },
+      status: {
+        enum: ['completed', 'partial', 'coverage_unavailable', 'failed'],
+        type: 'string',
+      },
+      target_id: {
+        type: 'string',
+      },
+      termination_reason: {
+        type: 'string',
+      },
+      warnings: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+    },
+    required: ['target_id', 'disaster', 'status', 'partial', 'termination_reason'],
     type: 'object',
   },
   LineStringGeometryResponse: {
@@ -2881,6 +3097,7 @@ export type AssistantResponse = {
   conversation_id: string;
   decision_support?: DecisionSupportResponse | null;
   investigation?: InvestigationResponse | null;
+  investigation_case?: InvestigationCaseResponse | null;
   map_action?: MapNavigationActionResponse | null;
   media_gallery?: DisasterMediaGalleryResponse | null;
   message: string;
@@ -2986,6 +3203,13 @@ export type CreateIncidentWatchOperatorActionResponse = {
   refresh_interval_seconds: 900 | 1800 | 3600 | 21600 | 86400;
   risk: 'confirmation_required';
   scope: OperatorActionScopeResponse;
+};
+
+export type CrossHazardAssessmentResponse = {
+  limitation: string;
+  status:
+    'associated' | 'not_established' | 'unsupported_pair' | 'insufficient_evidence';
+  summary: string;
 };
 
 export type CycloneMapCoordinateResponse = {
@@ -3229,6 +3453,21 @@ export type IncidentWatchScopeResponse = {
   kind: 'country' | 'worldwide';
 };
 
+export type InvestigationCaseCountryResponse = {
+  country_code: string;
+  country_name: string;
+};
+
+export type InvestigationCaseResponse = {
+  case_id: string;
+  correlations?: Array<CompoundHazardCorrelationResponse>;
+  country: InvestigationCaseCountryResponse;
+  cross_hazard_assessment: CrossHazardAssessmentResponse;
+  partial: boolean;
+  status: 'completed' | 'partial';
+  targets: Array<InvestigationTargetResponse>;
+};
+
 export type InvestigationResponse = {
   actions?: Array<string>;
   capability_gaps?: Array<string>;
@@ -3277,6 +3516,18 @@ export type InvestigationResponse = {
   triage_priority?: string | null;
   triage_requires_human_intervention?: boolean | null;
   triage_score?: number | null;
+};
+
+export type InvestigationTargetResponse = {
+  disaster: Disaster;
+  partial: boolean;
+  sections?: Array<ReportSectionResponse>;
+  selected_event?: SelectedEventResponse | null;
+  sources?: Array<SourceResponse>;
+  status: 'completed' | 'partial' | 'coverage_unavailable' | 'failed';
+  target_id: string;
+  termination_reason: string;
+  warnings?: Array<string>;
 };
 
 export type LineStringGeometryResponse = {

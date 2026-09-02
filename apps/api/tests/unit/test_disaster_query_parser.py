@@ -206,7 +206,9 @@ def test_ascii_aliases_respect_identifier_boundaries_punctuation_and_case(
     )
 
 
-def test_multiple_disaster_aliases_are_explicitly_ambiguous() -> None:
+def test_parser_keeps_multiple_disasters_ambiguous_while_agent_admits_two_targets() -> (
+    None
+):
     text = "Latest earthquake and flood in Japan"
 
     assert recognized_disasters(text) == (Disaster.EARTHQUAKE, Disaster.FLOOD)
@@ -219,7 +221,11 @@ def test_multiple_disaster_aliases_are_explicitly_ambiguous() -> None:
         query_parser=PARSER,
     )
     assert task.kind is TaskKind.INVESTIGATION
-    assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
+    assert task.validation_status is ValidationStatus.VALID
+    assert tuple(target.disaster for target in task.investigation_targets) == (
+        Disaster.EARTHQUAKE,
+        Disaster.FLOOD,
+    )
 
 
 def test_forest_fires_follow_the_same_wildfire_trusted_path_in_both_layers() -> None:

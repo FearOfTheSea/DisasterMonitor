@@ -122,6 +122,13 @@ class CompoundHazardCorrelationService:
             )[:MAX_CORRELATIONS]
         )
 
+    def supports_pair(self, first: Disaster, second: Disaster) -> bool:
+        """Expose the maintained allowlist without evaluating an event pair."""
+        return any(
+            {first, second} == {rule.first_disaster, rule.second_disaster}
+            for rule in _V1_RULES
+        )
+
 
 def _correlate_pair(
     first_candidate: CorrelatableIncident,

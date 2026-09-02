@@ -6,6 +6,9 @@ from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
+from disaster_monitor.application.agent.investigation_cases import (
+    InvestigationCaseArtifact,
+)
 from disaster_monitor.application.agent.operator_actions import (
     IncidentWatchOperatorAction,
     OperatorAction,
@@ -14,6 +17,7 @@ from disaster_monitor.application.agent.operator_actions import (
 from disaster_monitor.application.assistant_message_payload import (
     assistant_answer_from_payload,
 )
+from disaster_monitor.application.disaster import SelectedEventSummary
 from disaster_monitor.application.dto import AssistantAnswer, ModelReadiness
 from disaster_monitor.application.media import DisasterMediaGallery
 from disaster_monitor.application.multimodal import AssetAdmissionInput
@@ -92,6 +96,7 @@ from disaster_monitor.presentation.http.schemas import (
     CountryCatalogSourceResponse,
     CountryCatalogUpdateResponse,
     CreateIncidentWatchOperatorActionResponse,
+    CrossHazardAssessmentResponse,
     CycloneMapCoordinateResponse,
     CycloneMapLayerResponse,
     DecisionEstimateResponse,
@@ -113,7 +118,10 @@ from disaster_monitor.presentation.http.schemas import (
     IncidentWatchMarkReadResponse,
     IncidentWatchResponse,
     IncidentWatchScopeResponse,
+    InvestigationCaseCountryResponse,
+    InvestigationCaseResponse,
     InvestigationResponse,
+    InvestigationTargetResponse,
     MapNavigationActionResponse,
     OpenPanelOperatorActionResponse,
     OperatorActionRequest,
@@ -1168,6 +1176,97 @@ def _assistant_response(
         multimodal=multimodal_state_response(result.multimodal_state),
         common_operational_picture=cop_response(result.common_operational_picture),
         media_gallery=_media_gallery_response(result.media_gallery, http_request),
+        investigation_case=_investigation_case_response(result.investigation_case),
+    )
+
+
+def _investigation_case_response(
+    case: InvestigationCaseArtifact | None,
+) -> InvestigationCaseResponse | None:
+    if case is None:
+        return None
+    return InvestigationCaseResponse(
+        case_id=case.case_id,
+        country=InvestigationCaseCountryResponse(
+            country_code=case.country.country_code,
+            country_name=case.country.country_name,
+        ),
+        status=case.status.value,
+        partial=case.partial,
+        targets=[
+            InvestigationTargetResponse(
+                target_id=branch.target.target_id,
+                disaster=branch.target.disaster,
+                status=cast(
+                    Literal["completed", "partial", "coverage_unavailable", "failed"],
+                    branch.status.value,
+                ),
+                selected_event=_selected_event_response(branch.selected_event),
+                sources=[_source_response(source) for source in branch.sources],
+                warnings=list(branch.warnings),
+                sections=[
+                    ReportSectionResponse(title=section.title, content=section.content)
+                    for section in branch.sections
+                ],
+                partial=branch.partial,
+                termination_reason=branch.termination_reason,
+            )
+            for branch in case.targets
+        ],
+        cross_hazard_assessment=CrossHazardAssessmentResponse(
+            status=case.cross_hazard_assessment.status.value,
+            summary=case.cross_hazard_assessment.summary,
+            limitation=case.cross_hazard_assessment.limitation,
+        ),
+        correlations=[
+            CompoundHazardCorrelationResponse(
+                correlation_id=item.correlation_id,
+                rule_id=item.rule_id,
+                relationship=item.relationship.value,
+                first_event_id=item.first_event_id,
+                first_physical_event_id=item.first_physical_event_id,
+                first_disaster=item.first_disaster,
+                second_event_id=item.second_event_id,
+                second_physical_event_id=item.second_physical_event_id,
+                second_disaster=item.second_disaster,
+                distance_km=item.distance_km,
+                time_delta_seconds=item.time_delta_seconds,
+                source_ids=list(item.source_ids),
+                summary=item.summary,
+                limitation=item.limitation,
+            )
+            for item in case.correlations
+        ],
+    )
+
+
+def _selected_event_response(
+    selected_event: SelectedEventSummary | None,
+) -> SelectedEventResponse | None:
+    if selected_event is None:
+        return None
+    return SelectedEventResponse(
+        event_id=selected_event.event_id,
+        disaster=selected_event.disaster,
+        location=selected_event.location,
+        event_time=selected_event.event_time,
+        geometry=_event_geometry_response(selected_event.geometry),
+        measurements=[
+            EventMeasurementResponse(
+                kind=item.kind,
+                value=item.value,
+                unit=item.unit,
+                source_id=item.source.source_id,
+            )
+            for item in selected_event.measurements
+        ],
+        provider_ids=list(selected_event.provider_ids),
+        geography_status=selected_event.geography_status,
+        supplemental_geometry=[
+            _cyclone_map_layer_response(layer)
+            for layer in selected_event.supplemental_geometry
+        ],
+        source=_source_response(selected_event.source),
     )
 
 

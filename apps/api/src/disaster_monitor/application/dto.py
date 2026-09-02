@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from disaster_monitor.application.agent.investigation_cases import (
+    InvestigationCaseArtifact,
+)
 from disaster_monitor.application.agent.operator_actions import OperatorAction
 from disaster_monitor.application.disaster import ReportSection, SelectedEventSummary
 from disaster_monitor.application.media import DisasterMediaGallery
@@ -141,3 +144,4 @@ class AssistantAnswer:
     common_operational_picture: CommonOperationalPicture | None = None
     media_gallery: DisasterMediaGallery | None = None
     operator_actions: tuple[OperatorAction, ...] = ()
+    investigation_case: InvestigationCaseArtifact | None = None

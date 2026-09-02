@@ -97,6 +97,69 @@ describe('AssistantClient', () => {
     );
   });
 
+  it('accepts a bounded two-hazard investigation case without a top-level event', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'Two-hazard investigation.',
+          conversation_id: 'case-1',
+          model: 'source-backed-investigation-agent',
+          response_type: 'current_disaster_investigation_case',
+          partial: true,
+          investigation_case: {
+            case_id: 'investigation-case:v1:test',
+            country: { country_code: 'JPN', country_name: 'Japan' },
+            status: 'partial',
+            partial: true,
+            targets: [
+              {
+                target_id: 'target-quake',
+                disaster: 'earthquake',
+                status: 'completed',
+                sources: [],
+                warnings: [],
+                sections: [],
+                partial: false,
+                termination_reason: 'grounded_answer_composed',
+              },
+              {
+                target_id: 'target-slide',
+                disaster: 'landslide',
+                status: 'coverage_unavailable',
+                sources: [],
+                warnings: ['No matching event.'],
+                sections: [],
+                partial: true,
+                termination_reason: 'coverage_unavailable',
+              },
+            ],
+            cross_hazard_assessment: {
+              status: 'insufficient_evidence',
+              summary: 'One branch did not establish a selected event.',
+              limitation:
+                'Spatial and temporal proximity does not establish causation.',
+            },
+            correlations: [],
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const client = new AssistantClient('http://localhost:8001/api/v1');
+
+    const answer = await client.ask('Investigate both hazards in Japan.', null, {
+      centerLatitude: 0,
+      centerLongitude: 0,
+      zoom: 2,
+    });
+
+    expect(answer.selected_event).toBeUndefined();
+    expect(answer.investigation_case?.targets).toHaveLength(2);
+    expect(toAssistantReport(answer)?.investigationCase?.case_id).toBe(
+      'investigation-case:v1:test',
+    );
+  });
+
   it('translates an API error into a stable client error', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ detail: 'The local model is unavailable.' }), {

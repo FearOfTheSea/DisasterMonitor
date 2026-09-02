@@ -4,6 +4,20 @@ import httpx
 import pytest
 from conftest import FakeLanguageModel
 
+from disaster_monitor.application.agent.investigation_cases import (
+    CrossHazardAssessment,
+    CrossHazardAssessmentStatus,
+    InvestigationCaseArtifact,
+    InvestigationCaseCountry,
+    InvestigationCaseStatus,
+    InvestigationTargetResult,
+)
+from disaster_monitor.application.agent.models import (
+    AgentStatus,
+    InformationNeed,
+    InvestigationTarget,
+    OutputModality,
+)
 from disaster_monitor.application.agent.operator_actions import (
     AutomaticOperatorAction,
     IncidentWatchOperatorAction,
@@ -12,6 +26,7 @@ from disaster_monitor.application.agent.operator_actions import (
     OperatorActionTarget,
     OperatorActionType,
 )
+from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
 from disaster_monitor.application.media import (
     DisasterMediaGallery,
@@ -35,6 +50,9 @@ from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.conversations.memory_repository import (
     InMemoryConversationRepository,
 )
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
 from disaster_monitor.infrastructure.memory.memory_repository import (
     InMemoryMemoryRepository,
 )
@@ -42,6 +60,104 @@ from disaster_monitor.main import create_app
 from disaster_monitor.presentation.http.routes import get_conversation_turn
 
 NOW = datetime(2026, 8, 21, 10, tzinfo=UTC)
+
+
+def _investigation_case() -> InvestigationCaseArtifact:
+    country = StaticCountryCatalog().get_by_alpha3("JPN")
+    assert country is not None
+    targets = tuple(
+        InvestigationTarget(
+            target_id=f"investigation-target:v1:JPN:{index}:{disaster.value}",
+            disaster=disaster,
+            country=country,
+            query=DisasterQuery(disaster, country, "recent", ("event_overview",)),
+            information_needs=(InformationNeed.EVENT_OVERVIEW,),
+            output_modalities=(OutputModality.TEXT,),
+        )
+        for index, disaster in enumerate(
+            (Disaster.EARTHQUAKE, Disaster.LANDSLIDE), start=1
+        )
+    )
+    first, second = targets
+    return InvestigationCaseArtifact(
+        "investigation-case:v1:http-fixture",
+        InvestigationCaseCountry.from_country(country),
+        (
+            InvestigationTargetResult(
+                first,
+                AgentStatus.COMPLETED,
+                None,
+                (),
+                (),
+                (),
+                False,
+                "grounded_answer_composed",
+            ),
+            InvestigationTargetResult(
+                second,
+                AgentStatus.COVERAGE_UNAVAILABLE,
+                None,
+                (),
+                ("No matching event.",),
+                (),
+                True,
+                "coverage_unavailable",
+            ),
+        ),
+        CrossHazardAssessment(
+            CrossHazardAssessmentStatus.INSUFFICIENT_EVIDENCE,
+            "One branch did not establish a selected event.",
+            "Spatial and temporal proximity does not establish causation.",
+        ),
+        (),
+        InvestigationCaseStatus.PARTIAL,
+        True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_assistant_http_exposes_and_persists_a_bounded_investigation_case() -> (
+    None
+):
+    repository = InMemoryConversationRepository()
+
+    class Assistant:
+        async def execute(self, question: str, *, conversation_id: str, **kwargs):
+            return AssistantAnswer(
+                message="Two-hazard report.",
+                conversation_id=conversation_id,
+                model="fixture-agent",
+                response_type="current_disaster_investigation_case",
+                partial=True,
+                investigation_case=_investigation_case(),
+            )
+
+    app = create_app(model=FakeLanguageModel(), conversation_repository=repository)
+    app.dependency_overrides[get_conversation_turn] = lambda: RunConversationTurn(
+        Assistant(), repository
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        created = await client.post(
+            "/api/v1/assistant", json={"question": "Investigate both hazards."}
+        )
+        conversation_id = created.json()["conversation_id"]
+        loaded = await client.get(f"/api/v1/conversations/{conversation_id}")
+
+    assert created.status_code == 200
+    case = created.json()["investigation_case"]
+    assert created.json()["selected_event"] is None
+    assert case["case_id"] == "investigation-case:v1:http-fixture"
+    assert [target["disaster"] for target in case["targets"]] == [
+        "earthquake",
+        "landslide",
+    ]
+    assert case["cross_hazard_assessment"]["status"] == "insufficient_evidence"
+    assert (
+        loaded.json()["messages"][1]["assistant_response"]["investigation_case"] == case
+    )
 
 
 @pytest.mark.asyncio

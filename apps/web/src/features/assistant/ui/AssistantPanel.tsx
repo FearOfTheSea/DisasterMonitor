@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 
 import { OperatorActionCard } from '@/features/assistant/ui/OperatorActionCard';
+import { InvestigationCaseView } from '@/features/assistant/ui/InvestigationCaseView';
 import type {
   AssistantReport,
   CommonOperationalPicture,
@@ -265,6 +266,9 @@ function DisasterReportView({
   report: AssistantReport;
   message: string;
 }) {
+  if (report.investigationCase) {
+    return <InvestigationCaseView investigationCase={report.investigationCase} />;
+  }
   return (
     <div className="disaster-report">
       {report.partial && (
