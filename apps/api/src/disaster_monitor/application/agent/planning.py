@@ -7,6 +7,7 @@ from disaster_monitor.application.agent.models import (
     PlanStep,
     ValidatedDisasterTask,
 )
+from disaster_monitor.application.agent.sufficiency import FollowUpOptionId
 
 DEFAULT_TOOL_ORDER = (
     "list_sources_for_task",
@@ -81,6 +82,9 @@ def validate_plan(
     *,
     allowed_tools: frozenset[str],
     requires_multimodal: bool = False,
+    prior_tools: frozenset[str] = frozenset(),
+    allow_followup: bool = False,
+    require_composition: bool = True,
 ) -> InvestigationPlan:
     if not plan.steps or len(plan.steps) > min(plan.maximum_steps, 8):
         raise ValueError("The investigation plan has an invalid step count.")
@@ -98,10 +102,22 @@ def validate_plan(
             raise ValueError(
                 "The investigation plan has duplicate trusted disaster tool steps."
             )
+        if (
+            step.tool_name in prior_tools
+            and not allow_followup
+            and step.tool_name in _BUILTIN_TOOL_PREREQUISITES
+        ):
+            raise ValueError(
+                "The investigation plan repeats a trusted disaster tool without "
+                "follow-up authorization."
+            )
         if any(dependency not in seen_steps for dependency in step.dependencies):
             raise ValueError("The investigation plan has invalid sequencing.")
         required_tools = _BUILTIN_TOOL_PREREQUISITES.get(step.tool_name, ())
-        if any(required_tool not in seen_tools for required_tool in required_tools):
+        if any(
+            required_tool not in seen_tools and required_tool not in prior_tools
+            for required_tool in required_tools
+        ):
             raise ValueError(
                 "The investigation plan has invalid sequencing for trusted "
                 "disaster tools."
@@ -112,7 +128,7 @@ def validate_plan(
             )
         seen_steps.add(step.step_id)
         seen_tools.add(step.tool_name)
-    if (
+    if require_composition and (
         seen_tools.intersection(_BUILTIN_TOOL_PREREQUISITES)
         and "compose_disaster_answer" not in seen_tools
     ):
@@ -120,6 +136,15 @@ def validate_plan(
             "The investigation plan has invalid sequencing; trusted disaster plans "
             "must compose a grounded answer."
         )
+    if "compose_disaster_answer" in seen_tools and plan.steps[-1].tool_name != (
+        "compose_disaster_answer"
+    ):
+        raise ValueError(
+            "The investigation plan has invalid sequencing; composition must be "
+            "the final step."
+        )
+    if not require_composition and "compose_disaster_answer" in seen_tools:
+        raise ValueError("A follow-up plan cannot compose the final answer.")
     if requires_multimodal and not set(MULTIMODAL_TOOL_ORDER).issubset(seen_tools):
         raise ValueError(
             "The investigation plan omitted required bounded multimodal tools."
@@ -134,3 +159,57 @@ def validate_plan(
     ):
         raise ValueError("Multimodal analysis must finish through the COP safety gate.")
     return plan
+
+
+def follow_up_plan(
+    option_id: str,
+    *,
+    replan_number: int = 1,
+) -> InvestigationPlan:
+    """Build the sole bounded follow-up plan from an admitted option ID."""
+    try:
+        option = FollowUpOptionId(option_id)
+    except ValueError as error:
+        raise ValueError("Unknown follow-up option.") from error
+    if replan_number != 1:
+        raise ValueError("Only the first follow-up plan is supported.")
+
+    if option is FollowUpOptionId.RETRY_EVENT_DISCOVERY:
+        names: tuple[str, ...] = (
+            "find_disaster_event",
+            "retrieve_situation_evidence",
+            "reconcile_disaster_evidence",
+        )
+        purposes: tuple[str, ...] = (
+            "Retry the bounded event-discovery lookup.",
+            "Retrieve situation evidence for the recovered event.",
+            "Reconcile the recovered event evidence.",
+        )
+    else:
+        names = (
+            "retrieve_situation_evidence",
+            "reconcile_disaster_evidence",
+        )
+        purposes = (
+            "Retry the bounded situation-evidence lookup.",
+            "Reconcile the retried situation evidence.",
+        )
+    steps = tuple(
+        PlanStep(
+            step_id=f"followup-{replan_number}-{index}",
+            tool_name=name,
+            arguments=(),
+            purpose=purpose,
+            dependencies=()
+            if index == 1
+            else (f"followup-{replan_number}-{index - 1}",),
+        )
+        for index, (name, purpose) in enumerate(
+            zip(names, purposes, strict=True), start=1
+        )
+    )
+    return InvestigationPlan(
+        plan_id=f"followup-{replan_number}-{option.value}",
+        objective=f"Execute the bounded {option.value} recovery path.",
+        steps=steps,
+    )

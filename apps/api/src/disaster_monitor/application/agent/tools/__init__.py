@@ -7,7 +7,9 @@ from typing import Protocol
 from disaster_monitor.application.agent.models import (
     AgentExecutionState,
     InvestigationAction,
+    InvestigationPlan,
 )
+from disaster_monitor.application.agent.trace import TraceEventKind
 
 MAX_TOOL_CALLS = 12
 
@@ -58,16 +60,62 @@ class ToolRegistry:
             raise ValueError(f"Unknown agent tool: {name}") from error
 
 
-async def execute_plan(state: AgentExecutionState, registry: ToolRegistry) -> None:
-    """Execute a validated plan with strict sequencing and call budgets."""
+async def execute_plan(
+    state: AgentExecutionState,
+    registry: ToolRegistry,
+    *,
+    plan: InvestigationPlan | None = None,
+    step_ids: tuple[str, ...] | None = None,
+    stop_before_composition: bool = False,
+    trace_phase: str = "direct",
+) -> None:
+    """Execute a validated plan with strict sequencing and call budgets.
+
+    The optional controls are used by Runtime v2 to execute the validated
+    pre-composition prefix and an application-generated follow-up. The default
+    remains the legacy whole-plan behavior.
+    """
+    execution_plan = plan or state.plan
+    selected_step_ids = set(step_ids) if step_ids is not None else None
     completed = set(state.completed_steps)
-    state.pending_steps = [step.step_id for step in state.plan.steps]
-    for step in state.plan.steps:
+    state.pending_steps = [
+        step.step_id
+        for step in execution_plan.steps
+        if selected_step_ids is None or step.step_id in selected_step_ids
+    ]
+    for step in execution_plan.steps:
+        if selected_step_ids is not None and step.step_id not in selected_step_ids:
+            continue
+        if stop_before_composition and step.tool_name == "compose_disaster_answer":
+            break
         if state.tool_call_count >= MAX_TOOL_CALLS:
+            state.trace.record(
+                TraceEventKind.BUDGET_VIOLATION,
+                budget="tool_call",
+                phase=trace_phase,
+            )
             raise RuntimeError("The agent tool-call budget was exhausted.")
         if any(dependency not in completed for dependency in step.dependencies):
+            state.trace.record(
+                TraceEventKind.TOOL_FAILED,
+                phase=trace_phase,
+                step_id=step.step_id,
+                tool=step.tool_name,
+                failure="prerequisite",
+            )
             raise ValueError("An agent tool prerequisite was not completed.")
-        tool = registry.resolve(step.tool_name)
+        try:
+            tool = registry.resolve(step.tool_name)
+        except Exception:
+            state.trace.record(
+                TraceEventKind.TOOL_FAILED,
+                phase=trace_phase,
+                step_id=step.step_id,
+                tool=step.tool_name,
+                failure="unknown_tool",
+            )
+            raise
+        state.tool_call_count += 1
         if state.workspace.selected_event is None and step.tool_name in {
             "retrieve_situation_evidence",
             "reconcile_disaster_evidence",
@@ -78,9 +126,30 @@ async def execute_plan(state: AgentExecutionState, registry: ToolRegistry) -> No
                 f"Skipped step {step.step_id} ({step.purpose}): no selected event "
                 "was available."
             )
+            state.trace.record(
+                TraceEventKind.TOOL_SKIPPED,
+                phase=trace_phase,
+                step_id=step.step_id,
+                tool=step.tool_name,
+            )
         else:
-            action = await tool.execute(state)
-        state.tool_call_count += 1
+            try:
+                action = await tool.execute(state)
+            except Exception:
+                state.trace.record(
+                    TraceEventKind.TOOL_FAILED,
+                    phase=trace_phase,
+                    step_id=step.step_id,
+                    tool=step.tool_name,
+                    failure="execution_error",
+                )
+                raise
+            state.trace.record(
+                TraceEventKind.TOOL_COMPLETED,
+                phase=trace_phase,
+                step_id=step.step_id,
+                tool=step.tool_name,
+            )
         state.completed_steps.append(step.step_id)
         completed.add(step.step_id)
         state.pending_steps.remove(step.step_id)

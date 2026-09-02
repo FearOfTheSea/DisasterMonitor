@@ -8,6 +8,7 @@ from typing import Any
 from disaster_monitor.application.agent.models import (
     AgentReview,
     DisasterTaskDraft,
+    EvidenceSufficiencyAssessment,
     InformationNeed,
     InvestigationPlan,
     OutputModality,
@@ -154,15 +155,32 @@ class StructuredAgentModel:
         return parser(payload)
 
     async def review_progress(
-        self, task: ValidatedDisasterTask, completed_steps: tuple[str, ...]
+        self,
+        task: ValidatedDisasterTask,
+        assessment: EvidenceSufficiencyAssessment,
     ) -> AgentReview:
         prompt = (
-            "Return JSON only with keys decision and detail. decision must be finish, "
-            "replan, or clarify. Do not add facts, URLs, code, or hidden reasoning.\n"
-            f"Task: {task.question}\nCompleted tools: {', '.join(completed_steps)}"
+            "Return one JSON object only with exactly these keys: decision, detail, "
+            "selected_follow_up_option_id. decision must be finish, replan, or "
+            "clarify. selected_follow_up_option_id must be null unless decision is "
+            "replan; for replan it must exactly match one permitted option ID below. "
+            "Use only the supplied option ID. Never provide a provider name, URL, "
+            "tool name, tool argument, source, or a new plan. Keep detail short and "
+            "do not include facts or hidden reasoning.\n"
+            f"Task: {task.question}\n"
+            f"Evidence sufficiency state: {assessment.state.value}\n"
+            f"Stable gap codes: "
+            f"{', '.join(item.value for item in assessment.gap_codes) or 'none'}\n"
+            "Permitted follow-up options: "
+            f"{_review_options_text(assessment)}"
         )
-        payload = await self._json_with_one_repair(prompt, self._parse_review)
-        return self._parse_review(payload)
+        allowed_options = frozenset(assessment.option_ids)
+
+        def parser(value: dict[str, Any]) -> AgentReview:
+            return self._parse_review(value, allowed_options)
+
+        payload = await self._json_with_one_repair(prompt, parser)
+        return parser(payload)
 
     async def _json_with_one_repair(
         self,
@@ -331,11 +349,19 @@ class StructuredAgentModel:
         )
 
     @staticmethod
-    def _parse_review(payload: dict[str, Any]) -> AgentReview:
-        _exact_keys(payload, {"decision", "detail"})
-        return AgentReview(
-            ReviewDecision(_text(payload["decision"])), _text(payload["detail"])
-        )
+    def _parse_review(
+        payload: dict[str, Any], allowed_options: frozenset[str] = frozenset()
+    ) -> AgentReview:
+        _exact_keys(payload, {"decision", "detail", "selected_follow_up_option_id"})
+        decision = ReviewDecision(_text(payload["decision"]))
+        detail = _text(payload["detail"])
+        selected = _optional_text(payload["selected_follow_up_option_id"])
+        if decision is ReviewDecision.REPLAN:
+            if selected is None or selected not in allowed_options:
+                raise ValueError("The review selected an unpermitted follow-up.")
+        elif selected is not None:
+            raise ValueError("Only a replan decision may select a follow-up.")
+        return AgentReview(decision, detail, selected)
 
     async def aclose(self) -> None:
         if not self._owns_language_model:
@@ -410,6 +436,16 @@ def _bounded_chunks(text: str, maximum: int) -> tuple[str, ...]:
     if remaining:
         chunks.append(remaining)
     return tuple(chunk for chunk in chunks if chunk)
+
+
+def _review_options_text(assessment: EvidenceSufficiencyAssessment) -> str:
+    return (
+        "; ".join(
+            f"{item.option_id}: {item.description}"
+            for item in assessment.follow_up_options
+        )
+        or "none"
+    )
 
 
 def _parse_legacy_draft(payload: dict[str, Any]) -> DisasterTaskDraft:

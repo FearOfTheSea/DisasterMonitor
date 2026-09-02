@@ -428,9 +428,11 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
         agent_model=ReplanAgent(),
     ).run("Give me the latest earthquake information in Japan.")
 
-    assert reviewed.replan_count == 1
+    assert reviewed.replan_count == 0
     assert reviewed.model_call_count == 2
-    assert any("no distinct" in warning.lower() for warning in reviewed.warnings)
+    assert any(
+        "no permitted follow-up" in warning.lower() for warning in reviewed.warnings
+    )
 
     class CanonicalSpecialistModel:
         def __init__(self) -> None:

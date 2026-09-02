@@ -23,9 +23,13 @@ Run allowlisted tools
     ↓
 Build evidence workspace
     ↓
-Review sufficiency
+Deterministic evidence-sufficiency gate
     ↓
-Compose grounded answer
+Bounded policy-authorized follow-up, if selected
+    ↓
+Reassess sufficiency
+    ↓
+Compose grounded answer exactly once
 ```
 
 `RunDisasterAgent` is the application entry point for assistant requests.
@@ -62,6 +66,30 @@ reconcile_disaster_evidence
 compose_disaster_answer
 ```
 
+The runtime validates the initial plan, executes its pre-composition steps, and
+then performs an application-owned evidence-sufficiency assessment. The
+assessment has one of three stable states: `sufficient`,
+`followup_available`, or `terminal_gap`. It reports bounded gap codes rather than
+provider or model prose. Composition is always the final step of a validated
+trusted disaster plan and is not available to the review model as a way to skip
+evidence stages.
+
+At most one follow-up can be executed for a request. Production policy can offer
+only a retry of event discovery when no event was established and a retryable
+provider issue was admitted, or a retry of situation evidence when a selected
+event exists and a retryable provider issue was admitted. The event retry reruns
+its dependent situation retrieval and reconciliation; the situation retry reruns
+retrieval and reconciliation. Empty successful lookups, non-retryable issues,
+unsupported roles, missing configuration, and ordinary capability gaps do not
+create follow-up options. The model can select only an exact option ID supplied
+by the application; it cannot provide a provider, URL, tool, argument, or plan.
+Invalid, failed, or unavailable model review safely finishes with the already
+admitted evidence. Counters and specialist budgets continue across both phases.
+
+After a follow-up, the application reassesses sufficiency without permitting a
+second replan. A failed retry retains first-pass evidence and the final report
+preserves its partial or degraded status.
+
 When admitted multimodal assets exist, the runtime can insert visual analysis and
 Common Operational Picture steps before composition.
 
@@ -79,6 +107,9 @@ A request has these limits:
 - 2 specialist-model calls when specialist rollout is enabled
 - 1 replan decision
 
+The one replan decision is a single application-authorized follow-up selection;
+it does not reset the tool, model, or specialist counters.
+
 Specialist-model calls have separate accounting from interpretation, planning,
 review, localization, and visual-model calls. The two supported model-backed roles
 run sequentially through the configured text model.
@@ -88,6 +119,15 @@ Request state carries the remaining specialist budget. Each execution checks tha
 budget, so repeated composition cannot reset the two-call limit.
 
 Trusted built-in workflow tools can appear only once in a validated plan.
+
+Each request also carries a non-persisted deterministic decision trace. It records
+stable lifecycle events such as task and plan validation, tool outcomes,
+sufficiency assessments, review decisions, follow-up selection or rejection,
+composition, and termination. It contains no raw prompts, chain-of-thought,
+provider payloads, or unrestricted provider text. A pure replay validator can
+reconstruct the decision sequence and rejects multiple replans, out-of-order or
+duplicate composition, events after termination, and represented budget
+violations. Replay validates decisions; it does not replay provider I/O.
 
 The runtime does not allow:
 

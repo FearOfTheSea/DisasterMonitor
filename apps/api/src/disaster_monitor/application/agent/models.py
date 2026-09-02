@@ -4,6 +4,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
+from disaster_monitor.application.agent.sufficiency import (
+    EvidenceSufficiencyAssessment as EvidenceSufficiencyAssessment,
+)
+from disaster_monitor.application.agent.trace import ExecutionTrace
 from disaster_monitor.application.disaster import (
     DisasterQuery,
     DisasterReport,
@@ -288,12 +292,21 @@ class AgentExecutionState:
     specialist_fallback_reason: str | None = None
     specialist_provenance_validation_failures: int = 0
     specialist_latency_ms: float = 0.0
+    sufficiency_assessment: EvidenceSufficiencyAssessment | None = None
+    followup_plan: InvestigationPlan | None = None
+    trace: ExecutionTrace = field(default_factory=ExecutionTrace)
 
 
 @dataclass(frozen=True, slots=True)
 class AgentReview:
     decision: ReviewDecision
     detail: str = ""
+    selected_follow_up_option_id: str | None = None
+
+    @property
+    def follow_up_option_id(self) -> str | None:
+        """Short compatibility spelling for the selected bounded option."""
+        return self.selected_follow_up_option_id
 
 
 @dataclass(frozen=True, slots=True)

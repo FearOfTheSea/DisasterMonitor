@@ -3,6 +3,16 @@ from dataclasses import dataclass, field
 
 import pytest
 
+from disaster_monitor.application.agent.models import (
+    TaskKind,
+    ValidatedDisasterTask,
+)
+from disaster_monitor.application.agent.sufficiency import (
+    EvidenceGapCode,
+    EvidenceSufficiencyAssessment,
+    EvidenceSufficiencyState,
+    FollowUpOption,
+)
 from disaster_monitor.application.dto import (
     ModelReadiness,
     ModelRequest,
@@ -149,3 +159,50 @@ async def test_grounded_localization_is_a_separate_strict_operation() -> None:
 
     assert "42" in result
     assert "https://example.test" in result
+
+
+@pytest.mark.asyncio
+async def test_review_json_can_select_only_the_supplied_followup_option() -> None:
+    model = SequenceModel(
+        [
+            json.dumps(
+                {
+                    "decision": "replan",
+                    "detail": "Retry the bounded evidence stage.",
+                    "selected_follow_up_option_id": "retry_situation_evidence",
+                }
+            )
+        ]
+    )
+    task = ValidatedDisasterTask("test", TaskKind.INVESTIGATION, True)
+    assessment = EvidenceSufficiencyAssessment(
+        EvidenceSufficiencyState.FOLLOWUP_AVAILABLE,
+        (EvidenceGapCode.RETRYABLE_SITUATION_EVIDENCE,),
+        (FollowUpOption("retry_situation_evidence", "bounded retry"),),
+    )
+
+    result = await StructuredAgentModel(model).review_progress(task, assessment)
+
+    assert result.selected_follow_up_option_id == "retry_situation_evidence"
+    assert "Permitted follow-up options" in model.requests[0].messages[1].content
+
+
+@pytest.mark.asyncio
+async def test_review_json_rejects_a_model_invented_followup_option() -> None:
+    invalid = {
+        "decision": "replan",
+        "detail": "Retry it.",
+        "selected_follow_up_option_id": "invented_provider_retry",
+    }
+    model = SequenceModel([json.dumps(invalid), json.dumps(invalid)])
+    task = ValidatedDisasterTask("test", TaskKind.INVESTIGATION, True)
+    assessment = EvidenceSufficiencyAssessment(
+        EvidenceSufficiencyState.FOLLOWUP_AVAILABLE,
+        (EvidenceGapCode.RETRYABLE_SITUATION_EVIDENCE,),
+        (FollowUpOption("retry_situation_evidence", "bounded retry"),),
+    )
+
+    with pytest.raises(AgentModelError):
+        await StructuredAgentModel(model).review_progress(task, assessment)
+
+    assert len(model.requests) == 2

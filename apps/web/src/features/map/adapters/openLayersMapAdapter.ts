@@ -61,6 +61,10 @@ const DEFAULT_FIT_PADDING = 56;
 const WEB_MERCATOR_MAX_LATITUDE = 85.0511287798066;
 const INCIDENT_CLUSTER_MAX_ZOOM = 9;
 
+function clusterDistanceForZoom(zoom: number): number {
+  return zoom < INCIDENT_CLUSTER_MAX_ZOOM ? 44 : 0;
+}
+
 type PendingArea = {
   bounds: MapAreaBounds;
   maxZoom: number;
@@ -83,9 +87,12 @@ export class OpenLayersMapAdapter {
   private pendingArea?: PendingArea;
   private pendingIncidentId?: string;
   private layerVisibility: MapLayerVisibility = createDefaultMapLayerState().visibility;
-  private applyingView = false;
+  private clusterDistance: number;
+  private lastReportedView: MapView;
 
   constructor(private readonly options: MapAdapterOptions) {
+    this.clusterDistance = clusterDistanceForZoom(options.initialView.zoom);
+    this.lastReportedView = options.initialView;
     const baseLayer = new TileLayer({ source: new OSM() });
     baseLayer.set('dmLayerType', 'base');
     baseLayer.setZIndex(0);
@@ -102,7 +109,7 @@ export class OpenLayersMapAdapter {
     });
     this.pointIncidentSource = new VectorSource<Feature<Geometry>>();
     this.clusteredIncidentSource = new Cluster({
-      distance: 44,
+      distance: this.clusterDistance,
       minDistance: 12,
       source: this.pointIncidentSource,
     });
@@ -186,16 +193,9 @@ export class OpenLayersMapAdapter {
       this.applyPendingIncidentFocus();
       this.applyPendingArea();
     });
-    view.on('change:center', () => {
-      if (!this.applyingView) this.reportView();
-    });
+    this.map.on('moveend', () => this.reportView());
     view.on('change:resolution', () => {
-      this.clusteredIncidentSource.setDistance(
-        (view.getZoom() ?? options.initialView.zoom) < INCIDENT_CLUSTER_MAX_ZOOM
-          ? 44
-          : 0,
-      );
-      if (!this.applyingView) this.reportView();
+      this.updateClusterDistance(view.getZoom() ?? options.initialView.zoom);
     });
   }
 
@@ -282,11 +282,13 @@ export class OpenLayersMapAdapter {
     if (!configuration) return;
     const layer = new TileLayer({
       opacity: validOpacity(configuration.opacity) ? configuration.opacity : 1,
+      preload: 1,
       source: new XYZ({
         url: configuration.url,
         attributions: configuration.attribution,
         maxZoom: configuration.maximumUsefulZoom,
         crossOrigin: 'anonymous',
+        transition: 0,
       }),
     });
     layer.set('dmLayerType', 'satellite-imagery');
@@ -354,11 +356,9 @@ export class OpenLayersMapAdapter {
     ) {
       return;
     }
-    this.applyingView = true;
     view.cancelAnimations();
     view.setCenter(fromLonLat([next.centerLongitude, next.centerLatitude]));
     view.setZoom(next.zoom);
-    this.applyingView = false;
     this.reportView();
   }
 
@@ -447,11 +447,29 @@ export class OpenLayersMapAdapter {
       return;
     }
     const [longitude, latitude] = toLonLat(center);
-    this.options.onViewChange({
+    const nextView = {
       centerLatitude: latitude,
       centerLongitude: longitude,
       zoom: this.map.getView().getZoom() ?? this.options.initialView.zoom,
-    });
+    };
+    if (
+      this.lastReportedView.centerLatitude === nextView.centerLatitude &&
+      this.lastReportedView.centerLongitude === nextView.centerLongitude &&
+      this.lastReportedView.zoom === nextView.zoom
+    ) {
+      return;
+    }
+    this.lastReportedView = nextView;
+    this.options.onViewChange(nextView);
+  }
+
+  private updateClusterDistance(zoom: number): void {
+    const nextDistance = clusterDistanceForZoom(zoom);
+    if (nextDistance === this.clusterDistance) {
+      return;
+    }
+    this.clusterDistance = nextDistance;
+    this.clusteredIncidentSource.setDistance(nextDistance);
   }
 
   private incidentFeatures(): Feature<Geometry>[] {

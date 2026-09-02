@@ -1,13 +1,32 @@
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from disaster_monitor.application.agent.models import (
+    AgentExecutionState,
+    InvestigationPlan,
+    TaskKind,
+    ValidatedDisasterTask,
+)
+from disaster_monitor.application.agent.sufficiency import (
+    EvidenceSufficiencyState,
+    assess_evidence_sufficiency,
+)
+from disaster_monitor.application.disaster import (
+    DisasterQuery,
+    EvidencePacket,
+    GeographicScope,
+    ProviderBatch,
+    ProviderIssue,
+)
 from disaster_monitor.application.services.specialist_executor import (
     SpecialistExecutionResult,
 )
+from disaster_monitor.domain.disaster import Disaster, DisasterEvent, SourceReference
 from disaster_monitor.evaluation.disaster_agent_bench import (
     DisasterAgentBenchError,
     ReplayMode,
@@ -20,6 +39,9 @@ from disaster_monitor.evaluation.disaster_agent_bench import (
 from disaster_monitor.evaluation.reproducibility import (
     canonical_json_sha256,
     file_sha256,
+)
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
 )
 
 
@@ -212,3 +234,89 @@ def test_specialist_benchmark_records_safety_and_runtime_metrics() -> None:
     assert metrics.fallback_rate == 0.5
     assert metrics.specialist_model_call_count == 3
     assert metrics.average_latency_ms == 10.0
+
+
+def test_runtime_v2_recoverable_retry_improves_evidence_state_without_provider_io() -> (
+    None
+):
+    now = datetime(2026, 8, 2, 3, tzinfo=UTC)
+    country = StaticCountryCatalog().get_by_alpha3("VNM")
+    assert country is not None
+    source = SourceReference(
+        "fixture-source",
+        "Fixture authority",
+        "Fixture event",
+        "https://example.test/event",
+        now,
+        now,
+        now,
+    )
+    event = DisasterEvent(
+        "fixture:flood-1", Disaster.FLOOD, "Fixture location", country, now, source
+    )
+    query = DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",))
+    task = ValidatedDisasterTask(
+        "Latest flood information in Vietnam.",
+        TaskKind.INVESTIGATION,
+        True,
+        disaster=Disaster.FLOOD,
+        country=country,
+        geographic_scope=GeographicScope.COUNTRY,
+        query=query,
+    )
+    state = AgentExecutionState(task, InvestigationPlan("bench", task.question, ()))
+    state.workspace.event_batch = ProviderBatch(
+        issues=(
+            ProviderIssue(
+                "fixture", "temporary", reason_code="timeout", retryable=True
+            ),
+        )
+    )
+
+    first = assess_evidence_sufficiency(state)
+    state.replan_count = 1
+    state.workspace.event_batch = ProviderBatch((event,))
+    state.workspace.selected_event = event
+    state.workspace.situation_batch = ProviderBatch((object(),))
+    state.workspace.evidence_packet = EvidencePacket(
+        query=query,
+        event=event,
+        facts=(),
+        narratives=(),
+        sources=(source,),
+        conflicts=(),
+        warnings=(),
+        retrieved_at=now,
+        stale=False,
+        completeness="event_verified_with_event_specific_evidence",
+        partial=False,
+    )
+    recovered = assess_evidence_sufficiency(state)
+
+    assert first.state is EvidenceSufficiencyState.FOLLOWUP_AVAILABLE
+    assert first.option_ids == ("retry_event_discovery",)
+    assert recovered.state is EvidenceSufficiencyState.SUFFICIENT
+    assert recovered.option_ids == ()
+
+
+def test_runtime_v2_terminal_gap_has_no_retry_option_or_invented_coverage() -> None:
+    country = StaticCountryCatalog().get_by_alpha3("VNM")
+    assert country is not None
+    query = DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",))
+    task = ValidatedDisasterTask(
+        "Latest flood information in Vietnam.",
+        TaskKind.INVESTIGATION,
+        True,
+        disaster=Disaster.FLOOD,
+        country=country,
+        geographic_scope=GeographicScope.COUNTRY,
+        query=query,
+    )
+    state = AgentExecutionState(task, InvestigationPlan("bench", task.question, ()))
+    state.workspace.event_batch = ProviderBatch()
+
+    assessment = assess_evidence_sufficiency(state)
+
+    assert assessment.state is EvidenceSufficiencyState.TERMINAL_GAP
+    assert assessment.option_ids == ()
+    assert "retry_event_discovery" not in assessment.option_ids

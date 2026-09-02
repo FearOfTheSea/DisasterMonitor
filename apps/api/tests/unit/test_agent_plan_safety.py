@@ -64,6 +64,30 @@ def test_plan_validation_rejects_duplicate_trusted_tool_steps() -> None:
         validate_plan(plan, allowed_tools=frozenset(DEFAULT_TOOL_ORDER))
 
 
+def test_plan_validation_rejects_composition_that_is_not_final() -> None:
+    plan = InvestigationPlan(
+        "late-composition",
+        "Composition is a terminal operation.",
+        tuple(
+            PlanStep(
+                f"step-{index}",
+                name,
+                (),
+                name,
+                () if index == 1 else (f"step-{index - 1}",),
+            )
+            for index, name in enumerate((*DEFAULT_TOOL_ORDER, "dummy"), 1)
+        ),
+    )
+
+    with pytest.raises(ValueError, match="final"):
+        validate_plan(
+            plan,
+            allowed_tools=frozenset((*DEFAULT_TOOL_ORDER, "dummy")),
+            require_composition=True,
+        )
+
+
 def test_plan_validation_rejects_multimodal_tools_without_admitted_assets() -> None:
     tool_order = (
         *DEFAULT_TOOL_ORDER[:-1],

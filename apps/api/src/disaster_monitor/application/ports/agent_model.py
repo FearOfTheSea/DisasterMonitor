@@ -8,6 +8,9 @@ from disaster_monitor.application.agent.models import (
     InvestigationPlan,
     ValidatedDisasterTask,
 )
+from disaster_monitor.application.agent.sufficiency import (
+    EvidenceSufficiencyAssessment,
+)
 from disaster_monitor.application.disaster import DisasterReport
 
 
@@ -27,5 +30,7 @@ class AgentModel(Protocol):
     ) -> InvestigationPlan: ...
 
     async def review_progress(
-        self, task: ValidatedDisasterTask, completed_steps: tuple[str, ...]
+        self,
+        task: ValidatedDisasterTask,
+        assessment: EvidenceSufficiencyAssessment,
     ) -> AgentReview: ...
