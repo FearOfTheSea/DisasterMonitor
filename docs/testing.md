@@ -62,6 +62,12 @@ service. Use fakes for application ports.
 
 Architecture dependency checks are unit-level quality gates.
 
+`test_source_file_quality.py` enforces the documented 700-line hard limit across
+hand-maintained backend, frontend, test, and script sources. The generated frontend
+OpenAPI contract is the sole explicit size exemption; `check:api-contract` verifies
+its source of truth and freshness. It also prevents Python test modules from importing
+other test modules; reusable setup belongs in explicitly named fixture modules.
+
 ### Integration
 
 Integration tests cover boundaries where DisasterMonitor communicates with another
@@ -95,6 +101,11 @@ backend.
 
 Use controlled data and deterministic dependencies. Keep each scenario focused so a
 failure identifies the broken workflow.
+
+The browser workflow runs the production standalone server, fails on uncaught page or
+console errors, and accepts `SYSTEM_TEST_SCREENSHOT` as an optional final-state image
+path for visual QA. Set `SYSTEM_TEST_MOBILE_SCREENSHOT` to capture the same state at a
+390-pixel mobile viewport.
 
 ### Evaluation
 
@@ -142,9 +153,10 @@ uv run --directory apps/api pytest tests/unit -q
 uv run --directory apps/api pytest tests/integration -q
 uv run --directory apps/api pytest tests/evaluation -q
 uv run --directory apps/api pytest -q
-uv run --directory apps/api ruff format --check src tests
-uv run --directory apps/api ruff check src tests
+uv run --directory apps/api ruff format --check src tests scripts ../../scripts
+uv run --directory apps/api ruff check src tests scripts ../../scripts
 uv run --directory apps/api mypy
+uv run --directory apps/api mypy scripts ../../scripts
 ```
 
 Frontend:

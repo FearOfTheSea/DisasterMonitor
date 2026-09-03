@@ -1,9 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-const styles = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
+const layoutPath = join(process.cwd(), 'src/app/layout.tsx');
+const layout = readFileSync(layoutPath, 'utf8');
+const styles = [...layout.matchAll(/import ['"](.+\.css)['"];?/g)]
+  .map((match) => readFileSync(resolve(dirname(layoutPath), match[1]), 'utf8'))
+  .join('\n');
 
 describe('responsive layout safeguards', () => {
   it('reserves enough mobile header height for the brand and two action rows', () => {

@@ -1,12 +1,14 @@
-import hashlib
 import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from test_decision_support import FIXTURES as DECISION_FIXTURES
-from test_decision_support import _products
+from coordination_fixtures import build_multimodal_state
+from decision_support_fixtures import (
+    DECISION_SUPPORT_FIXTURES,
+    build_decision_products,
+)
 
 from disaster_monitor.application.services.collaborative_investigation import (
     SAFETY_POLICY_FINGERPRINT,
@@ -35,14 +37,6 @@ from disaster_monitor.domain.coordination import (
     SpecialistFinding,
     SpecialistFindingDraft,
     SpecialistRole,
-)
-from disaster_monitor.domain.multimodal import (
-    AssetEligibility,
-    AssetModality,
-    CaptureRole,
-    MultimodalAsset,
-    MultimodalEvidenceState,
-    MultimodalSourceMetadata,
 )
 from disaster_monitor.evaluation.disaster_agent_bench import (
     summarize_specialist_benchmark,
@@ -153,7 +147,9 @@ def test_co_b_release_gate() -> None:
     cases = fixture["cases"]
     assert isinstance(cases, list) and cases
     scenario_fixture = json.loads(
-        (DECISION_FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "scenario_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     scenarios = {str(item["id"]): item for item in scenario_fixture["cases"]}
     runs_per_case = int(fixture["runs_per_case"])
@@ -166,11 +162,13 @@ def test_co_b_release_gate() -> None:
 
     for item in cases:
         assert isinstance(item, dict)
-        state, _hypotheses, _priority, _triage, artifact = _products(
+        state, _hypotheses, _priority, _triage, artifact = build_decision_products(
             scenarios[str(item["scenario_id"])]
         )
         multimodal = (
-            _multimodal_state(state, str(item["id"])) if item["multimodal"] else None
+            build_multimodal_state(state, str(item["id"]))
+            if item["multimodal"]
+            else None
         )
         handoffs = (
             planner.for_evidence_state(state),
@@ -231,12 +229,14 @@ def test_co_b_release_gate() -> None:
 
 def test_co_b_attacks_fall_back_without_policy_or_evidence_mutation() -> None:
     scenario_fixture = json.loads(
-        (DECISION_FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "scenario_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     scenario = next(
         item for item in scenario_fixture["cases"] if item["id"] == "positive-injuries"
     )
-    state, _hypotheses, _priority, _triage, artifact = _products(scenario)
+    state, _hypotheses, _priority, _triage, artifact = build_decision_products(scenario)
     planner = CoordinationHandoffPlanner()
     handoffs = (
         planner.for_evidence_state(state),
@@ -311,7 +311,9 @@ def test_co_c_release_gate() -> None:
     cases = fixture["cases"]
     assert isinstance(cases, list) and cases
     scenario_fixture = json.loads(
-        (DECISION_FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "scenario_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     scenarios = {str(item["id"]): item for item in scenario_fixture["cases"]}
     runs_per_case = int(fixture["runs_per_case"])
@@ -323,11 +325,13 @@ def test_co_c_release_gate() -> None:
 
     for item in cases:
         assert isinstance(item, dict)
-        state, _hypotheses, _priority, _triage, artifact = _products(
+        state, _hypotheses, _priority, _triage, artifact = build_decision_products(
             scenarios[str(item["scenario_id"])]
         )
         multimodal = (
-            _multimodal_state(state, str(item["id"])) if item["multimodal"] else None
+            build_multimodal_state(state, str(item["id"]))
+            if item["multimodal"]
+            else None
         )
         run_success: list[bool] = []
         for run in range(runs_per_case):
@@ -416,12 +420,14 @@ class InventedEvidenceSpecialistModel(CanonicalSpecialistModel):
 @pytest.mark.asyncio
 async def test_llm_specialist_path_matches_baseline_and_records_metrics() -> None:
     scenario_fixture = json.loads(
-        (DECISION_FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "scenario_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     scenario = next(
         item for item in scenario_fixture["cases"] if item["id"] == "positive-injuries"
     )
-    state, _hypotheses, _priority, _triage, artifact = _products(scenario)
+    state, _hypotheses, _priority, _triage, artifact = build_decision_products(scenario)
     planner = CoordinationHandoffPlanner()
     handoffs = (
         planner.for_evidence_state(state),
@@ -577,44 +583,6 @@ def _supervision_episode(
 def _end_state_score(actual: dict[str, str], expected: dict[str, str]) -> float:
     return sum(actual.get(key) == value for key, value in expected.items()) / len(
         expected
-    )
-
-
-def _multimodal_state(state, case_id: str) -> MultimodalEvidenceState:
-    content = b"frozen-co-b-asset"
-    asset = MultimodalAsset(
-        asset_id=f"asset:{case_id}",
-        source=MultimodalSourceMetadata(
-            source_id=f"operator-asset:{case_id}",
-            attribution="Frozen CO-B operator asset",
-        ),
-        retrieved_at=NOW,
-        captured_at=NOW,
-        modality=AssetModality.IMAGE,
-        media_type="image/png",
-        content_sha256=hashlib.sha256(content).hexdigest(),
-        byte_length=len(content),
-        width=1,
-        height=1,
-        footprint=None,
-        declared_disaster=state.physical_event.event.disaster,
-        declared_country_code=state.physical_event.event.country.alpha3_code,
-        capture_role=CaptureRole.SINGLE_CAPTURE,
-        processing_level="raw",
-        parent_asset_ids=(),
-        event_id_hint=state.physical_event.event.event_id,
-        eligibility=AssetEligibility.ANALYSIS_ELIGIBLE,
-        eligibility_reasons=("frozen-co-b",),
-        content=content,
-    )
-    return MultimodalEvidenceState(
-        state_version=f"multimodal:{case_id}",
-        evidence_world_state_version=state.state_version,
-        physical_event_id=state.physical_event.physical_event_id,
-        assets=(asset,),
-        associations=(),
-        observations=(),
-        evaluated_at=NOW,
     )
 
 

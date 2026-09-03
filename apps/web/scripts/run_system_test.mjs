@@ -43,11 +43,21 @@ function stopStack() {
   }
 }
 
+let browser;
 try {
   await waitForApplication('http://127.0.0.1:4173/');
   await waitForApplication('http://127.0.0.1:8787/api/v1/health');
-  const browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
+  const browserErrors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      browserErrors.push(`console: ${message.text()}`);
+    }
+  });
+  page.on('pageerror', (error) => {
+    browserErrors.push(`page: ${error.message}`);
+  });
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Active incidents monitoring').waitFor();
   const incidentFixtures = [
@@ -295,10 +305,22 @@ try {
       'The Operator Agent did not create exactly one bounded flood watch.',
     );
   }
-  await browser.close();
+  const screenshotPath = process.env.SYSTEM_TEST_SCREENSHOT;
+  if (screenshotPath) {
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+  }
+  const mobileScreenshotPath = process.env.SYSTEM_TEST_MOBILE_SCREENSHOT;
+  if (mobileScreenshotPath) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
+  }
+  if (browserErrors.length > 0) {
+    throw new Error(`Browser errors detected:\n${browserErrors.join('\n')}`);
+  }
   console.log(
     'System test passed: all six Active Incidents hazards focused their own geometry, a scheduled Incident Watch refresh produced a visible source-backed timeline alert, the existing assistant workflow rendered, and Operator Agent v1 applied a 24-hour window while confirmation-gating one flood watch.',
   );
 } finally {
+  await browser?.close();
   stopStack();
 }

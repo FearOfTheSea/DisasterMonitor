@@ -1,0 +1,338 @@
+@media (max-width: 1320px) {
+  :root {
+    --incident-rail: 350px;
+    --assistant-rail: 380px;
+    --operations-rail: 440px;
+  }
+}
+
+@media (max-width: 1080px) and (min-width: 851px) {
+  .workspace-assistant-open,
+  .workspace-operations-open,
+  .workspace-source-catalog-open {
+    grid-template-columns: var(--incident-rail) minmax(0, 1fr);
+  }
+
+  .assistant-panel,
+  .operations-panel,
+  .source-catalog-panel {
+    bottom: 0;
+    box-shadow: -12px 0 30px rgba(15, 32, 57, 0.16);
+    grid-column: auto;
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+
+  .assistant-panel {
+    width: min(var(--assistant-rail), calc(100% - var(--incident-rail)));
+  }
+
+  .operations-panel {
+    width: min(var(--operations-rail), calc(100% - var(--incident-rail)));
+  }
+
+  .source-catalog-panel {
+    width: min(var(--operations-rail), calc(100% - var(--incident-rail)));
+  }
+}
+
+@media (max-width: 850px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-header {
+    position: sticky;
+    top: 0;
+  }
+
+  .workspace,
+  .workspace-assistant-open,
+  .workspace-operations-open,
+  .workspace-source-catalog-open {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100dvh - var(--header-height));
+    overflow: visible;
+  }
+
+  .workspace-assistant-open,
+  .workspace-operations-open,
+  .workspace-source-catalog-open {
+    height: calc(100dvh - var(--header-height));
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .active-incidents-panel {
+    border-bottom: 1px solid var(--line);
+    border-right: 0;
+    flex: none;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .active-incidents-scroll {
+    flex: none;
+    overflow: visible;
+  }
+
+  .active-incidents-header p {
+    max-width: none;
+  }
+
+  .map-region {
+    flex: none;
+    height: 68vh;
+    min-height: 560px;
+    order: 2;
+  }
+
+  .map-canvas {
+    height: 100%;
+    min-height: 560px;
+  }
+
+  .assistant-panel,
+  .operations-panel,
+  .source-catalog-panel {
+    bottom: 0;
+    box-shadow: none;
+    height: calc(100dvh - var(--header-height));
+    left: 0;
+    position: fixed;
+    right: 0;
+    top: var(--header-height);
+    width: 100%;
+    z-index: 25;
+  }
+}
+
+@media (max-width: 700px) {
+  :root {
+    --header-height: 144px;
+  }
+
+  .app-header {
+    align-content: center;
+    display: grid;
+    gap: 9px;
+    grid-template-columns: minmax(0, 1fr);
+    height: var(--header-height);
+    padding: 9px 14px 10px;
+  }
+
+  .brand-mark {
+    height: 34px;
+    width: 34px;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .header-actions button,
+  .assistant-toggle {
+    min-height: 36px;
+    padding: 7px 9px;
+    width: 100%;
+  }
+
+  .active-incidents-header {
+    padding: 14px 16px;
+  }
+
+  .incident-list-section,
+  .incident-coverage-section,
+  .incident-coverage-status {
+    padding: 14px 16px 15px;
+  }
+
+  .incident-coverage-grid {
+    column-gap: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .coverage-item:nth-child(odd) {
+    border-right: 1px solid var(--line);
+    padding-right: 12px;
+  }
+
+  .coverage-item:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
+  .coverage-item > div {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+  }
+
+  .coverage-state {
+    margin-left: auto;
+    padding-left: 0;
+    text-align: left;
+  }
+
+  .incident-source span,
+  .incident-source small {
+    display: none;
+  }
+
+  .map-overlay {
+    left: 14px;
+    max-width: calc(100% - 28px);
+    right: auto;
+    top: 14px;
+  }
+
+  .satellite-controls {
+    max-height: none;
+  }
+
+  .map-layer-controls {
+    max-height: calc(100% - 122px);
+    right: 12px;
+    top: 104px;
+  }
+
+  .incident-cluster-picker {
+    left: 12px;
+    top: 104px;
+    width: min(300px, calc(100% - 400px));
+  }
+
+  .map-region .ol-zoom {
+    top: 62px;
+  }
+
+  .cop-legend {
+    bottom: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+  }
+
+  .conversation-controls {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .conversation-controls button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand h1 {
+    font-size: 0.94rem;
+  }
+
+  .brand p {
+    font-size: 0.68rem;
+  }
+
+  .button-icon {
+    height: 15px;
+    width: 15px;
+  }
+
+  .header-actions button {
+    font-size: 0.72rem;
+  }
+
+  .active-incidents-header {
+    align-items: start;
+  }
+
+  .active-incidents-header button {
+    min-height: 32px;
+  }
+
+  .incident-card-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .incident-selected-label {
+    margin-left: auto;
+  }
+
+  .incident-chevron {
+    display: none;
+  }
+
+  .incident-coverage-grid {
+    column-gap: 10px;
+  }
+
+  .map-layer-controls {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .incident-cluster-picker {
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    width: auto;
+  }
+
+  .coverage-item:nth-child(odd) {
+    padding-right: 8px;
+  }
+
+  .coverage-item strong,
+  .coverage-state {
+    font-size: 0.62rem;
+  }
+
+  .assistant-panel-header,
+  .operations-panel-header,
+  .source-catalog-header,
+  .operations-section {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .message-list {
+    padding: 12px;
+  }
+
+  .assistant-form {
+    padding: 11px 12px 12px;
+  }
+
+  .assistant-form-footer {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .assistant-form-footer > div {
+    min-width: 0;
+  }
+
+  .loading-label {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .loading-indicator {
+    animation-duration: 1.6s;
+  }
+}

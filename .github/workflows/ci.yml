@@ -14,9 +14,10 @@ jobs:
         with:
           version: 0.11.32
       - run: uv sync --project apps/api --frozen
-      - run: uv run --directory apps/api ruff format --check src tests
-      - run: uv run --directory apps/api ruff check src tests
+      - run: uv run --directory apps/api ruff format --check src tests scripts ../../scripts
+      - run: uv run --directory apps/api ruff check src tests scripts ../../scripts
       - run: uv run --directory apps/api mypy
+      - run: uv run --directory apps/api mypy scripts ../../scripts
       - run: uv run --directory apps/api pytest -q
 
   postgres-persistence:

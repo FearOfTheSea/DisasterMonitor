@@ -3,14 +3,11 @@
 import asyncio
 import sys
 from dataclasses import dataclass
-from pathlib import Path
-
-api_src = Path(__file__).resolve().parents[1] / "apps" / "api" / "src"
-sys.path.insert(0, str(api_src))
 
 from disaster_monitor.application.agent.task_normalization import (
     worldwide_disaster_query,
 )
+from disaster_monitor.application.disaster import DisasterReport, ProviderIssue
 from disaster_monitor.application.services.active_incidents import (
     ActiveIncidentsService,
 )
@@ -93,13 +90,12 @@ CASES = (
 
 
 def _print_provider_status(
-    label: str, provider: object, counts: dict[str, int], issues: tuple[object, ...]
+    label: str,
+    provider: CompositeDisasterEventProvider | CompositeSituationReportProvider,
+    counts: dict[str, int],
+    issues: tuple[ProviderIssue, ...],
 ) -> None:
-    issue_by_provider = {
-        issue.provider: issue
-        for issue in issues
-        if hasattr(issue, "provider") and hasattr(issue, "reason_code")
-    }
+    issue_by_provider = {issue.provider: issue for issue in issues}
     print(f"{label}_providers=")
     for item in provider.providers:
         name = getattr(item, "provider_name", item.__class__.__name__)
@@ -113,7 +109,7 @@ def _print_provider_status(
         print(f"- {name}: {status} records={counts.get(name, 0)}")
 
 
-def _print_report(scope: str, question: str, result: object) -> None:
+def _print_report(scope: str, question: str, result: DisasterReport) -> None:
     print(f"scope={scope}")
     print(f"question={question}")
     print(f"response_type={result.response_type}")
@@ -154,8 +150,8 @@ async def main() -> None:
                         f"{named_country_question}"
                     )
                 named_result = await service.execute(named_query)
-                event_provider = service._event_provider
-                situation_provider = service._situation_report_provider
+                event_provider = service.event_provider
+                situation_provider = service.situation_report_provider
                 if isinstance(event_provider, CompositeDisasterEventProvider):
                     _print_provider_status(
                         "named_event",

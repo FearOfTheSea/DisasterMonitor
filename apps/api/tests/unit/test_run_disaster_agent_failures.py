@@ -14,7 +14,7 @@ from disaster_monitor.application.agent.models import (
     TaskKind,
     ValidatedDisasterTask,
 )
-from disaster_monitor.application.disaster import SelectedEventSummary
+from disaster_monitor.application.disaster import DisasterReport, SelectedEventSummary
 from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
 from disaster_monitor.domain.disaster import (
     Disaster,
@@ -105,18 +105,43 @@ async def test_media_discovery_failure_records_diagnostic_and_preserves_fallback
             raise TimeoutError("internal upstream detail")
 
     diagnostics = RecordingDiagnostics()
+
+    class SuccessfulRuntime:
+        async def run(self, question: str, **kwargs) -> AgentExecutionState:
+            task = ValidatedDisasterTask(
+                question,
+                TaskKind.INVESTIGATION,
+                True,
+                disaster=Disaster.EARTHQUAKE,
+            )
+            state = AgentExecutionState(
+                task,
+                InvestigationPlan(
+                    "successful-plan", question, (), status=PlanStatus.COMPLETED
+                ),
+            )
+            state.workspace.report = DisasterReport(
+                message="Fixture report",
+                response_type="current_disaster",
+                selected_event=event,
+                retrieval_time=now,
+                sources=(source,),
+                warnings=(),
+                sections=(),
+            )
+            state.final_status = AgentStatus.COMPLETED
+            return state
+
     use_case = RunDisasterAgent(
-        FailedRuntime(),
+        SuccessfulRuntime(),
         FailIfCalledGeneralModel(),
         event_media=FailingMedia(),
         diagnostics=diagnostics,
     )
 
-    gallery = await use_case._discover_media(
-        event, country=None, physical_event_id=None
-    )
+    answer = await use_case.execute("Give me the latest earthquake information.")
 
-    assert gallery is None
+    assert answer.media_gallery is None
     assert len(diagnostics.items) == 1
     assert diagnostics.items[0].capability is AgentCapability.EVENT_MEDIA_DISCOVERY
     assert diagnostics.items[0].exception_type == "TimeoutError"

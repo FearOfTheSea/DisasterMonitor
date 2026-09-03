@@ -3,11 +3,13 @@
 import argparse
 import asyncio
 import json
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
 
 from disaster_monitor.evaluation.multimodal_release import (
     MultimodalReleaseError,
+    ReleaseEvaluation,
     evaluate_locked_release,
 )
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
@@ -81,7 +83,7 @@ def main() -> int:
 
 async def _evaluate(
     *, root: Path, manifest: Path, specification: Path, model: str, ollama_url: str
-):
+) -> ReleaseEvaluation:
     adapter = OllamaVisionAdapter(model, ollama_url)
     try:
         return await evaluate_locked_release(
@@ -94,7 +96,7 @@ async def _evaluate(
         await adapter.aclose()
 
 
-def _emit(payload: dict, output: Path | None) -> None:
+def _emit(payload: Mapping[str, object], output: Path | None) -> None:
     encoded = json.dumps(payload, indent=2) + "\n"
     if output is None:
         print(encoded, end="")

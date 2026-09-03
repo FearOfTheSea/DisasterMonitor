@@ -1,9 +1,12 @@
 import json
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import pytest
+from decision_support_fixtures import (
+    DECISION_SUPPORT_FIXTURES,
+    build_decision_products,
+    load_option_cases,
+)
 from evidence_world_state_metrics import expected_calibration_error
 
 from disaster_monitor.application.services.decision_autonomy import (
@@ -11,26 +14,12 @@ from disaster_monitor.application.services.decision_autonomy import (
     validate_decision_execution,
 )
 from disaster_monitor.application.services.decision_support import (
-    DecisionOptionGenerator,
     render_decision_support,
     validate_decision_support_artifact,
-)
-from disaster_monitor.application.services.event_resolution import (
-    default_event_policy_registry,
-)
-from disaster_monitor.application.services.evidence_state import (
-    build_evidence_world_state,
-)
-from disaster_monitor.application.services.hypothesis_reasoning import (
-    HypothesisGenerator,
-)
-from disaster_monitor.application.services.incident_priority import (
-    IncidentPriorityRanker,
 )
 from disaster_monitor.application.services.scenario_reasoning import (
     validate_scenario_analysis,
 )
-from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 from disaster_monitor.domain.decision import (
     PROHIBITED_CONSEQUENTIAL_ACTIONS,
     DecisionAutonomyMode,
@@ -42,138 +31,11 @@ from disaster_monitor.domain.decision import (
     DecisionScenarioMode,
     DecisionStatementType,
 )
-from disaster_monitor.domain.disaster import (
-    Disaster,
-    DisasterEvent,
-    EventMeasurement,
-    EvidenceDisposition,
-    FactStatus,
-    MeasurementKind,
-    ReportedFact,
-    SituationReport,
-    SourceAuthority,
-    SourceReference,
-)
-from disaster_monitor.infrastructure.geography.static_country_catalog import (
-    StaticCountryCatalog,
-)
-
-FIXTURES = Path(__file__).parent / "fixtures" / "decision_support"
-NOW = datetime(2026, 8, 11, 12, tzinfo=UTC)
-COUNTRIES = StaticCountryCatalog()
-
-
-def _load() -> dict[str, object]:
-    return json.loads((FIXTURES / "option_cases.v1.json").read_text(encoding="utf-8"))
-
-
-def _state(item: dict[str, object]):
-    case_id = str(item["id"])
-    disaster = Disaster(str(item["disaster"]))
-    country = COUNTRIES.get_by_alpha3(str(item["country_code"]))
-    assert country is not None
-    event_time = datetime(2026, 8, 11, 6, tzinfo=UTC)
-    event_source = SourceReference(
-        source_id=f"event-{case_id}",
-        publisher="Frozen event source",
-        title=f"Event {case_id}",
-        canonical_url=f"https://events.example/{case_id}",
-        published_at=event_time,
-        updated_at=None,
-        retrieved_at=NOW,
-        authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
-    )
-    event = DisasterEvent(
-        event_id=case_id,
-        disaster=disaster,
-        location=country.canonical_name,
-        country=country,
-        event_time=event_time,
-        source=event_source,
-        measurements=(
-            ()
-            if item.get("magnitude") is None
-            else (
-                EventMeasurement(
-                    MeasurementKind.MAGNITUDE,
-                    float(item["magnitude"]),
-                    source=event_source,
-                ),
-            )
-        ),
-    )
-    physical_event = (
-        default_event_policy_registry()
-        .for_disaster(disaster)
-        .identify((event,))
-        .physical_events[0]
-    )
-    raw_reports = item.get("reports")
-    if raw_reports is None:
-        raw_reports = (
-            []
-            if not item.get("facts")
-            else [{"source_id": f"report-{case_id}", "facts": item["facts"]}]
-        )
-    assert isinstance(raw_reports, list)
-    reports: list[SituationReport] = []
-    for raw_report in raw_reports:
-        assert isinstance(raw_report, dict)
-        source_id = str(raw_report["source_id"])
-        source_time = NOW - timedelta(hours=float(raw_report.get("hours_ago", 0)))
-        source = SourceReference(
-            source_id=source_id,
-            publisher=f"Authority {source_id}",
-            title=f"Situation {source_id}",
-            canonical_url=f"https://reports.example/{case_id}/{source_id}",
-            published_at=source_time,
-            updated_at=None,
-            retrieved_at=NOW,
-            authority=SourceAuthority.NATIONAL_AUTHORITY,
-        )
-        raw_facts = raw_report["facts"]
-        assert isinstance(raw_facts, list)
-        facts = tuple(
-            ReportedFact(
-                category=str(fact["category"]),
-                label=str(fact["category"]).replace("_", " ").title(),
-                value=str(fact["value"]),
-                status=FactStatus(str(fact.get("status", "confirmed"))),
-                source=source,
-                event_id=case_id,
-                claim_id=str(fact["category"]),
-            )
-            for fact in raw_facts
-        )
-        reports.append(
-            SituationReport(
-                source=source,
-                narrative="Frozen decision-support packet.",
-                facts=facts,
-                event_id=case_id,
-                disaster=disaster,
-                country_codes=(country.alpha3_code,),
-            )
-        )
-    return build_evidence_world_state(
-        event,
-        tuple(reports),
-        evaluated_at=NOW,
-        physical_event=physical_event,
-    )
-
-
-def _products(item: dict[str, object]):
-    state = _state(item)
-    hypotheses = HypothesisGenerator().generate(state)
-    priority = IncidentPriorityRanker().assess(state)
-    triage = TriageAutonomyPolicy().decide(priority)
-    artifact = DecisionOptionGenerator().generate(state, hypotheses, priority, triage)
-    return state, hypotheses, priority, triage, artifact
+from disaster_monitor.domain.disaster import EvidenceDisposition
 
 
 def test_ds_a_release_gate() -> None:
-    fixture = _load()
+    fixture = load_option_cases()
     assert fixture["fixture_version"] == "dm-ds-a-v1"
     cases = fixture["cases"]
     assert isinstance(cases, list) and cases
@@ -184,7 +46,7 @@ def test_ds_a_release_gate() -> None:
     relevance_passed = 0
 
     for item in cases:
-        state, hypotheses, priority, triage, artifact = _products(item)
+        state, hypotheses, priority, triage, artifact = build_decision_products(item)
         known_evidence_ids = {
             state.physical_event.physical_event_id,
             *(
@@ -265,14 +127,16 @@ def test_ds_a_release_gate() -> None:
 
 def test_ds_epistemic_status_truth_table_and_hypothesis_policy() -> None:
     fixture = json.loads(
-        (FIXTURES / "epistemic_status_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "epistemic_status_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert fixture["fixture_version"] == "dm-ds-epistemic-v1"
     cases = fixture["cases"]
     assert isinstance(cases, list) and cases
 
     for item in cases:
-        state, hypotheses, _priority, _triage, artifact = _products(item)
+        state, hypotheses, _priority, _triage, artifact = build_decision_products(item)
         hypothesis = hypotheses[0]
         expected_fact_types = item["expected_fact_types"]
         assert isinstance(expected_fact_types, dict)
@@ -323,12 +187,14 @@ def test_ds_epistemic_status_truth_table_and_hypothesis_policy() -> None:
 
 def test_ds_domain_rejects_source_status_promotion_to_verified_fact() -> None:
     fixture = json.loads(
-        (FIXTURES / "epistemic_status_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "epistemic_status_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     cases = fixture["cases"]
     assert isinstance(cases, list)
     preliminary = next(item for item in cases if item["id"] == "preliminary-positive")
-    artifact = _products(preliminary)[-1]
+    artifact = build_decision_products(preliminary)[-1]
     fact = next(item for item in artifact.facts if item.status == "preliminary")
 
     with pytest.raises(ValueError, match="preserve source status"):
@@ -336,12 +202,14 @@ def test_ds_domain_rejects_source_status_promotion_to_verified_fact() -> None:
 
 
 def test_ds_a_rejects_unsupported_fact_and_omitted_contradiction() -> None:
-    cases = _load()["cases"]
+    cases = load_option_cases()["cases"]
     assert isinstance(cases, list)
     conflict_case = next(
         item for item in cases if item["id"] == "conflicting-fatalities"
     )
-    state, hypotheses, priority, triage, artifact = _products(conflict_case)
+    state, hypotheses, priority, triage, artifact = build_decision_products(
+        conflict_case
+    )
     fabricated = DecisionFact(
         fact_id="decision-fact:fabricated",
         statement="Unsupported current fatality total.",
@@ -374,17 +242,21 @@ def test_ds_a_rejects_unsupported_fact_and_omitted_contradiction() -> None:
 
 
 def test_ds_a_is_deterministic_across_repeated_packet_order() -> None:
-    cases = _load()["cases"]
+    cases = load_option_cases()["cases"]
     assert isinstance(cases, list)
-    baseline = {str(item["id"]): _products(item)[-1] for item in cases}
+    baseline = {str(item["id"]): build_decision_products(item)[-1] for item in cases}
     for replay in range(8):
         ordered = cases if replay % 2 == 0 else tuple(reversed(cases))
-        assert {str(item["id"]): _products(item)[-1] for item in ordered} == baseline
+        assert {
+            str(item["id"]): build_decision_products(item)[-1] for item in ordered
+        } == baseline
 
 
 def test_ds_b_release_gate() -> None:
     fixture = json.loads(
-        (FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "scenario_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert fixture["fixture_version"] == "dm-ds-b-v1"
     cases = fixture["cases"]
@@ -396,7 +268,7 @@ def test_ds_b_release_gate() -> None:
     outcomes: list[int] = []
 
     for item in cases:
-        state, hypotheses, _priority, triage, artifact = _products(item)
+        state, hypotheses, _priority, triage, artifact = build_decision_products(item)
         analysis = artifact.scenario_analysis
         consistency_passed += analysis.mode == DecisionScenarioMode(
             str(item["expected_mode"])
@@ -459,12 +331,14 @@ def test_ds_b_release_gate() -> None:
 
 def test_ds_b_disables_unsupported_recommendation_and_rejects_policy_escape() -> None:
     fixture = json.loads(
-        (FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "scenario_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     cases = fixture["cases"]
     assert isinstance(cases, list)
     missing = next(item for item in cases if item["id"] == "missing-neutral")
-    state, hypotheses, _priority, triage, artifact = _products(missing)
+    state, hypotheses, _priority, triage, artifact = build_decision_products(missing)
     analysis = artifact.scenario_analysis
     recommendation = analysis.recommendation
     assert (
@@ -491,7 +365,9 @@ def test_ds_b_disables_unsupported_recommendation_and_rejects_policy_escape() ->
     supported_case = next(
         item for item in cases if item["id"] == "explicit-zero-fatalities"
     )
-    supported = _products(supported_case)[-1].scenario_analysis.recommendation
+    supported = build_decision_products(supported_case)[
+        -1
+    ].scenario_analysis.recommendation
     assert supported.status == DecisionRecommendationStatus.AVAILABLE
     with pytest.raises(ValueError, match="unsupported premise"):
         replace(supported, unsupported_premise_ids=("premise:not-supported",))
@@ -499,11 +375,15 @@ def test_ds_b_disables_unsupported_recommendation_and_rejects_policy_escape() ->
 
 def test_ds_c_release_gate() -> None:
     scenario_fixture = json.loads(
-        (FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "scenario_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     scenarios = {str(item["id"]): item for item in scenario_fixture["cases"]}
     fixture = json.loads(
-        (FIXTURES / "autonomy_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "autonomy_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert fixture["fixture_version"] == "dm-ds-c-v1"
     cases = fixture["cases"]
@@ -525,7 +405,7 @@ def test_ds_c_release_gate() -> None:
             reports = scenario.get("reports")
             if isinstance(reports, list) and run % 2:
                 variant["reports"] = list(reversed(reports))
-            artifact = _products(variant)[-1]
+            artifact = build_decision_products(variant)[-1]
             requested = item.get("requested_action")
             outcome = controller.execute(
                 artifact,
@@ -575,12 +455,14 @@ def test_ds_c_release_gate() -> None:
 
 def test_ds_c_rollback_and_authority_guards_preserve_state() -> None:
     scenario_fixture = json.loads(
-        (FIXTURES / "scenario_cases.v1.json").read_text(encoding="utf-8")
+        (DECISION_SUPPORT_FIXTURES / "scenario_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
     )
     cases = scenario_fixture["cases"]
     assert isinstance(cases, list)
     eligible = next(item for item in cases if item["id"] == "positive-injuries")
-    artifact = _products(eligible)[-1]
+    artifact = build_decision_products(eligible)[-1]
 
     rollback = DecisionAutonomyController(autonomy_enabled=False).execute(artifact)
     assert rollback.autonomy_mode == DecisionAutonomyMode.ADVISORY_ONLY

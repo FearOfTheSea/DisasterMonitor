@@ -21,7 +21,6 @@ import {
   setMapLayerVisibility,
 } from '@/features/map/model/mapLayerState';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
-import type { SatelliteMapState } from '@/features/map/ui/DisasterMap';
 import {
   createMapUrlStateHistory,
   type MapUrlState,
@@ -36,6 +35,7 @@ import {
 import {
   observationTimeForSource,
   SATELLITE_IMAGERY_SOURCES,
+  type SatelliteMapState,
 } from '@/features/map/model/satelliteImagery';
 import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
 import { SourceCatalog } from '@/features/sources/ui/SourceCatalog';

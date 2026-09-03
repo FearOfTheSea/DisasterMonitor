@@ -8,6 +8,11 @@ export type SatelliteSourceId =
   | 'copernicus-sentinel-2-true-color'
   | 'planet-configured-mosaic';
 
+export type SatelliteMapState = {
+  sourceId: SatelliteSourceId;
+  observationTime?: string;
+};
+
 export type SatelliteTemporalMode = 'daily' | 'subdaily' | 'fixed';
 
 type DirectGibsAccess = {

@@ -585,7 +585,7 @@ def test_worldwide_task_scope_is_explicit_before_provider_selection() -> None:
 async def test_flood_worldwide_capabilities_are_explicitly_bounded() -> None:
     service = build_current_disaster_report(Settings())
     try:
-        selection = service._provider_registry.select(  # noqa: SLF001
+        selection = service.provider_registry.select(
             WorldwideDisasterQuery(Disaster.FLOOD, time_window_days=365, limit=999),
             ProviderRole.EVENT_DISCOVERY,
         )

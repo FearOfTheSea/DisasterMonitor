@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
 
@@ -62,7 +63,7 @@ def main() -> int:
     return 0 if arguments.integrity_only else 2
 
 
-def _write(path: Path, payload: dict) -> None:
+def _write(path: Path, payload: Mapping[str, object]) -> None:
     output = path.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

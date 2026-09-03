@@ -155,6 +155,11 @@ disaster providers and Ollama are backend concerns.
 The application root owns bounded URL presentation state. It composes the existing
 map, operations, source, and weather surfaces.
 
+Feature-owned UI styling lives beside the feature that changes it. Shared shell,
+panel, and responsive rules remain under `app/`; the root layout imports these style
+modules in explicit cascade order. `globals.css` is limited to design tokens, resets,
+and application-shell primitives rather than serving as a cross-feature stylesheet.
+
 Weather alerts use a dedicated application port and infrastructure adapter. They do
 not enter the disaster-provider registry or the physical-event domain.
 

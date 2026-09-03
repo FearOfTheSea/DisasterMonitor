@@ -265,7 +265,7 @@ def test_canonical_selection_is_order_independent() -> None:
 async def test_gfm_is_the_sole_primary_flood_event_discovery_authority() -> None:
     service = build_current_disaster_report(Settings())
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         primary = [
             item
             for item in registry.select(
@@ -284,7 +284,7 @@ async def test_gfm_is_the_sole_primary_flood_event_discovery_authority() -> None
 async def test_emsc_is_secondary_scientific_earthquake_coverage() -> None:
     service = build_current_disaster_report(Settings())
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         registrations = registry.select(
             DisasterQuery(
                 Disaster.EARTHQUAKE,
@@ -315,7 +315,7 @@ async def test_nasa_catalog_is_the_sole_primary_authority(
 ) -> None:
     service = build_current_disaster_report(Settings())
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         primary = [
             item
             for item in registry.registrations
@@ -334,7 +334,7 @@ async def test_nasa_catalog_is_the_sole_primary_authority(
 async def test_smithsonian_is_the_sole_primary_volcanic_event_authority() -> None:
     service = build_current_disaster_report(Settings())
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         primary = [
             item
             for item in registry.registrations
@@ -378,7 +378,7 @@ async def test_gdacs_discovery_is_secondary_for_non_cyclone_events(
 ) -> None:
     service = build_current_disaster_report(Settings())
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         matching = [
             item
             for item in registry.registrations

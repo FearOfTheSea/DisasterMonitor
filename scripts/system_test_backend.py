@@ -1,22 +1,19 @@
 """Deterministic FastAPI server used by the Playwright system test."""
 
 import json
-import sys
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import uvicorn
 
-api_src = Path(__file__).resolve().parents[1] / "apps" / "api" / "src"
-sys.path.insert(0, str(api_src))
-
+from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.disaster import (
+    DisasterQuery,
     GeographicScope,
     ProviderBatch,
     ProviderIssue,
     WorldwideDisasterEvent,
+    WorldwideDisasterQuery,
 )
-from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.dto import (
     ModelReadiness,
     ModelRequest,
@@ -36,6 +33,7 @@ from disaster_monitor.application.services.provider_registry import (
     ProviderRole,
 )
 from disaster_monitor.domain.disaster import (
+    Country,
     Disaster,
     DisasterEvent,
     EventCoordinate,
@@ -65,13 +63,21 @@ FOREIGN_SENTINEL = "VENEZUELA-FOREIGN-EVIDENCE-SENTINEL"
 UNRELATED_SENTINEL = "TOKYO-UNRELATED-EVIDENCE-SENTINEL"
 MODEL_SENTINEL = "GENERAL-MODEL-SENTINEL"
 CATALOG = StaticCountryCatalog()
-JAPAN = CATALOG.get_by_alpha3("JPN")
-VENEZUELA = CATALOG.get_by_alpha3("VEN")
-assert JAPAN is not None and VENEZUELA is not None
+
+
+def _required_country(alpha3_code: str) -> Country:
+    country = CATALOG.get_by_alpha3(alpha3_code)
+    if country is None:
+        raise RuntimeError(f"System fixture country is missing: {alpha3_code}")
+    return country
+
+
+JAPAN = _required_country("JPN")
+VENEZUELA = _required_country("VEN")
 
 
 class FakeSystemModel:
-    async def generate(self, request: ModelRequest):
+    async def generate(self, request: ModelRequest) -> ModelResponse:
         if any(tool.name == "fit_country" for tool in request.tools):
             return ModelResponse(
                 text="",
@@ -114,8 +120,10 @@ class FakeSystemModel:
 
 
 class FakeSystemEventProvider:
-    async def find_recent_events(self, _query, *, now):
-        if _query.disaster is Disaster.FLOOD:
+    async def find_recent_events(
+        self, query: DisasterQuery, *, now: datetime
+    ) -> ProviderBatch[DisasterEvent]:
+        if query.disaster is Disaster.FLOOD:
             source = SourceReference(
                 source_id="system-flood-events",
                 publisher="Deterministic flood fixture",
@@ -281,7 +289,9 @@ class FakeSystemEventProvider:
 
 
 class FakeSystemSituationProvider:
-    async def get_situation_reports(self, event, _query, *, now):
+    async def get_situation_reports(
+        self, event: DisasterEvent, _query: DisasterQuery, *, now: datetime
+    ) -> ProviderBatch[SituationReport]:
         if event.disaster is Disaster.FLOOD:
             source = SourceReference(
                 source_id="system-flood-situation",
@@ -379,7 +389,9 @@ class FakeSystemWorldwideProvider:
     source_id = "system-active-incidents"
     allowed_hosts = frozenset({"example.test"})
 
-    async def find_worldwide_events(self, query, *, now):
+    async def find_worldwide_events(
+        self, query: WorldwideDisasterQuery, *, now: datetime
+    ) -> ProviderBatch[WorldwideDisasterEvent]:
         event_id, location, age = {
             Disaster.EARTHQUAKE: (
                 "system-active-earthquake",

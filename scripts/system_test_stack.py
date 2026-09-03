@@ -2,25 +2,26 @@
 
 import asyncio
 import os
+import shutil
 import subprocess
-import sys
 import tempfile
 from dataclasses import replace
 from pathlib import Path
 from threading import Event, Thread
 
 import uvicorn
+from system_test_backend import (
+    NOW,
+    FakeSystemEventProvider,
+    FakeSystemModel,
+    FakeSystemSituationProvider,
+    build_system_active_incidents_service,
+)
 
-script_directory = Path(__file__).resolve().parent
-api_src = script_directory.parent / "apps" / "api" / "src"
-web_directory = script_directory.parent / "apps" / "web"
-sys.path.insert(0, str(api_src))
-sys.path.insert(0, str(script_directory))
-
+from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.services.active_incidents import (
     ActiveIncidentsService,
 )
-from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.services.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -53,13 +54,9 @@ from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
 )
 from disaster_monitor.main import create_app
-from system_test_backend import (
-    NOW,
-    FakeSystemEventProvider,
-    FakeSystemModel,
-    FakeSystemSituationProvider,
-    build_system_active_incidents_service,
-)
+
+script_directory = Path(__file__).resolve().parent
+web_directory = script_directory.parent / "apps" / "web"
 
 
 def main() -> int:
@@ -135,18 +132,12 @@ def main() -> int:
         env=web_environment,
         check=True,
     )
+    standalone_directory = _prepare_standalone_runtime(web_directory)
+    web_environment["HOSTNAME"] = "127.0.0.1"
+    web_environment["PORT"] = "4173"
     web_process = subprocess.Popen(
-        [
-            npm_command,
-            "run",
-            "start",
-            "--",
-            "--hostname",
-            "127.0.0.1",
-            "--port",
-            "4173",
-        ],
-        cwd=web_directory,
+        ["node", "server.js"],
+        cwd=standalone_directory,
         env=web_environment,
     )
     try:
@@ -162,6 +153,23 @@ def main() -> int:
             web_process.terminate()
             web_process.wait(timeout=10)
         catalog_directory.cleanup()
+
+
+def _prepare_standalone_runtime(web_root: Path) -> Path:
+    standalone_directory = web_root / ".next" / "standalone"
+    shutil.copytree(
+        web_root / ".next" / "static",
+        standalone_directory / ".next" / "static",
+        dirs_exist_ok=True,
+    )
+    public_directory = web_root / "public"
+    if public_directory.is_dir():
+        shutil.copytree(
+            public_directory,
+            standalone_directory / "public",
+            dirs_exist_ok=True,
+        )
+    return standalone_directory
 
 
 def _run_watch_runtime(

@@ -234,7 +234,7 @@ async def test_capabilities_include_japan_providers_and_exclude_them_abroad() ->
 async def test_configured_registry_routes_all_recognized_disasters() -> None:
     service = build_current_disaster_report(Settings(), country_catalog=CATALOG)
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         assert set(EXPECTED_EVENT_DISCOVERY_AUTHORITIES) == set(Disaster)
         for disaster in Disaster:
             expected = EXPECTED_EVENT_DISCOVERY_AUTHORITIES[disaster]
@@ -283,7 +283,7 @@ def test_disabled_global_reports_is_a_configuration_limitation() -> None:
 async def test_gfm_and_gdacs_floods_are_routable_for_every_catalog_country() -> None:
     service = build_current_disaster_report(Settings(), country_catalog=CATALOG)
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         for country in CATALOG.countries():
             selection = registry.select(
                 _query(Disaster.FLOOD, country), ProviderRole.EVENT_DISCOVERY
@@ -302,7 +302,7 @@ async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -
         Settings(_env_file=None, nasa_firms_map_key=None), country_catalog=CATALOG
     )
     try:
-        registry = disabled._provider_registry  # noqa: SLF001
+        registry = disabled.provider_registry
         situation = registry.select(
             _query(Disaster.WILDFIRE), ProviderRole.SITUATION_EVIDENCE
         )
@@ -328,7 +328,7 @@ async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -
         country_catalog=CATALOG,
     )
     try:
-        registry = enabled._provider_registry  # noqa: SLF001
+        registry = enabled.provider_registry
         situation = registry.select(
             _query(Disaster.WILDFIRE), ProviderRole.SITUATION_EVIDENCE
         )
@@ -361,7 +361,7 @@ async def test_copernicus_rapid_mapping_is_landslide_map_evidence_not_discovery(
         Settings(_env_file=None), country_catalog=CATALOG
     )
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         country = registry.select(
             _query(Disaster.LANDSLIDE), ProviderRole.SITUATION_EVIDENCE
         )
@@ -399,7 +399,7 @@ async def test_cyclone_map_sources_are_situation_context_not_discovery() -> None
         Settings(_env_file=None), country_catalog=CATALOG
     )
     try:
-        registry = service._provider_registry  # noqa: SLF001
+        registry = service.provider_registry
         country = registry.select(
             _query(Disaster.TROPICAL_CYCLONE), ProviderRole.SITUATION_EVIDENCE
         )
