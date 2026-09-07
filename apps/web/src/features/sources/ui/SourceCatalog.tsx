@@ -61,8 +61,8 @@ export function SourceCatalog({ onClose }: SourceCatalogProps) {
     >
       <header className="source-catalog-header">
         <div>
-          <h2>Source Catalog</h2>
-          <p>Maintained authority metadata with separately labelled runtime state.</p>
+          <h2>Sources</h2>
+          <p>See where information comes from and when it was last checked.</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close Source Catalog">
           Close

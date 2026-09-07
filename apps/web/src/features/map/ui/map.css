@@ -101,7 +101,7 @@
   scrollbar-color: #aeb9c8 transparent;
   scrollbar-width: thin;
   top: 24px;
-  width: 140px;
+  width: 170px;
   z-index: 6;
 }
 
@@ -115,10 +115,11 @@
   border: 0;
   color: var(--ink);
   display: flex;
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   font-weight: 650;
   gap: 10px;
-  padding: 16px;
+  min-height: 50px;
+  padding: 14px 16px;
   width: 100%;
 }
 
@@ -477,27 +478,42 @@
 }
 
 .map-overlay {
-  align-items: center;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-overlay);
   color: var(--muted);
-  display: flex;
-  flex-wrap: wrap;
   font-size: 0.72rem;
-  gap: 5px;
-  left: 24px;
+  left: auto;
   line-height: 1.3;
   max-width: calc(100% - 48px);
-  padding: 8px 10px;
+  padding: 0;
   position: absolute;
   top: auto;
   bottom: 18px;
+  right: 18px;
   z-index: 3;
 }
 
-.map-overlay > span:first-of-type {
+.map-overlay summary {
+  align-items: center;
+  color: var(--ink-soft);
+  display: flex;
+  font-weight: 650;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.map-overlay > div {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 10px;
+}
+
+.map-overlay > div > span:first-of-type {
   color: var(--ink-soft);
   font-weight: 650;
 }

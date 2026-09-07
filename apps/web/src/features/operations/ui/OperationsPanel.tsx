@@ -163,8 +163,8 @@ export function OperationsPanel({
     >
       <header className="operations-panel-header">
         <div>
-          <h2>Evidence operations</h2>
-          <p>Provider freshness, retained snapshots, and attributable review.</p>
+          <h2>Saved &amp; activity</h2>
+          <p>Follow places and review recent monitoring updates.</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close operations panel">
           Close

@@ -111,7 +111,11 @@ export function CommandPalette({ commands }: CommandPaletteProps) {
   return (
     <>
       <button type="button" className="command-palette-trigger" onClick={show}>
-        Commands <kbd>⌘/Ctrl K</kbd>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 4.5 4.5" />
+        </svg>
+        <span>Search</span> <kbd>⌘/Ctrl K</kbd>
       </button>
       {open ? (
         <div className="command-palette-backdrop">

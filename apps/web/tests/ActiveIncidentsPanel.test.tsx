@@ -89,8 +89,9 @@ describe('ActiveIncidentsPanel', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: 'Active incidents' }),
+      screen.getByRole('heading', { name: "What's happening" }),
     ).toBeInTheDocument();
+    expect(screen.getByText('Recent events reported by trusted sources')).toBeVisible();
     expect(screen.getAllByTestId('incident-coverage')).toHaveLength(6);
     expect(screen.getByText('Degraded')).toBeInTheDocument();
     expect(screen.getByText('Unavailable')).toBeInTheDocument();
@@ -110,13 +111,13 @@ describe('ActiveIncidentsPanel', () => {
     );
     expect(within(coverageItems[3]).getByText('Landslide')).toBeInTheDocument();
     expect(within(coverageItems[3]).getByText('Unavailable')).toBeInTheDocument();
-    expect(screen.getByText('Coverage is partial')).toBeInTheDocument();
+    expect(screen.getByText('Some gaps')).not.toBeVisible();
     expect(
       screen.getByText('Fixture provider returned a partial response.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Fixture Fire Authority')).toBeInTheDocument();
-    expect(screen.getByText('Primary tier')).toBeInTheDocument();
-    expect(screen.getByText('Scientific authority')).toBeInTheDocument();
+    expect(screen.getByText('Fixture Fire Authority')).not.toBeVisible();
+    expect(screen.getByText('Primary tier')).not.toBeVisible();
+    expect(screen.getByText('Scientific authority')).not.toBeVisible();
     expect(screen.getByText('Selected')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
@@ -126,10 +127,35 @@ describe('ActiveIncidentsPanel', () => {
       screen.getByRole('link', { name: 'Fixture wildfire perimeter' }),
     ).toHaveAttribute('href', 'https://wildfires.example/incidents/fire-1');
 
+    await user.click(screen.getByText('Source details'));
+    expect(screen.getByText('Fixture Fire Authority')).toBeVisible();
+    expect(screen.getByText('Primary tier')).toBeVisible();
+    expect(screen.getByText('Scientific authority')).toBeVisible();
+
     await user.click(
       screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
     );
     expect(onSelectIncident).toHaveBeenCalledWith('fire-1');
+  });
+
+  it('summarizes source coverage before revealing provider detail', async () => {
+    const user = userEvent.setup();
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot()}
+        status="success"
+        selectedIncidentId={undefined}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('5 source networks checked')).toBeVisible();
+    expect(screen.getByText('View coverage')).toBeVisible();
+    expect(screen.getAllByTestId('incident-coverage')[0]).not.toBeVisible();
+
+    await user.click(screen.getByText('View coverage'));
+    expect(screen.getAllByTestId('incident-coverage')[0]).toBeVisible();
   });
 
   it('labels estimated geometry without adding a long explanation', () => {
@@ -358,7 +384,7 @@ it('searches loaded locations and sources without changing provider coverage', a
     screen.queryByRole('button', { name: 'Focus Fixture reserve on map' }),
   ).not.toBeInTheDocument();
   expect(screen.getByText('No loaded records match your search.')).toBeVisible();
-  expect(screen.getByText('Coverage is partial')).toBeVisible();
+  expect(screen.getByText('View coverage')).toBeVisible();
   await user.clear(search);
   await user.type(search, 'fire authority');
   expect(

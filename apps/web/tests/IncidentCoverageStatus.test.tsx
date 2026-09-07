@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import type {
@@ -64,10 +65,14 @@ function snapshot(): ActiveIncidentsSnapshot {
 }
 
 describe('IncidentCoverageStatus', () => {
-  it('keeps successful-empty, degraded, and unavailable coverage visibly distinct', () => {
+  it('keeps successful-empty, degraded, and unavailable coverage distinct on demand', async () => {
+    const user = userEvent.setup();
     render(<IncidentCoverageStatus snapshot={snapshot()} />);
 
-    expect(screen.getByText(/Snapshot retrieved:/)).toHaveTextContent(
+    expect(screen.getByText('5 source networks checked')).toBeVisible();
+    expect(screen.getAllByTestId('incident-coverage')[0]).not.toBeVisible();
+    await user.click(screen.getByText('View coverage'));
+    expect(screen.getByText(/Last checked:/)).toHaveTextContent(
       new Date('2026-09-01T10:10:00Z').toLocaleString(),
     );
     const items = screen.getAllByTestId('incident-coverage');
@@ -82,7 +87,7 @@ describe('IncidentCoverageStatus', () => {
     expect(items[0]).toHaveTextContent(
       new Date('2026-09-01T10:05:00Z').toLocaleString(),
     );
-    expect(screen.getByText('Coverage is partial')).toBeInTheDocument();
+    expect(screen.getByText('Some gaps')).toBeVisible();
     expect(
       screen.getByText('A fixture provider returned a partial response.'),
     ).toBeInTheDocument();

@@ -1,9 +1,16 @@
 # Frontend design
 
-The workspace uses a map-first layout with a midnight header, white surfaces, teal
-controls, and locally served Inter fonts. Shared tokens live in `app/globals.css`;
-feature styles remain with the feature, and breakpoint composition lives in
-`app/responsive.css`. Inter is distributed under the license in `public/fonts`.
+The workspace uses an approachable map-first layout with a quiet white header, cool
+map surfaces, deep navy type, teal controls, and locally served Inter fonts. Shared
+tokens live in `app/globals.css`; feature styles remain with the feature, and
+breakpoint composition lives in `app/responsive.css`. Inter is distributed under the
+license in `public/fonts`.
+
+The default experience prioritizes recent events, location, relative time, and map
+context. Provider tiers, identifiers, exact source timestamps, coverage limitations,
+map coordinates, and other specialist metadata remain available through labelled
+native disclosures. Search, sources, saved monitoring, and the assistant open one at
+a time in an overlay drawer so the map retains its context.
 
 The initial map provides a Southeast Asian regional overview. Existing URL state
 still restores the operator's location, zoom, display layers, and selected panel.
@@ -20,7 +27,9 @@ fill and focus the composer for editing; submitting remains an explicit action.
 Source limitations remain available in the coverage disclosure and in actual
 reports. The UI never substitutes illustrative records for unavailable data.
 
-On phones, the incident feed scrolls within a bounded region so the map remains
-reachable. Assistant, operations, and catalog panels occupy the available screen
-below the header. Native disclosure controls, labeled search, keyboard focus rings,
-and reduced-motion support apply across these surfaces.
+On phones, the compact header and persistent Explore, Ask, Saved, and Sources
+navigation keep the primary paths reachable. The incident feed scrolls within a
+bounded region, the selected event summary remains above the navigation, and the map
+stays reachable below the feed. Assistant, operations, and catalog panels occupy the
+available screen below the header. Native disclosure controls, labelled search,
+keyboard focus rings, and reduced-motion support apply across these surfaces.

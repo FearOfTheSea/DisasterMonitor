@@ -10,6 +10,7 @@ import type {
   IncidentSourceAuthority,
 } from '@/features/incidents/model/activeIncidents';
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
+import { DisasterIcon } from '@/features/incidents/ui/DisasterIcon';
 import type { MapTimeWindow } from '@/shared/model/displayTimeWindow';
 
 type ActiveIncidentsPanelProps = {
@@ -41,54 +42,6 @@ const AUTHORITY_LABELS: Record<IncidentSourceAuthority, string> = {
 
 const GFM_WORLDWIDE_LOCATION_PREFIX = 'CEMS GFM acquisition ';
 
-function DisasterIcon({ disaster }: { disaster: DisasterType }) {
-  return (
-    <svg
-      className={`disaster-icon disaster-icon-${disaster}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {disaster === 'earthquake' && (
-        <path d="M2.5 13h4l1.8-6 3.4 11 2.3-8 1.8 3H21.5" />
-      )}
-      {disaster === 'flood' && (
-        <>
-          <path d="M2.5 8.5c2.3-2 4.7-2 7 0s4.7 2 7 0 4.7-2 7 0" />
-          <path d="M2.5 14.5c2.3-2 4.7-2 7 0s4.7 2 7 0 4.7-2 7 0" />
-          <path d="M2.5 20c2.3-2 4.7-2 7 0s4.7 2 7 0 4.7-2 7 0" />
-        </>
-      )}
-      {disaster === 'wildfire' && (
-        <path d="M13.5 2.5c.7 4-2.8 5.2-1.7 8.3.7-1.2 1.9-2 3.3-2.4 2.6 2.3 4 4.6 3.5 7.2-.6 3.3-3.3 5.9-6.8 5.9s-6.4-2.7-6.4-6.2c0-2.7 1.5-5 4.6-7.1-.2 2.1.4 3.5 1.6 4.2-.2-3.5.6-6.8 1.9-9.9Z" />
-      )}
-      {disaster === 'landslide' && (
-        <>
-          <path d="m2.5 19 6.7-12 4.1 7 2.1-3.5L21.5 19Z" />
-          <path d="m12.2 8.2 1.8-3M15.4 8.4l2.5-1M16.6 11.2l2.8.2" />
-        </>
-      )}
-      {disaster === 'tropical_cyclone' && (
-        <>
-          <path d="M19.8 7.5A8.3 8.3 0 0 0 5 8c1.7-1 4.3-1.2 6.2.3 1 .8 1.5 2.2 1.2 3.5" />
-          <path d="M4.2 16.5A8.3 8.3 0 0 0 19 16c-1.7 1-4.3 1.2-6.2-.3-1-.8-1.5-2.2-1.2-3.5" />
-          <circle cx="12" cy="12" r="1.5" />
-        </>
-      )}
-      {disaster === 'volcanic_eruption' && (
-        <>
-          <path d="m4 20 5.6-11h4.8L20 20Z" />
-          <path d="m9.6 9 2.4 3 2.4-3M8.5 5.5 7 3.5M12 5V2M15.5 5.5 17 3.5" />
-        </>
-      )}
-    </svg>
-  );
-}
-
 function SelectedIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -109,6 +62,18 @@ function ChevronIcon() {
 function formatTime(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function formatRelativeTime(value: string, reference?: string): string {
+  const eventTime = new Date(value).getTime();
+  const referenceTime = reference ? new Date(reference).getTime() : Date.now();
+  if (Number.isNaN(eventTime) || Number.isNaN(referenceTime)) return formatTime(value);
+  const minutes = Math.max(0, Math.round((referenceTime - eventTime) / 60_000));
+  if (minutes < 60) return minutes < 5 ? 'Reported recently' : `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
 }
 
 function formatDuration(seconds: number): string {
@@ -173,15 +138,15 @@ export function ActiveIncidentsPanel({
     <aside className="active-incidents-panel" aria-label="Active incidents monitoring">
       <header className="active-incidents-header">
         <div>
-          <h2>Active incidents</h2>
-          <p>Explore recent reports from monitored sources.</p>
+          <h2>What&apos;s happening</h2>
+          <p>Recent events reported by trusted sources</p>
         </div>
         <button
           type="button"
           onClick={() => void onRefresh()}
           disabled={status === 'loading'}
         >
-          {status === 'loading' ? 'Refreshing…' : 'Refresh'}
+          {status === 'loading' ? 'Updating…' : 'Updated just now'}
         </button>
       </header>
       <div className="incident-search">
@@ -198,7 +163,7 @@ export function ActiveIncidentsPanel({
         <input
           type="search"
           aria-label="Search locations or sources"
-          placeholder="Search locations or sources"
+          placeholder="Search a place or event"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -265,10 +230,10 @@ export function ActiveIncidentsPanel({
             aria-labelledby="incident-list-heading"
           >
             <div className="incident-section-heading">
-              <h3 id="incident-list-heading">Recent source records</h3>
+              <h3 id="incident-list-heading">Recent events</h3>
               <span>{incidents.length}</span>
             </div>
-            {displayTimeWindow ? (
+            {displayTimeWindow && displayTimeWindow !== '7d' ? (
               <p className="incident-display-filter-note">
                 Showing records in the {displayTimeWindow} display window. Provider
                 coverage above is unchanged.
@@ -323,38 +288,44 @@ export function ActiveIncidentsPanel({
                           </small>
                         )}
                         <time dateTime={incident.event_time}>
-                          {formatTime(incident.event_time)}
+                          {formatRelativeTime(
+                            incident.event_time,
+                            snapshot.retrieved_at,
+                          )}
                         </time>
                       </button>
-                      <div className="incident-metadata">
-                        <span>
-                          {incident.provider_tier === 'primary'
-                            ? 'Primary tier'
-                            : 'Secondary tier'}
-                        </span>
-                        <span>{AUTHORITY_LABELS[incident.source_authority]}</span>
-                      </div>
-                      <div className="incident-source">
-                        <small className="incident-event-id">
-                          Event ID: {incident.event_id}
-                        </small>
-                        <span>{incident.source.publisher}</span>
-                        <a
-                          href={incident.source.canonical_url}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {incident.source.title}
-                        </a>
-                        <small>
-                          {timestamp.label}: {formatTime(timestamp.value)}
-                        </small>
-                      </div>
-                      {incident.geometry?.kind === 'descriptive' && (
-                        <small className="incident-geometry-note">
-                          Descriptive location only; no map geometry was supplied.
-                        </small>
-                      )}
+                      <details className="incident-details">
+                        <summary>Source details</summary>
+                        <div className="incident-metadata">
+                          <span>
+                            {incident.provider_tier === 'primary'
+                              ? 'Primary tier'
+                              : 'Secondary tier'}
+                          </span>
+                          <span>{AUTHORITY_LABELS[incident.source_authority]}</span>
+                        </div>
+                        <div className="incident-source">
+                          <small className="incident-event-id">
+                            Event ID: {incident.event_id}
+                          </small>
+                          <span>{incident.source.publisher}</span>
+                          <a
+                            href={incident.source.canonical_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {incident.source.title}
+                          </a>
+                          <small>
+                            {timestamp.label}: {formatTime(timestamp.value)}
+                          </small>
+                        </div>
+                        {incident.geometry?.kind === 'descriptive' && (
+                          <small className="incident-geometry-note">
+                            Descriptive location only; no map geometry was supplied.
+                          </small>
+                        )}
+                      </details>
                     </article>
                   );
                 })}

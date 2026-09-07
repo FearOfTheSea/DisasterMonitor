@@ -85,23 +85,29 @@ export function IncidentCoverageStatus({
   const partial = snapshot.coverage.some(
     (item) => item.state === 'degraded' || item.state === 'unavailable',
   );
+  const checkedNetworkCount = snapshot.coverage.filter(
+    (item) => item.providers.length > 0,
+  ).length;
 
   return (
     <section className="incident-coverage-status" aria-labelledby="coverage-heading">
-      <div className="incident-section-heading">
-        <div>
-          <h3 id="coverage-heading">Provider coverage</h3>
-          <p className="incident-retrieval-time">
-            Snapshot retrieved:{' '}
-            <time dateTime={snapshot.retrieved_at}>
-              {formatTime(snapshot.retrieved_at)}
-            </time>
-          </p>
-        </div>
-        {partial ? <span className="incident-partial">Coverage is partial</span> : null}
-      </div>
       <details className="coverage-disclosure">
-        <summary>Coverage details and source notices</summary>
+        <summary>
+          <span>{checkedNetworkCount} source networks checked</span>
+          <strong>View coverage</strong>
+        </summary>
+        <div className="coverage-heading-row">
+          <div>
+            <h3 id="coverage-heading">Source coverage</h3>
+            <p className="incident-retrieval-time">
+              Last checked:{' '}
+              <time dateTime={snapshot.retrieved_at}>
+                {formatTime(snapshot.retrieved_at)}
+              </time>
+            </p>
+          </div>
+          {partial ? <span className="incident-partial">Some gaps</span> : null}
+        </div>
         <div className="incident-coverage-grid">
           {DISASTERS.map((definition) => {
             const coverage = coverageFor(snapshot, definition.value);

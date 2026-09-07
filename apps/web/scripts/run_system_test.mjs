@@ -48,7 +48,7 @@ try {
   await waitForApplication('http://127.0.0.1:4173/');
   await waitForApplication('http://127.0.0.1:8787/api/v1/health');
   browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  const page = await browser.newPage({ viewport: { width: 1536, height: 1024 } });
   const browserErrors = [];
   page.on('console', (message) => {
     if (message.type() === 'error') {
@@ -59,8 +59,14 @@ try {
     browserErrors.push(`page: ${error.message}`);
   });
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+  if (
+    page.url() !== 'http://127.0.0.1:4173/' ||
+    (await page.title()) !== 'Disaster Monitor'
+  ) {
+    throw new Error('The rendered page identity did not match Disaster Monitor.');
+  }
   await page.getByLabel('Active incidents monitoring').waitFor();
-  await page.getByText('Coverage details and source notices', { exact: true }).click();
+  await page.getByText('View coverage', { exact: true }).click();
   const incidentFixtures = [
     {
       coverageLabel: 'Earthquake',
@@ -107,11 +113,44 @@ try {
       .waitFor();
   }
   await page
+    .getByText('Flood fixture coverage is intentionally degraded.', { exact: true })
+    .waitFor();
+  await page.getByText('View coverage', { exact: true }).click();
+  await page.evaluate(() => {
+    const rail = document.querySelector('.active-incidents-scroll');
+    if (rail) rail.scrollTop = 0;
+  });
+  await page
+    .getByRole('button', { name: 'Focus Aleutian earthquake fixture on map' })
+    .click();
+  const initialScreenshotPath = process.env.SYSTEM_TEST_INITIAL_SCREENSHOT;
+  if (initialScreenshotPath) {
+    await page.screenshot({ path: initialScreenshotPath, fullPage: false });
+  }
+  const initialMobileScreenshotPath = process.env.SYSTEM_TEST_INITIAL_MOBILE_SCREENSHOT;
+  if (initialMobileScreenshotPath) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: initialMobileScreenshotPath, fullPage: false });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      const rail = document.querySelector('.active-incidents-scroll');
+      if (rail) rail.scrollTop = 0;
+    });
+  }
+  const drawerScreenshotPath = process.env.SYSTEM_TEST_DRAWER_SCREENSHOT;
+  if (drawerScreenshotPath) {
+    await page.getByRole('button', { name: 'Open assistant' }).click();
+    await page.screenshot({ path: drawerScreenshotPath, fullPage: false });
+    await page
+      .getByRole('complementary', { name: 'Disaster Monitor assistant' })
+      .getByRole('button', { name: 'Close assistant' })
+      .click();
+  }
+  await page.getByText('Map position', { exact: true }).click();
+  await page
     .getByRole('button', { name: 'Focus Lower Mekong flood fixture on map' })
     .getByText('estimated', { exact: true })
-    .waitFor();
-  await page
-    .getByText('Flood fixture coverage is intentionally degraded.', { exact: true })
     .waitFor();
   if (await page.getByRole('heading', { name: 'Map assistant' }).count()) {
     throw new Error('The assistant opened before the Active Incidents workflow.');
@@ -257,10 +296,6 @@ try {
   }
   await page.getByText('Hokkaido flood fixture', { exact: true }).waitFor();
   await page.getByRole('heading', { name: 'Situation summary' }).waitFor();
-  await page.getByRole('button', { name: 'Layers', exact: true }).click();
-  if (!(await page.getByRole('radio', { name: '24h' }).isChecked())) {
-    throw new Error('The Operator Agent did not apply the 24-hour display window.');
-  }
   await page
     .getByText('This creates persistent bounded monitoring.', { exact: true })
     .waitFor();
@@ -281,6 +316,15 @@ try {
   if (matchingWatchesBefore.length !== 0) {
     throw new Error('The Operator Agent created the flood watch before confirmation.');
   }
+  await page
+    .getByRole('complementary', { name: 'Disaster Monitor assistant' })
+    .getByRole('button', { name: 'Close assistant' })
+    .click();
+  await page.getByRole('button', { name: 'Layers', exact: true }).click();
+  if (!(await page.getByRole('radio', { name: '24h' }).isChecked())) {
+    throw new Error('The Operator Agent did not apply the 24-hour display window.');
+  }
+  await page.getByRole('button', { name: 'Open assistant' }).click();
   const confirmWatchResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/v1/incident-watches') &&

@@ -92,7 +92,7 @@ export function MapLayerControls({
         >
           <path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
         </svg>
-        <span>Layers</span>
+        <span>Map options</span>
         <svg
           className="disclosure-chevron"
           viewBox="0 0 24 24"

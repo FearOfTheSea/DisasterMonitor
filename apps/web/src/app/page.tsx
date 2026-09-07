@@ -12,6 +12,7 @@ import {
 import { CommandPalette } from '@/features/commands/ui/CommandPalette';
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
+import { SelectedIncidentSummary } from '@/features/incidents/ui/SelectedIncidentSummary';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import {
   filterCorrelationsForDisplay,
@@ -169,6 +170,11 @@ export default function Home() {
       ),
     ];
   }, [displayedIncidents, watchFocusIncident]);
+  const selectedIncident = useMemo(
+    () =>
+      mapIncidents.find((incident) => incident.event_id === usableSelectedIncidentId),
+    [mapIncidents, usableSelectedIncidentId],
+  );
   const handleAssistantSubmit = useCallback(
     async (question: string) => {
       const response = await submitAssistant(question, mapView);
@@ -242,37 +248,43 @@ export default function Home() {
           </div>
           <div className="brand-copy">
             <h1>Disaster Monitor</h1>
-            <p>A clearer view of a changing world.</p>
+            <p>What&apos;s happening, clearly explained.</p>
           </div>
         </div>
         <div className="header-actions">
           <CommandPalette commands={commands} />
           <button
             type="button"
+            aria-label="Source Catalog"
             aria-expanded={sourceCatalogOpen}
             aria-controls="source-catalog-panel"
             onClick={() => togglePanel('sources')}
           >
-            Source Catalog
+            <svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m4 7 8-4 8 4-8 4-8-4Zm0 5 8 4 8-4M4 17l8 4 8-4" />
+            </svg>
+            Sources
           </button>
           <button
             type="button"
+            aria-label={operationsOpen ? 'Close operations' : 'Evidence operations'}
             aria-expanded={operationsOpen}
             aria-controls="operations-panel"
             onClick={() => togglePanel('operations')}
           >
             <EvidenceIcon className="button-icon" />
-            {operationsOpen ? 'Close operations' : 'Evidence operations'}
+            Saved
           </button>
           <button
             className="assistant-toggle"
             type="button"
+            aria-label={assistantOpen ? 'Close assistant' : 'Open assistant'}
             aria-expanded={assistantOpen}
             aria-controls="assistant-panel"
             onClick={() => togglePanel('assistant')}
           >
             <AssistantIcon className="button-icon" />
-            {assistantOpen ? 'Close assistant' : 'Open assistant'}
+            Ask
           </button>
         </div>
       </header>
@@ -293,8 +305,8 @@ export default function Home() {
           <div className="map-introduction">
             <PositionIcon className="map-introduction-icon" />
             <div>
-              <h2>Situation overview</h2>
-              <p>Explore events. Understand the evidence.</p>
+              <h2>World overview</h2>
+              <p>Select an event to see what&apos;s known</p>
             </div>
           </div>
           <DisasterMap
@@ -316,17 +328,35 @@ export default function Home() {
             weatherAlerts={weatherAlerts.snapshot}
             focusRequestToken={focusRequestToken}
           />
-          <div className="map-overlay" role="status" aria-live="polite">
-            <PositionIcon className="map-overlay-icon" />
-            <span>OpenStreetMap base layer</span>
-            <span aria-hidden="true">·</span>
-            <span>
-              {mapView.centerLatitude.toFixed(2)}, {mapView.centerLongitude.toFixed(2)}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>zoom {mapView.zoom.toFixed(1)}</span>
-          </div>
+          <details className="map-overlay">
+            <summary>
+              <PositionIcon className="map-overlay-icon" />
+              Map position
+            </summary>
+            <div role="status" aria-live="polite">
+              <span>OpenStreetMap base layer</span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {mapView.centerLatitude.toFixed(2)},{' '}
+                {mapView.centerLongitude.toFixed(2)}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>zoom {mapView.zoom.toFixed(1)}</span>
+            </div>
+          </details>
+          <SelectedIncidentSummary
+            incident={selectedIncident}
+            onAsk={() => togglePanel('assistant')}
+          />
         </div>
+        {activePanel ? (
+          <button
+            className="panel-scrim"
+            type="button"
+            onClick={closePanel}
+            aria-label="Close open panel"
+          />
+        ) : null}
         {assistantOpen && (
           <AssistantPanel
             conversationId={conversation.conversationId}
@@ -340,6 +370,7 @@ export default function Home() {
             onSelectConversation={conversation.selectConversation}
             onDeleteConversation={conversation.deleteConversation}
             onWatchReady={() => openOperationsAt('incident-watches-heading')}
+            onClose={closePanel}
           />
         )}
         {operationsOpen && (
@@ -354,6 +385,38 @@ export default function Home() {
         )}
         {sourceCatalogOpen && <SourceCatalog onClose={closePanel} />}
       </section>
+      <nav className="mobile-navigation" aria-label="Primary navigation">
+        <button type="button" className="mobile-navigation-active" onClick={closePanel}>
+          <PositionIcon className="button-icon" />
+          Explore
+        </button>
+        <button
+          type="button"
+          onClick={() => togglePanel('assistant')}
+          aria-pressed={assistantOpen}
+        >
+          <AssistantIcon className="button-icon" />
+          Ask
+        </button>
+        <button
+          type="button"
+          onClick={() => togglePanel('operations')}
+          aria-pressed={operationsOpen}
+        >
+          <EvidenceIcon className="button-icon" />
+          Saved
+        </button>
+        <button
+          type="button"
+          onClick={() => togglePanel('sources')}
+          aria-pressed={sourceCatalogOpen}
+        >
+          <svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m4 7 8-4 8 4-8 4-8-4Zm0 5 8 4 8-4M4 17l8 4 8-4" />
+          </svg>
+          Sources
+        </button>
+      </nav>
     </main>
   );
 }

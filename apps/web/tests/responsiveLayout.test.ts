@@ -10,12 +10,13 @@ const styles = [...layout.matchAll(/import ['"](.+\.css)['"];?/g)]
   .join('\n');
 
 describe('responsive layout safeguards', () => {
-  it('reserves enough mobile header height for the brand and two action rows', () => {
+  it('keeps the mobile header compact and reserves space for bottom navigation', () => {
     const mobileHeaderHeight = styles.match(
       /@media \(max-width: 700px\)[\s\S]*?:root\s*{\s*--header-height:\s*(\d+)px;/,
     )?.[1];
 
-    expect(Number(mobileHeaderHeight)).toBeGreaterThanOrEqual(144);
+    expect(Number(mobileHeaderHeight)).toBe(64);
+    expect(styles).toMatch(/\.mobile-navigation\s*{[^}]*display: grid;/);
   });
 
   it('keeps sparse Source Catalog content packed at the top', () => {

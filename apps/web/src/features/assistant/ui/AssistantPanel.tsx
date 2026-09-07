@@ -22,6 +22,7 @@ type AssistantPanelProps = {
   onSelectConversation?: (conversationId: string | null) => void | Promise<void>;
   onDeleteConversation?: (conversationId: string) => void | Promise<void>;
   onWatchReady?: () => void;
+  onClose?: () => void;
 };
 
 export function AssistantPanel({
@@ -36,6 +37,7 @@ export function AssistantPanel({
   onSelectConversation,
   onDeleteConversation,
   onWatchReady,
+  onClose,
 }: AssistantPanelProps) {
   const [question, setQuestion] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -68,9 +70,21 @@ export function AssistantPanel({
     >
       <header className="assistant-panel-header">
         <div className="panel-heading">
-          <h2>Map assistant</h2>
-          <p>Turn questions into a clearer picture, with sources you can inspect.</p>
+          <h2>Ask Disaster Monitor</h2>
+          <p>Get a clear summary or ask about a place or event.</p>
         </div>
+        {onClose ? (
+          <button
+            className="panel-close"
+            type="button"
+            onClick={onClose}
+            aria-label="Close assistant"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        ) : null}
         <div className="conversation-controls">
           <label htmlFor="assistant-conversation">Conversation</label>
           <select

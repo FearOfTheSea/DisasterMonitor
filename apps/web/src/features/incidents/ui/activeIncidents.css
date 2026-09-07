@@ -18,12 +18,11 @@
   flex: 0 0 auto;
   gap: 12px;
   justify-content: space-between;
-  padding: 28px 24px 20px;
+  padding: 30px 24px 18px;
 }
 
 .active-incidents-header h2,
 .active-incidents-header p,
-.incident-coverage-section h3,
 .incident-list-section h3,
 .incident-correlations h3,
 .incident-correlations p,
@@ -34,7 +33,7 @@
 }
 
 .active-incidents-header h2 {
-  font-size: 1.55rem;
+  font-size: 1.65rem;
   font-weight: 720;
   letter-spacing: -0.01em;
   line-height: 1.25;
@@ -42,10 +41,10 @@
 
 .active-incidents-header p {
   color: var(--muted);
-  font-size: 0.8rem;
-  line-height: 1.6;
-  margin-top: 8px;
-  max-width: 235px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin-top: 7px;
+  max-width: 250px;
 }
 
 .active-incidents-header button,
@@ -54,12 +53,13 @@
 .conversation-controls button,
 .assistant-form-footer > button {
   background: var(--surface);
-  border: 1px solid var(--line-strong);
+  border: 0;
   border-radius: var(--radius-md);
   color: var(--ink);
   flex: 0 0 auto;
-  font-size: 0.72rem;
-  font-weight: 680;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 650;
   min-height: 34px;
   padding: 7px 10px;
 }
@@ -94,11 +94,7 @@
 }
 
 .incident-list-section {
-  order: 2;
-}
-
-.incident-coverage-section {
-  order: 3;
+  order: 1;
 }
 
 .incident-warnings {
@@ -106,7 +102,7 @@
 }
 
 .incident-correlations {
-  order: 5;
+  order: 2;
 }
 
 .incident-loading,
@@ -158,7 +154,6 @@
   margin-right: 6px;
 }
 
-.incident-coverage-section,
 .incident-coverage-status,
 .incident-list-section {
   border-bottom: 1px solid var(--line);
@@ -168,30 +163,22 @@
 }
 
 .incident-coverage-status {
-  order: 1;
+  order: 3;
 }
 
-.incident-coverage-status > .incident-section-heading {
+.coverage-heading-row {
   align-items: center;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  padding: 16px 0 8px;
 }
 
-.incident-coverage-status > .incident-section-heading > div {
-  display: contents;
+.coverage-heading-row h3 {
+  font-size: 0.8rem;
+  margin: 0;
 }
 
-.incident-coverage-status .incident-partial {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.incident-coverage-status .incident-retrieval-time {
-  grid-column: 1 / -1;
-  grid-row: 2;
-}
-
-.incident-coverage-status .incident-retrieval-time {
+.coverage-heading-row .incident-retrieval-time {
   border: 0;
   margin-top: 3px;
   padding: 0;
@@ -433,13 +420,13 @@
 .incident-card {
   --incident-color: #718096;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-left: 3px solid transparent;
   border-radius: var(--radius-md);
   display: grid;
-  gap: 12px;
+  gap: 9px;
   min-width: 0;
-  padding: 18px;
+  padding: 16px;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
@@ -472,12 +459,12 @@
 
 .incident-card:hover {
   background: var(--surface-raised);
-  border-color: #9cabbf;
+  border-color: var(--line);
 }
 
 .incident-card-selected {
-  background: var(--accent-soft);
-  border-color: #a6d6d1;
+  background: #fbfefe;
+  border-color: #8fc5ca;
   border-left-color: var(--accent);
   box-shadow: inset 0 0 0 1px rgba(8, 127, 120, 0.04);
 }
@@ -543,11 +530,6 @@
   flex: 0 0 auto;
   height: 17px;
   width: 17px;
-}
-
-.coverage-item .disaster-icon {
-  height: 16px;
-  width: 16px;
 }
 
 .disaster-icon-earthquake {
@@ -664,8 +646,8 @@
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
-  font-size: 0.78rem;
-  min-height: 46px;
+  font-size: 0.84rem;
+  min-height: 48px;
   padding: 12px 12px 12px 40px;
   width: 100%;
   min-width: 0;
@@ -676,14 +658,36 @@
 }
 
 .coverage-disclosure {
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
 }
 
 .coverage-disclosure summary {
-  color: var(--accent);
+  align-items: center;
+  color: var(--ink-soft);
   cursor: pointer;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 5px 0;
+  display: flex;
+  font-size: 0.72rem;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 8px 0;
+}
+
+.coverage-disclosure summary strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+.incident-details {
+  border-top: 1px solid var(--line);
+  padding-top: 3px;
+}
+.incident-details summary {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+  padding: 8px 0 3px;
+}
+.incident-details[open] summary {
+  color: var(--accent);
 }
