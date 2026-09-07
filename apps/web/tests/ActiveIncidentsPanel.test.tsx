@@ -159,6 +159,69 @@ describe('ActiveIncidentsPanel', () => {
     expect(screen.getByText('estimated')).toBeInTheDocument();
   });
 
+  it('uses an honest worldwide title and keeps the flood event ID in the details', () => {
+    const floodEventId =
+      'cems-gfm:sentinel-acquisition:S1C_IW_GRDH_1SDV_20260907T104635_20260907T104701_009340_01293B_C236';
+    const longFloodIncident: ActiveIncident = {
+      ...INCIDENT,
+      event_id: floodEventId,
+      disaster: 'flood',
+      location: `CEMS GFM acquisition ${floodEventId.slice(floodEventId.indexOf(':') + 1)}`,
+      source: {
+        ...INCIDENT.source,
+        source_id: 'cems-gfm-floods',
+      },
+    };
+
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot([longFloodIncident])}
+        status="success"
+        selectedIncidentId={undefined}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Focus Worldwide on map' });
+    expect(button.querySelector('.incident-card-location')).toHaveTextContent(
+      'Worldwide',
+    );
+    expect(button.closest('.incident-card')).toHaveTextContent(
+      `Event ID: ${floodEventId}`,
+    );
+  });
+
+  it('uses a source-backed flood country in the card title', () => {
+    const floodEventId = 'cems-gfm:sentinel-acquisition:japan-flood-1';
+    const floodIncident: ActiveIncident = {
+      ...INCIDENT,
+      event_id: floodEventId,
+      disaster: 'flood',
+      location: 'Japan',
+      source: {
+        ...INCIDENT.source,
+        source_id: 'cems-gfm-floods',
+      },
+    };
+
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot([floodIncident])}
+        status="success"
+        selectedIncidentId={undefined}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Focus Japan on map' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Japan')).toHaveClass('incident-card-location');
+    expect(screen.getByText(`Event ID: ${floodEventId}`)).toBeInTheDocument();
+  });
+
   it('renders bounded compound-hazard context with its non-causation limit', () => {
     const correlated = snapshot();
     correlated.correlations = [

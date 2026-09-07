@@ -40,6 +40,12 @@ path as named-country requests. They do not invent a country.
 Worldwide ranking and wording come from the selected disaster policy. The result
 provides event discovery, not global impact coverage.
 
+Active Incident titles use one canonical country from the maintained catalog when
+the event coordinate falls within a country. For offshore coordinates, an
+explicitly mentioned country is used when available; otherwise the source location
+is retained. Provider event IDs remain available in expanded incident details, not
+in the title.
+
 ## Evidence and authority
 
 Provider registrations declare a primary or secondary tier for each role and scope.

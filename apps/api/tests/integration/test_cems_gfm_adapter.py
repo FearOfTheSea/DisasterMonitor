@@ -180,7 +180,7 @@ async def test_worldwide_scan_is_bounded_and_uses_tile_center_geometry():
         fixture("cems_gfm_flood_statistics.json"),
         requests,
     )
-    adapter = CemsGfmAdapter(client=client)
+    adapter = CemsGfmAdapter(client=client, geography=StaticCountryCatalog())
 
     result = await adapter.find_worldwide_events(
         WorldwideDisasterQuery(Disaster.FLOOD, time_window_days=365, limit=999),

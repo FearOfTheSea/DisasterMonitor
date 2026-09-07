@@ -39,6 +39,8 @@ const AUTHORITY_LABELS: Record<IncidentSourceAuthority, string> = {
   secondary: 'Secondary authority',
 };
 
+const GFM_WORLDWIDE_LOCATION_PREFIX = 'CEMS GFM acquisition ';
+
 function DisasterIcon({ disaster }: { disaster: DisasterType }) {
   return (
     <svg
@@ -117,6 +119,16 @@ function formatDuration(seconds: number): string {
 
 function disasterLabel(disaster: DisasterType): string {
   return DISASTERS.find((item) => item.value === disaster)?.label ?? disaster;
+}
+
+function incidentTitle(incident: ActiveIncident): string {
+  if (
+    incident.source.source_id === 'cems-gfm-floods' &&
+    incident.location.startsWith(GFM_WORLDWIDE_LOCATION_PREFIX)
+  ) {
+    return 'Worldwide';
+  }
+  return incident.location;
 }
 
 function sourceTimestamp(incident: ActiveIncident): { label: string; value: string } {
@@ -277,6 +289,7 @@ export function ActiveIncidentsPanel({
               <div className="incident-list">
                 {incidents.map((incident) => {
                   const timestamp = sourceTimestamp(incident);
+                  const title = incidentTitle(incident);
                   return (
                     <article
                       key={`${incident.disaster}:${incident.event_id}`}
@@ -284,7 +297,7 @@ export function ActiveIncidentsPanel({
                     >
                       <button
                         type="button"
-                        aria-label={`Focus ${incident.location} on map`}
+                        aria-label={`Focus ${title} on map`}
                         aria-pressed={selectedIncidentId === incident.event_id}
                         onClick={() => onSelectIncident(incident.event_id)}
                       >
@@ -303,7 +316,7 @@ export function ActiveIncidentsPanel({
                             <ChevronIcon />
                           </span>
                         </span>
-                        <strong>{incident.location}</strong>
+                        <strong className="incident-card-location">{title}</strong>
                         {incident.geometry?.estimated && (
                           <small className="incident-geometry-estimated">
                             estimated
@@ -322,6 +335,9 @@ export function ActiveIncidentsPanel({
                         <span>{AUTHORITY_LABELS[incident.source_authority]}</span>
                       </div>
                       <div className="incident-source">
+                        <small className="incident-event-id">
+                          Event ID: {incident.event_id}
+                        </small>
                         <span>{incident.source.publisher}</span>
                         <a
                           href={incident.source.canonical_url}

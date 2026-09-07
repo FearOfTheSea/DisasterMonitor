@@ -40,6 +40,11 @@ damage, casualties, affected population, warnings, response status, or national 
 Country searches use the requested recent time window and country polygon.
 Worldwide searches use a deterministic bounded recent scan and are not globally complete.
 
+The Active Incidents projection uses the maintained country catalog to label a flood
+with the country containing its estimated observation-footprint center when the
+coordinate falls on land. If the coordinate is offshore, an explicitly mentioned
+country is used when available; otherwise the source location is retained.
+
 Accept STAC item references and COG URLs only from registered EODC authorities.
 
 Successful STAC and statistics responses can persist through the operational

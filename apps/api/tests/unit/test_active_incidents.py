@@ -30,6 +30,9 @@ from disaster_monitor.domain.disaster import (
     descriptive_event_geometry,
     point_event_geometry,
 )
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
 
 NOW = datetime(2026, 8, 20, 6, tzinfo=UTC)
 
@@ -79,6 +82,7 @@ def _event(
     descriptive: bool = False,
     latitude: float = 10.5,
     longitude: float = 20.25,
+    location: str | None = None,
 ) -> WorldwideDisasterEvent:
     source = _source(source_id, event_time)
     geometry = (
@@ -89,7 +93,7 @@ def _event(
     return WorldwideDisasterEvent(
         event_id=event_id,
         disaster=disaster,
-        location=f"{disaster.value} location",
+        location=location or f"{disaster.value} location",
         event_time=event_time,
         source=source,
         geometry=geometry,
@@ -203,6 +207,103 @@ async def test_aggregates_supported_disasters_and_orders_newest_then_identity() 
         IncidentCoverageState.UNAVAILABLE
     )
     assert snapshot.retrieved_at == NOW
+
+
+@pytest.mark.asyncio
+async def test_labels_on_land_coordinates_for_each_disaster() -> None:
+    providers = tuple(
+        _registration(
+            f"{disaster.value}-source",
+            FakeWorldwideProvider(
+                f"{disaster.value}-source",
+                ProviderBatch(
+                    (
+                        _event(
+                            f"{disaster.value}-source",
+                            disaster,
+                            f"{disaster.value}-event",
+                            NOW,
+                            latitude=32.5,
+                            longitude=133.5,
+                        ),
+                    )
+                ),
+            ),
+            disaster,
+        )
+        for disaster in Disaster
+    )
+    service = ActiveIncidentsService(
+        ProviderRegistry(providers),
+        country_catalog=StaticCountryCatalog(),
+        clock=lambda: NOW,
+    )
+
+    snapshot = await service.execute()
+
+    assert len(snapshot.incidents) == len(Disaster)
+    assert {item.location for item in snapshot.incidents} == {"Japan"}
+
+
+@pytest.mark.asyncio
+async def test_keeps_source_location_when_worldwide_coordinate_is_not_in_catalog() -> (
+    None
+):
+    provider = FakeWorldwideProvider(
+        "offshore-floods",
+        ProviderBatch(
+            (
+                _event(
+                    "offshore-floods",
+                    Disaster.FLOOD,
+                    "offshore-flood",
+                    NOW,
+                    latitude=0.0,
+                    longitude=0.0,
+                ),
+            )
+        ),
+    )
+    service = ActiveIncidentsService(
+        ProviderRegistry((_registration("Offshore floods", provider, Disaster.FLOOD),)),
+        country_catalog=StaticCountryCatalog(),
+        clock=lambda: NOW,
+    )
+
+    snapshot = await service.execute()
+
+    assert snapshot.incidents[0].location == "flood location"
+
+
+@pytest.mark.asyncio
+async def test_uses_source_country_when_coordinate_is_offshore() -> None:
+    provider = FakeWorldwideProvider(
+        "offshore-earthquakes",
+        ProviderBatch(
+            (
+                _event(
+                    "offshore-earthquakes",
+                    Disaster.EARTHQUAKE,
+                    "offshore-earthquake",
+                    NOW,
+                    latitude=0.0,
+                    longitude=0.0,
+                    location="OFFSHORE REGION, VIETNAM",
+                ),
+            )
+        ),
+    )
+    service = ActiveIncidentsService(
+        ProviderRegistry(
+            (_registration("Offshore earthquakes", provider, Disaster.EARTHQUAKE),)
+        ),
+        country_catalog=StaticCountryCatalog(),
+        clock=lambda: NOW,
+    )
+
+    snapshot = await service.execute()
+
+    assert snapshot.incidents[0].location == "Vietnam"
 
 
 @pytest.mark.asyncio

@@ -314,7 +314,13 @@ class IncidentRetrieval:
                 )
                 degraded = True
                 continue
-            accepted.append(_incident(event, registration.tier))
+            accepted.append(
+                _incident(
+                    event,
+                    registration.tier,
+                    country_catalog=self._country_catalog,
+                )
+            )
         for issue in batch.issues:
             if issue.reason_code == "empty_result":
                 continue
@@ -325,12 +331,15 @@ class IncidentRetrieval:
 
 
 def _incident(
-    event: WorldwideDisasterEvent, provider_tier: ProviderTier
+    event: WorldwideDisasterEvent,
+    provider_tier: ProviderTier,
+    *,
+    country_catalog: CountryCatalog | None,
 ) -> ActiveIncident:
     return ActiveIncident(
         event_id=event.event_id,
         disaster=event.disaster,
-        location=event.location,
+        location=_country_or_location(event, country_catalog),
         event_time=event.event_time,
         geometry=event.geometry,
         measurements=event.measurements,
@@ -340,6 +349,25 @@ def _incident(
         source=event.source,
         evidence_sources=(event.source,),
     )
+
+
+def _country_or_location(
+    event: WorldwideDisasterEvent,
+    country_catalog: CountryCatalog | None,
+) -> str:
+    """Prefer one catalog country, then preserve an explicit source location."""
+    if country_catalog is not None:
+        if event.geometry is not None and event.geometry.coordinates:
+            coordinate = event.geometry.coordinates[0]
+            for country in country_catalog.countries():
+                if country_catalog.contains(
+                    country, coordinate.latitude, coordinate.longitude
+                ):
+                    return country.canonical_name
+        mentioned_countries = country_catalog.find_mentions(event.location)
+        if mentioned_countries:
+            return mentioned_countries[0].canonical_name
+    return event.location
 
 
 def _country_incident(identity: PhysicalEventIdentity) -> ActiveIncident:
