@@ -393,6 +393,36 @@
   }
 }
 
+@media (min-width: 851px) and (max-height: 800px) {
+  .empty-state {
+    gap: 10px;
+    padding: 14px 12px;
+  }
+
+  .empty-state > svg {
+    height: 44px;
+    padding: 11px;
+    width: 44px;
+  }
+
+  .empty-state strong {
+    font-size: 1.4rem;
+  }
+
+  .empty-state p {
+    line-height: 1.5;
+  }
+
+  .assistant-starters {
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .assistant-starters button {
+    padding: 10px 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

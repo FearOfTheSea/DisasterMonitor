@@ -3,10 +3,11 @@
 import { useState } from 'react';
 
 import type { ActiveIncidentsStatus } from '@/features/incidents/hooks/useActiveIncidents';
-import type {
+import {
   ActiveIncident,
   ActiveIncidentsSnapshot,
   DisasterType,
+  displayActiveIncidentLocation,
   IncidentSourceAuthority,
 } from '@/features/incidents/model/activeIncidents';
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
@@ -39,8 +40,6 @@ const AUTHORITY_LABELS: Record<IncidentSourceAuthority, string> = {
   humanitarian_aggregator: 'Humanitarian aggregator',
   secondary: 'Secondary authority',
 };
-
-const GFM_WORLDWIDE_LOCATION_PREFIX = 'CEMS GFM acquisition ';
 
 function SelectedIcon() {
   return (
@@ -84,16 +83,6 @@ function formatDuration(seconds: number): string {
 
 function disasterLabel(disaster: DisasterType): string {
   return DISASTERS.find((item) => item.value === disaster)?.label ?? disaster;
-}
-
-function incidentTitle(incident: ActiveIncident): string {
-  if (
-    incident.source.source_id === 'cems-gfm-floods' &&
-    incident.location.startsWith(GFM_WORLDWIDE_LOCATION_PREFIX)
-  ) {
-    return 'Worldwide';
-  }
-  return incident.location;
 }
 
 function sourceTimestamp(incident: ActiveIncident): { label: string; value: string } {
@@ -254,7 +243,7 @@ export function ActiveIncidentsPanel({
               <div className="incident-list">
                 {incidents.map((incident) => {
                   const timestamp = sourceTimestamp(incident);
-                  const title = incidentTitle(incident);
+                  const title = displayActiveIncidentLocation(incident);
                   return (
                     <article
                       key={`${incident.disaster}:${incident.event_id}`}

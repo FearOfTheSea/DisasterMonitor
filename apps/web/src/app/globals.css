@@ -389,6 +389,10 @@ input[type='radio'] {
   font-weight: 750;
 }
 
+.selected-incident-copy {
+  min-width: 0;
+}
+
 .selected-incident-copy h3,
 .selected-incident-copy p {
   margin: 0;
@@ -398,6 +402,7 @@ input[type='radio'] {
   font-size: 1.12rem;
   line-height: 1.3;
   margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 
 .selected-incident-copy p {

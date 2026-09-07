@@ -67,6 +67,18 @@ export type ActiveIncident = {
   source: IncidentSource;
 };
 
+const GFM_WORLDWIDE_LOCATION_PREFIX = 'CEMS GFM acquisition ';
+
+export function displayActiveIncidentLocation(incident: ActiveIncident): string {
+  if (
+    incident.source.source_id === 'cems-gfm-floods' &&
+    incident.location.startsWith(GFM_WORLDWIDE_LOCATION_PREFIX)
+  ) {
+    return 'Worldwide';
+  }
+  return incident.location;
+}
+
 export type CompoundHazardCorrelation = Omit<
   CompoundHazardCorrelationResponse,
   'source_ids'

@@ -27,6 +27,26 @@ describe('workspace coordination', () => {
     expect(result.current.activePanel).toBe(null);
   });
 
+  it('restores focus to the desktop control that opened a panel', () => {
+    vi.useFakeTimers();
+    const opener = document.createElement('button');
+    const panelControl = document.createElement('button');
+    document.body.append(opener, panelControl);
+    opener.focus();
+
+    const { result, unmount } = renderHook(() => useWorkspacePanels());
+    act(() => result.current.togglePanel('assistant'));
+    act(() => vi.runOnlyPendingTimers());
+    panelControl.focus();
+    act(() => result.current.closePanel());
+    act(() => vi.runOnlyPendingTimers());
+
+    expect(document.activeElement).toBe(opener);
+    unmount();
+    opener.remove();
+    panelControl.remove();
+  });
+
   it('restores URL view and preserves state through browser navigation', () => {
     vi.useFakeTimers();
     window.history.replaceState(null, '', '/?c=48,2&z=5&r=europe');

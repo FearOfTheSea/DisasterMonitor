@@ -1,6 +1,7 @@
-import type {
+import {
   ActiveIncident,
   DisasterType,
+  displayActiveIncidentLocation,
 } from '@/features/incidents/model/activeIncidents';
 import { DisasterIcon } from '@/features/incidents/ui/DisasterIcon';
 
@@ -42,7 +43,7 @@ export function SelectedIncidentSummary({
       </div>
       <div className="selected-incident-copy">
         <span>{DISASTER_LABELS[incident.disaster]}</span>
-        <h3>{incident.location}</h3>
+        <h3>{displayActiveIncidentLocation(incident)}</h3>
         <p>
           {relativeEventTime(incident.event_time)} · {sourceCount}{' '}
           {sourceCount === 1 ? 'trusted source' : 'trusted sources'}

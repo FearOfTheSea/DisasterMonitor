@@ -19,6 +19,22 @@ describe('responsive layout safeguards', () => {
     expect(styles).toMatch(/\.mobile-navigation\s*{[^}]*display: grid;/);
   });
 
+  it('allows long selected-incident titles to wrap inside the summary', () => {
+    expect(styles).toMatch(/\.selected-incident-copy\s*{[^}]*min-width: 0;/);
+    expect(styles).toMatch(
+      /\.selected-incident-copy h3\s*{[^}]*overflow-wrap: anywhere;/,
+    );
+  });
+
+  it('compacts the assistant empty state on short desktop viewports', () => {
+    expect(styles).toMatch(
+      /@media \(min-width: 851px\) and \(max-height: 800px\)[\s\S]*?\.empty-state\s*{[^}]*gap: 10px;[^}]*padding: 14px 12px;/,
+    );
+    expect(styles).toMatch(
+      /@media \(min-width: 851px\) and \(max-height: 800px\)[\s\S]*?\.assistant-starters\s*{[^}]*margin-top: 4px;/,
+    );
+  });
+
   it('keeps sparse Source Catalog content packed at the top', () => {
     expect(styles).toMatch(/\.source-catalog-scroll\s*{[^}]*align-content: start;/);
   });
