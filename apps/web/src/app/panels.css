@@ -21,7 +21,7 @@
 .source-catalog-header {
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
-  padding: 16px;
+  padding: 24px;
 }
 
 .assistant-panel-header {

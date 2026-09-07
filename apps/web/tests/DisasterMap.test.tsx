@@ -466,6 +466,7 @@ describe('DisasterMap assistant focus', () => {
     const user = userEvent.setup();
     render(<DisasterMap onViewChange={vi.fn()} onSelectIncident={vi.fn()} />);
 
+    await user.click(screen.getByRole('button', { name: 'Layers' }));
     await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
     await waitFor(() =>
       expect(adapterMocks.setSatelliteImagery).toHaveBeenLastCalledWith(
@@ -508,6 +509,7 @@ describe('DisasterMap assistant focus', () => {
     const user = userEvent.setup();
     render(<DisasterMap onViewChange={vi.fn()} onSelectIncident={vi.fn()} />);
 
+    await user.click(screen.getByRole('button', { name: 'Layers' }));
     await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
     fireEvent.change(screen.getByLabelText('Satellite opacity'), {
       target: { value: '0.4' },
@@ -521,6 +523,10 @@ describe('DisasterMap assistant focus', () => {
   it('disables unavailable credentialed provider options without failing the map', async () => {
     render(<DisasterMap onViewChange={vi.fn()} onSelectIncident={vi.fn()} />);
 
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Layers' }));
+    await userEvent
+      .setup()
+      .click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
     await waitFor(() => expect(satelliteClientMocks.fetchCatalog).toHaveBeenCalled());
     expect(
       screen.getByRole('option', { name: 'Copernicus Sentinel-2 True Color' }),
@@ -531,7 +537,7 @@ describe('DisasterMap assistant focus', () => {
     expect(screen.getByLabelText('Interactive map')).toBeInTheDocument();
   });
 
-  it('passes only source weather alert geometry to its layer and labels alert semantics', () => {
+  it('passes only source weather alert geometry to its layer and labels alert semantics', async () => {
     const snapshot: WeatherAlertsSnapshot = {
       retrieved_at: '2026-09-01T02:00:00Z',
       alerts: [
@@ -584,6 +590,7 @@ describe('DisasterMap assistant focus', () => {
       />,
     );
 
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Layers' }));
     expect(adapterMocks.setWeatherAlerts).toHaveBeenLastCalledWith(snapshot.alerts);
     expect(
       screen.getByRole('complementary', { name: 'Weather alert coverage' }),

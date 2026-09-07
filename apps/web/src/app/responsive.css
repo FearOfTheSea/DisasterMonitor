@@ -71,13 +71,13 @@
     border-right: 0;
     flex: none;
     height: auto;
-    max-height: none;
-    overflow: visible;
+    max-height: 60vh;
+    overflow: hidden;
   }
 
   .active-incidents-scroll {
-    flex: none;
-    overflow: visible;
+    flex: 1 1 auto;
+    overflow-y: auto;
   }
 
   .active-incidents-header p {
@@ -188,7 +188,8 @@
     left: 14px;
     max-width: calc(100% - 28px);
     right: auto;
-    top: 14px;
+    top: auto;
+    bottom: 40px;
   }
 
   .satellite-controls {
@@ -198,17 +199,19 @@
   .map-layer-controls {
     max-height: calc(100% - 122px);
     right: 12px;
-    top: 104px;
+    top: 100px;
   }
 
   .incident-cluster-picker {
     left: 12px;
     top: 104px;
-    width: min(300px, calc(100% - 400px));
+    width: min(300px, calc(100% - 24px));
   }
 
   .map-region .ol-zoom {
-    top: 62px;
+    top: auto;
+    bottom: 100px;
+    left: 14px;
   }
 
   .cop-legend {
@@ -270,7 +273,7 @@
     column-gap: 10px;
   }
 
-  .map-layer-controls {
+  .map-layer-controls-expanded {
     left: 12px;
     right: 12px;
     width: auto;
@@ -334,5 +337,106 @@
 
   .loading-indicator {
     animation-duration: 1.6s;
+  }
+}
+
+@media (max-width: 1100px) {
+  .brand p {
+    display: none;
+  }
+  .brand h1 {
+    font-size: 1.1rem;
+  }
+  .app-header {
+    padding-inline: 16px;
+  }
+  .header-actions button {
+    padding-inline: 10px;
+  }
+  .map-introduction {
+    padding: 14px;
+  }
+  .map-introduction p {
+    display: none;
+  }
+}
+
+@media (max-width: 850px) {
+  .map-introduction {
+    max-width: calc(100% - 180px);
+  }
+  .active-incidents-header h2 {
+    font-size: 1.4rem;
+  }
+  .incident-search {
+    margin-inline: 16px;
+  }
+  .brand p {
+    display: block;
+  }
+}
+
+@media (max-width: 700px) {
+  .map-introduction {
+    left: 14px;
+    top: 16px;
+    max-width: calc(100% - 28px);
+  }
+  .map-introduction p {
+    display: block;
+  }
+  .brand-mark {
+    flex-basis: 34px;
+  }
+  .incident-source span,
+  .incident-source small {
+    display: block;
+  }
+  .incident-coverage-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .coverage-item:nth-child(odd) {
+    border-right: 0;
+    padding-right: 0;
+  }
+  .coverage-item strong,
+  .coverage-state {
+    font-size: 0.72rem;
+  }
+  .coverage-item > div {
+    flex-wrap: wrap;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 850px) {
+  :root {
+    --header-height: 116px;
+  }
+
+  .app-header {
+    align-content: center;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 10px;
+  }
+
+  .brand-mark {
+    flex-basis: 34px;
+    height: 34px;
+    width: 34px;
+  }
+
+  .brand p {
+    display: none;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .header-actions button {
+    white-space: nowrap;
   }
 }

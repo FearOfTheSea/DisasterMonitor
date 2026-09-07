@@ -60,6 +60,7 @@ export function MapLayerControls({
   regionalSelection = 'custom',
   onRegionalSelectionChange,
 }: MapLayerControlsProps) {
+  const [expanded, setExpanded] = useState(false);
   const [explainedLayerId, setExplainedLayerId] = useState<MapLayerId>();
   const explainedLayer = explainedLayerId
     ? mapLayerDefinition(explainedLayerId)
@@ -69,118 +70,157 @@ export function MapLayerControls({
     : undefined;
 
   return (
-    <section className="map-layer-controls" aria-label="Map layers and display time">
-      <div className="map-layer-controls-heading">
-        <div>
-          <span>Map display</span>
-          <h2>Layers</h2>
-        </div>
-        <output>{state.timeWindow}</output>
-      </div>
-      <div className="map-layer-presets" aria-label="Layer presets">
-        {MAP_LAYER_PRESETS.map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            aria-label={`${PRESET_LABELS[preset]} preset`}
-            aria-pressed={state.activePreset === preset}
-            onClick={() => onChange(applyMapLayerPreset(state, preset))}
-          >
-            {PRESET_LABELS[preset]}
-          </button>
-        ))}
-      </div>
-      {onRegionalSelectionChange ? (
-        <fieldset className="regional-preset-controls">
-          <legend>Regional navigation</legend>
-          <div>
-            {REGIONAL_PRESETS.map((preset) => (
+    <section
+      className={`map-layer-controls${expanded ? ' map-layer-controls-expanded' : ''}`}
+      aria-label="Map layers and display time"
+    >
+      <button
+        className="map-layer-toggle"
+        type="button"
+        aria-label="Layers"
+        aria-expanded={expanded}
+        aria-controls="map-layer-options"
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
+        </svg>
+        <span>Layers</span>
+        <svg
+          className="disclosure-chevron"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          aria-hidden="true"
+        >
+          <path d="m7 10 5 5 5-5" />
+        </svg>
+      </button>
+      {expanded && (
+        <div id="map-layer-options" className="map-layer-options">
+          <div className="map-layer-controls-heading">
+            <div>
+              <span>Map display</span>
+              <h2>Layers</h2>
+            </div>
+            <output>{state.timeWindow}</output>
+          </div>
+          <div className="map-layer-presets" aria-label="Layer presets">
+            {MAP_LAYER_PRESETS.map((preset) => (
               <button
-                key={preset.id}
+                key={preset}
                 type="button"
-                aria-label={`Focus ${preset.label}`}
-                aria-pressed={regionalSelection === preset.id}
-                onClick={() => onRegionalSelectionChange(preset.id)}
+                aria-label={`${PRESET_LABELS[preset]} preset`}
+                aria-pressed={state.activePreset === preset}
+                onClick={() => onChange(applyMapLayerPreset(state, preset))}
               >
-                {preset.label}
+                {PRESET_LABELS[preset]}
               </button>
             ))}
           </div>
-          <small>
-            Presentation-only navigation; presets do not define disaster geography.
-          </small>
-        </fieldset>
-      ) : null}
-      <fieldset className="map-time-filter">
-        <legend>Display time</legend>
-        <div>
-          {MAP_TIME_WINDOWS.map((window) => (
-            <label key={window}>
-              <input
-                type="radio"
-                name="map-display-time"
-                value={window}
-                checked={state.timeWindow === window}
-                onChange={() => onChange(setMapTimeWindow(state, window))}
-              />
-              <span>{window}</span>
-            </label>
-          ))}
-        </div>
-        <small>Changes displayed records only; provider coverage is unchanged.</small>
-      </fieldset>
-      <div className="map-layer-list">
-        {MAP_LAYER_REGISTRY.map((layer) => {
-          const runtime = runtimeDetails?.[layer.id];
-          return (
-            <div className="map-layer-row" key={layer.id}>
-              <label>
-                <input
-                  type="checkbox"
-                  aria-label={layer.label}
-                  checked={state.visibility[layer.id]}
-                  onChange={(event) =>
-                    onChange(
-                      setMapLayerVisibility(state, layer.id, event.target.checked),
-                    )
-                  }
-                />
-                <span>
-                  <b>{layer.label}</b>
-                  <small>{runtime?.availabilityLabel ?? layer.category}</small>
-                </span>
-              </label>
-              <button
-                type="button"
-                aria-label={`About ${layer.label}`}
-                aria-expanded={explainedLayerId === layer.id}
-                onClick={() => setExplainedLayerId(layer.id)}
-              >
-                About
-              </button>
+          {onRegionalSelectionChange ? (
+            <fieldset className="regional-preset-controls">
+              <legend>Regional navigation</legend>
+              <div>
+                {REGIONAL_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    aria-label={`Focus ${preset.label}`}
+                    aria-pressed={regionalSelection === preset.id}
+                    onClick={() => onRegionalSelectionChange(preset.id)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              <small>
+                Presentation-only navigation; presets do not define disaster geography.
+              </small>
+            </fieldset>
+          ) : null}
+          <fieldset className="map-time-filter">
+            <legend>Display time</legend>
+            <div>
+              {MAP_TIME_WINDOWS.map((window) => (
+                <label key={window}>
+                  <input
+                    type="radio"
+                    name="map-display-time"
+                    value={window}
+                    checked={state.timeWindow === window}
+                    onChange={() => onChange(setMapTimeWindow(state, window))}
+                  />
+                  <span>{window}</span>
+                </label>
+              ))}
             </div>
-          );
-        })}
-      </div>
-      {children ? (
-        <details
-          className="map-layer-satellite-controls"
-          open={state.visibility['satellite-imagery']}
-        >
-          <summary>Satellite source settings</summary>
-          {children}
-        </details>
-      ) : null}
-      {supplemental}
-      {explainedLayer ? (
-        <LayerExplanation
-          layer={explainedLayer}
-          onClose={() => setExplainedLayerId(undefined)}
-          sourceDetail={explainedRuntime?.sourceDetail}
-          freshnessDetail={explainedRuntime?.freshnessDetail}
-          attribution={explainedRuntime?.attribution}
-        />
-      ) : null}
+            <small>
+              Changes displayed records only; provider coverage is unchanged.
+            </small>
+          </fieldset>
+          <div className="map-layer-list">
+            {MAP_LAYER_REGISTRY.map((layer) => {
+              const runtime = runtimeDetails?.[layer.id];
+              return (
+                <div className="map-layer-row" key={layer.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      aria-label={layer.label}
+                      checked={state.visibility[layer.id]}
+                      onChange={(event) =>
+                        onChange(
+                          setMapLayerVisibility(state, layer.id, event.target.checked),
+                        )
+                      }
+                    />
+                    <span>
+                      <b>{layer.label}</b>
+                      <small>{runtime?.availabilityLabel ?? layer.category}</small>
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    aria-label={`About ${layer.label}`}
+                    aria-expanded={explainedLayerId === layer.id}
+                    onClick={() => setExplainedLayerId(layer.id)}
+                  >
+                    About
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {children ? (
+            <details
+              className="map-layer-satellite-controls"
+              open={state.visibility['satellite-imagery']}
+            >
+              <summary>Satellite source settings</summary>
+              {children}
+            </details>
+          ) : null}
+          {supplemental}
+          {explainedLayer ? (
+            <LayerExplanation
+              layer={explainedLayer}
+              onClose={() => setExplainedLayerId(undefined)}
+              sourceDetail={explainedRuntime?.sourceDetail}
+              freshnessDetail={explainedRuntime?.freshnessDetail}
+              attribution={explainedRuntime?.attribution}
+            />
+          ) : null}
+        </div>
+      )}
     </section>
   );
 }

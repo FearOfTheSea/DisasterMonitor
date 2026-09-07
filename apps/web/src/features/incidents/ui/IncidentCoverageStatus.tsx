@@ -100,62 +100,65 @@ export function IncidentCoverageStatus({
         </div>
         {partial ? <span className="incident-partial">Coverage is partial</span> : null}
       </div>
-      <div className="incident-coverage-grid">
-        {DISASTERS.map((definition) => {
-          const coverage = coverageFor(snapshot, definition.value);
-          const sourceRecords = snapshot.incidents.filter(
-            (incident) => incident.disaster === definition.value,
-          );
-          const timestamps = new Map<string, { label: string; value: string }>();
-          for (const incident of sourceRecords) {
-            const timestamp = sourceTimestamp(incident);
-            timestamps.set(incident.source.source_id, timestamp);
-          }
-          return (
-            <article
-              key={definition.value}
-              className={`coverage-item coverage-item-${coverage.state}`}
-              data-testid="incident-coverage"
-            >
-              <div>
-                <strong>{definition.label}</strong>
-                <span className={`coverage-state coverage-${coverage.state}`}>
-                  <CoverageStatusIcon state={coverage.state} />
-                  {COVERAGE_LABELS[coverage.state]}
-                </span>
-              </div>
-              <small>{coverage.detail}</small>
-              <small>
-                Providers:{' '}
-                {coverage.providers.length > 0
-                  ? coverage.providers.join(', ')
-                  : 'No providers reported'}
-              </small>
-              {[...timestamps].map(([sourceId, timestamp]) => (
-                <small key={sourceId}>
-                  {sourceId} · {timestamp.label}: {formatTime(timestamp.value)}
+      <details className="coverage-disclosure">
+        <summary>Coverage details and source notices</summary>
+        <div className="incident-coverage-grid">
+          {DISASTERS.map((definition) => {
+            const coverage = coverageFor(snapshot, definition.value);
+            const sourceRecords = snapshot.incidents.filter(
+              (incident) => incident.disaster === definition.value,
+            );
+            const timestamps = new Map<string, { label: string; value: string }>();
+            for (const incident of sourceRecords) {
+              const timestamp = sourceTimestamp(incident);
+              timestamps.set(incident.source.source_id, timestamp);
+            }
+            return (
+              <article
+                key={definition.value}
+                className={`coverage-item coverage-item-${coverage.state}`}
+                data-testid="incident-coverage"
+              >
+                <div>
+                  <strong>{definition.label}</strong>
+                  <span className={`coverage-state coverage-${coverage.state}`}>
+                    <CoverageStatusIcon state={coverage.state} />
+                    {COVERAGE_LABELS[coverage.state]}
+                  </span>
+                </div>
+                <small>{coverage.detail}</small>
+                <small>
+                  Providers:{' '}
+                  {coverage.providers.length > 0
+                    ? coverage.providers.join(', ')
+                    : 'No providers reported'}
                 </small>
+                {[...timestamps].map(([sourceId, timestamp]) => (
+                  <small key={sourceId}>
+                    {sourceId} · {timestamp.label}: {formatTime(timestamp.value)}
+                  </small>
+                ))}
+              </article>
+            );
+          })}
+        </div>
+        {snapshot.warnings.length > 0 ? (
+          <section
+            className="incident-warnings"
+            aria-labelledby="incident-warnings-heading"
+          >
+            <h3 id="incident-warnings-heading">Retrieval warnings</h3>
+            <p>
+              Provider notices describe coverage limits; they are not disaster claims.
+            </p>
+            <ul>
+              {snapshot.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
               ))}
-            </article>
-          );
-        })}
-      </div>
-      {snapshot.warnings.length > 0 ? (
-        <section
-          className="incident-warnings"
-          aria-labelledby="incident-warnings-heading"
-        >
-          <h3 id="incident-warnings-heading">Retrieval warnings</h3>
-          <p>
-            Provider notices describe coverage limits; they are not disaster claims.
-          </p>
-          <ul>
-            {snapshot.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+            </ul>
+          </section>
+        ) : null}
+      </details>
     </section>
   );
 }

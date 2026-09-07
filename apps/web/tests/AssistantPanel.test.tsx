@@ -660,3 +660,23 @@ describe('AssistantPanel', () => {
     expect(screen.queryByText('Verified source fact')).not.toBeInTheDocument();
   });
 });
+
+it('offers an editable starter question without submitting automatically', async () => {
+  const user = userEvent.setup();
+  const onSubmit = vi.fn();
+  render(
+    <AssistantPanel
+      messages={[]}
+      status="idle"
+      error={null}
+      onSubmit={onSubmit}
+      onClear={vi.fn()}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: 'Understand this map' }));
+  expect(screen.getByRole('textbox', { name: 'Question' })).toHaveValue(
+    'What does this map show?',
+  );
+  expect(screen.getByRole('textbox', { name: 'Question' })).toHaveFocus();
+  expect(onSubmit).not.toHaveBeenCalled();
+});

@@ -232,11 +232,17 @@ export default function Home() {
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            DM
+            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <circle cx="24" cy="24" r="21" />
+              <circle cx="24" cy="24" r="14" />
+              <circle cx="24" cy="24" r="6" />
+              <path d="m24 24 14-15" />
+              <circle cx="38" cy="9" r="2" fill="currentColor" />
+            </svg>
           </div>
           <div className="brand-copy">
             <h1>Disaster Monitor</h1>
-            <p>Local-first map workspace</p>
+            <p>A clearer view of a changing world.</p>
           </div>
         </div>
         <div className="header-actions">
@@ -284,6 +290,13 @@ export default function Home() {
           onRefresh={activeIncidents.refresh}
         />
         <div className="map-region">
+          <div className="map-introduction">
+            <PositionIcon className="map-introduction-icon" />
+            <div>
+              <h2>Situation overview</h2>
+              <p>Explore events. Understand the evidence.</p>
+            </div>
+          </div>
           <DisasterMap
             onViewChange={handleViewChange}
             onSelectIncident={handleSelectActiveIncident}

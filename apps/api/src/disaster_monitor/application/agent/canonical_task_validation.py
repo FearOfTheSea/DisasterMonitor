@@ -114,7 +114,8 @@ def _validate_canonical_task(
                 True,
                 ValidationStatus.CATALOG_LIMITATION,
                 f"{unresolved or 'The requested place'} is not in the maintained "
-                "geographic and source catalog. I cannot create trusted country metadata.",
+                "geographic and source catalog. I cannot create trusted country "
+                "metadata.",
                 disaster=draft.disaster,
                 unresolved_place=unresolved,
                 information_needs=needs,

@@ -60,6 +60,7 @@ try {
   });
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Active incidents monitoring').waitFor();
+  await page.getByText('Coverage details and source notices', { exact: true }).click();
   const incidentFixtures = [
     {
       coverageLabel: 'Earthquake',
@@ -256,6 +257,7 @@ try {
   }
   await page.getByText('Hokkaido flood fixture', { exact: true }).waitFor();
   await page.getByRole('heading', { name: 'Situation summary' }).waitFor();
+  await page.getByRole('button', { name: 'Layers', exact: true }).click();
   if (!(await page.getByRole('radio', { name: '24h' }).isChecked())) {
     throw new Error('The Operator Agent did not apply the 24-hour display window.');
   }

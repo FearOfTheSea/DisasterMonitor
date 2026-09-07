@@ -1,9 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDefaultMapLayerState } from '@/features/map/model/mapLayerState';
 import { MapLayerControls } from '@/features/map/ui/MapLayerControls';
+
+afterEach(cleanup);
 
 describe('MapLayerControls', () => {
   it('applies presets, time windows, individual visibility, and layer explanations', async () => {
@@ -12,6 +14,7 @@ describe('MapLayerControls', () => {
     const state = createDefaultMapLayerState();
     const { rerender } = render(<MapLayerControls state={state} onChange={onChange} />);
 
+    await user.click(screen.getByRole('button', { name: 'Layers' }));
     await user.click(screen.getByRole('button', { name: 'Satellite preset' }));
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -57,4 +60,20 @@ describe('MapLayerControls', () => {
     );
     expect(screen.getByText('Integrated satellite source controls')).toBeVisible();
   });
+});
+
+it('lets the user reveal and dismiss layer controls without changing map state', async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  render(<MapLayerControls state={createDefaultMapLayerState()} onChange={onChange} />);
+  const toggle = screen.getByRole('button', { name: 'Layers' });
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(
+    screen.queryByRole('button', { name: 'Satellite preset' }),
+  ).not.toBeInTheDocument();
+  await user.click(toggle);
+  expect(screen.getByRole('button', { name: 'Satellite preset' })).toBeVisible();
+  await user.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(onChange).not.toHaveBeenCalled();
 });

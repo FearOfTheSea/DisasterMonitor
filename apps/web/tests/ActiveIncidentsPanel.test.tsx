@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   ActiveIncident,
@@ -71,6 +71,8 @@ function snapshot(incidents: ActiveIncident[] = [INCIDENT]): ActiveIncidentsSnap
     correlations: [],
   };
 }
+
+afterEach(cleanup);
 
 describe('ActiveIncidentsPanel', () => {
   it('renders all coverage states, source metadata, warnings, and selection', async () => {
@@ -275,4 +277,28 @@ describe('ActiveIncidentsPanel', () => {
     ).toBeInTheDocument();
     expect(panel.getByText(/Provider coverage above is unchanged/)).toBeVisible();
   });
+});
+
+it('searches loaded locations and sources without changing provider coverage', async () => {
+  const user = userEvent.setup();
+  render(
+    <ActiveIncidentsPanel
+      snapshot={snapshot()}
+      status="success"
+      onSelectIncident={vi.fn()}
+      onRefresh={vi.fn()}
+    />,
+  );
+  const search = screen.getByRole('searchbox', { name: 'Search locations or sources' });
+  await user.type(search, 'missing place');
+  expect(
+    screen.queryByRole('button', { name: 'Focus Fixture reserve on map' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText('No loaded records match your search.')).toBeVisible();
+  expect(screen.getByText('Coverage is partial')).toBeVisible();
+  await user.clear(search);
+  await user.type(search, 'fire authority');
+  expect(
+    screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
+  ).toBeVisible();
 });

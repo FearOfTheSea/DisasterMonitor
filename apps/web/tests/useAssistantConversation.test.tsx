@@ -160,7 +160,7 @@ describe('useAssistantConversation', () => {
       await result.current.deleteConversation('conversation-1');
     });
     expect(result.current.conversationId).toBeNull();
-    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages).toHaveLength(0);
     expect(result.current.conversations).toEqual([]);
   });
 

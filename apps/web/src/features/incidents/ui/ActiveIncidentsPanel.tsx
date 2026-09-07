@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import type { ActiveIncidentsStatus } from '@/features/incidents/hooks/useActiveIncidents';
 import type {
   ActiveIncident,
@@ -137,22 +139,30 @@ export function ActiveIncidentsPanel({
   onSelectIncident,
   onRefresh,
 }: ActiveIncidentsPanelProps) {
-  const incidents = [...(snapshot?.incidents ?? [])].sort((first, second) => {
-    const timeDifference =
-      new Date(second.event_time).getTime() - new Date(first.event_time).getTime();
-    return (
-      timeDifference ||
-      first.disaster.localeCompare(second.disaster) ||
-      first.event_id.localeCompare(second.event_id)
-    );
-  });
+  const [search, setSearch] = useState('');
+  const query = search.trim().toLocaleLowerCase();
+  const incidents = [...(snapshot?.incidents ?? [])]
+    .filter((incident) =>
+      [incident.location, incident.source.publisher, incident.source.title].some(
+        (value) => value.toLocaleLowerCase().includes(query),
+      ),
+    )
+    .sort((first, second) => {
+      const timeDifference =
+        new Date(second.event_time).getTime() - new Date(first.event_time).getTime();
+      return (
+        timeDifference ||
+        first.disaster.localeCompare(second.disaster) ||
+        first.event_id.localeCompare(second.event_id)
+      );
+    });
 
   return (
     <aside className="active-incidents-panel" aria-label="Active incidents monitoring">
       <header className="active-incidents-header">
         <div>
           <h2>Active incidents</h2>
-          <p>Bounded worldwide event discovery from configured providers.</p>
+          <p>Explore recent reports from monitored sources.</p>
         </div>
         <button
           type="button"
@@ -162,6 +172,25 @@ export function ActiveIncidentsPanel({
           {status === 'loading' ? 'Refreshing…' : 'Refresh'}
         </button>
       </header>
+      <div className="incident-search">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          aria-hidden="true"
+        >
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 4.5 4.5" />
+        </svg>
+        <input
+          type="search"
+          aria-label="Search locations or sources"
+          placeholder="Search locations or sources"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </div>
       <div className="active-incidents-scroll">
         {status === 'loading' && !snapshot && (
           <div className="incident-loading" role="status">
@@ -235,7 +264,11 @@ export function ActiveIncidentsPanel({
             ) : null}
             {incidents.length === 0 ? (
               <div className="incident-empty">
-                <strong>No incident records matched this bounded retrieval.</strong>
+                <strong>
+                  {query
+                    ? 'No loaded records match your search.'
+                    : 'No incident records matched this bounded retrieval.'}
+                </strong>
                 <p>
                   A successful empty result does not prove that no disaster occurred.
                 </p>

@@ -12,14 +12,14 @@
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 9px;
-  padding: 15px 16px;
+  padding: 20px 24px;
 }
 
 .findings-center {
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 10px;
-  padding: 15px 16px;
+  padding: 20px 24px;
 }
 
 .findings-center h3,
@@ -35,7 +35,7 @@
 .findings-empty,
 .findings-limitation {
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   line-height: 1.4;
   margin-top: 3px;
 }
@@ -71,7 +71,7 @@
 
 .finding-heading span {
   color: var(--muted);
-  font-size: 0.58rem;
+  font-size: 0.75rem;
   font-weight: 760;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -80,17 +80,17 @@
 .finding-heading time,
 .finding small {
   color: var(--muted);
-  font-size: 0.61rem;
+  font-size: 0.75rem;
 }
 
 .finding > strong {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.35;
 }
 
 .finding > p {
   color: var(--ink-soft);
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
@@ -111,7 +111,7 @@
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 11px;
-  padding: 15px 16px;
+  padding: 20px 24px;
 }
 
 .incident-watches h3,
@@ -130,7 +130,7 @@
 .incident-watch-empty p,
 .incident-watch-timeline p {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   line-height: 1.45;
   margin-top: 3px;
 }
@@ -153,7 +153,7 @@
 
 .incident-watch-create label > span {
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -164,7 +164,7 @@
   border-radius: var(--radius-sm);
   color: var(--ink);
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   height: 34px;
   min-width: 0;
   padding: 5px 8px;
@@ -186,7 +186,7 @@
 }
 
 .incident-watch-empty strong {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .incident-watch-list,
@@ -225,7 +225,7 @@
 
 .incident-watch-card-heading strong,
 .incident-watch-change strong {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .incident-watch-card-heading span,
@@ -234,7 +234,7 @@
 .incident-watch-change > div span,
 .incident-watch-change a {
   color: var(--muted);
-  font-size: 0.64rem;
+  font-size: 0.75rem;
 }
 
 .watch-enabled,
@@ -318,7 +318,7 @@
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   padding: 4px 8px;
 }
 
@@ -354,7 +354,7 @@
 
 .provider-status strong,
 .snapshot-card strong {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
 
@@ -363,7 +363,7 @@
 .snapshot-card code,
 .catalog-status small {
   color: var(--muted);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
 
@@ -382,7 +382,7 @@
 
 .catalog-status p {
   color: var(--ink-soft);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
 }
 
 .freshness,
@@ -391,7 +391,7 @@
   color: var(--muted);
   display: inline-flex;
   flex: 0 0 auto;
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   font-weight: 680;
   gap: 5px;
   text-transform: capitalize;

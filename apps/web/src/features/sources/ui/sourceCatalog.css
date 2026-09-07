@@ -4,7 +4,7 @@
 }
 
 .source-catalog-header h2 {
-  font-size: 0.96rem;
+  font-size: 1.3rem;
 }
 
 .source-catalog-header p,
@@ -12,7 +12,7 @@
 .source-catalog-panel li,
 .source-catalog-panel dd {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
@@ -21,7 +21,7 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   color: var(--ink-soft);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 680;
   min-height: 32px;
   padding: 6px 9px;
@@ -40,13 +40,13 @@
 .source-catalog-summary {
   align-items: center;
   display: flex;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   justify-content: space-between;
 }
 
 .source-catalog-boundary {
-  background: #eef5ff;
-  border: 1px solid #bfd5ef;
+  background: var(--accent-soft);
+  border: 1px solid #b9ddd8;
   border-radius: var(--radius-sm);
   margin: 0;
   padding: 9px;
@@ -62,7 +62,7 @@
   border-radius: var(--radius-md);
   display: grid;
   gap: 9px;
-  padding: 11px;
+  padding: 16px;
 }
 
 .source-catalog-card > header {
@@ -86,7 +86,7 @@
 .source-catalog-card header > span {
   background: var(--surface-soft);
   border-radius: 999px;
-  font-size: 0.58rem;
+  font-size: 0.75rem;
   font-weight: 750;
   padding: 3px 7px;
 }
@@ -103,7 +103,7 @@
 
 .source-catalog-card dt {
   color: var(--ink-soft);
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 720;
 }
 
@@ -114,7 +114,7 @@
 
 .source-catalog-card summary {
   color: var(--ink-soft);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 

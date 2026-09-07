@@ -15,17 +15,10 @@ import type {
   MapView,
 } from '@/shared/types/assistant';
 
-const welcomeMessage: ConversationMessage = {
-  id: 'welcome',
-  role: 'assistant',
-  content:
-    'Ask about the map, disaster concepts, or supported source-backed investigations. Selected current events may include conservatively associated source photos; operator-supplied images remain a separate analytical path.',
-};
-
 export function useAssistantConversation() {
   const client = useMemo(() => new AssistantClient(API_BASE_URL), []);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ConversationMessage[]>([welcomeMessage]);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [status, setStatus] = useState<ConversationStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +52,7 @@ export function useAssistantConversation() {
       return;
     }
     setConversationId(null);
-    setMessages([welcomeMessage]);
+    setMessages([]);
     setStatus('idle');
     setError(null);
   }, [status]);

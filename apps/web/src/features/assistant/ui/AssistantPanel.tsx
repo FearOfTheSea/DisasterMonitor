@@ -69,7 +69,7 @@ export function AssistantPanel({
       <header className="assistant-panel-header">
         <div className="panel-heading">
           <h2>Map assistant</h2>
-          <p>Agent-first routing with local Qwen and trusted source tools.</p>
+          <p>Turn questions into a clearer picture, with sources you can inspect.</p>
         </div>
         <div className="conversation-controls">
           <label htmlFor="assistant-conversation">Conversation</label>
@@ -100,20 +100,58 @@ export function AssistantPanel({
           )}
         </div>
       </header>
-      <div className="availability-note">
-        Source-backed current disaster reports are available for recognized requests;
-        unsupported coverage is reported explicitly. Selected events can include bounded
-        source-photo previews when date, disaster, geography, credit, and source policy
-        agree. Operator-supplied imagery remains a separate analytical path.
-      </div>
+      <details className="availability-note">
+        <summary>About sources and coverage</summary>
+        <p>
+          Source-backed current disaster reports are available for recognized requests;
+          unsupported coverage is reported explicitly. Selected events can include
+          bounded source-photo previews when date, disaster, geography, credit, and
+          source policy agree. Operator-supplied imagery remains a separate analytical
+          path.
+        </p>
+      </details>
       <div className="message-list" aria-live="polite">
         {messages.length === 0 ? (
           <div className="empty-state">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M19 14.5a4 4 0 0 1-4 4H9l-5 3v-7a4 4 0 0 1-1-2.7V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4z" />
             </svg>
-            <strong>No messages yet</strong>
-            <p>Your conversation will appear here.</p>
+            <strong>Start with a question.</strong>
+            <p>
+              Explore a place, make sense of an event, or find the evidence behind a
+              report.
+            </p>
+            <div className="assistant-starters">
+              {[
+                ['Understand this map', 'What does this map show?'],
+                [
+                  'Explore recent earthquakes',
+                  'What are the latest earthquakes in Japan?',
+                ],
+                ['Investigate flooding', 'What is the latest flooding in Vietnam?'],
+              ].map(([label, prompt]) => (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => {
+                    setQuestion(prompt);
+                    composerRef.current?.focus();
+                  }}
+                >
+                  {label}
+                  <svg
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 15 15 5M5 5h10v10" />
+                  </svg>
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           messages.map((message) => (

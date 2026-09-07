@@ -1,5 +1,5 @@
 .command-palette-trigger kbd {
-  color: var(--muted);
+  color: #adc1cb;
   font-family: inherit;
   font-size: 0.62rem;
 }
@@ -17,6 +17,7 @@
 
 .command-palette {
   background: var(--surface);
+  color: var(--ink);
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   box-shadow: 0 22px 70px rgba(15, 32, 57, 0.3);
