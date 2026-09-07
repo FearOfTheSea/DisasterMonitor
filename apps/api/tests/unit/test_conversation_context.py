@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from disaster_monitor.application.services.conversation_context import (
+from disaster_monitor.application.conversations.conversation_context import (
     MAX_HISTORY_CHARACTERS,
     MAX_HISTORY_MESSAGES,
     resolve_disaster_follow_up,

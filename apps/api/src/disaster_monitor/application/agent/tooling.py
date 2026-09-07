@@ -29,45 +29,45 @@ from disaster_monitor.application.agent.tools.source_tools import (
     RetrieveSituationEvidenceTool,
     SourceToolDependencies,
 )
+from disaster_monitor.application.conversations.memory_recall import MemoryRecallService
+from disaster_monitor.application.decision.decision_autonomy import (
+    DecisionAutonomyController,
+)
+from disaster_monitor.application.decision.decision_support import (
+    DecisionOptionGenerator,
+)
+from disaster_monitor.application.decision.hypothesis_reasoning import (
+    HypothesisGenerator,
+)
+from disaster_monitor.application.decision.triage_autonomy import TriageAutonomyPolicy
+from disaster_monitor.application.evidence.event_resolution import EventPolicyRegistry
+from disaster_monitor.application.evidence.evidence_reconciliation import (
+    EvidenceReconciler,
+)
+from disaster_monitor.application.evidence.operational_evidence import (
+    OperationalEvidenceRecorder,
+)
+from disaster_monitor.application.incidents.incident_priority import (
+    IncidentPriorityRanker,
+)
+from disaster_monitor.application.investigation.coordination_handoffs import (
+    CoordinationHandoffPlanner,
+)
+from disaster_monitor.application.investigation.coordination_supervision import (
+    CoordinationSupervisor,
+)
+from disaster_monitor.application.investigation.disaster_report_renderer import (
+    DisasterReportRenderer,
+)
+from disaster_monitor.application.investigation.specialist_executor import (
+    SpecialistExecutor,
+)
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
 )
 from disaster_monitor.application.ports.source_catalog import SourceCatalog
-from disaster_monitor.application.services.coordination_handoffs import (
-    CoordinationHandoffPlanner,
-)
-from disaster_monitor.application.services.coordination_supervision import (
-    CoordinationSupervisor,
-)
-from disaster_monitor.application.services.decision_autonomy import (
-    DecisionAutonomyController,
-)
-from disaster_monitor.application.services.decision_support import (
-    DecisionOptionGenerator,
-)
-from disaster_monitor.application.services.disaster_report_renderer import (
-    DisasterReportRenderer,
-)
-from disaster_monitor.application.services.event_resolution import EventPolicyRegistry
-from disaster_monitor.application.services.evidence_reconciliation import (
-    EvidenceReconciler,
-)
-from disaster_monitor.application.services.hypothesis_reasoning import (
-    HypothesisGenerator,
-)
-from disaster_monitor.application.services.incident_priority import (
-    IncidentPriorityRanker,
-)
-from disaster_monitor.application.services.memory_recall import MemoryRecallService
-from disaster_monitor.application.services.operational_evidence import (
-    OperationalEvidenceRecorder,
-)
-from disaster_monitor.application.services.provider_registry import ProviderRegistry
-from disaster_monitor.application.services.specialist_executor import (
-    SpecialistExecutor,
-)
-from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
+from disaster_monitor.application.sources.provider_registry import ProviderRegistry
 
 
 @dataclass(frozen=True, slots=True)

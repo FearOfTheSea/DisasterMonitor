@@ -10,7 +10,9 @@ from disaster_monitor.application.agent.models import (
     TaskKind,
     ValidatedDisasterTask,
 )
-from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
+from disaster_monitor.application.investigation.run_disaster_agent import (
+    RunDisasterAgent,
+)
 from disaster_monitor.domain.conversation import ConversationMessage, ConversationRole
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,

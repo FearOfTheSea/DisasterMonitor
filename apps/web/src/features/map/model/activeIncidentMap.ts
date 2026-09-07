@@ -2,7 +2,7 @@ import type {
   ActiveIncident,
   DisasterType,
   IncidentGeometry,
-} from '@/features/incidents/model/activeIncidents';
+} from '@/features/incidents/public';
 
 export type RenderableIncidentGeometry = IncidentGeometry & {
   kind: 'point' | 'area' | 'track';

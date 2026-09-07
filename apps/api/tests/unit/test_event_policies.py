@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery
-from disaster_monitor.application.services.event_resolution import (
+from disaster_monitor.application.evidence.event_resolution import (
     DefaultEventPolicy,
     EarthquakeEventPolicy,
     default_event_policy_registry,

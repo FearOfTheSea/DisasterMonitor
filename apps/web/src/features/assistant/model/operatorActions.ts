@@ -4,17 +4,14 @@ import type {
   SetTimeWindowOperatorActionResponse,
   ShowLayerOperatorActionResponse,
 } from '@/shared/api/generated/assistant';
-import {
-  MAP_LAYER_REGISTRY,
-  type MapLayerId,
-} from '@/features/map/model/mapLayerRegistry';
+import { MAP_LAYER_REGISTRY, type MapLayerId } from '@/features/map/public';
 import {
   MAP_TIME_WINDOWS,
   setMapLayerVisibility,
   setMapTimeWindow,
   type MapLayerState,
   type MapTimeWindow,
-} from '@/features/map/model/mapLayerState';
+} from '@/features/map/public';
 
 export type OperatorAction =
   | OpenPanelOperatorActionResponse

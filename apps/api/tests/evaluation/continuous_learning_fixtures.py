@@ -1,11 +1,11 @@
 import json
 from pathlib import Path
 
-from disaster_monitor.application.services.drift_adaptation import (
+from disaster_monitor.application.learning.drift_adaptation import (
     DriftObservation,
     load_drift_observations,
 )
-from disaster_monitor.application.services.offline_learning import (
+from disaster_monitor.application.learning.offline_learning import (
     load_locked_trajectories,
 )
 from disaster_monitor.domain.learning import LearningPartition, LearningTrajectory

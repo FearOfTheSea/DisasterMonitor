@@ -8,7 +8,7 @@ import type {
   IncidentSourceAuthority,
 } from '@/features/incidents/model/activeIncidents';
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
-import type { MapTimeWindow } from '@/features/map/model/mapLayerState';
+import type { MapTimeWindow } from '@/shared/model/displayTimeWindow';
 
 type ActiveIncidentsPanelProps = {
   snapshot?: ActiveIncidentsSnapshot;

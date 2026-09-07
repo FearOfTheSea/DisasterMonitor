@@ -5,12 +5,12 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
+from disaster_monitor.application.evidence.multimodal_asset_admission import (
+    MultimodalAssetAdmissionService,
+)
 from disaster_monitor.application.multimodal import (
     AssetAdmissionInput,
     VisualAnalysisRequest,
-)
-from disaster_monitor.application.services.multimodal_asset_admission import (
-    MultimodalAssetAdmissionService,
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.domain.errors import ModelResponseError

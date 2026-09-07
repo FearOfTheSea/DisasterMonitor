@@ -11,7 +11,7 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
 )
-from disaster_monitor.application.services.worldwide_disaster_policy import (
+from disaster_monitor.application.investigation.worldwide_disaster_policy import (
     DefaultWorldwideDisasterPolicy,
 )
 from disaster_monitor.domain.disaster import (

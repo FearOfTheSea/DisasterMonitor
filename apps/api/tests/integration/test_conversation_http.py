@@ -26,6 +26,9 @@ from disaster_monitor.application.agent.operator_actions import (
     OperatorActionTarget,
     OperatorActionType,
 )
+from disaster_monitor.application.conversations.run_conversation_turn import (
+    RunConversationTurn,
+)
 from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.application.dto import AssistantAnswer, InvestigationSummary
 from disaster_monitor.application.media import (
@@ -36,9 +39,6 @@ from disaster_monitor.application.media import (
     MediaCreditKind,
     MediaRightsStatus,
     StoredMediaAsset,
-)
-from disaster_monitor.application.use_cases.run_conversation_turn import (
-    RunConversationTurn,
 )
 from disaster_monitor.domain.conversation import (
     Conversation,

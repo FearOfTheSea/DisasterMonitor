@@ -2,11 +2,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from disaster_monitor.application.incidents.active_incidents import ActiveIncident
 from disaster_monitor.application.ports.weather_alerts import (
     WeatherAlertBatch,
     WeatherAlertProviderIssue,
 )
-from disaster_monitor.application.services.active_incidents import ActiveIncident
 from disaster_monitor.application.weather_alerts import (
     WeatherAlert,
     WeatherAlertCertainty,

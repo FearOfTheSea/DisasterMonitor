@@ -14,7 +14,7 @@ import type {
   ActiveIncidentMapFeature,
   RenderableIncidentGeometry,
 } from '@/features/map/model/activeIncidentMap';
-import type { DisasterType } from '@/features/incidents/model/activeIncidents';
+import type { DisasterType } from '@/features/incidents/public';
 import type { MapAreaBounds } from '@/features/map/model/assistantMapFocus';
 import { cycloneStyleSemantics } from '@/features/map/model/cycloneMapLayers';
 import type { CopGeometry, CycloneMapLayer, MapView } from '@/shared/types/assistant';

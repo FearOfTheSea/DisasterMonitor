@@ -8,21 +8,23 @@ import os
 import socket
 from datetime import UTC, datetime
 
-from disaster_monitor.application.services.active_incidents import (
+from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
-from disaster_monitor.application.services.operational_ingestion import (
+from disaster_monitor.application.incidents.refresh_incident_watch import (
+    RefreshIncidentWatch,
+)
+from disaster_monitor.application.ingestion.jobs import ScheduledInvestigation
+from disaster_monitor.application.ingestion.watch_jobs import (
     IncidentWatchScheduler,
     IncidentWatchWorker,
-    ScheduledInvestigation,
-)
-from disaster_monitor.application.use_cases.refresh_incident_watch import (
-    RefreshIncidentWatch,
 )
 from disaster_monitor.infrastructure.composition import (
     build_country_catalog,
-    build_current_disaster_report,
     build_operational_services,
+)
+from disaster_monitor.infrastructure.composition_builders import (
+    build_investigation_resources,
 )
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.operations.postgres_repository import (
@@ -65,17 +67,17 @@ async def _worker(settings: Settings, *, once: bool) -> None:
     repository = _postgres(settings)
     operational = build_operational_services(settings, repository)
     countries = build_country_catalog(settings)
-    report = build_current_disaster_report(
+    investigation = build_investigation_resources(
         settings,
         countries,
         snapshot_recorder=operational.snapshots.persist,
         operational_evidence=operational.evidence,
     )
     discovery = ActiveIncidentsService(
-        report.provider_registry,
-        country_event_provider=report.event_provider,
+        investigation.dependencies.provider_registry,
+        country_event_provider=investigation.dependencies.event_provider,
         country_catalog=countries,
-        event_policies=report.event_policies,
+        event_policies=investigation.dependencies.event_policies,
     )
     worker = IncidentWatchWorker(
         repository, RefreshIncidentWatch(repository, discovery)
@@ -89,7 +91,7 @@ async def _worker(settings: Settings, *, once: bool) -> None:
             if job is None:
                 await asyncio.sleep(2)
     finally:
-        await report.aclose()
+        await investigation.lifecycle.shutdown()
 
 
 def run() -> None:

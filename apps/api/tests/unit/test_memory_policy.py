@@ -1,7 +1,7 @@
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
-from disaster_monitor.application.services.memory_policy import (
+from disaster_monitor.application.conversations.memory_policy import (
     MemoryPolicy,
     MemoryPolicyAction,
 )

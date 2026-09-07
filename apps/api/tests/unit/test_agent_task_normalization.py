@@ -13,7 +13,7 @@ from disaster_monitor.application.agent.task_normalization import (
     validate_disaster_task,
     worldwide_disaster_query,
 )
-from disaster_monitor.application.services.disaster_query_parser import (
+from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
 )
 from disaster_monitor.domain.disaster import Disaster

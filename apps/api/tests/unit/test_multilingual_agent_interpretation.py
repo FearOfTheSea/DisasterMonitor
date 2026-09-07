@@ -12,7 +12,7 @@ from disaster_monitor.application.agent.runtime import DisasterAgentRuntime
 from disaster_monitor.application.agent.task_normalization import (
     validate_disaster_task,
 )
-from disaster_monitor.application.services.disaster_query_parser import (
+from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
 )
 from disaster_monitor.domain.disaster import Disaster
@@ -258,3 +258,25 @@ def test_model_cannot_invent_an_event_discriminator() -> None:
 
     assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
     assert task.query is None
+
+
+@pytest.mark.parametrize(
+    "question",
+    (
+        "What is known about the magnitude 5.6 earthquake in the Solomon Islands "
+        "on September 6, 2026?",
+        "Latest magnitude 5.6 earthquake in the Solomon Islands",
+    ),
+)
+def test_missing_country_metadata_is_not_reported_as_a_date_or_magnitude_error(
+    question: str,
+) -> None:
+    task = validate_disaster_task(
+        question,
+        canonical_draft(country_code="SLB"),
+        country_catalog=CATALOG,
+        query_parser=DisasterQueryParser(CATALOG),
+    )
+    assert task.validation_status is ValidationStatus.CATALOG_LIMITATION
+    assert task.query is None
+    assert "not in the maintained" in task.detail

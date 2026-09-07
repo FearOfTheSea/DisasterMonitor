@@ -8,16 +8,16 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
     WorldwideDisasterQuery,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.evidence.source_evidence_policy import (
+    validate_event_evidence,
+    validate_situation_evidence,
+)
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,
     ProviderRole,
     ProviderTier,
-)
-from disaster_monitor.application.services.source_evidence_policy import (
-    validate_event_evidence,
-    validate_situation_evidence,
 )
 from disaster_monitor.domain.disaster import (
     Disaster,

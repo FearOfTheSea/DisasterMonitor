@@ -5,15 +5,15 @@ from typing import Annotated, cast
 from fastapi import APIRouter, Depends, Request, Response
 
 from disaster_monitor.application.dto import ModelReadiness
+from disaster_monitor.application.ingestion.provider_freshness import (
+    ProviderFreshnessService,
+)
+from disaster_monitor.application.ingestion.queries import QueueStatusQuery
 from disaster_monitor.application.ports.geography import (
     CountryCatalogUpdateAutomation,
     CountryCatalogUpdateTrigger,
 )
 from disaster_monitor.application.ports.language_model import LanguageModel
-from disaster_monitor.application.ports.operational_state import OperationalRepository
-from disaster_monitor.application.services.provider_freshness import (
-    ProviderFreshnessService,
-)
 from disaster_monitor.presentation.http.metrics import OperationalMetrics
 from disaster_monitor.presentation.http.response_serialization import (
     _country_catalog_response,
@@ -33,11 +33,9 @@ def get_language_model(request: Request) -> LanguageModel:
     return cast(LanguageModel, request.app.state.dependencies.language_model)
 
 
-def get_operational_repository(request: Request) -> OperationalRepository:
+def get_queue_status_query(request: Request) -> QueueStatusQuery:
     """Retrieve the operational store built by the composition root."""
-    return cast(
-        OperationalRepository, request.app.state.dependencies.operational_repository
-    )
+    return cast(QueueStatusQuery, request.app.state.dependencies.queue_status)
 
 
 def get_operational_metrics() -> OperationalMetrics:
@@ -138,12 +136,12 @@ async def update_country_catalog(
 
 @router.get("/metrics", tags=["operations"])
 async def metrics(
-    repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+    repository: Annotated[QueueStatusQuery, Depends(get_queue_status_query)],
     operational_metrics: Annotated[
         OperationalMetrics, Depends(get_operational_metrics)
     ],
 ) -> Response:
     """Expose API and durable queue metrics for an owner-selected scraper."""
-    operational_metrics.update_jobs(await repository.job_status_counts())
+    operational_metrics.update_jobs(await repository.execute())
     content, content_type = operational_metrics.render()
     return Response(content=content, media_type=content_type)

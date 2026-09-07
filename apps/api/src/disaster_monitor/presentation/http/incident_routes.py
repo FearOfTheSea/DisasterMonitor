@@ -4,22 +4,22 @@ from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from disaster_monitor.application.ports.operational_state import OperationalRepository
-from disaster_monitor.application.ports.operator_identity import (
-    TrustedOperatorIdentityPolicy,
+from disaster_monitor.application.decision.record_operator_action import (
+    RecordOperatorAction,
+    UnknownEvidenceStateError,
 )
-from disaster_monitor.application.services.active_incidents import (
+from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
+from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsQuery,
     ActiveIncidentsService,
 )
-from disaster_monitor.application.use_cases.manage_incident_watches import (
+from disaster_monitor.application.incidents.manage_incident_watches import (
     IncidentWatchNotFoundError,
     InvalidIncidentWatchScopeError,
     ManageIncidentWatches,
 )
-from disaster_monitor.application.use_cases.record_operator_action import (
-    RecordOperatorAction,
-    UnknownEvidenceStateError,
+from disaster_monitor.application.ports.operator_identity import (
+    TrustedOperatorIdentityPolicy,
 )
 from disaster_monitor.domain.disaster import (
     WatchScopeKind,
@@ -61,11 +61,9 @@ def get_incident_watches(request: Request) -> ManageIncidentWatches:
     return cast(ManageIncidentWatches, request.app.state.dependencies.incident_watches)
 
 
-def get_operational_repository(request: Request) -> OperationalRepository:
+def get_evidence_history_query(request: Request) -> EvidenceHistoryQuery:
     """Retrieve the operational store built by the composition root."""
-    return cast(
-        OperationalRepository, request.app.state.dependencies.operational_repository
-    )
+    return cast(EvidenceHistoryQuery, request.app.state.dependencies.evidence_history)
 
 
 def get_record_operator_action(request: Request) -> RecordOperatorAction:
@@ -279,14 +277,15 @@ async def mark_incident_watch_timeline_read(
     tags=["operations"],
 )
 async def evidence_history(
-    repository: Annotated[OperationalRepository, Depends(get_operational_repository)],
+    repository: Annotated[EvidenceHistoryQuery, Depends(get_evidence_history_query)],
     source_id: str | None = None,
     limit: int = 100,
 ) -> list[EvidenceSnapshotResponse]:
     """Return bounded immutable snapshot metadata, newest first."""
-    if limit < 1 or limit > 500:
-        raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
-    snapshots = await repository.snapshots(source_id=source_id, limit=limit)
+    try:
+        snapshots = await repository.execute(source_id=source_id, limit=limit)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     return [
         EvidenceSnapshotResponse(
             snapshot_id=item.snapshot_id,

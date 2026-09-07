@@ -9,15 +9,15 @@ from decision_support_fixtures import (
 )
 from evidence_world_state_metrics import expected_calibration_error
 
-from disaster_monitor.application.services.decision_autonomy import (
+from disaster_monitor.application.decision.decision_autonomy import (
     DecisionAutonomyController,
     validate_decision_execution,
 )
-from disaster_monitor.application.services.decision_support import (
+from disaster_monitor.application.decision.decision_support import (
     render_decision_support,
     validate_decision_support_artifact,
 )
-from disaster_monitor.application.services.scenario_reasoning import (
+from disaster_monitor.application.decision.scenario_reasoning import (
     validate_scenario_analysis,
 )
 from disaster_monitor.domain.decision import (

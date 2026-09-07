@@ -7,7 +7,7 @@ import {
   OpenLayersMapAdapter,
   type SatelliteLayerConfiguration,
 } from '@/features/map/adapters/openLayersMapAdapter';
-import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
+import type { ActiveIncident } from '@/features/incidents/public';
 import type { AssistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import { activeIncidentMapFeatures } from '@/features/map/model/activeIncidentMap';
 import { cycloneMapLayers } from '@/features/map/model/cycloneMapLayers';
@@ -34,7 +34,7 @@ import type {
   RegionalPresetId,
   RegionalSelection,
 } from '@/features/map/model/regionalPresets';
-import type { WeatherAlertsSnapshot } from '@/features/weather/model/weatherAlert';
+import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 import type {
   CommonOperationalPicture,
   MapView,

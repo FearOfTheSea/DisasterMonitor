@@ -1,7 +1,7 @@
 from dataclasses import replace
 
-from disaster_monitor.application.services.provider_registry import ProviderRegistry
 from disaster_monitor.application.source_catalog import SourceCatalogService
+from disaster_monitor.application.sources.provider_registry import ProviderRegistry
 from disaster_monitor.infrastructure.composition import (
     build_current_disaster_report,
     build_source_catalog,

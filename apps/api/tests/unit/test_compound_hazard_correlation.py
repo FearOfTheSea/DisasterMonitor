@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
-from disaster_monitor.application.services.active_incidents import ActiveIncident
-from disaster_monitor.application.services.event_policies import (
+from disaster_monitor.application.evidence.event_policies import (
     ASSOCIATION_LIMITATION,
     CompoundHazardCorrelationService,
 )
+from disaster_monitor.application.incidents.active_incidents import ActiveIncident
 from disaster_monitor.domain.disaster import (
     Disaster,
     EventCoordinate,

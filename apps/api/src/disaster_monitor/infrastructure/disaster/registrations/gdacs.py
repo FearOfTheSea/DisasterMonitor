@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderRegistration,
     ProviderTier,
 )

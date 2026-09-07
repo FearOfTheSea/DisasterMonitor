@@ -16,7 +16,7 @@ import type {
   IncidentWatchCoverageState,
   IncidentWatchEvent,
 } from '@/features/operations/model/incidentWatch';
-import type { DisasterType } from '@/features/incidents/model/activeIncidents';
+import type { DisasterType } from '@/features/incidents/public';
 import {
   createRefreshController,
   REFRESH_POLICIES,

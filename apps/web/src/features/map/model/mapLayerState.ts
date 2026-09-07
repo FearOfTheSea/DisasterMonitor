@@ -1,15 +1,14 @@
 import type {
   ActiveIncident,
   CompoundHazardCorrelation,
-} from '@/features/incidents/model/activeIncidents';
+} from '@/features/incidents/public';
 import {
   MAP_LAYER_REGISTRY,
   type MapLayerId,
 } from '@/features/map/model/mapLayerRegistry';
 
-export const MAP_TIME_WINDOWS = ['1h', '6h', '24h', '48h', '7d'] as const;
-export type MapTimeWindow = (typeof MAP_TIME_WINDOWS)[number];
-
+export { MAP_TIME_WINDOWS, type MapTimeWindow } from '@/shared/model/displayTimeWindow';
+import type { MapTimeWindow } from '@/shared/model/displayTimeWindow';
 export const MAP_LAYER_PRESETS = [
   'minimal',
   'incidents',
@@ -39,13 +38,7 @@ const PRESET_LAYERS: Record<MapLayerPreset, readonly MapLayerId[]> = {
   all: MAP_LAYER_REGISTRY.map((layer) => layer.id),
 };
 
-const WINDOW_MILLISECONDS: Record<MapTimeWindow, number> = {
-  '1h': 60 * 60 * 1_000,
-  '6h': 6 * 60 * 60 * 1_000,
-  '24h': 24 * 60 * 60 * 1_000,
-  '48h': 48 * 60 * 60 * 1_000,
-  '7d': 7 * 24 * 60 * 60 * 1_000,
-};
+import { WINDOW_MILLISECONDS } from '@/shared/model/displayTimeWindow';
 
 export function createDefaultMapLayerState(): MapLayerState {
   return {

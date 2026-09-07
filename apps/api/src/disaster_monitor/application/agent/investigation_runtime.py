@@ -26,7 +26,7 @@ from disaster_monitor.application.agent.models import (
 from disaster_monitor.application.agent.planning import DEFAULT_TOOL_ORDER
 from disaster_monitor.application.agent.tools import MAX_TOOL_CALLS
 from disaster_monitor.application.agent.trace import ExecutionTrace, TraceEventKind
-from disaster_monitor.application.services.investigation_report_renderer import (
+from disaster_monitor.application.investigation.investigation_report_renderer import (
     InvestigationReportRenderer,
 )
 

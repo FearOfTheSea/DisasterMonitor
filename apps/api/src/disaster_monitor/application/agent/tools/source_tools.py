@@ -12,13 +12,13 @@ from disaster_monitor.application.agent.models import (
 )
 from disaster_monitor.application.agent.tools import ToolDescription
 from disaster_monitor.application.disaster import ProviderBatch
+from disaster_monitor.application.evidence.event_resolution import EventPolicyRegistry
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
 )
 from disaster_monitor.application.ports.source_catalog import SourceCatalog
-from disaster_monitor.application.services.event_resolution import EventPolicyRegistry
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderRegistry,
     ProviderRole,
 )

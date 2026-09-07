@@ -6,28 +6,28 @@ from disaster_monitor.application.disaster import (
     DisasterQuery,
     EventDiscriminator,
 )
-from disaster_monitor.application.services.current_disaster_report import (
-    CurrentDisasterReportService,
-)
-from disaster_monitor.application.services.disaster_query_parser import (
-    DisasterQueryParser,
-)
-from disaster_monitor.application.services.disaster_report_renderer import (
-    render_source_backed_report,
-)
-from disaster_monitor.application.services.event_resolution import (
+from disaster_monitor.application.evidence.event_resolution import (
     cluster_physical_events,
     resolve_recent_event,
 )
-from disaster_monitor.application.services.evidence_correlation import (
+from disaster_monitor.application.evidence.evidence_correlation import (
     EarthquakeEvidenceCorrelationPolicy,
 )
-from disaster_monitor.application.services.evidence_reconciliation import (
+from disaster_monitor.application.evidence.evidence_reconciliation import (
     EvidenceReconciler,
     build_evidence_packet,
     correlate_situation_report,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.investigation.current_disaster_report import (
+    CurrentDisasterReportService,
+)
+from disaster_monitor.application.investigation.disaster_query_parser import (
+    DisasterQueryParser,
+)
+from disaster_monitor.application.investigation.disaster_report_renderer import (
+    render_source_backed_report,
+)
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRole,
 )

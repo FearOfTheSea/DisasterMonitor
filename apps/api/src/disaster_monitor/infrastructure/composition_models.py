@@ -3,6 +3,28 @@
 from dataclasses import dataclass
 
 from disaster_monitor.application.agent.diagnostics import AgentDiagnostics
+from disaster_monitor.application.agent.tooling import DisasterToolDependencies
+from disaster_monitor.application.evidence.operational_evidence import (
+    OperationalEvidenceRecorder,
+)
+from disaster_monitor.application.evidence.snapshot_persistence import (
+    SnapshotPersistenceService,
+)
+from disaster_monitor.application.incidents.active_incidents import (
+    ActiveIncidentsService,
+)
+from disaster_monitor.application.investigation.current_disaster_report import (
+    CurrentDisasterReportService,
+)
+from disaster_monitor.application.investigation.disaster_query_parser import (
+    DisasterQueryParser,
+)
+from disaster_monitor.application.investigation.workflow import (
+    DisasterInvestigationWorkflow,
+)
+from disaster_monitor.application.investigation.worldwide_disaster import (
+    WorldwideDisasterReportService,
+)
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.conversation_deletion import (
     ConversationDeletionStore,
@@ -19,26 +41,9 @@ from disaster_monitor.application.ports.operational_state import OperationalRepo
 from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
-from disaster_monitor.application.services.active_incidents import (
-    ActiveIncidentsService,
-)
-from disaster_monitor.application.services.current_disaster_report import (
-    CurrentDisasterReportService,
-)
-from disaster_monitor.application.services.disaster_query_parser import (
-    DisasterQueryParser,
-)
-from disaster_monitor.application.services.operational_evidence import (
-    OperationalEvidenceRecorder,
-)
-from disaster_monitor.application.services.operational_ingestion import (
-    SnapshotPersistenceService,
-)
-from disaster_monitor.application.services.worldwide_disaster import (
-    WorldwideDisasterReportService,
-)
 from disaster_monitor.application.source_catalog import SourceCatalogService
 from disaster_monitor.application.weather_alerts import WeatherAlertsService
+from disaster_monitor.infrastructure.app_dependencies import AppLifecycle
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,3 +84,10 @@ class AppDependencyOverrides:
     memory_repository: MemoryStore | None = None
     conversation_deletion_store: ConversationDeletionStore | None = None
     agent_diagnostics: AgentDiagnostics | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class InvestigationResources:
+    dependencies: DisasterToolDependencies
+    workflow: DisasterInvestigationWorkflow
+    lifecycle: AppLifecycle

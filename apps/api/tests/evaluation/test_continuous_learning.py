@@ -3,11 +3,11 @@ from dataclasses import replace
 import pytest
 from continuous_learning_fixtures import drift_inputs, load_trajectories
 
-from disaster_monitor.application.services.drift_adaptation import (
+from disaster_monitor.application.learning.drift_adaptation import (
     DistributionDriftDetector,
     DriftAdaptationController,
 )
-from disaster_monitor.application.services.offline_learning import (
+from disaster_monitor.application.learning.offline_learning import (
     BASELINE_ANALYTICAL_TUNING_V0,
     OfflineTrajectoryLearner,
 )

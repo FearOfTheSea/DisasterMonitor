@@ -5,8 +5,8 @@ import { useState } from 'react';
 import {
   createIncidentWatch,
   fetchIncidentWatches,
-} from '@/features/operations/api/incidentWatches';
-import type { IncidentWatch } from '@/features/operations/model/incidentWatch';
+} from '@/features/operations/public';
+import type { IncidentWatch } from '@/features/operations/public';
 import type { CreateIncidentWatchOperatorActionResponse } from '@/shared/api/generated/assistant';
 
 type OperatorActionCardProps = {

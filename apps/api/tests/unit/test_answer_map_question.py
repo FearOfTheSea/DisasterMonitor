@@ -3,11 +3,13 @@ from datetime import UTC, datetime
 import pytest
 from conftest import FakeLanguageModel
 
-from disaster_monitor.application.services.prompt_preparation import (
+from disaster_monitor.application.investigation.answer_map_question import (
+    AnswerMapQuestion,
+)
+from disaster_monitor.application.investigation.prompt_preparation import (
     normalize_question,
     prepare_model_request,
 )
-from disaster_monitor.application.use_cases.answer_map_question import AnswerMapQuestion
 from disaster_monitor.domain.conversation import (
     ConversationMessage,
     ConversationRole,

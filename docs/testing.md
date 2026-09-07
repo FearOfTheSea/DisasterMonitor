@@ -60,7 +60,12 @@ deterministic policy.
 They must not require network access, a database, Ollama, or another external
 service. Use fakes for application ports.
 
-Architecture dependency checks are unit-level quality gates.
+Architecture dependency checks are unit-level quality gates. Backend checks include
+relative-import resolution, capability dependencies, narrow persistence consumption,
+HTTP query delegation, and compatibility exports. Frontend checks include shared/app
+boundaries, public feature contracts, and feature cycles. Workspace hook tests cover
+panel exclusivity, URL restoration, selection, and cleanup; system tests continue to
+cover the rendered map, assistant, and incident-watch workflows.
 
 `test_source_file_quality.py` enforces the documented 700-line hard limit across
 hand-maintained backend, frontend, test, and script sources. The generated frontend

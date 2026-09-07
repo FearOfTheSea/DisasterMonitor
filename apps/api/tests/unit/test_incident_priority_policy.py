@@ -2,19 +2,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from disaster_monitor.application.services.event_resolution import (
+from disaster_monitor.application.evidence.event_resolution import (
     default_event_policy_registry,
 )
-from disaster_monitor.application.services.evidence_state import (
+from disaster_monitor.application.evidence.evidence_state import (
     build_evidence_world_state,
 )
-from disaster_monitor.application.services.incident_priority import (
+from disaster_monitor.application.incidents.incident_priority import (
     IncidentPriorityRanker,
-)
-from disaster_monitor.application.services.incident_priority_policy import (
-    EarthquakeIncidentPriorityPolicy,
-    IncidentPriorityContribution,
-    default_incident_priority_policy_registry,
 )
 from disaster_monitor.domain.disaster import (
     Disaster,
@@ -27,6 +22,11 @@ from disaster_monitor.domain.disaster import (
     SituationReport,
     SourceReference,
     point_event_geometry,
+)
+from disaster_monitor.domain.hazards.incident_priority import (
+    EarthquakeIncidentPriorityPolicy,
+    IncidentPriorityContribution,
+    default_incident_priority_policy_registry,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,

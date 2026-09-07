@@ -8,7 +8,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from disaster_monitor.application.services.specialist_executor import (
+from disaster_monitor.application.investigation.specialist_executor import (
     SpecialistExecutionResult,
 )
 from disaster_monitor.domain.disaster import Disaster

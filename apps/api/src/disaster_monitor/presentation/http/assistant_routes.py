@@ -9,14 +9,17 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from disaster_monitor.application.assistant_message_payload import (
     assistant_answer_from_payload,
 )
-from disaster_monitor.application.multimodal import AssetAdmissionInput
-from disaster_monitor.application.ports.conversation_store import ConversationStore
-from disaster_monitor.application.use_cases.delete_conversation import (
+from disaster_monitor.application.conversations.delete_conversation import (
     DeleteConversation,
 )
-from disaster_monitor.application.use_cases.run_conversation_turn import (
+from disaster_monitor.application.conversations.queries import (
+    ConversationNotFoundError,
+    ConversationQueries,
+)
+from disaster_monitor.application.conversations.run_conversation_turn import (
     RunConversationTurn,
 )
+from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.domain.models import MapView
 from disaster_monitor.presentation.http.multimodal_schemas import (
     MultimodalAssetRequest,
@@ -35,9 +38,11 @@ from disaster_monitor.presentation.http.schemas import (
 router = APIRouter()
 
 
-def get_conversation_store(request: Request) -> ConversationStore:
+def get_conversation_queries(request: Request) -> ConversationQueries:
     """Retrieve the conversation repository built by the composition root."""
-    return cast(ConversationStore, request.app.state.dependencies.conversation_store)
+    return cast(
+        ConversationQueries, request.app.state.dependencies.conversation_queries
+    )
 
 
 def get_conversation_turn(request: Request) -> RunConversationTurn:
@@ -88,7 +93,7 @@ async def assistant(
     tags=["assistant"],
 )
 async def list_conversations(
-    repository: Annotated[ConversationStore, Depends(get_conversation_store)],
+    repository: Annotated[ConversationQueries, Depends(get_conversation_queries)],
 ) -> list[ConversationSummaryResponse]:
     """List durable conversations from newest update to oldest."""
     return [
@@ -110,15 +115,16 @@ async def list_conversations(
 async def get_conversation(
     conversation_id: str,
     http_request: Request,
-    repository: Annotated[ConversationStore, Depends(get_conversation_store)],
+    repository: Annotated[ConversationQueries, Depends(get_conversation_queries)],
 ) -> ConversationResponse:
     """Return one stored transcript in chronological order."""
-    conversation = await repository.get(conversation_id)
-    if conversation is None:
+    try:
+        conversation = await repository.get(conversation_id)
+    except ConversationNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The requested conversation does not exist.",
-        )
+        ) from None
     return ConversationResponse(
         conversation_id=conversation.conversation_id,
         created_at=conversation.created_at,

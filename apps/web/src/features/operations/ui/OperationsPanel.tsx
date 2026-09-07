@@ -18,7 +18,7 @@ import type {
   ActiveIncident,
   ActiveIncidentsSnapshot,
   CompoundHazardCorrelation,
-} from '@/features/incidents/model/activeIncidents';
+} from '@/features/incidents/public';
 import { FindingsCenter } from '@/features/operations/ui/FindingsCenter';
 import { IncidentWatches } from '@/features/operations/ui/IncidentWatches';
 

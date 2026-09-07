@@ -12,7 +12,7 @@ from disaster_monitor.application.media import (
     MediaRightsStatus,
     RetrievedMedia,
 )
-from disaster_monitor.application.services.event_media import (
+from disaster_monitor.application.media_analysis.event_media import (
     DisasterMediaService,
     EventMediaAssociationPolicy,
 )

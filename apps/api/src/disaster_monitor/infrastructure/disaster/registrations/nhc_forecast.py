@@ -1,6 +1,6 @@
 """NOAA NHC/CPHC cyclone forecast registration."""
 
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderRegistration,
     ProviderTier,
 )

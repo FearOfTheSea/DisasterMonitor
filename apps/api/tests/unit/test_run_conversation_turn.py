@@ -2,6 +2,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+from disaster_monitor.application.conversations.run_conversation_turn import (
+    RunConversationTurn,
+)
 from disaster_monitor.application.dto import AssistantAnswer
 from disaster_monitor.application.media import (
     DisasterMediaGallery,
@@ -10,9 +13,6 @@ from disaster_monitor.application.media import (
     MediaContentRole,
     MediaCreditKind,
     MediaRightsStatus,
-)
-from disaster_monitor.application.use_cases.run_conversation_turn import (
-    RunConversationTurn,
 )
 from disaster_monitor.domain.errors import ConversationNotFoundError
 from disaster_monitor.infrastructure.conversations.memory_repository import (

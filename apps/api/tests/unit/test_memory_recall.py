@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from disaster_monitor.application.services.memory_recall import (
+from disaster_monitor.application.conversations.memory_recall import (
     MemoryRecallRequest,
     MemoryRecallService,
 )

@@ -1,9 +1,49 @@
 """Manual composition root for the local API."""
 
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
+from disaster_monitor.application.agent.tooling import (
+    DisasterToolDependencies,
+    build_disaster_tool_registry,
+)
+from disaster_monitor.application.conversations.memory_recall import MemoryRecallService
+from disaster_monitor.application.evidence.event_resolution import (
+    default_event_policy_registry,
+)
+from disaster_monitor.application.evidence.evidence_reconciliation import (
+    EvidenceReconciler,
+)
+from disaster_monitor.application.evidence.operational_evidence import (
+    OperationalEvidenceRecorder,
+)
+from disaster_monitor.application.evidence.snapshot_persistence import (
+    SnapshotPersistenceService,
+)
+from disaster_monitor.application.evidence.source_consistency import (
+    validate_provider_source_consistency,
+)
+from disaster_monitor.application.evidence.source_evidence_policy import (
+    validate_event_evidence,
+    validate_situation_evidence,
+)
+from disaster_monitor.application.investigation.current_disaster_report import (
+    CurrentDisasterReportService,
+)
+from disaster_monitor.application.investigation.disaster_query_parser import (
+    DisasterQueryParser,
+)
+from disaster_monitor.application.investigation.disaster_report_renderer import (
+    DisasterReportRenderer,
+)
+from disaster_monitor.application.investigation.specialist_executor import (
+    SpecialistExecutor,
+)
+from disaster_monitor.application.investigation.workflow import (
+    DisasterInvestigationWorkflow,
+)
+from disaster_monitor.application.media_analysis.event_media import DisasterMediaService
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.conversation_deletion import (
     ConversationDeletionStore,
@@ -15,45 +55,14 @@ from disaster_monitor.application.ports.operational_state import OperationalRepo
 from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
-from disaster_monitor.application.services.current_disaster_report import (
-    CurrentDisasterReportService,
-)
-from disaster_monitor.application.services.disaster_query_parser import (
-    DisasterQueryParser,
-)
-from disaster_monitor.application.services.disaster_report_renderer import (
-    DisasterReportRenderer,
-)
-from disaster_monitor.application.services.event_media import DisasterMediaService
-from disaster_monitor.application.services.event_resolution import (
-    default_event_policy_registry,
-)
-from disaster_monitor.application.services.evidence_reconciliation import (
-    EvidenceReconciler,
-)
-from disaster_monitor.application.services.memory_recall import MemoryRecallService
-from disaster_monitor.application.services.operational_evidence import (
-    OperationalEvidenceRecorder,
-)
-from disaster_monitor.application.services.operational_ingestion import (
-    SnapshotPersistenceService,
-)
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderRegistry,
 )
-from disaster_monitor.application.services.source_consistency import (
-    validate_provider_source_consistency,
-)
-from disaster_monitor.application.services.source_evidence_policy import (
-    validate_event_evidence,
-    validate_situation_evidence,
-)
-from disaster_monitor.application.services.specialist_executor import (
-    SpecialistExecutor,
-)
 from disaster_monitor.application.weather_alerts import WeatherAlertsService
+from disaster_monitor.infrastructure.app_dependencies import AppLifecycle
 from disaster_monitor.infrastructure.composition_models import (
     EventMediaServices,
+    InvestigationResources,
     OperationalServices,
 )
 from disaster_monitor.infrastructure.configuration import Settings
@@ -390,14 +399,14 @@ def build_disaster_query_parser(
     return DisasterQueryParser(country_catalog or build_country_catalog())
 
 
-def build_current_disaster_report(
+def build_investigation_resources(
     settings: Settings,
     country_catalog: StaticCountryCatalog | None = None,
     snapshot_recorder: SourcePayloadRecorder | None = None,
     operational_evidence: OperationalEvidenceRecorder | None = None,
     specialist_executor: SpecialistExecutor | None = None,
     memory_recall: MemoryRecallService | None = None,
-) -> CurrentDisasterReportService:
+) -> InvestigationResources:
     """Construct capability-registered live disaster providers."""
     geography = country_catalog or build_country_catalog()
     registry = ProviderRegistry(
@@ -411,15 +420,54 @@ def build_current_disaster_report(
     situation_provider = CompositeSituationReportProvider(
         registry, validate=validate_situation_evidence
     )
-    return CurrentDisasterReportService(
-        event_provider,
-        situation_provider,
+    dependencies = DisasterToolDependencies(
         provider_registry=registry,
+        source_catalog=source_catalog,
+        event_provider=event_provider,
+        situation_provider=situation_provider,
         event_policies=default_event_policy_registry(),
         evidence_reconciler=EvidenceReconciler(),
         renderer=DisasterReportRenderer(),
-        source_catalog=source_catalog,
+        clock=lambda: datetime.now(UTC),
         operational_evidence=operational_evidence,
         specialist_executor=specialist_executor,
         memory_recall=memory_recall,
+    )
+    return InvestigationResources(
+        dependencies,
+        DisasterInvestigationWorkflow(build_disaster_tool_registry(dependencies)),
+        AppLifecycle(shutdown_hooks=(event_provider.aclose, situation_provider.aclose)),
+    )
+
+
+def build_current_disaster_report(
+    settings: Settings,
+    country_catalog: StaticCountryCatalog | None = None,
+    snapshot_recorder: SourcePayloadRecorder | None = None,
+    operational_evidence: OperationalEvidenceRecorder | None = None,
+    specialist_executor: SpecialistExecutor | None = None,
+    memory_recall: MemoryRecallService | None = None,
+) -> CurrentDisasterReportService:
+    """Compatibility builder for callers of the original report service."""
+    resources = build_investigation_resources(
+        settings,
+        country_catalog,
+        snapshot_recorder,
+        operational_evidence,
+        specialist_executor,
+        memory_recall,
+    )
+    deps = resources.dependencies
+    return CurrentDisasterReportService(
+        deps.event_provider,
+        deps.situation_provider,
+        provider_registry=deps.provider_registry,
+        event_policies=deps.event_policies,
+        evidence_reconciler=deps.evidence_reconciler,
+        renderer=deps.renderer,
+        source_catalog=deps.source_catalog,
+        clock=deps.clock,
+        operational_evidence=deps.operational_evidence,
+        specialist_executor=deps.specialist_executor,
+        memory_recall=deps.memory_recall,
     )

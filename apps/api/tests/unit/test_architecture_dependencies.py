@@ -2,12 +2,14 @@ import ast
 import sys
 from pathlib import Path
 
+from .architecture_support import imports_from_path
+
 SRC = Path(__file__).resolve().parents[2] / "src" / "disaster_monitor"
 DOMAIN = SRC / "domain"
 APPLICATION = SRC / "application"
 INFRASTRUCTURE = SRC / "infrastructure"
 PRESENTATION = SRC / "presentation"
-INCIDENT_PRIORITY = APPLICATION / "services" / "incident_priority.py"
+INCIDENT_PRIORITY = APPLICATION / "incidents" / "incident_priority.py"
 CONVERSATION_STORE = APPLICATION / "ports" / "conversation_store.py"
 MEMORY_STORE = APPLICATION / "ports" / "memory_store.py"
 MAIN = SRC / "main.py"
@@ -39,12 +41,12 @@ INFRASTRUCTURE_APPLICATION_SURFACE = {
 
 DISASTER_POLICY_MODULES = {
     "disaster_monitor.application.disaster_aliases",
-    "disaster_monitor.application.services.disaster_query_policy",
-    "disaster_monitor.application.services.event_media",
-    "disaster_monitor.application.services.evidence_correlation",
-    "disaster_monitor.application.services.incident_priority_policy",
-    "disaster_monitor.application.services.report_profiles",
-    "disaster_monitor.application.services.worldwide_disaster_policy",
+    "disaster_monitor.application.investigation.disaster_query_policy",
+    "disaster_monitor.application.media_analysis.event_media",
+    "disaster_monitor.application.evidence.evidence_correlation",
+    "disaster_monitor.domain.hazards.incident_priority",
+    "disaster_monitor.application.investigation.report_profiles",
+    "disaster_monitor.application.investigation.worldwide_disaster_policy",
 }
 
 
@@ -55,14 +57,7 @@ def _python_files(directory: Path) -> tuple[Path, ...]:
 
 
 def _imports(path: Path) -> tuple[str, ...]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    imports: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imports.extend(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imports.append(node.module)
-    return tuple(imports)
+    return imports_from_path(path, SRC.parent)
 
 
 def _module_name(path: Path) -> str:
@@ -86,6 +81,9 @@ def test_domain_imports_only_standard_library() -> None:
 def test_compatibility_facades_do_not_accumulate_implementations() -> None:
     facades = (
         DOMAIN / "disaster.py",
+        APPLICATION / "investigation" / "current_disaster_report.py",
+        APPLICATION / "services" / "current_disaster_report.py",
+        APPLICATION / "ingestion" / "operational_ingestion.py",
         APPLICATION / "agent" / "task_normalization.py",
         INFRASTRUCTURE / "composition.py",
         INFRASTRUCTURE / "geography" / "country_catalog_updates.py",
@@ -109,24 +107,16 @@ def test_compatibility_facades_do_not_accumulate_implementations() -> None:
 
 
 def test_application_does_not_import_outward_dependencies() -> None:
-    forbidden_roots = {
-        "fastapi",
-        "httpx",
-        "next",
-        "ollama",
-        "pydantic",
-        "pypdf",
-        "react",
-    }
+    standard_library = sys.stdlib_module_names | {"__future__"}
     violations = []
     for path in _python_files(APPLICATION):
         for name in _imports(path):
             root = name.split(".", 1)[0]
-            if root in forbidden_roots or name.startswith(
-                (
-                    "disaster_monitor.infrastructure",
-                    "disaster_monitor.presentation",
-                )
+            if root not in standard_library and not (
+                name == "disaster_monitor.application"
+                or name.startswith("disaster_monitor.application.")
+                or name == "disaster_monitor.domain"
+                or name.startswith("disaster_monitor.domain.")
             ):
                 violations.append(f"{path.relative_to(SRC)} imports {name}")
 
@@ -218,7 +208,7 @@ def test_generic_application_modules_do_not_branch_on_specific_disasters() -> No
     for path in _python_files(APPLICATION):
         module = _module_name(path)
         if module in DISASTER_POLICY_MODULES or module.startswith(
-            "disaster_monitor.application.services.event_policies."
+            "disaster_monitor.application.evidence.event_policies."
         ):
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

@@ -10,24 +10,24 @@ from decision_support_fixtures import (
     build_decision_products,
 )
 
-from disaster_monitor.application.services.collaborative_investigation import (
+from disaster_monitor.application.investigation.collaborative_investigation import (
     SAFETY_POLICY_FINGERPRINT,
     CollaborativeInvestigator,
     single_supervisor_baseline,
     validate_collaborative_investigation,
 )
-from disaster_monitor.application.services.coordination_handoffs import (
+from disaster_monitor.application.investigation.coordination_handoffs import (
     CoordinationHandoffPlanner,
     SpecialistHandoffBroker,
     role_permissions,
     task_owner,
     validate_specialist_handoff,
 )
-from disaster_monitor.application.services.coordination_supervision import (
+from disaster_monitor.application.investigation.coordination_supervision import (
     CoordinationSupervisor,
     validate_coordination_supervision,
 )
-from disaster_monitor.application.services.specialist_executor import (
+from disaster_monitor.application.investigation.specialist_executor import (
     SpecialistExecutor,
 )
 from disaster_monitor.domain.coordination import (

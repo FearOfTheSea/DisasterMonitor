@@ -12,16 +12,16 @@ from disaster_monitor.application.agent.task_normalization import (
     deterministic_task_draft,
     disaster_safety_gate,
 )
-from disaster_monitor.application.services.event_resolution import (
+from disaster_monitor.application.decision.triage_autonomy import TriageAutonomyPolicy
+from disaster_monitor.application.evidence.event_resolution import (
     default_event_policy_registry,
 )
-from disaster_monitor.application.services.evidence_state import (
+from disaster_monitor.application.evidence.evidence_state import (
     build_evidence_world_state,
 )
-from disaster_monitor.application.services.incident_priority import (
+from disaster_monitor.application.incidents.incident_priority import (
     IncidentPriorityRanker,
 )
-from disaster_monitor.application.services.triage_autonomy import TriageAutonomyPolicy
 from disaster_monitor.domain.disaster import (
     Disaster,
     DisasterEvent,
@@ -520,7 +520,7 @@ def test_tr_b_production_policy_contains_no_frozen_episode_ids() -> None:
         / "src"
         / "disaster_monitor"
         / "application"
-        / "services"
+        / "incidents"
         / "incident_priority.py"
     ).read_text(encoding="utf-8")
     episodes = _load("incident_priority_cases.v1.json")["episodes"]
@@ -623,7 +623,7 @@ def test_tr_c_production_policy_contains_no_frozen_case_ids() -> None:
         / "src"
         / "disaster_monitor"
         / "application"
-        / "services"
+        / "decision"
         / "triage_autonomy.py"
     ).read_text(encoding="utf-8")
     cases = _load("autonomous_triage_cases.v1.json")["cases"]

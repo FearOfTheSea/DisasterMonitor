@@ -4,14 +4,14 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery
-from disaster_monitor.application.ports.source_evidence import (
-    SourceEvidencePolicyError,
-)
-from disaster_monitor.application.services.event_resolution import (
+from disaster_monitor.application.evidence.event_resolution import (
     DefaultEventPolicy,
 )
-from disaster_monitor.application.services.source_evidence_policy import (
+from disaster_monitor.application.evidence.source_evidence_policy import (
     validate_physical_event_evidence,
+)
+from disaster_monitor.application.ports.source_evidence import (
+    SourceEvidencePolicyError,
 )
 from disaster_monitor.domain.disaster import (
     Disaster,

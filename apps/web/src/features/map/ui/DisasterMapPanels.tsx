@@ -1,4 +1,4 @@
-import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
+import type { ActiveIncident } from '@/features/incidents/public';
 import { copStyleSemantics } from '@/features/map/model/copRenderPlan';
 import { cycloneStyleSemantics } from '@/features/map/model/cycloneMapLayers';
 import {
@@ -7,7 +7,7 @@ import {
   type SatelliteMapState,
   type SatelliteSourceId,
 } from '@/features/map/model/satelliteImagery';
-import type { WeatherAlertsSnapshot } from '@/features/weather/model/weatherAlert';
+import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 import type {
   CommonOperationalPicture,
   CycloneMapLayer,

@@ -6,14 +6,14 @@ from disaster_monitor.application.agent.models import (
     AgentExecutionState,
     InformationNeed,
 )
-from disaster_monitor.application.services.coordination_handoffs import (
-    CoordinationHandoffPlanner,
-)
-from disaster_monitor.application.services.decision_autonomy import (
+from disaster_monitor.application.decision.decision_autonomy import (
     DecisionAutonomyController,
 )
-from disaster_monitor.application.services.decision_support import (
+from disaster_monitor.application.decision.decision_support import (
     DecisionOptionGenerator,
+)
+from disaster_monitor.application.investigation.coordination_handoffs import (
+    CoordinationHandoffPlanner,
 )
 from disaster_monitor.domain.disaster import EvidenceWorldState
 

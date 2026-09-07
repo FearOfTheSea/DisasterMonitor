@@ -22,14 +22,14 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterQuery,
     WorldwideSelectionIntent,
 )
-from disaster_monitor.application.ports.geography import CountryCatalog
-from disaster_monitor.application.services.disaster_query_parser import (
+from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
     has_explicit_date,
 )
-from disaster_monitor.application.services.disaster_query_policy import (
+from disaster_monitor.application.investigation.disaster_query_policy import (
     default_disaster_query_policies,
 )
+from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.domain.disaster import Country, Disaster
 
 
@@ -104,6 +104,24 @@ def _validate_canonical_task(
             response_language_explicit=draft.response_language_explicit,
         )
     scope = draft.geographic_scope or GeographicScope.COUNTRY
+    country = None
+    if scope is GeographicScope.COUNTRY:
+        country = _resolve_canonical_country(draft, country_catalog)
+        if country is None:
+            unresolved = draft.country_name or draft.country_code
+            return _limited_task(
+                question,
+                True,
+                ValidationStatus.CATALOG_LIMITATION,
+                f"{unresolved or 'The requested place'} is not in the maintained "
+                "geographic and source catalog. I cannot create trusted country metadata.",
+                disaster=draft.disaster,
+                unresolved_place=unresolved,
+                information_needs=needs,
+                output_modalities=modalities,
+                response_language=draft.requested_response_language,
+                response_language_explicit=draft.response_language_explicit,
+            )
     discriminator_requested = bool(draft.event_discriminators) or bool(
         default_disaster_query_policies()
         .for_disaster(draft.disaster)
@@ -217,22 +235,7 @@ def _validate_canonical_task(
             disaster=draft.disaster,
         )
 
-    country = _resolve_canonical_country(draft, country_catalog)
-    if country is None:
-        unresolved = draft.country_name or draft.country_code
-        return _limited_task(
-            question,
-            True,
-            ValidationStatus.CATALOG_LIMITATION,
-            f"{unresolved or 'The requested place'} is not in the maintained "
-            "geographic and source catalog. I cannot create trusted country metadata.",
-            disaster=draft.disaster,
-            unresolved_place=unresolved,
-            information_needs=needs,
-            output_modalities=modalities,
-            response_language=draft.requested_response_language,
-            response_language_explicit=draft.response_language_explicit,
-        )
+    assert country is not None
     query = DisasterQuery(
         disaster=draft.disaster,
         country=country,

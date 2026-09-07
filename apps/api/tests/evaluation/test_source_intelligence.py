@@ -7,27 +7,27 @@ from typing import cast
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery, ProviderBatch
+from disaster_monitor.application.evidence.evidence_reconciliation import (
+    EvidenceReconciler,
+)
+from disaster_monitor.application.evidence.source_evidence_policy import (
+    validate_event_evidence,
+    validate_situation_evidence,
+)
 from disaster_monitor.application.ports.source_evidence import (
     SourceEvidencePolicyError,
 )
-from disaster_monitor.application.services.evidence_reconciliation import (
-    EvidenceReconciler,
+from disaster_monitor.application.source_intelligence import (
+    CandidateSourceStatus,
+    CandidateSourceSubmission,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,
     ProviderRole,
 )
-from disaster_monitor.application.services.source_evidence_policy import (
-    validate_event_evidence,
-    validate_situation_evidence,
-)
-from disaster_monitor.application.services.source_scouting import SourceScout
-from disaster_monitor.application.source_intelligence import (
-    CandidateSourceStatus,
-    CandidateSourceSubmission,
-)
+from disaster_monitor.application.sources.source_scouting import SourceScout
 from disaster_monitor.domain.disaster import (
     Country,
     Disaster,

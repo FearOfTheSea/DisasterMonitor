@@ -6,7 +6,7 @@ import type {
   ActiveIncident,
   ActiveIncidentsSnapshot,
   CompoundHazardCorrelation,
-} from '@/features/incidents/model/activeIncidents';
+} from '@/features/incidents/public';
 import {
   fetchIncidentWatches,
   fetchIncidentWatchTimeline,

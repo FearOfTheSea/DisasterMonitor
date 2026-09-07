@@ -9,12 +9,14 @@ from disaster_monitor.domain.conversation import (
 )
 
 
-class ConversationStore(Protocol):
-    async def create(self, conversation: Conversation) -> None: ...
-
+class ConversationReader(Protocol):
     async def get(self, conversation_id: str) -> Conversation | None: ...
 
     async def list(self) -> tuple[ConversationSummary, ...]: ...
+
+
+class ConversationStore(ConversationReader, Protocol):
+    async def create(self, conversation: Conversation) -> None: ...
 
     async def append(self, message: ConversationMessage) -> None: ...
 

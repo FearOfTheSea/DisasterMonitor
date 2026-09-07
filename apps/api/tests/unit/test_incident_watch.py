@@ -2,14 +2,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from disaster_monitor.application.services.incident_change_detection import (
+from disaster_monitor.application.incidents.incident_change_detection import (
     IncidentChangeDetector,
 )
-from disaster_monitor.application.use_cases.manage_incident_watches import (
+from disaster_monitor.application.incidents.manage_incident_watches import (
     InvalidIncidentWatchScopeError,
     ManageIncidentWatches,
 )
-from disaster_monitor.application.use_cases.refresh_incident_watch import (
+from disaster_monitor.application.incidents.refresh_incident_watch import (
     IncidentWatchRefreshRetryableError,
     RefreshIncidentWatch,
 )

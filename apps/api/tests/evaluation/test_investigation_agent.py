@@ -4,7 +4,7 @@ from disaster_monitor.application.agent.investigation_cases import (
     CrossHazardAssessmentStatus,
     assess_cross_hazard_pair,
 )
-from disaster_monitor.application.services.active_incidents import ActiveIncident
+from disaster_monitor.application.incidents.active_incidents import ActiveIncident
 from disaster_monitor.domain.disaster import (
     Disaster,
     ProviderTier,

@@ -101,8 +101,10 @@ The application surface for infrastructure adapters is deliberately narrow:
 Ports include stable boundary normalization and admission primitives when both an
 adapter and an application service must apply the same rule.
 
-Infrastructure adapters must not import `application/services/**` or
-`application/use_cases/**`.
+Infrastructure adapters must not import application capability implementations.
+Only the contract surface listed above is available to adapters, regardless of
+where a service is located. The architecture gate uses an allowlist rather than
+relying on `services` or `use_cases` directory names.
 
 `infrastructure/composition.py`, provider-family modules under
 `infrastructure/disaster/registrations/`, `infrastructure/operations/runtime.py`,
@@ -114,6 +116,81 @@ construct or expose the object graph and process entry points.
 
 Architecture boundaries are enforced by
 `apps/api/tests/unit/test_architecture_dependencies.py`.
+
+## Application capabilities
+
+Application implementations are organized by ownership rather than generic service
+and use-case buckets. Each package contains its use cases and the deterministic
+application helpers that change with them:
+
+| Package | Ownership |
+| --- | --- |
+| `incidents` | Discovery, watch management, watch observation, change detection, priority coordination, map navigation |
+| `evidence` | Admission, identity, reconciliation, geometry, immutable snapshots, retention, common operational picture |
+| `investigation` | Report workflow, question routing, report rendering, specialist coordination, assistant request execution |
+| `conversations` | Transcript turns and reads, bounded conversational context, historical-memory policy and recall |
+| `ingestion` | Queue workers, schedules, watch dispatch, provider freshness, queue-status queries |
+| `decision` | Options, hypotheses, scenarios, triage autonomy, attributable operator review |
+| `sources` | Provider registry selection and source scouting |
+| `media_analysis` | Media discovery and visual-analysis orchestration |
+| `learning` | Offline learning, drift evaluation, governed optimization |
+| `agent` | Bounded agent planning, execution, tools, and task validation |
+| `ports` | Consumer-owned external seams and shared boundary admission rules |
+| `compatibility` | Legacy construction only; no new use-case behavior |
+
+`agent` and `investigation` collaborate as one execution subsystem; these are not
+independently deployable services. Capability dependencies are explicitly checked in
+`test_capability_boundaries.py`. Leaf decision, learning, and media-analysis packages
+cannot acquire implementation dependencies on other capabilities. Evidence depends
+on sources and agent boundary models; incidents depends on evidence and sources.
+Conversation turns invoke the `AssistantResponder` port rather than a concrete
+investigation use case. Shared assistant text admission lives beside that port.
+
+Incident retrieval is owned by `incidents/retrieval.py`. Interactive discovery in
+`active_incidents.py` and watch projection in `watch_observation.py` consume that
+same admitted retrieval result. Watch freshness, retryability, and observation
+construction do not become rules of the interactive list.
+
+Deterministic hazard-severity thresholds live in `domain/hazards/incident_priority.py`.
+`domain/hazards/intensity.py` interprets the currently admitted notation once and
+retains its scale. Ranking and priority remain separate decisions. Priority does
+not treat JMA-labelled readings as MMI. This reorganization retains the existing
+admission bounds rather than expanding supported intensity ranges or converting
+between scales. Malformed labels no longer become ranking signals via substring
+matches.
+
+### Persistence and query ownership
+
+Consumers request narrow ports: `IngestJobQueue`, `JobStatusReader`, `SnapshotReader`,
+`SnapshotWriter`, `SnapshotRetentionStore`, `EvidenceWriter`, `OperatorActionStore`,
+and `ProviderStatusReader`. `OperationalRepository` aggregates these only for runtime
+composition and compatibility. The same concrete repository can satisfy several
+ports; interface segregation does not require more database connections, changed
+SQL, or split transactions. Incident-watch refresh remains one `record_watch_refresh`
+operation, and conversation deletion retains its atomic deletion boundary.
+
+The ingestion implementation is split into queue jobs, watch jobs, evidence snapshot
+persistence, and decision review recording. Its old combined module is exports only.
+
+HTTP transcript reads, evidence history, and queue metrics delegate to
+`ConversationQueries`, `EvidenceHistoryQuery`, and `QueueStatusQuery`. Application
+queries own query bounds and not-found outcomes; presentation owns transport parsing,
+serialization, and HTTP error mapping. Conversation queries need only
+`ConversationReader`, without transcript mutation authority.
+
+### Investigation composition and compatibility
+
+`DisasterInvestigationWorkflow` executes a report from an injected tool registry.
+`build_investigation_resources` constructs providers, tool dependencies, workflow,
+and infrastructure-owned shutdown hooks. API and worker composition consume those
+resources directly. They never retrieve providers from a legacy report facade.
+
+The original `application.services.current_disaster_report` import remains a pure
+export. Legacy construction is isolated in `compatibility/report_composition.py`;
+its execution delegates to the shared workflow. Existing injected legacy reports
+are adapted once at composition. Production construction does not depend on that
+legacy interface. The compatibility code can be removed when direct-construction
+callers have migrated to explicit investigation resources.
 
 ## Module design
 
@@ -142,6 +219,7 @@ apps/web/src/
   features/
     assistant/     Assistant UI and conversation behavior
     commands/      Deterministic in-memory operator commands
+    incidents/     Incident list and source-backed coverage
     map/           Map UI and OpenLayers integration
     operations/    Operations UI
     sources/       Read-only source-catalog projection
@@ -152,8 +230,19 @@ apps/web/src/
 The frontend communicates with the backend through typed API clients. External
 disaster providers and Ollama are backend concerns.
 
-The application root owns bounded URL presentation state. It composes the existing
-map, operations, source, and weather surfaces.
+The application root composes map, operations, source, and weather surfaces.
+`app/workspace/useMapWorkspace` owns map selection and presentation state;
+`useWorkspaceUrlState` owns browser-history synchronization and cleanup;
+`useWorkspacePanels` owns a single exclusive panel state and requested heading focus.
+The page renders those states and coordinates feature actions.
+
+Cross-feature imports use explicit `public.ts` contracts. A public contract exports
+only capabilities consumed by other features; it does not re-export a feature's
+entire UI. Application composition may import feature entry points directly. Shared
+modules cannot import features or app code, and features cannot import app code.
+The shared display-time-window contract avoids a map/incident dependency cycle.
+ESLint enforces these boundaries, including relative imports. Frontend architecture
+tests reject cycles between features, including type-only dependencies.
 
 Feature-owned UI styling lives beside the feature that changes it. Shared shell,
 panel, and responsive rules remain under `app/`; the root layout imports these style
@@ -181,6 +270,10 @@ apps/web/tests/
 ```
 
 Tests follow the same architectural boundaries as production code.
+
+Backend import checks resolve relative imports, restrict application imports to the
+standard library and inward layers, and protect compatibility facades from growing
+implementations. Frontend tests parse imports and exports with TypeScript.
 
 Architecture tests are executable design constraints. Change them only when an
 intentional architecture decision updates this document and the software-quality

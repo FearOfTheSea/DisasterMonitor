@@ -9,10 +9,10 @@ from disaster_monitor.application.agent.models import (
 )
 from disaster_monitor.application.disaster import WorldwideDisasterQuery
 from disaster_monitor.application.disaster_aliases import recognized_disasters
-from disaster_monitor.application.services.disaster_query_parser import (
+from disaster_monitor.application.investigation.disaster_query_parser import (
     has_explicit_date,
 )
-from disaster_monitor.application.services.worldwide_disaster_policy import (
+from disaster_monitor.application.investigation.worldwide_disaster_policy import (
     WorldwideDisasterPolicyRegistry,
     default_worldwide_disaster_policy_registry,
 )

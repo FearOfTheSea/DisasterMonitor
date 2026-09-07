@@ -15,17 +15,17 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
 )
-from disaster_monitor.application.services.disaster_query_parser import (
+from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.investigation.worldwide_disaster import (
+    WorldwideDisasterReportService,
+)
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,
     ProviderRole,
-)
-from disaster_monitor.application.services.worldwide_disaster import (
-    WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
     Country,

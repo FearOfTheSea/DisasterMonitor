@@ -170,3 +170,17 @@ architecture or become a template for new code.
 Known debt discovered inside the requested scope should be resolved with the change.
 Debt outside scope should be recorded precisely enough to act on; vague “cleanup later”
 notes are not an acceptable substitute for a maintainable boundary.
+
+
+## Capability ownership enforcement
+
+Application capabilities remain inside the existing Clean Architecture layers.
+Cross-capability implementation dependencies must follow the explicit ownership map
+in `architecture.md` and `test_capability_boundaries.py`; moving code into a new
+package never grants adapters permission to import it. Consumer-owned ports expose
+only required operations. Aggregate repository contracts belong at composition.
+
+Frontend features expose narrow public contracts and form an acyclic dependency
+graph, including type-only imports. Shared code stays independent of features.
+Architecture checks resolve relative imports as well as absolute imports so equivalent
+syntax cannot bypass an ownership boundary.

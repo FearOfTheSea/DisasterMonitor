@@ -10,7 +10,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from disaster_monitor.application.agent.models import AgentStatus, InvestigationTarget
 from disaster_monitor.application.disaster import ReportSection, SelectedEventSummary
-from disaster_monitor.application.services.event_policies import (
+from disaster_monitor.application.evidence.event_policies import (
     ASSOCIATION_LIMITATION,
     CompoundHazardCorrelation,
     CompoundHazardCorrelationService,

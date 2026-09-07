@@ -2,12 +2,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from disaster_monitor.application.services.operational_ingestion import (
+from disaster_monitor.application.incidents.refresh_incident_watch import (
+    IncidentWatchRefreshRetryableError,
+)
+from disaster_monitor.application.ingestion.operational_ingestion import (
     IncidentWatchScheduler,
     IncidentWatchWorker,
-)
-from disaster_monitor.application.use_cases.refresh_incident_watch import (
-    IncidentWatchRefreshRetryableError,
 )
 from disaster_monitor.domain.disaster import (
     Disaster,

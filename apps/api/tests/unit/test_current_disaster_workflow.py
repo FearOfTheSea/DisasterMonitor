@@ -7,21 +7,21 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
     RequestType,
 )
+from disaster_monitor.application.evidence.event_resolution import resolve_recent_event
+from disaster_monitor.application.evidence.evidence_reconciliation import (
+    build_evidence_packet,
+)
+from disaster_monitor.application.investigation.current_disaster_report import (
+    CurrentDisasterReportService,
+)
+from disaster_monitor.application.investigation.disaster_query_parser import (
+    DisasterQueryParser,
+)
 from disaster_monitor.application.ports.provider_text import sanitize_provider_text
 from disaster_monitor.application.ports.temporal_normalization import (
     normalize_timestamp,
 )
-from disaster_monitor.application.services.current_disaster_report import (
-    CurrentDisasterReportService,
-)
-from disaster_monitor.application.services.disaster_query_parser import (
-    DisasterQueryParser,
-)
-from disaster_monitor.application.services.event_resolution import resolve_recent_event
-from disaster_monitor.application.services.evidence_reconciliation import (
-    build_evidence_packet,
-)
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRole,
 )

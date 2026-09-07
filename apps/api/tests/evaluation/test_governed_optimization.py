@@ -10,20 +10,20 @@ from decision_support_fixtures import (
     build_decision_products,
 )
 
-from disaster_monitor.application.services.collaborative_investigation import (
+from disaster_monitor.application.investigation.collaborative_investigation import (
     SAFETY_POLICY_FINGERPRINT,
 )
-from disaster_monitor.application.services.coordination_handoffs import (
+from disaster_monitor.application.investigation.coordination_handoffs import (
     CoordinationHandoffPlanner,
 )
-from disaster_monitor.application.services.coordination_supervision import (
+from disaster_monitor.application.investigation.coordination_supervision import (
     CoordinationSupervisor,
     derive_analytical_focus_signals,
 )
-from disaster_monitor.application.services.governed_optimization import (
+from disaster_monitor.application.learning.governed_optimization import (
     GovernedAutonomousOptimizer,
 )
-from disaster_monitor.application.services.offline_learning import (
+from disaster_monitor.application.learning.offline_learning import (
     APPROVED_GOVERNED_ANALYTICAL_TUNING_RELEASE_V3,
     CURRENT_APPROVED_ANALYTICAL_TUNING_RELEASE,
     DRIFT_ADAPTED_ANALYTICAL_TUNING_V2,

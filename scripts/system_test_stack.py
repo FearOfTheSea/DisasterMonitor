@@ -19,25 +19,25 @@ from system_test_backend import (
 )
 
 from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
-from disaster_monitor.application.services.active_incidents import (
+from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
-from disaster_monitor.application.services.current_disaster_report import (
-    CurrentDisasterReportService,
+from disaster_monitor.application.incidents.manage_incident_watches import (
+    ManageIncidentWatches,
 )
-from disaster_monitor.application.services.operational_ingestion import (
+from disaster_monitor.application.incidents.refresh_incident_watch import (
+    RefreshIncidentWatch,
+)
+from disaster_monitor.application.ingestion.operational_ingestion import (
     IncidentWatchScheduler,
     IncidentWatchWorker,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.investigation.current_disaster_report import (
+    CurrentDisasterReportService,
+)
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRole,
-)
-from disaster_monitor.application.use_cases.manage_incident_watches import (
-    ManageIncidentWatches,
-)
-from disaster_monitor.application.use_cases.refresh_incident_watch import (
-    RefreshIncidentWatch,
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.configuration import Settings

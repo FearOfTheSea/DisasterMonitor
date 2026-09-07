@@ -4,6 +4,27 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from disaster_monitor.application.agent.diagnostics import AgentDiagnostics
+from disaster_monitor.application.conversations.delete_conversation import (
+    DeleteConversation,
+)
+from disaster_monitor.application.conversations.queries import ConversationQueries
+from disaster_monitor.application.conversations.run_conversation_turn import (
+    RunConversationTurn,
+)
+from disaster_monitor.application.decision.record_operator_action import (
+    RecordOperatorAction,
+)
+from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
+from disaster_monitor.application.incidents.active_incidents import (
+    ActiveIncidentsService,
+)
+from disaster_monitor.application.incidents.manage_incident_watches import (
+    ManageIncidentWatches,
+)
+from disaster_monitor.application.ingestion.provider_freshness import (
+    ProviderFreshnessService,
+)
+from disaster_monitor.application.ingestion.queries import QueueStatusQuery
 from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.event_media import MediaAssetStore
 from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
@@ -13,25 +34,7 @@ from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
 )
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
-from disaster_monitor.application.services.active_incidents import (
-    ActiveIncidentsService,
-)
-from disaster_monitor.application.services.provider_freshness import (
-    ProviderFreshnessService,
-)
 from disaster_monitor.application.source_catalog import SourceCatalogService
-from disaster_monitor.application.use_cases.delete_conversation import (
-    DeleteConversation,
-)
-from disaster_monitor.application.use_cases.manage_incident_watches import (
-    ManageIncidentWatches,
-)
-from disaster_monitor.application.use_cases.record_operator_action import (
-    RecordOperatorAction,
-)
-from disaster_monitor.application.use_cases.run_conversation_turn import (
-    RunConversationTurn,
-)
 from disaster_monitor.application.weather_alerts import WeatherAlertsService
 
 AsyncHook = Callable[[], Awaitable[None]]
@@ -79,6 +82,9 @@ class AppLifecycle:
 class AppDependencies:
     """The single typed dependency object exposed through ``app.state``."""
 
+    conversation_queries: ConversationQueries
+    evidence_history: EvidenceHistoryQuery
+    queue_status: QueueStatusQuery
     conversation_store: ConversationStore
     run_conversation_turn: RunConversationTurn
     delete_conversation: DeleteConversation

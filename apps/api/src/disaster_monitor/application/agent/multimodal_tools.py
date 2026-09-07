@@ -9,19 +9,21 @@ from disaster_monitor.application.agent.models import (
     SourceInformationRole,
 )
 from disaster_monitor.application.agent.tooling import AgentTool, ToolDescription
-from disaster_monitor.application.services.common_operational_picture import (
+from disaster_monitor.application.evidence.common_operational_picture import (
     CommonOperationalPictureBuilder,
 )
-from disaster_monitor.application.services.coordination_handoffs import (
-    CoordinationHandoffPlanner,
-)
-from disaster_monitor.application.services.multimodal_association import (
+from disaster_monitor.application.evidence.multimodal_association import (
     MultimodalEventAssociator,
 )
-from disaster_monitor.application.services.multimodal_state import (
+from disaster_monitor.application.evidence.multimodal_state import (
     build_multimodal_evidence_state,
 )
-from disaster_monitor.application.services.visual_analysis import VisualAnalysisService
+from disaster_monitor.application.investigation.coordination_handoffs import (
+    CoordinationHandoffPlanner,
+)
+from disaster_monitor.application.media_analysis.visual_analysis import (
+    VisualAnalysisService,
+)
 from disaster_monitor.domain.multimodal import EventAssociationStatus, VisualObservation
 
 

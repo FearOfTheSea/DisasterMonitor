@@ -1,7 +1,4 @@
-import {
-  MAP_LAYER_REGISTRY,
-  type MapLayerId,
-} from '@/features/map/model/mapLayerRegistry';
+import { MAP_LAYER_REGISTRY, type MapLayerId } from '@/features/map/public';
 import {
   applyMapLayerPreset,
   MAP_LAYER_PRESETS,
@@ -9,11 +6,8 @@ import {
   setMapLayerVisibility,
   setMapTimeWindow,
   type MapLayerState,
-} from '@/features/map/model/mapLayerState';
-import {
-  REGIONAL_PRESETS,
-  type RegionalPresetId,
-} from '@/features/map/model/regionalPresets';
+} from '@/features/map/public';
+import { REGIONAL_PRESETS, type RegionalPresetId } from '@/features/map/public';
 
 export type OperatorCommand = {
   id: string;

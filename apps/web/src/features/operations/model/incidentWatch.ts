@@ -3,7 +3,7 @@ import type {
   DisasterType,
   IncidentCoverageState,
   IncidentSource,
-} from '@/features/incidents/model/activeIncidents';
+} from '@/features/incidents/public';
 
 export type IncidentWatchCoverageState = IncidentCoverageState | 'stale';
 

@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from disaster_monitor.application.multimodal import AssetAdmissionInput
-from disaster_monitor.application.services.event_resolution import (
+from disaster_monitor.application.evidence.event_resolution import (
     default_event_policy_registry,
 )
-from disaster_monitor.application.services.multimodal_asset_admission import (
+from disaster_monitor.application.evidence.multimodal_asset_admission import (
     MultimodalAssetAdmissionService,
 )
-from disaster_monitor.application.services.multimodal_association import (
+from disaster_monitor.application.evidence.multimodal_association import (
     MultimodalEventAssociator,
 )
+from disaster_monitor.application.multimodal import AssetAdmissionInput
 from disaster_monitor.domain.disaster import (
     Country,
     Disaster,

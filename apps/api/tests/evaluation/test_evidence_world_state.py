@@ -16,16 +16,16 @@ from evidence_world_state_metrics import (
     score_partition,
 )
 
+from disaster_monitor.application.decision.hypothesis_reasoning import (
+    HypothesisGenerator,
+)
 from disaster_monitor.application.disaster import DisasterQuery
-from disaster_monitor.application.services.event_resolution import (
+from disaster_monitor.application.evidence.event_resolution import (
     EarthquakeEventPolicy,
     event_observation_key,
 )
-from disaster_monitor.application.services.evidence_reconciliation import (
+from disaster_monitor.application.evidence.evidence_reconciliation import (
     EvidenceReconciler,
-)
-from disaster_monitor.application.services.hypothesis_reasoning import (
-    HypothesisGenerator,
 )
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,

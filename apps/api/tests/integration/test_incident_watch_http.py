@@ -5,7 +5,7 @@ import httpx
 import pytest
 from conftest import FakeLanguageModel
 
-from disaster_monitor.application.use_cases.refresh_incident_watch import (
+from disaster_monitor.application.incidents.refresh_incident_watch import (
     RefreshIncidentWatch,
 )
 from disaster_monitor.domain.disaster import (

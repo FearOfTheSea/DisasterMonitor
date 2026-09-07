@@ -22,6 +22,12 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterEvent,
 )
 from disaster_monitor.application.dto import ModelRequest
+from disaster_monitor.application.investigation.current_disaster_report import (
+    CurrentDisasterReportService,
+)
+from disaster_monitor.application.investigation.worldwide_disaster import (
+    WorldwideDisasterReportService,
+)
 from disaster_monitor.application.media import (
     DisasterMediaGallery,
     DisasterMediaItem,
@@ -31,17 +37,11 @@ from disaster_monitor.application.media import (
     MediaRightsStatus,
     StoredMediaAsset,
 )
-from disaster_monitor.application.services.current_disaster_report import (
-    CurrentDisasterReportService,
-)
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,
     ProviderRole,
-)
-from disaster_monitor.application.services.worldwide_disaster import (
-    WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import (
     Disaster,

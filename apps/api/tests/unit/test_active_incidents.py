@@ -8,12 +8,12 @@ from disaster_monitor.application.disaster import (
     ProviderIssue,
     WorldwideDisasterEvent,
 )
-from disaster_monitor.application.services.active_incidents import (
+from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsQuery,
     ActiveIncidentsService,
     IncidentCoverageState,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,

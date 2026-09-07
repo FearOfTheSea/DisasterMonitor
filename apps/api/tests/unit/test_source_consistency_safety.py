@@ -12,14 +12,14 @@ from disaster_monitor.application.disaster import (
     ProviderBatch,
     WorldwideDisasterQuery,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.evidence.source_consistency import (
+    validate_provider_source_consistency,
+)
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,
     ProviderRole,
-)
-from disaster_monitor.application.services.source_consistency import (
-    validate_provider_source_consistency,
 )
 from disaster_monitor.domain.disaster import Country, Disaster, GeographicArea
 from disaster_monitor.infrastructure.sources.static_source_catalog import (

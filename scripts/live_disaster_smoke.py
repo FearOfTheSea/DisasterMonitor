@@ -8,13 +8,13 @@ from disaster_monitor.application.agent.task_normalization import (
     worldwide_disaster_query,
 )
 from disaster_monitor.application.disaster import DisasterReport, ProviderIssue
-from disaster_monitor.application.services.active_incidents import (
+from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
-from disaster_monitor.application.services.current_disaster_report import (
+from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
 )
-from disaster_monitor.application.services.worldwide_disaster import (
+from disaster_monitor.application.investigation.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
 from disaster_monitor.domain.disaster import Disaster

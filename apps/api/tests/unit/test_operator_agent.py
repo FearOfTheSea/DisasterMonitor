@@ -28,7 +28,7 @@ from disaster_monitor.application.dto import (
     ModelRequest,
     ModelResponse,
 )
-from disaster_monitor.application.services.disaster_query_parser import (
+from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
 )
 from disaster_monitor.domain.conversation import AssistantMessagePayload

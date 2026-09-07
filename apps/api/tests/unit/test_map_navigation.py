@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from disaster_monitor.application.disaster import SelectedEventSummary
 from disaster_monitor.application.dto import ModelToolCall
-from disaster_monitor.application.services.map_navigation import (
+from disaster_monitor.application.incidents.map_navigation import (
     FIT_COUNTRY_TOOL,
     MapNavigationService,
 )

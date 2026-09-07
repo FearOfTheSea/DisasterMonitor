@@ -3,7 +3,7 @@ import type {
   ActiveIncidentsSnapshot,
   CompoundHazardCorrelation,
   DisasterType,
-} from '@/features/incidents/model/activeIncidents';
+} from '@/features/incidents/public';
 import type {
   IncidentWatch,
   IncidentWatchChange,

@@ -5,6 +5,7 @@ from typing import Protocol
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
+    DisasterReport,
     ProviderBatch,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
@@ -56,3 +57,7 @@ class Clock(Protocol):
     """Injectable time source used by freshness and cache tests."""
 
     def now(self) -> datetime: ...
+
+
+class DisasterReportQuery(Protocol):
+    async def execute(self, query: DisasterQuery) -> DisasterReport: ...

@@ -15,7 +15,9 @@ from disaster_monitor.application.agent.models import (
     ValidatedDisasterTask,
 )
 from disaster_monitor.application.disaster import DisasterReport, SelectedEventSummary
-from disaster_monitor.application.use_cases.run_disaster_agent import RunDisasterAgent
+from disaster_monitor.application.investigation.run_disaster_agent import (
+    RunDisasterAgent,
+)
 from disaster_monitor.domain.disaster import (
     Disaster,
     EventGeographyStatus,

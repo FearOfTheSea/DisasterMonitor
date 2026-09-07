@@ -44,7 +44,7 @@ import type {
   CycloneMapLayer,
   MapView,
 } from '@/shared/types/assistant';
-import type { WeatherAlert } from '@/features/weather/model/weatherAlert';
+import type { WeatherAlert } from '@/features/weather/public';
 
 type MapAdapterOptions = {
   target: HTMLElement;

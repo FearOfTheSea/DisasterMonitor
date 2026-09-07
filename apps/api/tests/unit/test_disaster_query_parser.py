@@ -15,7 +15,7 @@ from disaster_monitor.application.disaster_aliases import (
     aliases_for,
     recognized_disasters,
 )
-from disaster_monitor.application.services.disaster_query_parser import (
+from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
 )
 from disaster_monitor.domain.disaster import Disaster

@@ -2,12 +2,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from disaster_monitor.application.services.provider_freshness import (
-    ProviderFreshnessService,
-)
-from disaster_monitor.application.use_cases.record_operator_action import (
+from disaster_monitor.application.decision.record_operator_action import (
     RecordOperatorAction,
     UnknownEvidenceStateError,
+)
+from disaster_monitor.application.ingestion.provider_freshness import (
+    ProviderFreshnessService,
 )
 from disaster_monitor.domain.operations import (
     FreshnessState,

@@ -5,15 +5,15 @@ import httpx
 import pytest
 from conftest import FakeLanguageModel
 
+from disaster_monitor.application.ingestion.operational_ingestion import (
+    SnapshotPersistenceService,
+)
 from disaster_monitor.application.ports.geography import (
     CountryCatalogUpdateState,
     CountryCatalogUpdateStatus,
     CountryCatalogUpdateTrigger,
 )
 from disaster_monitor.application.ports.source_payload import AcquiredSourcePayload
-from disaster_monitor.application.services.operational_ingestion import (
-    SnapshotPersistenceService,
-)
 from disaster_monitor.domain.operations import WorldStateVersionRecord
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.operations.filesystem_blob_store import (

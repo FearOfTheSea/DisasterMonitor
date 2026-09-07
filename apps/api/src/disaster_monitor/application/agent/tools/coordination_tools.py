@@ -10,28 +10,28 @@ from disaster_monitor.application.agent.models import (
     SourceInformationRole,
 )
 from disaster_monitor.application.agent.tools import ToolDescription
+from disaster_monitor.application.decision.decision_autonomy import (
+    render_decision_execution,
+)
+from disaster_monitor.application.decision.decision_support import (
+    render_decision_support,
+)
 from disaster_monitor.application.disaster import (
     DisasterReport,
     ReportSection,
     SelectedEventSummary,
 )
-from disaster_monitor.application.services.collaborative_investigation import (
+from disaster_monitor.application.investigation.collaborative_investigation import (
     render_collaborative_investigation,
 )
-from disaster_monitor.application.services.coordination_supervision import (
+from disaster_monitor.application.investigation.coordination_supervision import (
     CoordinationSupervisor,
     render_coordination_supervision,
 )
-from disaster_monitor.application.services.decision_autonomy import (
-    render_decision_execution,
-)
-from disaster_monitor.application.services.decision_support import (
-    render_decision_support,
-)
-from disaster_monitor.application.services.disaster_report_renderer import (
+from disaster_monitor.application.investigation.disaster_report_renderer import (
     DisasterReportRenderer,
 )
-from disaster_monitor.application.services.specialist_executor import (
+from disaster_monitor.application.investigation.specialist_executor import (
     SpecialistExecutor,
 )
 from disaster_monitor.domain.coordination import SpecialistFinding

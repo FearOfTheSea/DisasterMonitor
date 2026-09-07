@@ -20,13 +20,13 @@ from disaster_monitor.application.dto import (
     ModelResponse,
     ModelToolCall,
 )
-from disaster_monitor.application.services.active_incidents import (
+from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
-from disaster_monitor.application.services.current_disaster_report import (
+from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
     ProviderRegistry,

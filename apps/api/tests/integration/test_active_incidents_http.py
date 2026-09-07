@@ -4,22 +4,22 @@ import httpx
 import pytest
 
 from disaster_monitor.application.disaster import ProviderBatch
-from disaster_monitor.application.services.active_incidents import (
+from disaster_monitor.application.evidence.event_policies import (
+    ASSOCIATION_LIMITATION,
+    CompoundHazardCorrelation,
+    CompoundHazardRelationship,
+)
+from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncident,
     ActiveIncidentsQuery,
     ActiveIncidentsSnapshot,
     DisasterIncidentCoverage,
     IncidentCoverageState,
 )
-from disaster_monitor.application.services.current_disaster_report import (
+from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
 )
-from disaster_monitor.application.services.event_policies import (
-    ASSOCIATION_LIMITATION,
-    CompoundHazardCorrelation,
-    CompoundHazardRelationship,
-)
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRole,
 )

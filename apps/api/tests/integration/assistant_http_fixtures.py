@@ -1,10 +1,10 @@
 from datetime import UTC, datetime
 
 from disaster_monitor.application.disaster import DisasterQuery, ProviderBatch
-from disaster_monitor.application.services.current_disaster_report import (
+from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
 )
-from disaster_monitor.application.services.provider_registry import (
+from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRole,
 )

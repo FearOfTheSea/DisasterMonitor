@@ -1,6 +1,6 @@
 """Aggregate executable provider-family registrations for composition."""
 
-from disaster_monitor.application.services.provider_registry import ProviderRegistration
+from disaster_monitor.application.sources.provider_registry import ProviderRegistration
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.http import SourcePayloadRecorder
 from disaster_monitor.infrastructure.disaster.registrations import (

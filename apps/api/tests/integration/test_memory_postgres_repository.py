@@ -5,7 +5,7 @@ from uuid import uuid4
 import psycopg
 import pytest
 
-from disaster_monitor.application.use_cases.delete_conversation import (
+from disaster_monitor.application.conversations.delete_conversation import (
     DeleteConversation,
 )
 from disaster_monitor.domain.conversation import (
