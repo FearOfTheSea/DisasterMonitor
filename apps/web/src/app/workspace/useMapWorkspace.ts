@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 
-import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
+import type { IncidentMapRecord } from '@/features/incidents/model/activeIncidents';
 import {
   createDefaultMapLayerState,
   setMapLayerVisibility,
@@ -31,7 +31,7 @@ export function useMapWorkspace(activeIncidents: {
   snapshot?: ActiveIncidentsSnapshot;
 }) {
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>();
-  const [watchFocusIncident, setWatchFocusIncident] = useState<ActiveIncident>();
+  const [watchFocusIncident, setWatchFocusIncident] = useState<IncidentMapRecord>();
   const [mapLayerState, setMapLayerState] = useState(createDefaultMapLayerState);
   const [mapView, setMapView] = useState<MapView>(DEFAULT_MAP_VIEW);
   const [regionalSelection, setRegionalSelection] =
@@ -80,7 +80,7 @@ export function useMapWorkspace(activeIncidents: {
       setMapLayerVisibility(current, 'active-incidents', true),
     );
   }, []);
-  const handleSelectWatchIncident = useCallback((incident: ActiveIncident) => {
+  const handleSelectWatchIncident = useCallback((incident: IncidentMapRecord) => {
     setWatchFocusIncident(incident);
     setSelectedIncidentId(incident.event_id);
     setFocusRequestToken((current) => current + 1);

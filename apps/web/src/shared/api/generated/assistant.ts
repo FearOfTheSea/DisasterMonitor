@@ -3013,7 +3013,16 @@ export function matchesApiSchema(name: ApiSchemaName, value: unknown): boolean {
   return matchesOpenApiSchema(value, apiSchemas[name], apiSchemas);
 }
 
+export type ActiveIncidentCountryResponse = {
+  association_basis:
+    'coordinate_polygon' | 'source_mention' | 'named_region' | 'nearby_boundary';
+  code: string;
+  distance_km?: number | null;
+  name: string;
+};
+
 export type ActiveIncidentResponse = {
+  country: ActiveIncidentCountryResponse;
   disaster: Disaster;
   event_id: string;
   event_time: string;

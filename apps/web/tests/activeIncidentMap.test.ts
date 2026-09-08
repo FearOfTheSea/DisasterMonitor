@@ -12,6 +12,7 @@ import {
 } from '@/features/map/model/activeIncidentMap';
 import { OpenLayersMapAdapter } from '@/features/map/adapters/openLayersMapAdapter';
 import type { WeatherAlert } from '@/features/weather/model/weatherAlert';
+import { TEST_INCIDENT_COUNTRY } from './fixtures/incidents';
 
 const SOURCE = {
   source_id: 'six-hazard-fixture',
@@ -32,6 +33,7 @@ function incident(
   return {
     event_id: eventId,
     disaster,
+    country: TEST_INCIDENT_COUNTRY,
     location: `${disaster} fixture`,
     event_time: '2026-08-06T02:00:00Z',
     geometry,

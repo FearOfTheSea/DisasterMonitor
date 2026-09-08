@@ -13,6 +13,7 @@ import type { ActiveIncident } from '@/features/incidents/model/activeIncidents'
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
 import type { WeatherAlertsSnapshot } from '@/features/weather/model/weatherAlert';
 import type { MapView, SelectedEvent } from '@/shared/types/assistant';
+import { TEST_INCIDENT_COUNTRY } from './fixtures/incidents';
 
 const adapterMocks = vi.hoisted(() => ({
   destroy: vi.fn(),
@@ -187,6 +188,7 @@ describe('DisasterMap assistant focus', () => {
       {
         event_id: 'point-1',
         disaster: 'earthquake',
+        country: TEST_INCIDENT_COUNTRY,
         location: 'Point event',
         event_time: '2026-08-20T03:00:00Z',
         geometry: pointGeometry,
@@ -199,6 +201,7 @@ describe('DisasterMap assistant focus', () => {
       {
         event_id: 'flood-1',
         disaster: 'flood',
+        country: TEST_INCIDENT_COUNTRY,
         location: 'Estimated flood tile',
         event_time: '2026-08-20T02:30:00Z',
         geometry: {
@@ -217,6 +220,7 @@ describe('DisasterMap assistant focus', () => {
       {
         event_id: 'area-1',
         disaster: 'wildfire',
+        country: TEST_INCIDENT_COUNTRY,
         location: 'Area event',
         event_time: '2026-08-20T02:00:00Z',
         geometry: areaGeometry,
@@ -229,6 +233,7 @@ describe('DisasterMap assistant focus', () => {
       {
         event_id: 'descriptive-1',
         disaster: 'flood',
+        country: TEST_INCIDENT_COUNTRY,
         location: 'Descriptive event',
         event_time: '2026-08-20T01:00:00Z',
         geometry: {
@@ -293,6 +298,7 @@ describe('DisasterMap assistant focus', () => {
     const incidents: ActiveIncident[] = ['first', 'second'].map((eventId, index) => ({
       event_id: eventId,
       disaster: 'earthquake',
+      country: TEST_INCIDENT_COUNTRY,
       location: `${eventId} location`,
       event_time: '2026-08-20T03:00:00Z',
       geometry: {
@@ -321,7 +327,7 @@ describe('DisasterMap assistant focus', () => {
     expect(
       screen.getByRole('complementary', { name: 'Clustered incidents' }),
     ).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'second location' }));
+    await user.click(screen.getByRole('button', { name: 'Japan — second location' }));
     expect(onSelectIncident).toHaveBeenCalledWith('second');
     expect(
       screen.queryByRole('complementary', { name: 'Clustered incidents' }),

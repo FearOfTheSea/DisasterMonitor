@@ -5,6 +5,10 @@ from disaster_monitor.application.evidence.event_policies import (
     CompoundHazardCorrelationService,
 )
 from disaster_monitor.application.incidents.active_incidents import ActiveIncident
+from disaster_monitor.application.incidents.country_association import (
+    CountryAssociationBasis,
+    IncidentCountryAssociation,
+)
 from disaster_monitor.domain.disaster import (
     Disaster,
     EventCoordinate,
@@ -17,6 +21,11 @@ from disaster_monitor.domain.disaster import (
 )
 
 NOW = datetime(2026, 8, 20, 6, tzinfo=UTC)
+COUNTRY = IncidentCountryAssociation(
+    country_code="JPN",
+    country_name="Japan",
+    basis=CountryAssociationBasis.COORDINATE_POLYGON,
+)
 
 
 def _source(source_id: str) -> SourceReference:
@@ -69,6 +78,7 @@ def _incident(
     return ActiveIncident(
         event_id=event_id,
         disaster=disaster,
+        country=COUNTRY,
         location=f"{disaster.value} location",
         event_time=event_time,
         geometry=geometry,

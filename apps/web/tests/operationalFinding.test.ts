@@ -11,10 +11,12 @@ import type {
   IncidentWatchEvent,
 } from '@/features/operations/model/incidentWatch';
 import { buildOperationalFindings } from '@/features/operations/model/operationalFinding';
+import { TEST_INCIDENT_COUNTRY } from './fixtures/incidents';
 
 const INCIDENT: ActiveIncident = {
   event_id: 'earthquake-1',
   disaster: 'earthquake',
+  country: TEST_INCIDENT_COUNTRY,
   location: 'Fixture region',
   event_time: '2026-09-01T10:00:00Z',
   geometry: {

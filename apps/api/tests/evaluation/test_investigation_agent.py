@@ -5,6 +5,10 @@ from disaster_monitor.application.agent.investigation_cases import (
     assess_cross_hazard_pair,
 )
 from disaster_monitor.application.incidents.active_incidents import ActiveIncident
+from disaster_monitor.application.incidents.country_association import (
+    CountryAssociationBasis,
+    IncidentCountryAssociation,
+)
 from disaster_monitor.domain.disaster import (
     Disaster,
     ProviderTier,
@@ -34,6 +38,11 @@ def _incident(
     return ActiveIncident(
         event_id=event_id,
         disaster=disaster,
+        country=IncidentCountryAssociation(
+            country_code="JPN",
+            country_name="Japan",
+            basis=CountryAssociationBasis.COORDINATE_POLYGON,
+        ),
         location="Fixture location",
         event_time=event_time,
         geometry=point_event_geometry(35, longitude, source),

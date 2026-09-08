@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  displayActiveIncidentLocation,
+  displayActiveIncidentCountry,
+  displayActiveIncidentContext,
   type ActiveIncident,
 } from '@/features/incidents/model/activeIncidents';
 
@@ -16,6 +17,12 @@ function incident(overrides: Partial<ActiveIncident> = {}): ActiveIncident {
     provider_ids: ['event-1'],
     provider_tier: 'primary',
     source_authority: 'scientific_authority',
+    country: {
+      code: 'VNM',
+      name: 'Vietnam',
+      association_basis: 'coordinate_polygon',
+      distance_km: null,
+    },
     source: {
       source_id: 'provider',
       publisher: 'Provider',
@@ -31,21 +38,29 @@ function incident(overrides: Partial<ActiveIncident> = {}): ActiveIncident {
 }
 
 describe('active incident display', () => {
-  it('uses a human-readable location for worldwide GFM acquisitions', () => {
-    expect(
-      displayActiveIncidentLocation(
-        incident({
-          location: 'CEMS GFM acquisition S1D_IW_GRDH_1SDV_20260907T155945',
-          source: {
-            ...incident().source,
-            source_id: 'cems-gfm-floods',
-          },
-        }),
-      ),
-    ).toBe('Worldwide');
+  it('uses the associated country instead of a technical provider location', () => {
+    const technicalIncident = incident({
+      location: 'CEMS GFM acquisition S1D_IW_GRDH_1SDV_20260907T155945',
+      country: {
+        code: 'ITA',
+        name: 'Italy',
+        association_basis: 'nearby_boundary',
+        distance_km: 10.8,
+      },
+      source: {
+        ...incident().source,
+        source_id: 'cems-gfm-floods',
+      },
+    });
+
+    expect(displayActiveIncidentCountry(technicalIncident)).toBe('Italy');
+    expect(displayActiveIncidentContext(technicalIncident)).toBe(
+      '10.8 km from mapped boundary',
+    );
   });
 
   it('preserves meaningful provider locations', () => {
-    expect(displayActiveIncidentLocation(incident())).toBe('Da Nang, Vietnam');
+    expect(displayActiveIncidentCountry(incident())).toBe('Vietnam');
+    expect(displayActiveIncidentContext(incident())).toBe('Da Nang, Vietnam');
   });
 });

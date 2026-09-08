@@ -1,6 +1,6 @@
 import type {
-  ActiveIncident,
   DisasterType,
+  IncidentMapRecord,
   IncidentGeometry,
 } from '@/features/incidents/public';
 
@@ -24,7 +24,7 @@ function isRenderableGeometry(
 }
 
 export function activeIncidentMapFeatures(
-  incidents: readonly ActiveIncident[],
+  incidents: readonly IncidentMapRecord[],
 ): ActiveIncidentMapFeature[] {
   return incidents.flatMap((incident) =>
     isRenderableGeometry(incident.geometry)

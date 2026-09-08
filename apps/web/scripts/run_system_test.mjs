@@ -43,6 +43,18 @@ function stopStack() {
   }
 }
 
+async function assertNoHorizontalOverflow(locator, label) {
+  const overflow = await locator.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  if (overflow.scrollWidth > overflow.clientWidth + 1) {
+    throw new Error(
+      `${label} overflowed horizontally (${overflow.scrollWidth}px content in ${overflow.clientWidth}px).`,
+    );
+  }
+}
+
 let browser;
 try {
   await waitForApplication('http://127.0.0.1:4173/');
@@ -70,33 +82,39 @@ try {
   const incidentFixtures = [
     {
       coverageLabel: 'Earthquake',
-      location: 'Aleutian earthquake fixture',
+      location: 'Aleutian earthquake fixture, United States',
+      country: 'United States',
       focusedCoordinate: /52\.00,\s*-170\.00/,
     },
     {
       coverageLabel: 'Flood',
       location: 'Lower Mekong flood fixture',
+      country: 'Thailand',
       focusedCoordinate: /15\.00,\s*105\.00/,
       coverageState: 'Degraded',
     },
     {
       coverageLabel: 'Wildfire',
       location: 'Equatorial wildfire perimeter fixture',
-      focusedCoordinate: /0\.00,\s*-120\.00/,
+      country: 'Brazil',
+      focusedCoordinate: /-10\.00,\s*-55\.00/,
     },
     {
       coverageLabel: 'Landslide',
       location: 'Taiwan landslide fixture',
+      country: 'Taiwan',
       focusedCoordinate: /23\.50,\s*121\.00/,
     },
     {
       coverageLabel: 'Tropical cyclone',
-      location: 'Western Pacific cyclone track fixture',
+      location: 'Western Pacific cyclone track fixture, Philippines',
+      country: 'Philippines',
       focusedCoordinate: /20\.00,\s*150\.00/,
     },
     {
       coverageLabel: 'Volcanic eruption',
       location: 'East African volcanic eruption fixture',
+      country: 'Tanzania',
       focusedCoordinate: /-3\.00,\s*36\.00/,
     },
   ];
@@ -120,9 +138,7 @@ try {
     const rail = document.querySelector('.active-incidents-scroll');
     if (rail) rail.scrollTop = 0;
   });
-  await page
-    .getByRole('button', { name: 'Focus Aleutian earthquake fixture on map' })
-    .click();
+  await page.getByRole('button', { name: 'Focus United States on map' }).click();
   const initialScreenshotPath = process.env.SYSTEM_TEST_INITIAL_SCREENSHOT;
   if (initialScreenshotPath) {
     await page.screenshot({ path: initialScreenshotPath, fullPage: false });
@@ -149,7 +165,7 @@ try {
   }
   await page.getByText('Map position', { exact: true }).click();
   await page
-    .getByRole('button', { name: 'Focus Lower Mekong flood fixture on map' })
+    .getByRole('button', { name: 'Focus Thailand on map' })
     .getByText('estimated', { exact: true })
     .waitFor();
   if (await page.getByRole('heading', { name: 'Map assistant' }).count()) {
@@ -157,7 +173,7 @@ try {
   }
   for (const fixture of incidentFixtures) {
     const button = page.getByRole('button', {
-      name: `Focus ${fixture.location} on map`,
+      name: `Focus ${fixture.country} on map`,
     });
     await button.click();
     await page.locator('.map-overlay').getByText(fixture.focusedCoordinate).waitFor();
@@ -214,7 +230,7 @@ try {
     .click();
   await page
     .locator('.map-overlay')
-    .getByText(/0\.00,\s*-120\.00/)
+    .getByText(/-10\.00,\s*-55\.00/)
     .waitFor();
   await page.getByRole('button', { name: 'Mark timeline read' }).click();
   await watchCard.getByText('0 unread', { exact: true }).waitFor();
@@ -254,6 +270,14 @@ try {
   await page.getByRole('link', { name: /Global situation fixture/ }).waitFor();
   await page.getByText('Investigation details').click();
   await page.getByText(/Selected the source-backed event/).waitFor();
+  await assertNoHorizontalOverflow(
+    page.locator('.message-list'),
+    'The assistant transcript',
+  );
+  await assertNoHorizontalOverflow(
+    page.locator('.message-assistant').last(),
+    'The structured assistant response',
+  );
   for (const sentinel of [
     'Venezuela',
     'VENEZUELA-FOREIGN-EVIDENCE-SENTINEL',

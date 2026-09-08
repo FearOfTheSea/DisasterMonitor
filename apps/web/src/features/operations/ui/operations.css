@@ -1,3 +1,28 @@
+.operations-panel-header > div {
+  min-width: 0;
+}
+
+.operations-panel-header h2,
+.operations-panel-header p,
+.operations-section h3,
+.operations-section p {
+  margin: 0;
+}
+
+.operations-panel-header h2 {
+  font-size: 1.3rem;
+  font-weight: 730;
+  letter-spacing: -0.01em;
+}
+
+.operations-panel-header p,
+.operations-section p {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  margin-top: 3px;
+}
+
 .operations-scroll {
   display: flex;
   flex: 1 1 auto;

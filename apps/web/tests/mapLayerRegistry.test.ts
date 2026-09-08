@@ -15,11 +15,13 @@ import type {
   ActiveIncident,
   CompoundHazardCorrelation,
 } from '@/features/incidents/model/activeIncidents';
+import { TEST_INCIDENT_COUNTRY } from './fixtures/incidents';
 
 function incident(eventId: string, eventTime: string): ActiveIncident {
   return {
     event_id: eventId,
     disaster: eventId.startsWith('flood') ? 'flood' : 'earthquake',
+    country: TEST_INCIDENT_COUNTRY,
     location: eventId,
     event_time: eventTime,
     geometry: {

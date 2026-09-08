@@ -6,8 +6,10 @@ import type { ActiveIncidentsStatus } from '@/features/incidents/hooks/useActive
 import {
   ActiveIncident,
   ActiveIncidentsSnapshot,
+  countryAssociationLabel,
   DisasterType,
-  displayActiveIncidentLocation,
+  displayActiveIncidentCountry,
+  displayActiveIncidentContext,
   IncidentSourceAuthority,
 } from '@/features/incidents/model/activeIncidents';
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
@@ -109,9 +111,13 @@ export function ActiveIncidentsPanel({
   const query = search.trim().toLocaleLowerCase();
   const incidents = [...(snapshot?.incidents ?? [])]
     .filter((incident) =>
-      [incident.location, incident.source.publisher, incident.source.title].some(
-        (value) => value.toLocaleLowerCase().includes(query),
-      ),
+      [
+        incident.country.name,
+        incident.country.code,
+        incident.location,
+        incident.source.publisher,
+        incident.source.title,
+      ].some((value) => value.toLocaleLowerCase().includes(query)),
     )
     .sort((first, second) => {
       const timeDifference =
@@ -243,7 +249,8 @@ export function ActiveIncidentsPanel({
               <div className="incident-list">
                 {incidents.map((incident) => {
                   const timestamp = sourceTimestamp(incident);
-                  const title = displayActiveIncidentLocation(incident);
+                  const title = displayActiveIncidentCountry(incident);
+                  const context = displayActiveIncidentContext(incident);
                   return (
                     <article
                       key={`${incident.disaster}:${incident.event_id}`}
@@ -271,6 +278,11 @@ export function ActiveIncidentsPanel({
                           </span>
                         </span>
                         <strong className="incident-card-location">{title}</strong>
+                        {context ? (
+                          <small className="incident-card-source-location">
+                            {context}
+                          </small>
+                        ) : null}
                         {incident.geometry?.estimated && (
                           <small className="incident-geometry-estimated">
                             estimated
@@ -297,6 +309,7 @@ export function ActiveIncidentsPanel({
                           <small className="incident-event-id">
                             Event ID: {incident.event_id}
                           </small>
+                          <span>{countryAssociationLabel(incident)}</span>
                           <span>{incident.source.publisher}</span>
                           <a
                             href={incident.source.canonical_url}

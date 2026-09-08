@@ -99,12 +99,27 @@ class SelectedEventResponse(BaseModel):
     supplemental_geometry: list[CycloneMapLayerResponse] = Field(default_factory=list)
 
 
+class ActiveIncidentCountryResponse(BaseModel):
+    """Country or territory associated by deterministic retrieval policy."""
+
+    code: str = Field(min_length=3, max_length=3)
+    name: str = Field(min_length=1)
+    association_basis: Literal[
+        "coordinate_polygon",
+        "source_mention",
+        "named_region",
+        "nearby_boundary",
+    ]
+    distance_km: Annotated[float, Field(ge=0)] | None = None
+
+
 class ActiveIncidentResponse(BaseModel):
     """One worldwide event with exact provider evidence and authority."""
 
     event_id: str
     physical_event_id: str | None = None
     disaster: Disaster
+    country: ActiveIncidentCountryResponse
     location: str
     event_time: datetime
     geometry: EventGeometryResponse | None = None

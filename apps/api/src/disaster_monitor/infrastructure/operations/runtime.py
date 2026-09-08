@@ -27,6 +27,9 @@ from disaster_monitor.infrastructure.composition_builders import (
     build_investigation_resources,
 )
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.geography.static_geographic_region_catalog import (
+    StaticGeographicRegionCatalog,
+)
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
 )
@@ -77,6 +80,7 @@ async def _worker(settings: Settings, *, once: bool) -> None:
         investigation.dependencies.provider_registry,
         country_event_provider=investigation.dependencies.event_provider,
         country_catalog=countries,
+        geographic_region_catalog=StaticGeographicRegionCatalog(),
         event_policies=investigation.dependencies.event_policies,
     )
     worker = IncidentWatchWorker(

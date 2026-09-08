@@ -214,7 +214,7 @@ export function AssistantPanel({
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="Ask about the map or disaster monitoring…"
           disabled={isLoading}
-          rows={3}
+          rows={2}
         />
         <div className="assistant-form-footer">
           <button

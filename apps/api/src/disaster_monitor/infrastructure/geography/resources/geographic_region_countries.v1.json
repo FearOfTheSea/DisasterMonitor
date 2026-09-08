@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "schema_version": "1.0.0",
+    "description": "Named geographic regions used only to associate worldwide incident cards with a country or territory.",
+    "limitations": "These mappings provide display context and do not assert legal borders, maritime jurisdiction, or event containment."
+  },
+  "regions": [
+    {
+      "name": "Kermadec Islands",
+      "aliases": ["Kermadec Islands region"],
+      "country_code": "NZL",
+      "source_url": "https://gazetteer.linz.govt.nz/place/58783"
+    },
+    {
+      "name": "Loyalty Islands",
+      "aliases": ["Loyalty Islands Province", "Province of the Loyalty Islands"],
+      "country_code": "NCL",
+      "source_url": "https://gouv.nc/gouvernement-et-institutions-les-autres-institutions/les-provinces"
+    }
+  ]
+}

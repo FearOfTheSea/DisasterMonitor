@@ -7,6 +7,7 @@ import type {
   DisasterType,
   IncidentGeometry,
 } from '@/features/incidents/model/activeIncidents';
+import { TEST_INCIDENT_COUNTRY } from './fixtures/incidents';
 
 const DISASTERS: DisasterType[] = [
   'earthquake',
@@ -21,6 +22,7 @@ function incident(disaster: DisasterType, geometry: IncidentGeometry): ActiveInc
   return {
     event_id: `fixture-${disaster}`,
     disaster,
+    country: TEST_INCIDENT_COUNTRY,
     location: `${disaster} fixture`,
     event_time: '2026-08-06T02:00:00Z',
     geometry,

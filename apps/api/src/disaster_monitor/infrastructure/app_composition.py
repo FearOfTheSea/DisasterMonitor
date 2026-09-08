@@ -91,6 +91,9 @@ from disaster_monitor.infrastructure.composition_models import (
     InvestigationResources,
 )
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.geography.static_geographic_region_catalog import (
+    StaticGeographicRegionCatalog,
+)
 from disaster_monitor.infrastructure.media.filesystem_store import (
     FilesystemMediaAssetStore,
 )
@@ -168,6 +171,7 @@ def build_app_dependencies(
             retrieval.provider_registry,
             country_event_provider=retrieval.event_provider,
             country_catalog=country_catalog,
+            geographic_region_catalog=StaticGeographicRegionCatalog(),
             event_policies=retrieval.event_policies,
         )
     )

@@ -248,19 +248,25 @@ export function DisasterReportView({
   if (report.investigationCase) {
     return <InvestigationCaseView investigationCase={report.investigationCase} />;
   }
+  const warnings =
+    report.warnings.length > 0
+      ? report.warnings
+      : [
+          'This report is partial because reliable event-specific evidence was not available.',
+        ];
   return (
     <div className="disaster-report">
       {report.partial && (
-        <div className="report-warning" role="status">
-          {(report.warnings.length > 0
-            ? report.warnings
-            : [
-                'This report is partial because reliable event-specific evidence was not available.',
-              ]
-          ).map((warning, index) => (
-            <p key={`report-warning-${index}`}>{warning}</p>
-          ))}
-        </div>
+        <details className="report-warning" role="status">
+          <summary>
+            {warnings.length} coverage {warnings.length === 1 ? 'note' : 'notes'}
+          </summary>
+          <div className="report-warning-content">
+            {warnings.map((warning, index) => (
+              <p key={`report-warning-${index}`}>{warning}</p>
+            ))}
+          </div>
+        </details>
       )}
       {report.selectedEvent && (
         <div className="report-event">

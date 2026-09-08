@@ -1,5 +1,7 @@
 export type { DisasterType } from './model/activeIncidents';
 export type { ActiveIncident } from './model/activeIncidents';
+export type { IncidentMapRecord } from './model/activeIncidents';
+export { displayActiveIncidentCountry } from './model/activeIncidents';
 export type { IncidentGeometry } from './model/activeIncidents';
 export type { CompoundHazardCorrelation } from './model/activeIncidents';
 export type { IncidentCoverageState } from './model/activeIncidents';

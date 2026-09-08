@@ -3,6 +3,7 @@ import type {
   ActiveIncidentsSnapshot,
   CompoundHazardCorrelation,
   DisasterType,
+  IncidentMapRecord,
 } from '@/features/incidents/public';
 import type {
   IncidentWatch,
@@ -25,7 +26,7 @@ export type OperationalFinding = {
   occurredAt?: string;
   watchId?: string;
   changeId?: string;
-  focusIncident?: ActiveIncident;
+  focusIncident?: IncidentMapRecord;
 };
 
 type OperationalFindingInput = {
@@ -51,7 +52,7 @@ const WATCH_COVERAGE_LABELS = {
   stale: 'Stale evidence',
 } as const;
 
-function mappableIncident(incident: ActiveIncident | null | undefined) {
+function mappableIncident(incident: IncidentMapRecord | null | undefined) {
   const geometry = incident?.geometry;
   if (!incident || !geometry || geometry.kind === 'descriptive') return undefined;
   if (geometry.kind === 'point' && geometry.coordinates.length !== 1) return undefined;

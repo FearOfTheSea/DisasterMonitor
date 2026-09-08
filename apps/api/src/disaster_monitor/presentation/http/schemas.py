@@ -22,6 +22,7 @@ from disaster_monitor.presentation.http.assistant_schemas import (
     ShowLayerOperatorActionResponse,
 )
 from disaster_monitor.presentation.http.event_schemas import (
+    ActiveIncidentCountryResponse,
     ActiveIncidentResponse,
     ActiveIncidentsSnapshotResponse,
     CompoundHazardCorrelationResponse,
@@ -99,6 +100,7 @@ __all__ = [
     "CycloneMapLayerResponse",
     "SelectedEventResponse",
     "ActiveIncidentResponse",
+    "ActiveIncidentCountryResponse",
     "CompoundHazardCorrelationResponse",
     "InvestigationCaseCountryResponse",
     "CrossHazardAssessmentResponse",

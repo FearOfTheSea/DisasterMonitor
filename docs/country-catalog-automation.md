@@ -90,6 +90,21 @@ worker. Readers detect an atomic file revision and refresh without an app restar
 Admin 0 polygons are query approximations. They are not legal borders, maritime
 claims, or a resolution of disputed sovereignty.
 
+Worldwide incident discovery associates each retained record with one catalog country
+or territory using a single deterministic policy: polygon membership, an explicit
+source mention, a provenanced named-region mapping, then a nearest-boundary fallback
+limited to 100 km. Records that remain unresolved are excluded from the country-based
+feed and reported as degraded coverage; their source location is never rewritten.
+
+Named-region mappings are separate from the automatically promoted country catalog.
+They live in the versioned packaged resource
+`geographic_region_countries.v1.json`, require an HTTPS provenance URL, and reject
+ambiguous aliases. The initial mappings cover the Kermadec Islands using the official
+LINZ Gazetteer and the Loyalty Islands using the official New Caledonia government
+province record. Adding a mapping requires deterministic catalog tests and an
+authoritative source. These associations are display and retrieval metadata, not
+maritime or sovereignty claims.
+
 Remove ambiguous aliases that are shared by multiple records.
 
 The default timezone is the IANA zone geographically closest to Natural Earth’s

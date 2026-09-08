@@ -7,7 +7,7 @@ import {
   OpenLayersMapAdapter,
   type SatelliteLayerConfiguration,
 } from '@/features/map/adapters/openLayersMapAdapter';
-import type { ActiveIncident } from '@/features/incidents/public';
+import type { IncidentMapRecord } from '@/features/incidents/public';
 import type { AssistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import { activeIncidentMapFeatures } from '@/features/map/model/activeIncidentMap';
 import { cycloneMapLayers } from '@/features/map/model/cycloneMapLayers';
@@ -54,7 +54,7 @@ import {
 
 const DEFAULT_SATELLITE_SOURCE: SatelliteSourceId = 'nasa-viirs-snpp-true-color';
 const DEFAULT_SATELLITE_OPACITY = 0.75;
-const EMPTY_ACTIVE_INCIDENTS: ActiveIncident[] = [];
+const EMPTY_ACTIVE_INCIDENTS: IncidentMapRecord[] = [];
 
 function sameMapView(first: MapView, second: MapView): boolean {
   return (
@@ -69,7 +69,7 @@ type DisasterMapProps = {
   onSelectIncident: (incidentId: string) => void;
   commonOperationalPicture?: CommonOperationalPicture;
   areaOfInterest?: AssistantMapAreaOfInterest;
-  activeIncidents?: ActiveIncident[];
+  activeIncidents?: IncidentMapRecord[];
   selectedIncidentId?: string;
   selectedEvent?: SelectedEvent;
   layerState?: MapLayerState;

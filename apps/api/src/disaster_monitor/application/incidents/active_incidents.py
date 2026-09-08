@@ -22,6 +22,9 @@ from disaster_monitor.application.incidents.watch_observation import observe_wat
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
 )
+from disaster_monitor.application.ports.geographic_regions import (
+    GeographicRegionCatalog,
+)
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.sources.provider_registry import (
     ProviderRegistry,
@@ -42,9 +45,10 @@ class ActiveIncidentsService:
         self,
         provider_registry: ProviderRegistry,
         *,
+        country_catalog: CountryCatalog,
         clock: Callable[[], datetime] = _now_utc,
         country_event_provider: DisasterEventProvider | None = None,
-        country_catalog: CountryCatalog | None = None,
+        geographic_region_catalog: GeographicRegionCatalog | None = None,
         event_policies: EventPolicyRegistry | None = None,
         correlation_service: CompoundHazardCorrelationService | None = None,
     ) -> None:
@@ -54,6 +58,7 @@ class ActiveIncidentsService:
             clock=clock,
             country_event_provider=country_event_provider,
             country_catalog=country_catalog,
+            geographic_region_catalog=geographic_region_catalog,
             event_policies=event_policies,
         )
         self._correlation_service = (

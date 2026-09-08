@@ -567,6 +567,7 @@
 }
 
 .incident-card time,
+.incident-card-source-location,
 .incident-source span,
 .incident-source small,
 .incident-geometry-note,
@@ -574,6 +575,10 @@
   color: var(--muted);
   font-size: 0.72rem;
   line-height: 1.35;
+}
+
+.incident-card-source-location {
+  overflow-wrap: anywhere;
 }
 
 .incident-geometry-estimated {

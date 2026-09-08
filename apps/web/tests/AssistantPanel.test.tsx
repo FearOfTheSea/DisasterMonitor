@@ -385,6 +385,7 @@ describe('AssistantPanel', () => {
     expect(
       screen.getByRole('heading', { name: 'Situation summary' }),
     ).toBeInTheDocument();
+    expect(screen.getByText('1 coverage note')).toBeInTheDocument();
     expect(screen.getByText('Situation source unavailable.')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /Global Catalog: Earthquake fixture/ }),

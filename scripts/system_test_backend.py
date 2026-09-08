@@ -2,9 +2,9 @@
 
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import uvicorn
-
 from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.disaster import (
     DisasterQuery,
@@ -62,7 +62,9 @@ TARGET_TIME = datetime(2026, 8, 5, 14, 30, tzinfo=UTC)
 FOREIGN_SENTINEL = "VENEZUELA-FOREIGN-EVIDENCE-SENTINEL"
 UNRELATED_SENTINEL = "TOKYO-UNRELATED-EVIDENCE-SENTINEL"
 MODEL_SENTINEL = "GENERAL-MODEL-SENTINEL"
-CATALOG = StaticCountryCatalog()
+CATALOG = StaticCountryCatalog(
+    Path(__file__).resolve().parents[1] / "data" / "geography"
+)
 
 
 def _required_country(alpha3_code: str) -> Country:
@@ -395,7 +397,7 @@ class FakeSystemWorldwideProvider:
         event_id, location, age = {
             Disaster.EARTHQUAKE: (
                 "system-active-earthquake",
-                "Aleutian earthquake fixture",
+                "Aleutian earthquake fixture, United States",
                 timedelta(minutes=30),
             ),
             Disaster.FLOOD: (
@@ -415,7 +417,7 @@ class FakeSystemWorldwideProvider:
             ),
             Disaster.TROPICAL_CYCLONE: (
                 "system-active-tropical-cyclone",
-                "Western Pacific cyclone track fixture",
+                "Western Pacific cyclone track fixture, Philippines",
                 timedelta(minutes=70),
             ),
             Disaster.VOLCANIC_ERUPTION: (
@@ -446,11 +448,11 @@ class FakeSystemWorldwideProvider:
                 kind=EventGeometryKind.AREA,
                 source=source,
                 coordinates=(
-                    EventCoordinate(-1.0, -121.0),
-                    EventCoordinate(1.0, -121.0),
-                    EventCoordinate(1.0, -119.0),
-                    EventCoordinate(-1.0, -119.0),
-                    EventCoordinate(-1.0, -121.0),
+                    EventCoordinate(-10.5, -55.5),
+                    EventCoordinate(-9.5, -55.5),
+                    EventCoordinate(-9.5, -54.5),
+                    EventCoordinate(-10.5, -54.5),
+                    EventCoordinate(-10.5, -55.5),
                 ),
             ),
             Disaster.LANDSLIDE: point_event_geometry(23.5, 121.0, source),
@@ -509,7 +511,11 @@ def build_system_active_incidents_service() -> ActiveIncidentsService:
             ),
         )
     )
-    return ActiveIncidentsService(registry, clock=lambda: NOW)
+    return ActiveIncidentsService(
+        registry,
+        country_catalog=CATALOG,
+        clock=lambda: NOW,
+    )
 
 
 if __name__ == "__main__":

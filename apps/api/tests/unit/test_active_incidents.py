@@ -10,8 +10,10 @@ from disaster_monitor.application.disaster import (
 )
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsQuery,
-    ActiveIncidentsService,
     IncidentCoverageState,
+)
+from disaster_monitor.application.incidents.active_incidents import (
+    ActiveIncidentsService as ActiveIncidentsServiceType,
 )
 from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
@@ -80,8 +82,8 @@ def _event(
     event_time: datetime,
     *,
     descriptive: bool = False,
-    latitude: float = 10.5,
-    longitude: float = 20.25,
+    latitude: float = 32.5,
+    longitude: float = 133.5,
     location: str | None = None,
 ) -> WorldwideDisasterEvent:
     source = _source(source_id, event_time)
@@ -132,6 +134,16 @@ def _coverage(snapshot):
     return {item.disaster: item for item in snapshot.coverage}
 
 
+def _active_incidents_service(
+    provider_registry: ProviderRegistry, **kwargs
+) -> ActiveIncidentsServiceType:
+    return ActiveIncidentsServiceType(
+        provider_registry,
+        country_catalog=StaticCountryCatalog(),
+        **kwargs,
+    )
+
+
 def _watch(disaster: Disaster) -> IncidentWatch:
     return IncidentWatch(
         watch_id=f"incident-watch:{disaster.value}",
@@ -179,7 +191,7 @@ async def test_aggregates_supported_disasters_and_orders_newest_then_identity() 
             )
         ),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (
                 _registration("Earthquakes", earthquake, Disaster.EARTHQUAKE),
@@ -233,22 +245,22 @@ async def test_labels_on_land_coordinates_for_each_disaster() -> None:
         )
         for disaster in Disaster
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(providers),
-        country_catalog=StaticCountryCatalog(),
         clock=lambda: NOW,
     )
 
     snapshot = await service.execute()
 
     assert len(snapshot.incidents) == len(Disaster)
-    assert {item.location for item in snapshot.incidents} == {"Japan"}
+    assert {item.country.country_name for item in snapshot.incidents} == {"Japan"}
+    assert {item.location for item in snapshot.incidents} == {
+        f"{disaster.value} location" for disaster in Disaster
+    }
 
 
 @pytest.mark.asyncio
-async def test_keeps_source_location_when_worldwide_coordinate_is_not_in_catalog() -> (
-    None
-):
+async def test_excludes_record_when_country_cannot_be_resolved() -> None:
     provider = FakeWorldwideProvider(
         "offshore-floods",
         ProviderBatch(
@@ -264,15 +276,19 @@ async def test_keeps_source_location_when_worldwide_coordinate_is_not_in_catalog
             )
         ),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry((_registration("Offshore floods", provider, Disaster.FLOOD),)),
-        country_catalog=StaticCountryCatalog(),
         clock=lambda: NOW,
     )
 
     snapshot = await service.execute()
 
-    assert snapshot.incidents[0].location == "flood location"
+    assert snapshot.incidents == ()
+    assert _coverage(snapshot)[Disaster.FLOOD].state is IncidentCoverageState.DEGRADED
+    assert snapshot.warnings == (
+        "A worldwide disaster record could not be associated with a country or "
+        "territory and was excluded from the country-based incident feed.",
+    )
 
 
 @pytest.mark.asyncio
@@ -293,17 +309,17 @@ async def test_uses_source_country_when_coordinate_is_offshore() -> None:
             )
         ),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (_registration("Offshore earthquakes", provider, Disaster.EARTHQUAKE),)
         ),
-        country_catalog=StaticCountryCatalog(),
         clock=lambda: NOW,
     )
 
     snapshot = await service.execute()
 
-    assert snapshot.incidents[0].location == "Vietnam"
+    assert snapshot.incidents[0].country.country_name == "Vietnam"
+    assert snapshot.incidents[0].location == "OFFSHORE REGION, VIETNAM"
 
 
 @pytest.mark.asyncio
@@ -325,7 +341,7 @@ async def test_usable_primary_records_suppress_lower_tier_records() -> None:
             )
         ),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (
                 _registration(
@@ -369,7 +385,7 @@ async def test_secondary_records_are_fallback_after_empty_primary() -> None:
         "secondary-floods",
         ProviderBatch((_event("secondary-floods", Disaster.FLOOD, "fallback", NOW),)),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (
                 _registration(
@@ -407,7 +423,7 @@ async def test_provider_failure_degrades_only_affected_coverage() -> None:
             (_event("earthquake-source", Disaster.EARTHQUAKE, "quake", NOW),)
         ),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (
                 _registration("Failed floods", failed, Disaster.FLOOD),
@@ -437,7 +453,7 @@ async def test_source_policy_invalid_records_are_excluded() -> None:
         "approved-source",
         ProviderBatch((_event("spoofed-source", Disaster.WILDFIRE, "bad", NOW),)),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry((_registration("Wildfires", invalid, Disaster.WILDFIRE),)),
         clock=lambda: NOW,
     )
@@ -457,7 +473,7 @@ async def test_source_policy_invalid_records_are_excluded() -> None:
 async def test_successful_empty_result_differs_from_provider_failure() -> None:
     empty = FakeWorldwideProvider("empty-earthquakes", ProviderBatch())
     failed = FakeWorldwideProvider("failed-floods", RuntimeError("offline"))
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (
                 _registration("Empty earthquakes", empty, Disaster.EARTHQUAKE),
@@ -478,7 +494,7 @@ async def test_successful_empty_result_differs_from_provider_failure() -> None:
 @pytest.mark.asyncio
 async def test_unconfigured_worldwide_coverage_is_unavailable() -> None:
     provider = FakeWorldwideProvider("wildfires", ProviderBatch())
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (
                 _registration(
@@ -519,7 +535,7 @@ async def test_watch_observation_preserves_empty_failure_stale_and_unavailable()
             )
         ),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (
                 _registration("Empty earthquakes", empty, Disaster.EARTHQUAKE),
@@ -567,7 +583,7 @@ async def test_query_bounds_are_enforced_and_results_are_bounded() -> None:
         for index in range(5)
     )
     provider = FakeWorldwideProvider("earthquakes", ProviderBatch(events))
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (_registration("Earthquakes", provider, Disaster.EARTHQUAKE),)
         ),
@@ -597,11 +613,12 @@ async def test_descriptive_geometry_remains_without_coordinates() -> None:
                     "storm",
                     NOW,
                     descriptive=True,
+                    location="Japan",
                 ),
             )
         ),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (_registration("Cyclones", provider, Disaster.TROPICAL_CYCLONE),)
         ),
@@ -634,12 +651,12 @@ async def test_active_incidents_correlate_only_retained_cross_hazard_records() -
                     Disaster.LANDSLIDE,
                     "slide",
                     NOW + timedelta(hours=2),
-                    longitude=20.5,
+                    longitude=133.7,
                 ),
             )
         ),
     )
-    service = ActiveIncidentsService(
+    service = _active_incidents_service(
         ProviderRegistry(
             (
                 _registration("Earthquakes", earthquake, Disaster.EARTHQUAKE),

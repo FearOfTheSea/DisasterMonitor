@@ -53,10 +53,21 @@ export type IncidentMeasurement = {
   source_id: string;
 };
 
+export type IncidentCountryAssociationBasis =
+  'coordinate_polygon' | 'source_mention' | 'named_region' | 'nearby_boundary';
+
+export type IncidentCountry = {
+  code: string;
+  name: string;
+  association_basis: IncidentCountryAssociationBasis;
+  distance_km: number | null;
+};
+
 export type ActiveIncident = {
   event_id: string;
   physical_event_id?: string | null;
   disaster: DisasterType;
+  country: IncidentCountry;
   location: string;
   event_time: string;
   geometry: IncidentGeometry | null;
@@ -67,14 +78,40 @@ export type ActiveIncident = {
   source: IncidentSource;
 };
 
-const GFM_WORLDWIDE_LOCATION_PREFIX = 'CEMS GFM acquisition ';
+export type IncidentMapRecord = Omit<ActiveIncident, 'country'> & {
+  country?: IncidentCountry;
+};
 
-export function displayActiveIncidentLocation(incident: ActiveIncident): string {
+export function displayActiveIncidentCountry(incident: IncidentMapRecord): string {
+  return incident.country?.name ?? incident.location;
+}
+
+export function countryAssociationLabel(incident: IncidentMapRecord): string {
+  if (!incident.country) return 'Country association unavailable';
+  switch (incident.country.association_basis) {
+    case 'coordinate_polygon':
+      return 'Coordinate within mapped country or territory';
+    case 'source_mention':
+      return 'Country or territory named by source';
+    case 'named_region':
+      return 'Verified named-region association';
+    case 'nearby_boundary':
+      return incident.country.distance_km === null
+        ? 'Near a mapped country or territory boundary'
+        : `${incident.country.distance_km.toFixed(1)} km from mapped boundary`;
+  }
+}
+
+export function displayActiveIncidentContext(
+  incident: IncidentMapRecord,
+): string | null {
+  const country = displayActiveIncidentCountry(incident);
+  if (incident.location === country) return null;
   if (
     incident.source.source_id === 'cems-gfm-floods' &&
-    incident.location.startsWith(GFM_WORLDWIDE_LOCATION_PREFIX)
+    incident.location.startsWith('CEMS GFM acquisition ')
   ) {
-    return 'Worldwide';
+    return countryAssociationLabel(incident);
   }
   return incident.location;
 }

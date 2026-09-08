@@ -16,6 +16,10 @@ from disaster_monitor.application.incidents.active_incidents import (
     DisasterIncidentCoverage,
     IncidentCoverageState,
 )
+from disaster_monitor.application.incidents.country_association import (
+    CountryAssociationBasis,
+    IncidentCountryAssociation,
+)
 from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -35,6 +39,11 @@ from disaster_monitor.domain.disaster import (
 from disaster_monitor.main import create_app
 
 NOW = datetime(2026, 8, 20, 6, tzinfo=UTC)
+COUNTRY = IncidentCountryAssociation(
+    country_code="JPN",
+    country_name="Japan",
+    basis=CountryAssociationBasis.COORDINATE_POLYGON,
+)
 
 
 class FakeLanguageModel:
@@ -90,6 +99,7 @@ def _snapshot() -> ActiveIncidentsSnapshot:
     incident = ActiveIncident(
         event_id="fire-1",
         disaster=Disaster.WILDFIRE,
+        country=COUNTRY,
         location="Fixture reserve",
         event_time=datetime(2026, 8, 20, 3, tzinfo=UTC),
         geometry=EventGeometry(
@@ -169,6 +179,12 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
     assert body["incidents"][0] == {
         "event_id": "fire-1",
         "disaster": "wildfire",
+        "country": {
+            "code": "JPN",
+            "name": "Japan",
+            "association_basis": "coordinate_polygon",
+            "distance_km": None,
+        },
         "location": "Fixture reserve",
         "event_time": "2026-08-20T03:00:00Z",
         "geometry": {
@@ -208,6 +224,7 @@ async def test_active_incidents_serializes_resolvable_compound_correlations() ->
     first = ActiveIncident(
         event_id="quake-1",
         disaster=Disaster.EARTHQUAKE,
+        country=COUNTRY,
         location="Fixture coast",
         event_time=NOW,
         geometry=None,
@@ -221,6 +238,7 @@ async def test_active_incidents_serializes_resolvable_compound_correlations() ->
     second = ActiveIncident(
         event_id="slide-1",
         disaster=Disaster.LANDSLIDE,
+        country=COUNTRY,
         location="Fixture slope",
         event_time=NOW,
         geometry=None,

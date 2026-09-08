@@ -1,4 +1,7 @@
-import type { ActiveIncident } from '@/features/incidents/public';
+import {
+  displayActiveIncidentCountry,
+  type IncidentMapRecord,
+} from '@/features/incidents/public';
 import { copStyleSemantics } from '@/features/map/model/copRenderPlan';
 import { cycloneStyleSemantics } from '@/features/map/model/cycloneMapLayers';
 import {
@@ -197,7 +200,7 @@ export function WeatherAlertCoverage({
 
 type ClusteredIncident = {
   incidentId: string;
-  incident: ActiveIncident;
+  incident: IncidentMapRecord;
 };
 
 export function IncidentClusterPicker({
@@ -223,7 +226,7 @@ export function IncidentClusterPicker({
         {incidents.map(({ incidentId, incident }) => (
           <li key={incidentId}>
             <button type="button" onClick={() => onSelectIncident(incidentId)}>
-              {incident.location}
+              {displayActiveIncidentCountry(incident)} — {incident.location}
             </button>
           </li>
         ))}

@@ -16,6 +16,11 @@ from disaster_monitor.application.evidence.event_resolution import (
 from disaster_monitor.application.evidence.source_evidence_policy import (
     validate_worldwide_event_evidence,
 )
+from disaster_monitor.application.incidents.country_association import (
+    CountryAssociationBasis,
+    IncidentCountryAssociation,
+    IncidentCountryResolver,
+)
 from disaster_monitor.application.incidents.models import (
     ActiveIncident,
     ActiveIncidentsQuery,
@@ -25,6 +30,9 @@ from disaster_monitor.application.incidents.models import (
 )
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
+)
+from disaster_monitor.application.ports.geographic_regions import (
+    GeographicRegionCatalog,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.source_evidence import (
@@ -37,6 +45,7 @@ from disaster_monitor.application.sources.provider_registry import (
 )
 from disaster_monitor.domain.disaster import (
     Disaster,
+    EventGeographyStatus,
     IncidentWatch,
     PhysicalEventIdentity,
     ProviderTier,
@@ -52,15 +61,19 @@ class IncidentRetrieval:
         self,
         provider_registry: ProviderRegistry,
         *,
+        country_catalog: CountryCatalog,
         clock: Callable[[], datetime] = _now_utc,
         country_event_provider: DisasterEventProvider | None = None,
-        country_catalog: CountryCatalog | None = None,
+        geographic_region_catalog: GeographicRegionCatalog | None = None,
         event_policies: EventPolicyRegistry | None = None,
     ) -> None:
         self._provider_registry = provider_registry
         self._clock = clock
         self._country_event_provider = country_event_provider
         self._country_catalog = country_catalog
+        self._country_resolver = IncidentCountryResolver(
+            country_catalog, geographic_region_catalog
+        )
         self._event_policies = event_policies or default_event_policy_registry()
 
     async def country(
@@ -70,7 +83,7 @@ class IncidentRetrieval:
         *,
         now: datetime,
     ) -> IncidentRetrievalResult:
-        if self._country_event_provider is None or self._country_catalog is None:
+        if self._country_event_provider is None:
             return _unavailable_country_result(watch)
         country_code = watch.scope.country_code
         country = (
@@ -314,13 +327,16 @@ class IncidentRetrieval:
                 )
                 degraded = True
                 continue
-            accepted.append(
-                _incident(
-                    event,
-                    registration.tier,
-                    country_catalog=self._country_catalog,
+            incident = _incident(event, registration.tier, self._country_resolver)
+            if incident is None:
+                warnings.append(
+                    "A worldwide disaster record could not be associated with a "
+                    "country or territory and was excluded from the country-based "
+                    "incident feed."
                 )
-            )
+                degraded = True
+                continue
+            accepted.append(incident)
         for issue in batch.issues:
             if issue.reason_code == "empty_result":
                 continue
@@ -333,13 +349,16 @@ class IncidentRetrieval:
 def _incident(
     event: WorldwideDisasterEvent,
     provider_tier: ProviderTier,
-    *,
-    country_catalog: CountryCatalog | None,
-) -> ActiveIncident:
+    country_resolver: IncidentCountryResolver,
+) -> ActiveIncident | None:
+    country = country_resolver.resolve(event)
+    if country is None:
+        return None
     return ActiveIncident(
         event_id=event.event_id,
         disaster=event.disaster,
-        location=_country_or_location(event, country_catalog),
+        country=country,
+        location=event.location,
         event_time=event.event_time,
         geometry=event.geometry,
         measurements=event.measurements,
@@ -351,30 +370,21 @@ def _incident(
     )
 
 
-def _country_or_location(
-    event: WorldwideDisasterEvent,
-    country_catalog: CountryCatalog | None,
-) -> str:
-    """Prefer one catalog country, then preserve an explicit source location."""
-    if country_catalog is not None:
-        if event.geometry is not None and event.geometry.coordinates:
-            coordinate = event.geometry.coordinates[0]
-            for country in country_catalog.countries():
-                if country_catalog.contains(
-                    country, coordinate.latitude, coordinate.longitude
-                ):
-                    return country.canonical_name
-        mentioned_countries = country_catalog.find_mentions(event.location)
-        if mentioned_countries:
-            return mentioned_countries[0].canonical_name
-    return event.location
-
-
 def _country_incident(identity: PhysicalEventIdentity) -> ActiveIncident:
     event = identity.event
     return ActiveIncident(
         event_id=event.event_id,
         disaster=event.disaster,
+        country=IncidentCountryAssociation(
+            country_code=event.country.alpha3_code,
+            country_name=event.country.canonical_name,
+            basis=(
+                CountryAssociationBasis.SOURCE_MENTION
+                if event.geography_status
+                is EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
+                else CountryAssociationBasis.COORDINATE_POLYGON
+            ),
+        ),
         location=event.location,
         event_time=event.event_time,
         geometry=event.geometry,

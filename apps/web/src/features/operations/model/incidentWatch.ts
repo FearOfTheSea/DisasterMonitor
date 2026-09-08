@@ -27,7 +27,7 @@ export type IncidentWatch = {
   unread_change_count: number;
 };
 
-export type IncidentWatchEvent = ActiveIncident & {
+export type IncidentWatchEvent = Omit<ActiveIncident, 'country'> & {
   physical_event_id: string;
   evidence_sources: IncidentSource[];
 };

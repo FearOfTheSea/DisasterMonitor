@@ -177,7 +177,10 @@ async def main() -> None:
             worldwide_result = await worldwide_service.execute(worldwide_query)
             _print_report("worldwide", case.worldwide_question, worldwide_result)
 
-        snapshot = await ActiveIncidentsService(service.provider_registry).execute()
+        snapshot = await ActiveIncidentsService(
+            service.provider_registry,
+            country_catalog=country_catalog,
+        ).execute()
         print(f"active_incidents_retrieved_at={snapshot.retrieved_at.isoformat()}")
         print(f"active_incidents_count={len(snapshot.incidents)}")
         for coverage in snapshot.coverage:

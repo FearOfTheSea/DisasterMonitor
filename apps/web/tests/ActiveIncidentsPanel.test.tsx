@@ -8,6 +8,7 @@ import type {
   DisasterType,
 } from '@/features/incidents/model/activeIncidents';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
+import { TEST_INCIDENT_COUNTRY } from './fixtures/incidents';
 
 const DISASTERS: DisasterType[] = [
   'earthquake',
@@ -21,6 +22,7 @@ const DISASTERS: DisasterType[] = [
 const INCIDENT: ActiveIncident = {
   event_id: 'fire-1',
   disaster: 'wildfire',
+  country: TEST_INCIDENT_COUNTRY,
   location: 'Fixture reserve',
   event_time: '2026-08-20T03:00:00Z',
   geometry: {
@@ -119,9 +121,10 @@ describe('ActiveIncidentsPanel', () => {
     expect(screen.getByText('Primary tier')).not.toBeVisible();
     expect(screen.getByText('Scientific authority')).not.toBeVisible();
     expect(screen.getByText('Selected')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
-    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Focus Japan on map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getAllByText(/Source updated/)).toHaveLength(2);
     expect(
       screen.getByRole('link', { name: 'Fixture wildfire perimeter' }),
@@ -132,9 +135,7 @@ describe('ActiveIncidentsPanel', () => {
     expect(screen.getByText('Primary tier')).toBeVisible();
     expect(screen.getByText('Scientific authority')).toBeVisible();
 
-    await user.click(
-      screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Focus Japan on map' }));
     expect(onSelectIncident).toHaveBeenCalledWith('fire-1');
   });
 
@@ -185,13 +186,19 @@ describe('ActiveIncidentsPanel', () => {
     expect(screen.getByText('estimated')).toBeInTheDocument();
   });
 
-  it('uses an honest worldwide title and keeps the flood event ID in the details', () => {
+  it('uses the associated country and keeps the flood event ID in the details', () => {
     const floodEventId =
       'cems-gfm:sentinel-acquisition:S1C_IW_GRDH_1SDV_20260907T104635_20260907T104701_009340_01293B_C236';
     const longFloodIncident: ActiveIncident = {
       ...INCIDENT,
       event_id: floodEventId,
       disaster: 'flood',
+      country: {
+        code: 'ITA',
+        name: 'Italy',
+        association_basis: 'nearby_boundary',
+        distance_km: 10.8,
+      },
       location: `CEMS GFM acquisition ${floodEventId.slice(floodEventId.indexOf(':') + 1)}`,
       source: {
         ...INCIDENT.source,
@@ -209,10 +216,9 @@ describe('ActiveIncidentsPanel', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: 'Focus Worldwide on map' });
-    expect(button.querySelector('.incident-card-location')).toHaveTextContent(
-      'Worldwide',
-    );
+    const button = screen.getByRole('button', { name: 'Focus Italy on map' });
+    expect(button.querySelector('.incident-card-location')).toHaveTextContent('Italy');
+    expect(button).toHaveTextContent('10.8 km from mapped boundary');
     expect(button.closest('.incident-card')).toHaveTextContent(
       `Event ID: ${floodEventId}`,
     );
@@ -381,13 +387,11 @@ it('searches loaded locations and sources without changing provider coverage', a
   const search = screen.getByRole('searchbox', { name: 'Search locations or sources' });
   await user.type(search, 'missing place');
   expect(
-    screen.queryByRole('button', { name: 'Focus Fixture reserve on map' }),
+    screen.queryByRole('button', { name: 'Focus Japan on map' }),
   ).not.toBeInTheDocument();
   expect(screen.getByText('No loaded records match your search.')).toBeVisible();
   expect(screen.getByText('View coverage')).toBeVisible();
   await user.clear(search);
   await user.type(search, 'fire authority');
-  expect(
-    screen.getByRole('button', { name: 'Focus Fixture reserve on map' }),
-  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Focus Japan on map' })).toBeVisible();
 });

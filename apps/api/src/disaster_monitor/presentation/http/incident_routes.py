@@ -33,6 +33,7 @@ from disaster_monitor.presentation.http.response_serialization import (
     _incident_watch_response,
 )
 from disaster_monitor.presentation.http.schemas import (
+    ActiveIncidentCountryResponse,
     ActiveIncidentResponse,
     ActiveIncidentsSnapshotResponse,
     CompoundHazardCorrelationResponse,
@@ -106,6 +107,12 @@ async def active_incidents(
                 event_id=incident.event_id,
                 physical_event_id=incident.physical_event_id,
                 disaster=incident.disaster,
+                country=ActiveIncidentCountryResponse(
+                    code=incident.country.country_code,
+                    name=incident.country.country_name,
+                    association_basis=incident.country.basis.value,
+                    distance_km=incident.country.distance_km,
+                ),
                 location=incident.location,
                 event_time=incident.event_time,
                 geometry=_event_geometry_response(incident.geometry),

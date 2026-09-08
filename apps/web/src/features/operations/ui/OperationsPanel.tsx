@@ -18,6 +18,7 @@ import type {
   ActiveIncident,
   ActiveIncidentsSnapshot,
   CompoundHazardCorrelation,
+  IncidentMapRecord,
 } from '@/features/incidents/public';
 import { FindingsCenter } from '@/features/operations/ui/FindingsCenter';
 import { IncidentWatches } from '@/features/operations/ui/IncidentWatches';
@@ -25,7 +26,7 @@ import { IncidentWatches } from '@/features/operations/ui/IncidentWatches';
 type OperationsPanelProps = {
   evidenceStateVersion?: string;
   onClose: () => void;
-  onSelectWatchIncident: (incident: ActiveIncident) => void;
+  onSelectWatchIncident: (incident: IncidentMapRecord) => void;
   activeIncidentsSnapshot?: ActiveIncidentsSnapshot;
   displayedIncidents?: readonly ActiveIncident[];
   displayedCorrelations?: readonly CompoundHazardCorrelation[];

@@ -1,7 +1,9 @@
 import {
-  ActiveIncident,
+  countryAssociationLabel,
   DisasterType,
-  displayActiveIncidentLocation,
+  displayActiveIncidentCountry,
+  displayActiveIncidentContext,
+  IncidentMapRecord,
 } from '@/features/incidents/model/activeIncidents';
 import { DisasterIcon } from '@/features/incidents/ui/DisasterIcon';
 
@@ -28,11 +30,12 @@ export function SelectedIncidentSummary({
   incident,
   onAsk,
 }: {
-  incident?: ActiveIncident;
+  incident?: IncidentMapRecord;
   onAsk: () => void;
 }) {
   if (!incident) return null;
   const sourceCount = Math.max(1, incident.provider_ids.length);
+  const context = displayActiveIncidentContext(incident);
 
   return (
     <article
@@ -43,7 +46,8 @@ export function SelectedIncidentSummary({
       </div>
       <div className="selected-incident-copy">
         <span>{DISASTER_LABELS[incident.disaster]}</span>
-        <h3>{displayActiveIncidentLocation(incident)}</h3>
+        <h3>{displayActiveIncidentCountry(incident)}</h3>
+        {context ? <small>{context}</small> : null}
         <p>
           {relativeEventTime(incident.event_time)} · {sourceCount}{' '}
           {sourceCount === 1 ? 'trusted source' : 'trusted sources'}
@@ -58,6 +62,14 @@ export function SelectedIncidentSummary({
           <div>
             <dt>Event ID</dt>
             <dd>{incident.event_id}</dd>
+          </div>
+          <div>
+            <dt>Country association</dt>
+            <dd>{countryAssociationLabel(incident)}</dd>
+          </div>
+          <div>
+            <dt>Source location</dt>
+            <dd>{incident.location}</dd>
           </div>
           <div>
             <dt>Publisher</dt>

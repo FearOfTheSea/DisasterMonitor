@@ -7,6 +7,9 @@ from enum import StrEnum
 from disaster_monitor.application.evidence.event_policies import (
     CompoundHazardCorrelation,
 )
+from disaster_monitor.application.incidents.country_association import (
+    IncidentCountryAssociation,
+)
 from disaster_monitor.domain.disaster import (
     Disaster,
     EventGeometry,
@@ -54,6 +57,7 @@ class ActiveIncident:
 
     event_id: str
     disaster: Disaster
+    country: IncidentCountryAssociation
     location: str
     event_time: datetime
     geometry: EventGeometry | None

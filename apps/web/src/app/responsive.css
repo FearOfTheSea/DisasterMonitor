@@ -1,7 +1,7 @@
 @media (max-width: 1320px) {
   :root {
     --incident-rail: 350px;
-    --assistant-rail: 380px;
+    --assistant-rail: 480px;
     --operations-rail: 440px;
   }
 }
