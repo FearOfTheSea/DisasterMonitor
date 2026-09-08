@@ -10,6 +10,14 @@ from pathlib import Path
 from threading import Event, Thread
 
 import uvicorn
+from system_test_backend import (
+    NOW,
+    FakeSystemEventProvider,
+    FakeSystemModel,
+    FakeSystemSituationProvider,
+    build_system_active_incidents_service,
+)
+
 from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
@@ -46,13 +54,6 @@ from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
 )
 from disaster_monitor.main import create_app
-from system_test_backend import (
-    NOW,
-    FakeSystemEventProvider,
-    FakeSystemModel,
-    FakeSystemSituationProvider,
-    build_system_active_incidents_service,
-)
 
 script_directory = Path(__file__).resolve().parent
 web_directory = script_directory.parent / "apps" / "web"

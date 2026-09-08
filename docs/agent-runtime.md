@@ -152,8 +152,9 @@ The one replan decision is a single application-authorized follow-up selection;
 it does not reset the tool, model, or specialist counters.
 
 Specialist-model calls have separate accounting from interpretation, planning,
-review, localization, and visual-model calls. The two supported model-backed roles
-run sequentially through the configured text model.
+review, localization, and visual-model calls. See
+[specialist-agents.md](specialist-agents.md) for roles, handoffs, validation, and
+the optional model-backed path.
 
 The runtime does not construct another text model or a parallel Ollama worker.
 Request state carries the remaining specialist budget. Each execution checks that
@@ -213,35 +214,11 @@ The agent can reason about evidence. Deterministic policy controls authority.
 
 ## Coordination
 
-Specialist coordination is bounded and request-scoped.
-
-Handoffs require typed artifacts, provenance, declared ownership, and existing
-permissions. Specialists cannot create authority or mutate canonical evidence.
-
-Invalid provenance, privilege escalation, policy drift, conflicts, or budget
-overruns use the existing single-supervisor result.
-
-Deterministic collaboration is the baseline and the default. When
-`SPECIALIST_LLM_ENABLED=true`, only evidence reconciliation and decision analysis
-can request one model draft each.
-
-Event identity remains deterministic. Multimodal analysis remains on the
-visual-analysis path.
-
-Each model-backed specialist receives a compact read-only projection of admitted
-artifacts. It has no tools, provider access, network access, filesystem access, or
-recursive-agent authority.
-
-Each specialist returns an untrusted `SpecialistFindingDraft`. Application policy
-checks role, task ownership, granted permissions, state lineage, evidence and source
-membership, provenance, safety fingerprint, contradictions, and budgets.
-
-The returned key must select one exact projection item. Its evidence and source
-identifiers must equal that item’s current-evidence lineage. Projection-wide or
-historical-memory identifiers cannot replace item lineage.
-
-Any model or validation failure discards all model findings for the request. The
-runtime retains the deterministic result and does not change canonical evidence.
+Specialist coordination is bounded, request-scoped, and non-authoritative.
+Typed handoffs, provenance, declared ownership, and existing permissions are
+required; invalid coordination retains the single-supervisor result. See
+[specialist-agents.md](specialist-agents.md) for the current roles, limits,
+deterministic baseline, and draft-validation rules.
 
 ## State
 
@@ -262,20 +239,10 @@ DisasterMonitor keeps five state categories separate.
    context. User turns can resolve a narrowly referential disaster follow-up.
    Assistant text cannot establish a disaster anchor or current fact.
 3. **Typed long-term historical memory.** When `LONG_TERM_MEMORY_ENABLED=true`,
-   `MemoryStore` separately retains validated, high-confidence conversation and
-   physical-event references. Lifecycle states are `active`, `superseded`,
-   `expired`, and `deleted`. Recall is deterministic and capped at five records and
-   1,500 characters. Recall can use an already-resolved physical event plus disaster
-   and country identifiers.
-
-   The store keeps references such as physical-event ID, evidence IDs, and prior
-   state version. It does not keep volatile current claims. Models and specialists
-   cannot write or search the store. Policy alone admits candidates. Specialists
-   receive only a supervisor-created frozen `MemoryContextArtifact`.
-
-   Persistence atomically replaces the active physical-event reference in a
-   conversation scope. PostgreSQL enforces at most one active reference in that
-   scope.
+   `MemoryStore` retains validated, non-authoritative physical-event references
+   separately from transcripts and operational evidence. See
+   [memory.md](memory.md) for admission, lifecycle, recall, persistence, and
+   authority boundaries.
 4. **Request-scoped agent and evidence state.** Plans, tool state, workspaces,
    handoffs, analytical findings, multimodal state, and recalled memory context
    exist only for the current request. The runtime does not restore them as an
@@ -287,13 +254,5 @@ DisasterMonitor keeps five state categories separate.
 
 Conversation history and typed long-term memory are historical, non-authoritative
 context. Neither can become a verified fact, provider observation, trusted source,
-or current world-state claim.
-
-Questions about current disaster conditions always run provider retrieval and
-deterministic reconciliation before the runtime recalls historical references or
-exposes them to specialists.
-
-The runtime has no continuous investigation loop or autonomous background monitoring.
-It has no cross-request evidence recovery from memory, global personal memory,
-cross-user preference memory, semantic or vector retrieval, or unrestricted
-self-modification.
+or current world-state claim. The runtime has no continuous investigation loop or
+autonomous background monitoring.
