@@ -247,6 +247,11 @@ def _validate_canonical_task(
         event_discriminators=(
             matched_query.event_discriminators if matched_query is not None else ()
         ),
+        selection_intent=(
+            matched_query.selection_intent
+            if matched_query is not None
+            else WorldwideSelectionIntent.LATEST
+        ),
     )
     return ValidatedDisasterTask(
         question=question,

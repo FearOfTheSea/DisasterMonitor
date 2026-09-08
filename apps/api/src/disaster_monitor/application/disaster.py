@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from disaster_monitor.application.ports.provider_failures import ProviderFailureReason
 from disaster_monitor.domain.disaster import (
     Country,
     CycloneMapLayer,
@@ -13,9 +14,11 @@ from disaster_monitor.domain.disaster import (
     EventGeometry,
     EventMeasurement,
     EvidenceWorldState,
+    IncidentActivityStatus,
     ReportedFact,
     SourceReference,
 )
+from disaster_monitor.domain.disaster import ObservationKind as ObservationKind
 
 
 class RequestType(StrEnum):
@@ -87,6 +90,7 @@ class DisasterQuery:
     latitude: float | None = None
     longitude: float | None = None
     event_discriminators: tuple[EventDiscriminator, ...] = ()
+    selection_intent: WorldwideSelectionIntent = WorldwideSelectionIntent.LATEST
 
     def discriminator(self, kind: str) -> str | None:
         for item in self.event_discriminators:
@@ -117,6 +121,9 @@ class WorldwideDisasterEvent:
     geometry: EventGeometry | None = None
     measurements: tuple[EventMeasurement, ...] = ()
     provider_ids: tuple[str, ...] = ()
+    lineage_ids: tuple[str, ...] = ()
+    observation_kind: ObservationKind = ObservationKind.PHYSICAL_EVENT
+    activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,7 +151,7 @@ class ProviderIssue:
 
     provider: str
     message: str
-    reason_code: str = "invalid_payload"
+    reason_code: ProviderFailureReason | str = ProviderFailureReason.INVALID_PAYLOAD
     retryable: bool = False
     http_status: int | None = None
     detail: str | None = None
@@ -156,6 +163,8 @@ class ProviderBatch[T]:
 
     records: tuple[T, ...] = ()
     issues: tuple[ProviderIssue, ...] = ()
+    scan_complete: bool = True
+    records_seen: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +207,7 @@ class SelectedEventSummary:
     source: SourceReference
     geography_status: EventGeographyStatus
     provider_ids: tuple[str, ...] = ()
+    lineage_ids: tuple[str, ...] = ()
     supplemental_geometry: tuple[CycloneMapLayer, ...] = ()
 
 

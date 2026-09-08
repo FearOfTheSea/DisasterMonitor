@@ -43,6 +43,8 @@ from disaster_monitor.domain.operations import (
     NormalizedObservationRecord,
     OperatorActionRecord,
     OperatorDecision,
+    ProviderAttempt,
+    ProviderAttemptOutcome,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -174,6 +176,33 @@ async def test_freshness_exposes_stale_and_never_ingested_states(
     assert by_source["global-test-source"].age_seconds == 7 * 3600 + 5 * 60
     assert by_source["global-test-secondary"].state == (FreshnessState.NEVER_INGESTED)
     assert by_source["global-test-secondary"].age_seconds is None
+
+
+@pytest.mark.asyncio
+async def test_provider_attempts_override_never_ingested_diagnostics() -> None:
+    repository = InMemoryOperationalRepository()
+    attempted_at = NOW + timedelta(minutes=1)
+
+    await repository.record_provider_attempt(
+        ProviderAttempt(
+            source_id="global-test-secondary",
+            attempted_at=attempted_at,
+            outcome=ProviderAttemptOutcome.FAILED,
+            reason_code="endpoint_missing",
+            http_status=404,
+        )
+    )
+
+    status = await repository.freshness(
+        now=attempted_at + timedelta(minutes=2),
+        expectations={"global-test-secondary": timedelta(hours=1)},
+    )
+
+    item = status[0]
+    assert item.state is FreshnessState.UNAVAILABLE
+    assert item.last_attempt_at == attempted_at
+    assert item.consecutive_failures == 1
+    assert item.latest_error_code == "endpoint_missing"
 
 
 @pytest.mark.asyncio

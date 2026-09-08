@@ -173,6 +173,15 @@ def build_app_dependencies(
             country_catalog=country_catalog,
             geographic_region_catalog=StaticGeographicRegionCatalog(),
             event_policies=retrieval.event_policies,
+            projection_store=(
+                operational.repository
+                if isinstance(operational.repository, PostgresOperationalRepository)
+                else None
+            ),
+            read_from_projection=isinstance(
+                operational.repository, PostgresOperationalRepository
+            ),
+            provider_attempt_recorder=operational.repository,
         )
     )
     query_parser = configured.disaster_query_parser or build_disaster_query_parser(
@@ -304,7 +313,14 @@ def build_app_dependencies(
         satellite_imagery=configured_satellite_imagery,
         media_assets=media_services.store,
         operational_repository=operational.repository,
-        provider_freshness=ProviderFreshnessService(operational.repository),
+        provider_freshness=ProviderFreshnessService(
+            operational.repository,
+            source_ids=tuple(
+                registration.source_id
+                for registration in retrieval.provider_registry.registrations
+                if registration.source_id is not None
+            ),
+        ),
         record_operator_action=RecordOperatorAction(operational.repository),
         operator_identity=TrustedOperatorIdentityPolicy(
             enabled=settings.trusted_operator_identity_enabled,

@@ -134,7 +134,7 @@ async def test_emsc_country_query_is_bounded_and_country_validated() -> None:
         "minlongitude": "122.0",
         "maxlongitude": "154.0",
         "minmagnitude": "4.5",
-        "orderby": "magnitude",
+        "orderby": "time",
         "limit": "50",
     }
     assert len(result.records) == 1

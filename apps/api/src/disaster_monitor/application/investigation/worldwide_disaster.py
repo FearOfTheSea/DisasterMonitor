@@ -138,6 +138,7 @@ class WorldwideDisasterReportService:
             measurements=selected.measurements,
             source=selected.source,
             provider_ids=selected.provider_ids,
+            lineage_ids=selected.lineage_ids,
             geography_status=EventGeographyStatus.WORLDWIDE,
         )
         detail = policy.describe_selection(selected, query)

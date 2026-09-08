@@ -180,8 +180,7 @@ async def test_usgs_adapter_surfaces_http_failure() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.asyncio
-async def test_usgs_generic_query_is_bounded_and_magnitude_ordered() -> None:
+async def test_usgs_generic_latest_query_is_bounded_and_time_ordered() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -197,9 +196,9 @@ async def test_usgs_generic_query_is_bounded_and_magnitude_ordered() -> None:
     adapter = UsgsEarthquakeAdapter(geography=CATALOG, client=client)
     await adapter.find_recent_events(QUERY, now=NOW)
     query_params = dict(requests[0].url.params.multi_items())
-    assert query_params["orderby"] == "magnitude"
+    assert query_params["orderby"] == "time"
     assert query_params["limit"] == "50"
-    assert query_params["minmagnitude"] == "4.5"
+    assert "minmagnitude" not in query_params
     assert query_params["minlatitude"] == "20.0"
     assert query_params["maxlatitude"] == "46.0"
     assert query_params["minlongitude"] == "122.0"

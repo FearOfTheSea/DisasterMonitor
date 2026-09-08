@@ -37,12 +37,12 @@ from disaster_monitor.infrastructure.disaster.http import (
 )
 
 COOLR_QUERY_URL = (
-    "https://gis.earthdata.nasa.gov/gis01/rest/services/Landslides/"
-    "COOLR_Reports_Points/FeatureServer/0/query"
+    "https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/"
+    "COOLR_Events_Points/FeatureServer/0/query"
 )
 _COOLR_FEATURE_URL = (
-    "https://gis.earthdata.nasa.gov/gis01/rest/services/Landslides/"
-    "COOLR_Reports_Points/FeatureServer/0"
+    "https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/"
+    "COOLR_Events_Points/FeatureServer/0"
 )
 _COOLR_RIGHTS_ID = "nasa-coolr-report-catalog"
 _MAX_TIME_WINDOW_DAYS = 30
@@ -416,6 +416,7 @@ class NasaCoolrLandslideAdapter:
             raise DisasterProviderResponseError(
                 "The COOLR response had no feature list.", reason_code="invalid_schema"
             )
+        result_limit = int(params["resultRecordCount"])
         snapshot_id = (
             capture.snapshot.snapshot_id if capture and capture.snapshot else None
         )
@@ -445,7 +446,22 @@ class NasaCoolrLandslideAdapter:
                     reason_code="empty_result",
                 )
             )
-        return ProviderBatch(tuple(records), tuple(issues))
+        scan_complete = len(raw_features) < result_limit
+        if not scan_complete:
+            issues.append(
+                ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: The acquisition limit was reached; "
+                    "additional matching reports may exist.",
+                    reason_code="acquisition_limit_reached",
+                )
+            )
+        return ProviderBatch(
+            tuple(records),
+            tuple(issues),
+            scan_complete=scan_complete,
+            records_seen=len(raw_features),
+        )
 
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
@@ -461,6 +477,8 @@ class NasaCoolrLandslideAdapter:
                 item for item in result.records if isinstance(item, DisasterEvent)
             ),
             issues=result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def find_worldwide_events(
@@ -479,6 +497,8 @@ class NasaCoolrLandslideAdapter:
                 if isinstance(item, WorldwideDisasterEvent)
             ),
             issues=result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def aclose(self) -> None:

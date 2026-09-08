@@ -96,6 +96,17 @@ def _snapshot() -> ActiveIncidentsSnapshot:
         authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
         snapshot_id="snapshot:fire-1",
     )
+    corroborating_source = SourceReference(
+        source_id="fixture-secondary",
+        publisher="Fixture Secondary Authority",
+        title="Fixture corroborating event",
+        canonical_url="https://secondary.example/incidents/fire-1",
+        published_at=source.published_at,
+        updated_at=source.updated_at,
+        retrieved_at=source.retrieved_at,
+        authority=SourceAuthority.SECONDARY,
+        snapshot_id="snapshot:fire-1-secondary",
+    )
     incident = ActiveIncident(
         event_id="fire-1",
         disaster=Disaster.WILDFIRE,
@@ -116,6 +127,7 @@ def _snapshot() -> ActiveIncidentsSnapshot:
         provider_tier=ProviderTier.PRIMARY,
         source_authority=SourceAuthority.SCIENTIFIC_AUTHORITY,
         source=source,
+        evidence_sources=(source, corroborating_source),
     )
     coverage = tuple(
         DisasterIncidentCoverage(
@@ -175,6 +187,9 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
         "incident_count": 1,
         "providers": ["Fixture provider"],
         "detail": "Fixture coverage detail.",
+        "scan_complete": True,
+        "records_seen": 0,
+        "truncated": False,
     }
     assert body["incidents"][0] == {
         "event_id": "fire-1",
@@ -200,9 +215,32 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
         },
         "measurements": [],
         "provider_ids": ["fixture:fire-1"],
+        "lineage_ids": [],
         "provider_tier": "primary",
         "source_authority": "scientific_authority",
         "physical_event_id": None,
+        "evidence_sources": [
+            {
+                "source_id": "fixture-wildfires",
+                "publisher": "Fixture Fire Authority",
+                "title": "Fixture wildfire perimeter",
+                "canonical_url": "https://wildfires.example/incidents/fire-1",
+                "published_at": "2026-08-20T04:00:00Z",
+                "updated_at": "2026-08-20T05:00:00Z",
+                "retrieved_at": "2026-08-20T06:00:00Z",
+                "snapshot_id": "snapshot:fire-1",
+            },
+            {
+                "source_id": "fixture-secondary",
+                "publisher": "Fixture Secondary Authority",
+                "title": "Fixture corroborating event",
+                "canonical_url": "https://secondary.example/incidents/fire-1",
+                "published_at": "2026-08-20T04:00:00Z",
+                "updated_at": "2026-08-20T05:00:00Z",
+                "retrieved_at": "2026-08-20T06:00:00Z",
+                "snapshot_id": "snapshot:fire-1-secondary",
+            },
+        ],
         "source": {
             "source_id": "fixture-wildfires",
             "publisher": "Fixture Fire Authority",
@@ -213,6 +251,8 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
             "retrieved_at": "2026-08-20T06:00:00Z",
             "snapshot_id": "snapshot:fire-1",
         },
+        "observation_kind": "physical_event",
+        "activity_status": "unknown",
     }
     assert body["correlations"] == []
     assert body["warnings"] == ["Fixture provider returned a partial response."]

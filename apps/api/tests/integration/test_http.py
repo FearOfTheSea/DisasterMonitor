@@ -53,6 +53,20 @@ async def test_health_endpoint_does_not_need_the_model() -> None:
 
 
 @pytest.mark.asyncio
+async def test_monitoring_readiness_discloses_in_memory_mode() -> None:
+    app = create_app(model=FakeLanguageModel())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/operations/monitoring")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["durable_storage"] is False
+    assert response.json()["scheduler_worker_configured"] is False
+
+
+@pytest.mark.asyncio
 async def test_current_cyclone_serializes_supplemental_forecast_geometry() -> None:
     event_source = SourceReference(
         source_id="gdacs-tropical-cyclones",

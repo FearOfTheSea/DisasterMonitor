@@ -14,6 +14,10 @@ from disaster_monitor.application.ingestion.jobs import (
     _public_error_code,
     scheduled_job,
 )
+from disaster_monitor.application.ingestion.projection_jobs import (
+    IncidentProjectionRefresher,
+    WorldwideIncidentProjectionScheduler,
+)
 from disaster_monitor.application.ports.ingest_jobs import IngestJobQueue
 from disaster_monitor.domain.incident_watch import IncidentWatch
 from disaster_monitor.domain.operations import (
@@ -61,10 +65,12 @@ class IncidentWatchWorker:
         repository: IngestJobQueue,
         refresher: IncidentWatchRefresher,
         *,
+        projection_refresher: IncidentProjectionRefresher | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._repository = repository
         self._refresher = refresher
+        self._projection_refresher = projection_refresher
         self._clock = clock
 
     async def run_once(self, worker_id: str) -> IngestJob | None:
@@ -72,6 +78,27 @@ class IncidentWatchWorker:
         job = await self._repository.claim(worker_id, now=now)
         if job is None:
             return None
+        if job.source_id == WorldwideIncidentProjectionScheduler.source_id:
+            if self._projection_refresher is None:
+                await self._repository.fail(
+                    job.job_id,
+                    failed_at=now,
+                    error_code="projection_refresher_not_registered",
+                    retry_at=now,
+                )
+                return job
+            try:
+                await self._projection_refresher.refresh()
+            except Exception as error:
+                await self._repository.fail(
+                    job.job_id,
+                    failed_at=now,
+                    error_code=_public_error_code(error),
+                    retry_at=now + timedelta(seconds=min(300, 2**job.attempt_count)),
+                )
+            else:
+                await self._repository.complete(job.job_id, completed_at=now)
+            return job
         if job.source_id != IncidentWatchScheduler.source_id:
             await self._repository.fail(
                 job.job_id,

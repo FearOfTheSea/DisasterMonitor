@@ -395,3 +395,32 @@ it('searches loaded locations and sources without changing provider coverage', a
   await user.type(search, 'fire authority');
   expect(screen.getByRole('button', { name: 'Focus Japan on map' })).toBeVisible();
 });
+
+it('emits explicit server-side view and hazard filters', async () => {
+  const user = userEvent.setup();
+  const onViewChange = vi.fn();
+  const onHazardChange = vi.fn();
+  render(
+    <ActiveIncidentsPanel
+      snapshot={snapshot()}
+      status="success"
+      view="recent"
+      onViewChange={onViewChange}
+      onHazardChange={onHazardChange}
+      onSelectIncident={vi.fn()}
+      onRefresh={vi.fn()}
+    />,
+  );
+
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Incident view' }),
+    'ongoing',
+  );
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Hazard filter' }),
+    'wildfire',
+  );
+
+  expect(onViewChange).toHaveBeenCalledWith('ongoing');
+  expect(onHazardChange).toHaveBeenCalledWith('wildfire');
+});

@@ -1,7 +1,7 @@
 # NASA COOLR Landslides
 
-DisasterMonitor uses NASA’s [COOLR Reports Points FeatureServer
-layer](https://gis.earthdata.nasa.gov/gis01/rest/services/Landslides/COOLR_Reports_Points/FeatureServer/0/query)
+DisasterMonitor uses NASA’s [COOLR Events Points FeatureServer
+layer](https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/COOLR_Events_Points/FeatureServer/0/query)
 as the configured landslide event-discovery provider.
 
 The adapter uses the JSON FeatureServer query interface and a bounded standardized
@@ -15,6 +15,12 @@ validates each returned point against the maintained country polygon.
 Worldwide requests omit the country envelope. They do not create a country.
 
 COOLR is a global report catalogue, not complete real-time landslide surveillance.
+
+External verification on 2026-09-08T17:20Z returned HTTP 404 for the configured
+Earthdata FeatureServer query URL. The adapter therefore reports endpoint-unavailable
+coverage when the service cannot be reached; this is an external service blocker, not
+evidence that landslides were absent. Re-verify the NASA service contract before
+claiming live COOLR coverage.
 
 NASA describes reports from the Global Landslide Catalog (`GLC`) and Landslide
 Reporter Catalog (`LRC`). This integration accepts only those two documented import

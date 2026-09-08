@@ -13,6 +13,7 @@ from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
     SituationReportProvider,
 )
+from disaster_monitor.application.ports.provider_failures import ProviderFailureReason
 from disaster_monitor.application.ports.provider_registry import (
     ProviderRegistration,
     ProviderRegistryPort,
@@ -32,6 +33,7 @@ _SAFE_MESSAGES = {
     "http_client_error": "The provider rejected the request.",
     "http_server_error": "The provider returned a server error.",
     "rate_limited": "The provider rate-limited the request.",
+    "endpoint_missing": "The provider endpoint was not found.",
     "configuration_rejected": "The provider configuration was rejected.",
     "response_too_large": "The provider response exceeded the configured size limit.",
     "unexpected_content_type": "The provider returned an unexpected content type.",
@@ -39,6 +41,8 @@ _SAFE_MESSAGES = {
     "invalid_payload": "The provider returned an unsupported payload.",
     "empty_result": "The provider returned no matching records.",
     "source_policy_violation": "The provider record violated source policy.",
+    "invalid_schema": "The provider returned an unsupported schema.",
+    "pagination_limit_reached": "The provider scan reached its pagination limit.",
 }
 
 
@@ -59,7 +63,7 @@ def _policy_issue(provider: str, error: SourceEvidencePolicyError) -> ProviderIs
     return ProviderIssue(
         provider=provider,
         message=f"{provider}: {_SAFE_MESSAGES['source_policy_violation']}",
-        reason_code="source_policy_violation",
+        reason_code=ProviderFailureReason.SOURCE_POLICY_VIOLATION,
         detail=str(error),
     )
 
@@ -117,6 +121,8 @@ class CompositeDisasterEventProvider:
     ) -> ProviderBatch[DisasterEvent]:
         records: list[DisasterEvent] = []
         issues: list[ProviderIssue] = []
+        scan_complete = True
+        records_seen = 0
         self.last_record_counts = {}
         selected: tuple[
             tuple[ProviderRegistration | None, DisasterEventProvider], ...
@@ -166,6 +172,12 @@ class CompositeDisasterEventProvider:
                         issues.append(_policy_issue(name, error))
                 records.extend(accepted)
                 issues.extend(_safe_batch_issues(name, tuple(batch.issues)))
+                scan_complete = scan_complete and batch.scan_complete
+                records_seen += (
+                    batch.records_seen
+                    if batch.records_seen is not None
+                    else len(batch.records)
+                )
                 self.last_record_counts[name] = len(accepted)
             except Exception as error:
                 if isinstance(error, DisasterProviderError):
@@ -182,7 +194,12 @@ class CompositeDisasterEventProvider:
                     )
                 self.last_record_counts[name] = 0
         self.last_diagnostics = tuple(issues)
-        return ProviderBatch(records=tuple(records), issues=tuple(issues))
+        return ProviderBatch(
+            records=tuple(records),
+            issues=tuple(issues),
+            scan_complete=scan_complete,
+            records_seen=records_seen,
+        )
 
     async def aclose(self) -> None:
         for provider in self.providers:

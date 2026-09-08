@@ -32,6 +32,16 @@ def _intensity_score(value: float | str | None) -> float:
     return reading.level if reading is not None else 0.0
 
 
+def _evidence_quality_score(event: DisasterEvent) -> float:
+    magnitude = measurement(event, MeasurementKind.MAGNITUDE)
+    significance = measurement(event, MeasurementKind.PROVIDER_SIGNIFICANCE)
+    return (
+        (magnitude if isinstance(magnitude, (int, float)) else 0.0) * 2.0
+        + _intensity_score(measurement(event, MeasurementKind.INTENSITY)) * 1.5
+        + (significance if isinstance(significance, (int, float)) else 0.0) / 500
+    )
+
+
 class EarthquakeEventPolicy(BaseEventPolicy):
     """Earthquake mainshock, equivalence, ranking, and ambiguity policy."""
 
@@ -58,6 +68,8 @@ class EarthquakeEventPolicy(BaseEventPolicy):
         )
 
     def rank(self, event: DisasterEvent, query: DisasterQuery, now: datetime) -> float:
+        if query.selection_intent.value == "latest":
+            return event.event_time.timestamp()
         age_hours = max(0.0, (now - event.event_time).total_seconds() / 3600)
         recency = max(0.0, 1.0 - age_hours / (30 * 24))
         discriminator_bonus = 0.0
@@ -98,6 +110,24 @@ class EarthquakeEventPolicy(BaseEventPolicy):
             return True
         if super().same_physical_event(first, second):
             return True
+        # One provider's distinct event identifiers are already authoritative
+        # within that provider.  Cross-provider geometry/time matching must not
+        # collapse two nearby records from the same catalog.
+        if first.source.source_id == second.source.source_id:
+            first_prefixes = {
+                identifier.split(":", 1)[0].casefold()
+                for identifier in (first.event_id, *first.provider_ids)
+                if ":" in identifier
+            }
+            second_prefixes = {
+                identifier.split(":", 1)[0].casefold()
+                for identifier in (second.event_id, *second.provider_ids)
+                if ":" in identifier
+            }
+            if not first_prefixes or not second_prefixes:
+                return False
+            if first_prefixes & second_prefixes:
+                return False
         if abs((first.event_time - second.event_time).total_seconds()) > 90:
             return False
         distance = distance_km(first, second)
@@ -184,7 +214,9 @@ class EarthquakeEventPolicy(BaseEventPolicy):
                 "coordinate, magnitude, or event-identifier discriminator."
             )
         return (
-            "Selected the highest-ranked recent earthquake using intensity, "
+            "Selected the latest matching earthquake by source event time."
+            if query.selection_intent.value == "latest"
+            else "Selected the highest-ranked recent earthquake using intensity, "
             "magnitude, provider significance, recency, and an aftershock penalty."
         )
 
@@ -199,12 +231,20 @@ class EarthquakeEventPolicy(BaseEventPolicy):
         if resolution.selected is None or not resolution.alternatives:
             return resolution
         second = resolution.alternatives[0]
+        score_gap = (
+            abs(
+                _evidence_quality_score(resolution.selected)
+                - _evidence_quality_score(second)
+            )
+            if query.selection_intent.value == "latest"
+            else self.rank(resolution.selected, query, now)
+            - self.rank(second, query, now)
+        )
         ambiguous = resolution.ambiguous or (
             not self.same_sequence(resolution.selected, second)
             and (
-                self.rank(resolution.selected, query, now)
-                - self.rank(second, query, now)
-                < self.ambiguity_threshold
+                score_gap < self.ambiguity_threshold
+                or _is_aftershock(resolution.selected)
                 or _is_aftershock(second)
             )
         )

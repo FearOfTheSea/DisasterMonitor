@@ -11,6 +11,7 @@ import httpx
 
 from disaster_monitor.application.disaster import (
     DisasterQuery,
+    ObservationKind,
     ProviderBatch,
     ProviderIssue,
     WorldwideDisasterEvent,
@@ -198,6 +199,8 @@ class CemsGfmAdapter:
                 item for item in result.records if isinstance(item, DisasterEvent)
             ),
             issues=result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def find_worldwide_events(
@@ -215,6 +218,8 @@ class CemsGfmAdapter:
                 if isinstance(item, WorldwideDisasterEvent)
             ),
             issues=result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def _find(
@@ -254,6 +259,11 @@ class CemsGfmAdapter:
         features = self._features(payload)
         if not features:
             return ProviderBatch(issues=(_empty_result(),))
+        result_limit = (
+            min(_MAX_STAC_ITEMS, max(1, query.limit))
+            if isinstance(query, WorldwideDisasterQuery)
+            else _MAX_STAC_ITEMS
+        )
 
         start, end = _time_window(query.time_window_days, now=now)
         records: dict[str, DisasterEvent | WorldwideDisasterEvent] = {}
@@ -320,6 +330,7 @@ class CemsGfmAdapter:
                     source=source,
                     geometry=event_geometry,
                     provider_ids=event_provider_ids,
+                    observation_kind=ObservationKind.ACQUISITION,
                 )
             else:
                 event = DisasterEvent(
@@ -332,6 +343,7 @@ class CemsGfmAdapter:
                     geometry=event_geometry,
                     provider_ids=event_provider_ids,
                     geography_status=EventGeographyStatus.IN_COUNTRY,
+                    observation_kind=ObservationKind.ACQUISITION,
                 )
             existing = records.get(event_id)
             if existing is None:
@@ -355,7 +367,22 @@ class CemsGfmAdapter:
                         existing,
                         provider_ids=coalesced_provider_ids,
                     )
-        return ProviderBatch(records=tuple(records.values()), issues=tuple(issues))
+        scan_complete = len(features) < result_limit
+        if not scan_complete:
+            issues.append(
+                ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: The acquisition limit was reached; "
+                    "additional matching acquisitions may exist.",
+                    reason_code="acquisition_limit_reached",
+                )
+            )
+        return ProviderBatch(
+            records=tuple(records.values()),
+            issues=tuple(issues),
+            scan_complete=scan_complete,
+            records_seen=len(features),
+        )
 
     async def _inspect_candidate(
         self,

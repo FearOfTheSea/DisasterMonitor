@@ -14,6 +14,9 @@ from disaster_monitor.application.ports.geography import (
     CountryCatalogUpdateTrigger,
 )
 from disaster_monitor.application.ports.language_model import LanguageModel
+from disaster_monitor.application.ports.operational_state import (
+    MonitoringReadinessReader,
+)
 from disaster_monitor.presentation.http.metrics import OperationalMetrics
 from disaster_monitor.presentation.http.response_serialization import (
     _country_catalog_response,
@@ -21,6 +24,7 @@ from disaster_monitor.presentation.http.response_serialization import (
 from disaster_monitor.presentation.http.schemas import (
     CountryCatalogUpdateResponse,
     HealthResponse,
+    MonitoringReadinessResponse,
     ProviderFreshnessResponse,
     ReadinessResponse,
 )
@@ -76,6 +80,60 @@ async def readiness(
         ollama_available=result.ollama_available,
         model_available=result.model_available,
         model=result.model,
+    )
+
+
+@router.get(
+    "/operations/monitoring",
+    response_model=MonitoringReadinessResponse,
+    tags=["operations"],
+)
+async def monitoring_readiness(
+    request: Request,
+) -> MonitoringReadinessResponse:
+    """Report durable monitoring posture without conflating it with model readiness."""
+    repository = cast(
+        MonitoringReadinessReader,
+        request.app.state.dependencies.operational_repository,
+    )
+    durable_storage = repository.durable
+    if not durable_storage:
+        return MonitoringReadinessResponse(
+            status="degraded",
+            durable_storage=False,
+            scheduler_worker_configured=False,
+            projection_available=False,
+            detail=(
+                "Standalone development mode is using in-memory operational state; "
+                "scheduler and worker continuity are not configured."
+            ),
+        )
+    try:
+        projection = await repository.latest_incident_projection()
+    except Exception:
+        return MonitoringReadinessResponse(
+            status="unavailable",
+            durable_storage=True,
+            scheduler_worker_configured=True,
+            projection_available=False,
+            detail=(
+                "Durable operational storage is configured but could not be read; "
+                "scheduler/worker monitoring is unavailable."
+            ),
+        )
+    projection_available = projection is not None
+    return MonitoringReadinessResponse(
+        status="ready" if projection_available else "degraded",
+        durable_storage=True,
+        scheduler_worker_configured=True,
+        projection_available=projection_available,
+        detail=(
+            "A durable incident projection is available; scheduler and worker "
+            "heartbeat lag remains an operational metric."
+            if projection_available
+            else "Durable storage is configured, but no incident projection has been "
+            "written by the worker yet."
+        ),
     )
 
 

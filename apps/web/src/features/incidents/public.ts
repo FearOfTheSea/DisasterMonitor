@@ -5,5 +5,8 @@ export { displayActiveIncidentCountry } from './model/activeIncidents';
 export type { IncidentGeometry } from './model/activeIncidents';
 export type { CompoundHazardCorrelation } from './model/activeIncidents';
 export type { IncidentCoverageState } from './model/activeIncidents';
+export type { ObservationKind } from './model/activeIncidents';
+export type { IncidentActivityStatus } from './model/activeIncidents';
+export type { IncidentView } from './model/activeIncidents';
 export type { IncidentSource } from './model/activeIncidents';
 export type { ActiveIncidentsSnapshot } from './model/activeIncidents';

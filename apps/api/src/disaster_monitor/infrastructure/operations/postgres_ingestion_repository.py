@@ -9,6 +9,9 @@ from typing import Any, cast
 
 from psycopg.rows import dict_row
 
+from disaster_monitor.application.ports.incident_projection import (
+    IncidentProjectionRecord,
+)
 from disaster_monitor.domain.operations import (
     AuditEventRecord,
     EventObservationLinkRecord,
@@ -17,6 +20,8 @@ from disaster_monitor.domain.operations import (
     NormalizedObservationRecord,
     OperatorActionRecord,
     PhysicalEventRecord,
+    ProviderAttempt,
+    ProviderAttemptOutcome,
     ProviderFreshness,
     SourceSnapshotRecord,
     WorldStateVersionRecord,
@@ -29,6 +34,8 @@ from disaster_monitor.infrastructure.operations.postgres_repository_base import 
 
 class PostgresIngestionRepository(PostgresRepositoryBase):
     """Transactional ingestion, evidence, and audit persistence."""
+
+    durable = True
 
     def __init__(self, dsn: str) -> None:
         if not dsn.strip():
@@ -196,6 +203,54 @@ class PostgresIngestionRepository(PostgresRepositoryBase):
                     ),
                 )
                 return cursor.rowcount == 1
+
+    async def append_incident_projection(
+        self, projection: IncidentProjectionRecord
+    ) -> bool:
+        async with await self._connection() as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    INSERT INTO incident_projection(
+                        projection_id, snapshot_version, retrieved_at,
+                        created_at, payload
+                    ) VALUES (%s,%s,%s,%s,%s::jsonb)
+                    ON CONFLICT (projection_id) DO NOTHING
+                    """,
+                    (
+                        projection.projection_id,
+                        projection.snapshot_version,
+                        projection.retrieved_at,
+                        projection.created_at,
+                        projection.payload_json,
+                    ),
+                )
+                return cursor.rowcount == 1
+
+    async def latest_incident_projection(
+        self,
+    ) -> IncidentProjectionRecord | None:
+        async with await self._connection() as connection:
+            async with connection.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    """
+                    SELECT projection_id, snapshot_version, retrieved_at,
+                           created_at, payload::text AS payload_json
+                    FROM incident_projection
+                    ORDER BY retrieved_at DESC, projection_id DESC
+                    LIMIT 1
+                    """
+                )
+                row = await cursor.fetchone()
+        if row is None:
+            return None
+        return IncidentProjectionRecord(
+            projection_id=str(row["projection_id"]),
+            snapshot_version=str(row["snapshot_version"]),
+            retrieved_at=row["retrieved_at"],
+            created_at=row["created_at"],
+            payload_json=str(row["payload_json"]),
+        )
 
     async def snapshot_by_idempotency_key(
         self, idempotency_key: str
@@ -420,6 +475,65 @@ class PostgresIngestionRepository(PostgresRepositoryBase):
                 )
                 return cursor.rowcount == 1
 
+    async def record_provider_attempt(self, attempt: ProviderAttempt) -> None:
+        async with await self._connection() as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    """
+                    INSERT INTO provider_attempt(
+                        source_id, attempted_at, outcome, reason_code,
+                        retryable, http_status, records_seen
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        attempt.source_id,
+                        attempt.attempted_at,
+                        attempt.outcome.value,
+                        attempt.reason_code,
+                        attempt.retryable,
+                        attempt.http_status,
+                        attempt.records_seen,
+                    ),
+                )
+
+    async def provider_attempts(
+        self, *, source_id: str, limit: int = 100
+    ) -> tuple[ProviderAttempt, ...]:
+        if not 1 <= limit <= 500:
+            raise ValueError(
+                "Provider attempt history limit must be between 1 and 500."
+            )
+        async with await self._connection() as connection:
+            async with connection.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    """
+                    SELECT source_id, attempted_at, outcome, reason_code,
+                           retryable, http_status, records_seen
+                    FROM provider_attempt
+                    WHERE source_id=%s
+                    ORDER BY attempted_at DESC, attempt_id DESC
+                    LIMIT %s
+                    """,
+                    (source_id, limit),
+                )
+                rows = await cursor.fetchall()
+        return tuple(
+            ProviderAttempt(
+                source_id=str(row["source_id"]),
+                attempted_at=cast(datetime, row["attempted_at"]),
+                outcome=ProviderAttemptOutcome(str(row["outcome"])),
+                reason_code=(
+                    str(row["reason_code"]) if row["reason_code"] is not None else None
+                ),
+                retryable=bool(row["retryable"]),
+                http_status=(
+                    int(row["http_status"]) if row["http_status"] is not None else None
+                ),
+                records_seen=int(row["records_seen"]),
+            )
+            for row in rows
+        )
+
     async def freshness(
         self,
         *,
@@ -429,6 +543,7 @@ class PostgresIngestionRepository(PostgresRepositoryBase):
         results: list[ProviderFreshness] = []
         for source_id, expected in sorted(expectations.items()):
             snapshots = await self.snapshots(source_id=source_id, limit=1)
+            attempts = await self.provider_attempts(source_id=source_id, limit=100)
             async with await self._connection() as connection:
                 async with connection.cursor(row_factory=dict_row) as cursor:
                     await cursor.execute(
@@ -442,20 +557,44 @@ class PostgresIngestionRepository(PostgresRepositoryBase):
                     row = await cursor.fetchone()
             job = row
             failed = bool(job and job["status"] in {"retry", "dead_letter"})
+            last_attempt = attempts[0] if attempts else None
+            consecutive = 0
+            for attempt in attempts:
+                if attempt.outcome not in {
+                    ProviderAttemptOutcome.FAILED,
+                    ProviderAttemptOutcome.INCOMPLETE,
+                }:
+                    break
+                consecutive += 1
+            if not attempts and failed:
+                consecutive = 1
             results.append(
                 freshness_for(
                     source_id=source_id,
                     now=now,
                     expected_freshness=expected,
                     last_attempt_at=(
-                        cast(datetime, job["claimed_at"] or job["created_at"])
-                        if job
-                        else None
+                        last_attempt.attempted_at
+                        if last_attempt is not None
+                        else (
+                            cast(datetime, job["claimed_at"] or job["created_at"])
+                            if job
+                            else None
+                        )
                     ),
                     last_snapshot=snapshots[0] if snapshots else None,
-                    consecutive_failures=1 if failed else 0,
+                    consecutive_failures=consecutive,
                     latest_error_code=(
-                        cast(str | None, job["last_error_code"]) if job else None
+                        last_attempt.reason_code
+                        if last_attempt is not None
+                        and last_attempt.outcome
+                        in {
+                            ProviderAttemptOutcome.FAILED,
+                            ProviderAttemptOutcome.INCOMPLETE,
+                        }
+                        else cast(str | None, job["last_error_code"])
+                        if job
+                        else None
                     ),
                 )
             )

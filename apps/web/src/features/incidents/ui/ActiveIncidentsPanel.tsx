@@ -10,6 +10,7 @@ import {
   DisasterType,
   displayActiveIncidentCountry,
   displayActiveIncidentContext,
+  IncidentView,
   IncidentSourceAuthority,
 } from '@/features/incidents/model/activeIncidents';
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
@@ -23,6 +24,14 @@ type ActiveIncidentsPanelProps = {
   error?: string;
   selectedIncidentId?: string;
   displayTimeWindow?: MapTimeWindow;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  view?: IncidentView;
+  onViewChange?: (value: IncidentView) => void;
+  hazard?: DisasterType;
+  onHazardChange?: (value: DisasterType | undefined) => void;
+  onLoadMore?: () => void | Promise<void>;
+  loadingMore?: boolean;
   onSelectIncident: (eventId: string) => void;
   onRefresh: () => void | Promise<void>;
 };
@@ -87,6 +96,24 @@ function disasterLabel(disaster: DisasterType): string {
   return DISASTERS.find((item) => item.value === disaster)?.label ?? disaster;
 }
 
+const VIEW_LABELS: Record<IncidentView, string> = {
+  recent: 'Recent onset',
+  ongoing: 'Ongoing',
+  recently_updated: 'Recently updated',
+  historical: 'Historical window',
+};
+
+function activityStatusLabel(status: ActiveIncident['activity_status']): string {
+  switch (status) {
+    case 'ongoing':
+      return 'Ongoing';
+    case 'ended':
+      return 'Ended';
+    default:
+      return 'Activity unknown';
+  }
+}
+
 function sourceTimestamp(incident: ActiveIncident): { label: string; value: string } {
   if (incident.source.updated_at) {
     return { label: 'Source updated', value: incident.source.updated_at };
@@ -104,30 +131,38 @@ export function ActiveIncidentsPanel({
   error,
   selectedIncidentId,
   displayTimeWindow,
+  search,
+  onSearchChange,
+  view = 'recent',
+  onViewChange,
+  hazard,
+  onHazardChange,
+  onLoadMore,
+  loadingMore = false,
   onSelectIncident,
   onRefresh,
 }: ActiveIncidentsPanelProps) {
-  const [search, setSearch] = useState('');
-  const query = search.trim().toLocaleLowerCase();
-  const incidents = [...(snapshot?.incidents ?? [])]
-    .filter((incident) =>
-      [
-        incident.country.name,
-        incident.country.code,
-        incident.location,
-        incident.source.publisher,
-        incident.source.title,
-      ].some((value) => value.toLocaleLowerCase().includes(query)),
-    )
-    .sort((first, second) => {
-      const timeDifference =
-        new Date(second.event_time).getTime() - new Date(first.event_time).getTime();
-      return (
-        timeDifference ||
-        first.disaster.localeCompare(second.disaster) ||
-        first.event_id.localeCompare(second.event_id)
+  const [localSearch, setLocalSearch] = useState('');
+  const isServerSearch = search !== undefined;
+  const currentSearch = search ?? localSearch;
+  const query = currentSearch.trim().toLocaleLowerCase();
+  const incidents = isServerSearch
+    ? (snapshot?.incidents ?? [])
+    : (snapshot?.incidents ?? []).filter((incident) =>
+        [
+          incident.country?.name,
+          incident.country?.code,
+          incident.location,
+          incident.source.publisher,
+          incident.source.title,
+        ]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLocaleLowerCase().includes(query)),
       );
-    });
+  const updateSearch = (value: string) => {
+    setLocalSearch(value);
+    onSearchChange?.(value);
+  };
 
   return (
     <aside className="active-incidents-panel" aria-label="Active incidents monitoring">
@@ -141,7 +176,11 @@ export function ActiveIncidentsPanel({
           onClick={() => void onRefresh()}
           disabled={status === 'loading'}
         >
-          {status === 'loading' ? 'Updating…' : 'Updated just now'}
+          {status === 'loading'
+            ? 'Updating…'
+            : snapshot
+              ? `Retrieved ${formatTime(snapshot.retrieved_at)}`
+              : 'Not retrieved'}
         </button>
       </header>
       <div className="incident-search">
@@ -159,9 +198,44 @@ export function ActiveIncidentsPanel({
           type="search"
           aria-label="Search locations or sources"
           placeholder="Search a place or event"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          value={currentSearch}
+          onChange={(event) => updateSearch(event.target.value)}
         />
+      </div>
+      <div className="incident-query-controls" aria-label="Incident filters">
+        <label>
+          <span>View</span>
+          <select
+            aria-label="Incident view"
+            value={view}
+            onChange={(event) => onViewChange?.(event.target.value as IncidentView)}
+          >
+            {Object.entries(VIEW_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Hazard</span>
+          <select
+            aria-label="Hazard filter"
+            value={hazard ?? ''}
+            onChange={(event) =>
+              onHazardChange?.(
+                event.target.value ? (event.target.value as DisasterType) : undefined,
+              )
+            }
+          >
+            <option value="">All hazards</option>
+            {DISASTERS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <div className="active-incidents-scroll">
         {status === 'loading' && !snapshot && (
@@ -219,14 +293,46 @@ export function ActiveIncidentsPanel({
             </div>
           </section>
         )}
+        {snapshot && (snapshot.observations?.length ?? 0) > 0 && (
+          <section
+            className="incident-observations"
+            aria-labelledby="incident-observations-heading"
+          >
+            <details>
+              <summary id="incident-observations-heading">
+                {snapshot.observations?.length} acquisition records excluded from
+                incident counts
+              </summary>
+              <p>
+                These are source-backed sensing or product records, not separate
+                physical incidents. They remain available for provenance review.
+              </p>
+              <ul>
+                {snapshot.observations?.slice(0, 5).map((observation) => (
+                  <li key={`${observation.source.source_id}:${observation.event_id}`}>
+                    {displayActiveIncidentCountry(observation)} ·{' '}
+                    {observation.source.publisher}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </section>
+        )}
         {snapshot && (
           <section
             className="incident-list-section"
             aria-labelledby="incident-list-heading"
           >
             <div className="incident-section-heading">
-              <h3 id="incident-list-heading">Recent events</h3>
-              <span>{incidents.length}</span>
+              <h3 id="incident-list-heading">{VIEW_LABELS[view]}</h3>
+              <span>
+                {incidents.length}
+                {snapshot.total_incident_count !== undefined &&
+                snapshot.total_incident_count !== null &&
+                snapshot.total_incident_count !== incidents.length
+                  ? ` / ${snapshot.total_incident_count}`
+                  : ''}
+              </span>
             </div>
             {displayTimeWindow && displayTimeWindow !== '7d' ? (
               <p className="incident-display-filter-note">
@@ -238,7 +344,9 @@ export function ActiveIncidentsPanel({
               <div className="incident-empty">
                 <strong>
                   {query
-                    ? 'No loaded records match your search.'
+                    ? isServerSearch
+                      ? 'No records match your server-side search.'
+                      : 'No loaded records match your search.'
                     : 'No incident records matched this bounded retrieval.'}
                 </strong>
                 <p>
@@ -288,6 +396,11 @@ export function ActiveIncidentsPanel({
                             estimated
                           </small>
                         )}
+                        <small
+                          className={`incident-activity-status incident-activity-status-${incident.activity_status ?? 'unknown'}`}
+                        >
+                          {activityStatusLabel(incident.activity_status)}
+                        </small>
                         <time dateTime={incident.event_time}>
                           {formatRelativeTime(
                             incident.event_time,
@@ -333,6 +446,16 @@ export function ActiveIncidentsPanel({
                 })}
               </div>
             )}
+            {snapshot.has_more ? (
+              <button
+                className="incident-load-more"
+                type="button"
+                onClick={() => void onLoadMore?.()}
+                disabled={loadingMore}
+              >
+                {loadingMore ? 'Loading more…' : 'Load more incidents'}
+              </button>
+            ) : null}
           </section>
         )}
       </div>

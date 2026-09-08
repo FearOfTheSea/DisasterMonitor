@@ -9,6 +9,12 @@ export type DisasterType =
 export type IncidentCoverageState =
   'events_found' | 'no_matching_records' | 'degraded' | 'unavailable';
 
+export type ObservationKind = 'physical_event' | 'acquisition';
+
+export type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
+
+export type IncidentView = 'recent' | 'ongoing' | 'recently_updated' | 'historical';
+
 export type IncidentSourceAuthority =
   | 'national_authority'
   | 'scientific_authority'
@@ -67,19 +73,23 @@ export type ActiveIncident = {
   event_id: string;
   physical_event_id?: string | null;
   disaster: DisasterType;
-  country: IncidentCountry;
+  country: IncidentCountry | null;
   location: string;
   event_time: string;
   geometry: IncidentGeometry | null;
   measurements: IncidentMeasurement[];
   provider_ids: string[];
+  lineage_ids?: string[];
   provider_tier: 'primary' | 'secondary';
   source_authority: IncidentSourceAuthority;
   source: IncidentSource;
+  evidence_sources?: IncidentSource[];
+  observation_kind?: ObservationKind;
+  activity_status?: IncidentActivityStatus;
 };
 
 export type IncidentMapRecord = Omit<ActiveIncident, 'country'> & {
-  country?: IncidentCountry;
+  country?: IncidentCountry | null;
 };
 
 export function displayActiveIncidentCountry(incident: IncidentMapRecord): string {
@@ -129,6 +139,9 @@ export type DisasterIncidentCoverage = {
   incident_count: number;
   providers: string[];
   detail: string;
+  scan_complete?: boolean;
+  records_seen?: number;
+  truncated?: boolean;
 };
 
 export type ActiveIncidentsSnapshot = {
@@ -136,6 +149,11 @@ export type ActiveIncidentsSnapshot = {
   incidents: ActiveIncident[];
   coverage: DisasterIncidentCoverage[];
   warnings: string[];
+  observations?: ActiveIncident[];
   correlations?: CompoundHazardCorrelation[];
+  snapshot_version?: string | null;
+  next_cursor?: string | null;
+  has_more?: boolean;
+  total_incident_count?: number | null;
 };
 import type { CompoundHazardCorrelationResponse } from '@/shared/api/generated/assistant';

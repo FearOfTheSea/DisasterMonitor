@@ -140,7 +140,8 @@ async def test_operational_status_history_and_attributed_review(tmp_path: Path) 
         )
 
     assert providers.status_code == 200
-    assert len(providers.json()) == 2
+    provider_ids = {item["source_id"] for item in providers.json()}
+    assert {"usgs-earthquakes", "gdacs-tropical-cyclones"}.issubset(provider_ids)
     by_source = {item["source_id"]: item for item in providers.json()}
     assert by_source["usgs-earthquakes"]["last_success_at"] is not None
     assert history.status_code == 200

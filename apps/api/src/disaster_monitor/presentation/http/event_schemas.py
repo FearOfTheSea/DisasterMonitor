@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from disaster_monitor.domain.disaster import (
     Disaster,
+    IncidentActivityStatus,
     MeasurementKind,
     ProviderTier,
     SourceAuthority,
@@ -95,6 +96,7 @@ class SelectedEventResponse(BaseModel):
     measurements: list[EventMeasurementResponse] = Field(default_factory=list)
     source: SourceResponse
     provider_ids: list[str] = Field(default_factory=list)
+    lineage_ids: list[str] = Field(default_factory=list)
     geography_status: str
     supplemental_geometry: list[CycloneMapLayerResponse] = Field(default_factory=list)
 
@@ -119,15 +121,19 @@ class ActiveIncidentResponse(BaseModel):
     event_id: str
     physical_event_id: str | None = None
     disaster: Disaster
-    country: ActiveIncidentCountryResponse
+    country: ActiveIncidentCountryResponse | None = None
     location: str
     event_time: datetime
     geometry: EventGeometryResponse | None = None
     measurements: list[EventMeasurementResponse] = Field(default_factory=list)
     provider_ids: list[str] = Field(default_factory=list)
+    lineage_ids: list[str] = Field(default_factory=list)
     provider_tier: ProviderTier
     source_authority: SourceAuthority
     source: SourceResponse
+    evidence_sources: list[SourceResponse] = Field(default_factory=list)
+    observation_kind: Literal["physical_event", "acquisition"] = "physical_event"
+    activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
 
 
 class CompoundHazardCorrelationResponse(BaseModel):
@@ -199,6 +205,9 @@ class DisasterIncidentCoverageResponse(BaseModel):
     incident_count: int
     providers: list[str] = Field(default_factory=list)
     detail: str
+    scan_complete: bool = True
+    records_seen: int = 0
+    truncated: bool = False
 
 
 class ActiveIncidentsSnapshotResponse(BaseModel):
@@ -206,9 +215,14 @@ class ActiveIncidentsSnapshotResponse(BaseModel):
 
     retrieved_at: datetime
     incidents: list[ActiveIncidentResponse] = Field(default_factory=list)
+    observations: list[ActiveIncidentResponse] = Field(default_factory=list)
     coverage: list[DisasterIncidentCoverageResponse] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     correlations: list[CompoundHazardCorrelationResponse] = Field(default_factory=list)
+    snapshot_version: str | None = None
+    next_cursor: str | None = None
+    has_more: bool = False
+    total_incident_count: int | None = None
 
 
 class CountryIncidentWatchScopeRequest(BaseModel):

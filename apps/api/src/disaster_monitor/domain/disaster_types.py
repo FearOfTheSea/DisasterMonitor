@@ -22,6 +22,21 @@ class Disaster(StrEnum):
     VOLCANIC_ERUPTION = "volcanic_eruption"
 
 
+class ObservationKind(StrEnum):
+    """Whether a provider record describes an event or a sampled product."""
+
+    PHYSICAL_EVENT = "physical_event"
+    ACQUISITION = "acquisition"
+
+
+class IncidentActivityStatus(StrEnum):
+    """Source-backed lifecycle state; unknown is preferable to an inference."""
+
+    ONGOING = "ongoing"
+    ENDED = "ended"
+    UNKNOWN = "unknown"
+
+
 class BoundaryValidationQuality(StrEnum):
     """Strength of a geographic membership decision."""
 

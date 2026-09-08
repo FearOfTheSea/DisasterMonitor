@@ -23,6 +23,7 @@ from disaster_monitor.domain.disaster import (
     EventGeographyStatus,
     EventGeometry,
     EventMeasurement,
+    IncidentActivityStatus,
     MeasurementKind,
     SourceAuthority,
     SourceReference,
@@ -219,6 +220,10 @@ class _GdacsEventAdapter:
             raw_feature.get("geometry"), source, index=index
         )
         measurements = self._measurements(properties, source)
+        # GDACS `todate` is an event-interval field, not a documented lifecycle
+        # assertion that the hazard has ended or is still ongoing.  Keep that
+        # distinction explicit until a source contract supplies a status field.
+        activity_status = IncidentActivityStatus.UNKNOWN
         if country_query is None:
             event: WorldwideDisasterEvent | DisasterEvent = WorldwideDisasterEvent(
                 event_id=event_id,
@@ -229,6 +234,7 @@ class _GdacsEventAdapter:
                 geometry=geometry,
                 measurements=measurements,
                 provider_ids=tuple(provider_ids),
+                activity_status=activity_status,
             )
         else:
             projected_country = (
@@ -270,6 +276,7 @@ class _GdacsEventAdapter:
                 measurements=measurements,
                 provider_ids=tuple(provider_ids),
                 geography_status=geography_status,
+                activity_status=activity_status,
             )
         return event, (geometry_issue,) if geometry_issue is not None else ()
 
@@ -367,7 +374,7 @@ class _GdacsEventAdapter:
                     capture=capture,
                     accepted_content_types=frozenset({""}),
                 )
-                raw_features = _feature_list(payload)
+                raw_features = [] if payload is None else _feature_list(payload)
             except DisasterProviderError as error:
                 if page_number == 1:
                     if error.failure.reason_code == "empty_result":
@@ -410,7 +417,15 @@ class _GdacsEventAdapter:
             and (country_query is None or not saw_raw_features)
         ):
             issues.append(_empty_result(self.provider_name))
-        return ProviderBatch(records=tuple(events), issues=tuple(issues))
+        scan_complete = not any(
+            issue.reason_code == "pagination_limit_reached" for issue in issues
+        )
+        return ProviderBatch(
+            records=tuple(events),
+            issues=tuple(issues),
+            scan_complete=scan_complete,
+            records_seen=raw_record_count,
+        )
 
     async def find_worldwide_events(
         self, query: WorldwideDisasterQuery, *, now: datetime
@@ -427,6 +442,8 @@ class _GdacsEventAdapter:
                 if isinstance(event, WorldwideDisasterEvent)
             ),
             issues=result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def find_recent_events(
@@ -449,6 +466,8 @@ class _GdacsEventAdapter:
                 event for event in result.records if isinstance(event, DisasterEvent)
             ),
             issues=result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def aclose(self) -> None:

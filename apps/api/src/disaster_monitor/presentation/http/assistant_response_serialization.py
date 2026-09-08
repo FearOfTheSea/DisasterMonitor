@@ -192,6 +192,7 @@ def _assistant_response(
                     for item in selected_event.measurements
                 ],
                 provider_ids=list(selected_event.provider_ids),
+                lineage_ids=list(selected_event.lineage_ids),
                 geography_status=selected_event.geography_status,
                 supplemental_geometry=[
                     _cyclone_map_layer_response(layer)
@@ -319,6 +320,7 @@ def _selected_event_response(
             for item in selected_event.measurements
         ],
         provider_ids=list(selected_event.provider_ids),
+        lineage_ids=list(selected_event.lineage_ids),
         geography_status=selected_event.geography_status,
         supplemental_geometry=[
             _cyclone_map_layer_response(layer)

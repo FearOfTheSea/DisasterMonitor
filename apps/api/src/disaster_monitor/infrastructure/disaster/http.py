@@ -1,5 +1,6 @@
 """Small shared helpers for bounded JSON feed adapters."""
 
+import asyncio
 import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from disaster_monitor.application.ports.provider_failures import ProviderFailureReason
 from disaster_monitor.application.ports.source_payload import (
     AcquiredSourcePayload,
     canonical_request_identity,
@@ -20,7 +22,12 @@ from disaster_monitor.infrastructure.disaster.errors import (
     ProviderFailure,
 )
 
-_RETRYABLE_CODES = {"timeout", "network_error", "rate_limited", "http_server_error"}
+_RETRYABLE_CODES = {
+    ProviderFailureReason.TIMEOUT,
+    ProviderFailureReason.NETWORK_ERROR,
+    ProviderFailureReason.RATE_LIMITED,
+    ProviderFailureReason.HTTP_SERVER_ERROR,
+}
 HttpParam = str | int | float | bool | None | Sequence[str | int | float | bool | None]
 SourcePayloadRecorder = Callable[
     [AcquiredSourcePayload], Awaitable[SourceSnapshotRecord]
@@ -67,7 +74,7 @@ def validate_network_target(url: str, allowed_hosts: frozenset[str]) -> None:
     except ValueError as error:
         raise DisasterProviderResponseError(
             "The provider target is invalid.",
-            reason_code="source_policy_violation",
+            reason_code=ProviderFailureReason.SOURCE_POLICY_VIOLATION,
         ) from error
     hostname = (target.hostname or "").lower().rstrip(".")
     approved = {item.lower().rstrip(".") for item in allowed_hosts}
@@ -81,24 +88,27 @@ def validate_network_target(url: str, allowed_hosts: frozenset[str]) -> None:
     ):
         raise DisasterProviderResponseError(
             "The provider target is outside the approved source authority.",
-            reason_code="source_policy_violation",
+            reason_code=ProviderFailureReason.SOURCE_POLICY_VIOLATION,
         )
 
 
 def _http_failure(error: httpx.HTTPStatusError) -> DisasterProviderError:
     status = error.response.status_code
     if status == 429:
-        code = "rate_limited"
+        code = ProviderFailureReason.RATE_LIMITED
         retryable = True
+    elif status == 404:
+        code = ProviderFailureReason.ENDPOINT_MISSING
+        retryable = False
     elif 400 <= status < 500:
         code = (
-            "configuration_rejected"
+            ProviderFailureReason.CONFIGURATION_REJECTED
             if status in {400, 401, 403}
-            else "http_client_error"
+            else ProviderFailureReason.HTTP_CLIENT_ERROR
         )
         retryable = False
     else:
-        code = "http_server_error"
+        code = ProviderFailureReason.HTTP_SERVER_ERROR
         retryable = True
     return DisasterProviderError(
         "The source returned an HTTP error.",
@@ -153,7 +163,7 @@ async def post_json(
     except (TypeError, ValueError) as error:
         raise DisasterProviderResponseError(
             "The provider request body is not valid JSON.",
-            reason_code="invalid_payload",
+            reason_code=ProviderFailureReason.INVALID_PAYLOAD,
         ) from error
     request_headers = dict(headers or {})
     request_headers.setdefault("content-type", "application/json")
@@ -188,6 +198,7 @@ async def _request_json(
     """Execute one bounded JSON request with one retry for transient failures."""
     validate_network_target(url, allowed_hosts)
     response_body = b""
+    no_content = False
     for attempt in range(2):
         try:
             request_kwargs: dict[str, Any] = {
@@ -202,8 +213,13 @@ async def _request_json(
                 except httpx.HTTPStatusError as error:
                     failure = _http_failure(error)
                     if failure.failure.reason_code in _RETRYABLE_CODES and attempt == 0:
+                        await asyncio.sleep(0.05)
                         continue
                     raise failure from error
+                if response.status_code == 204:
+                    no_content = True
+                    response_body = b""
+                    break
                 content_type = response.headers.get("content-type", "").lower()
                 media_type = content_type.partition(";")[0].strip()
                 if "json" not in content_type and media_type not in {
@@ -211,7 +227,7 @@ async def _request_json(
                 }:
                     raise DisasterProviderResponseError(
                         "The source returned an unexpected content type.",
-                        reason_code="unexpected_content_type",
+                        reason_code=ProviderFailureReason.UNEXPECTED_CONTENT_TYPE,
                     )
                 declared_length = response.headers.get("content-length")
                 if declared_length is not None:
@@ -220,7 +236,7 @@ async def _request_json(
                             raise DisasterProviderResponseError(
                                 "The source response exceeded the configured size "
                                 "limit.",
-                                reason_code="response_too_large",
+                                reason_code=ProviderFailureReason.RESPONSE_TOO_LARGE,
                             )
                     except ValueError:
                         pass
@@ -233,7 +249,7 @@ async def _request_json(
                     if len(body) > max_bytes:
                         raise DisasterProviderResponseError(
                             "The source response exceeded the configured size limit.",
-                            reason_code="response_too_large",
+                            reason_code=ProviderFailureReason.RESPONSE_TOO_LARGE,
                         )
                 response_body = bytes(body)
                 await _capture_response(response, response_body, capture)
@@ -242,30 +258,38 @@ async def _request_json(
         except httpx.TimeoutException as error:
             failure = DisasterProviderError(
                 "The source request timed out.",
-                failure=ProviderFailure("timeout", retryable=True),
+                failure=ProviderFailure(ProviderFailureReason.TIMEOUT, retryable=True),
             )
             if attempt == 0:
+                await asyncio.sleep(0.05)
                 continue
             raise failure from error
         except httpx.HTTPError as error:
             failure = DisasterProviderError(
                 "The source network request failed.",
-                failure=ProviderFailure("network_error", retryable=True),
+                failure=ProviderFailure(
+                    ProviderFailureReason.NETWORK_ERROR, retryable=True
+                ),
             )
             if attempt == 0:
+                await asyncio.sleep(0.05)
                 continue
             raise failure from error
         else:
             break
+    if no_content:
+        return None
     if not response_body:
         raise DisasterProviderResponseError(
-            "The source returned an empty response.", reason_code="empty_result"
+            "The source returned an empty 2xx response body.",
+            reason_code=ProviderFailureReason.INVALID_PAYLOAD,
         )
     try:
         return json.loads(response_body)
     except json.JSONDecodeError as error:
         raise DisasterProviderResponseError(
-            "The source returned malformed JSON.", reason_code="malformed_json"
+            "The source returned malformed JSON.",
+            reason_code=ProviderFailureReason.MALFORMED_JSON,
         ) from error
 
 
@@ -292,8 +316,12 @@ async def get_text(
                 except httpx.HTTPStatusError as error:
                     failure = _http_failure(error)
                     if failure.failure.reason_code in _RETRYABLE_CODES and attempt == 0:
+                        await asyncio.sleep(0.05)
                         continue
                     raise failure from error
+                if response.status_code == 204:
+                    content = b""
+                    break
                 content_type = response.headers.get("content-type", "").lower()
                 if not any(
                     value in content_type
@@ -301,7 +329,7 @@ async def get_text(
                 ):
                     raise DisasterProviderResponseError(
                         "The source returned an unexpected content type.",
-                        reason_code="unexpected_content_type",
+                        reason_code=ProviderFailureReason.UNEXPECTED_CONTENT_TYPE,
                     )
                 declared_length = response.headers.get("content-length")
                 if (
@@ -311,7 +339,7 @@ async def get_text(
                 ):
                     raise DisasterProviderResponseError(
                         "The source response exceeded the configured size limit.",
-                        reason_code="response_too_large",
+                        reason_code=ProviderFailureReason.RESPONSE_TOO_LARGE,
                     )
                 body = bytearray()
                 async for chunk in response.aiter_bytes(
@@ -322,7 +350,7 @@ async def get_text(
                     if len(body) > max_bytes:
                         raise DisasterProviderResponseError(
                             "The source response exceeded the configured size limit.",
-                            reason_code="response_too_large",
+                            reason_code=ProviderFailureReason.RESPONSE_TOO_LARGE,
                         )
                 content = bytes(body)
                 await _capture_response(response, content, capture)
@@ -331,24 +359,29 @@ async def get_text(
         except httpx.TimeoutException as error:
             failure = DisasterProviderError(
                 "The source request timed out.",
-                failure=ProviderFailure("timeout", retryable=True),
+                failure=ProviderFailure(ProviderFailureReason.TIMEOUT, retryable=True),
             )
             if attempt == 0:
+                await asyncio.sleep(0.05)
                 continue
             raise failure from error
         except httpx.HTTPError as error:
             failure = DisasterProviderError(
                 "The source network request failed.",
-                failure=ProviderFailure("network_error", retryable=True),
+                failure=ProviderFailure(
+                    ProviderFailureReason.NETWORK_ERROR, retryable=True
+                ),
             )
             if attempt == 0:
+                await asyncio.sleep(0.05)
                 continue
             raise failure from error
         else:
             break
     if not content:
         raise DisasterProviderResponseError(
-            "The source returned an empty response.", reason_code="empty_result"
+            "The source returned an empty response.",
+            reason_code=ProviderFailureReason.EMPTY_RESULT,
         )
     return content.decode("utf-8", errors="replace")
 
@@ -376,6 +409,7 @@ async def get_bytes(
                 except httpx.HTTPStatusError as error:
                     failure = _http_failure(error)
                     if failure.failure.reason_code in _RETRYABLE_CODES and attempt == 0:
+                        await asyncio.sleep(0.05)
                         continue
                     raise failure from error
                 body = bytearray()
@@ -387,7 +421,7 @@ async def get_bytes(
                     if len(body) > max_bytes:
                         raise DisasterProviderResponseError(
                             "The source response exceeded the configured size limit.",
-                            reason_code="response_too_large",
+                            reason_code=ProviderFailureReason.RESPONSE_TOO_LARGE,
                         )
                 content = bytes(body)
                 await _capture_response(response, content, capture)
@@ -396,24 +430,29 @@ async def get_bytes(
         except httpx.TimeoutException as error:
             failure = DisasterProviderError(
                 "The source request timed out.",
-                failure=ProviderFailure("timeout", retryable=True),
+                failure=ProviderFailure(ProviderFailureReason.TIMEOUT, retryable=True),
             )
             if attempt == 0:
+                await asyncio.sleep(0.05)
                 continue
             raise failure from error
         except httpx.HTTPError as error:
             failure = DisasterProviderError(
                 "The source network request failed.",
-                failure=ProviderFailure("network_error", retryable=True),
+                failure=ProviderFailure(
+                    ProviderFailureReason.NETWORK_ERROR, retryable=True
+                ),
             )
             if attempt == 0:
+                await asyncio.sleep(0.05)
                 continue
             raise failure from error
         else:
             break
     if not content:
         raise DisasterProviderResponseError(
-            "The source returned an empty response.", reason_code="empty_result"
+            "The source returned an empty response.",
+            reason_code=ProviderFailureReason.EMPTY_RESULT,
         )
     return content
 

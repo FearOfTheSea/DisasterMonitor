@@ -11,6 +11,8 @@ from disaster_monitor.domain.disaster_types import (
     Country,
     Disaster,
     EventGeographyStatus,
+    IncidentActivityStatus,
+    ObservationKind,
     ProviderTier,
     _is_aware,
 )
@@ -287,8 +289,11 @@ class DisasterEvent:
     geometry: EventGeometry | None = None
     measurements: tuple[EventMeasurement, ...] = ()
     provider_ids: tuple[str, ...] = ()
+    lineage_ids: tuple[str, ...] = ()
     geography_status: EventGeographyStatus = EventGeographyStatus.IN_COUNTRY
     provider_tier: ProviderTier = ProviderTier.SECONDARY
+    observation_kind: ObservationKind = ObservationKind.PHYSICAL_EVENT
+    activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
 
     def __post_init__(self) -> None:
         if not isinstance(self.provider_tier, ProviderTier):
@@ -314,7 +319,7 @@ class DisasterEvent:
         normalized = value.strip().lower()
         identifiers = {
             item.strip().lower()
-            for item in (self.event_id, *self.provider_ids)
+            for item in (self.event_id, *self.provider_ids, *self.lineage_ids)
             if item.strip()
         }
         if ":" in normalized:

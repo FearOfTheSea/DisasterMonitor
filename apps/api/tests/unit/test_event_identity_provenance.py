@@ -4,8 +4,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery
+from disaster_monitor.application.evidence.event_identity import (
+    event_observation_key,
+    provider_identifiers,
+)
 from disaster_monitor.application.evidence.event_resolution import (
     DefaultEventPolicy,
+    WildfireEventPolicy,
 )
 from disaster_monitor.application.evidence.source_evidence_policy import (
     validate_physical_event_evidence,
@@ -49,6 +54,8 @@ def _event(
     event_id: str = "flood:shared",
     geometry=None,
     measurements: tuple[EventMeasurement, ...] = (),
+    provider_ids: tuple[str, ...] | None = None,
+    lineage_ids: tuple[str, ...] = (),
     event_time: datetime = NOW,
 ) -> DisasterEvent:
     return DisasterEvent(
@@ -60,7 +67,8 @@ def _event(
         source=source,
         geometry=geometry,
         measurements=measurements,
-        provider_ids=(event_id,),
+        provider_ids=provider_ids if provider_ids is not None else (event_id,),
+        lineage_ids=lineage_ids,
     )
 
 
@@ -95,6 +103,83 @@ def test_generic_policy_keeps_events_separate_without_identity_evidence() -> Non
     identity = DefaultEventPolicy().identify((first, second))
 
     assert len(identity.physical_events) == 2
+
+
+def test_generic_provider_labels_do_not_create_cross_event_identity() -> None:
+    first = _event(
+        _source("nasa-eonet-wildfires"),
+        event_id="eonet:EONET_24104",
+        provider_ids=("GDACS",),
+    )
+    second = _event(
+        _source("nasa-eonet-wildfires"),
+        event_id="eonet:EONET_24106",
+        provider_ids=("GDACS",),
+    )
+
+    assert provider_identifiers(first) == {"eonet:eonet_24104"}
+    assert provider_identifiers(second) == {"eonet:eonet_24106"}
+    assert len(DefaultEventPolicy().identify((first, second)).physical_events) == 2
+
+
+def test_three_australian_eonet_observations_with_bare_gdacs_label_stay_separate() -> (
+    None
+):
+    source = _source("nasa-eonet-wildfires")
+    fixtures = (
+        ("EONET_24104", -17.209298692387, 126.08467536061),
+        ("EONET_24106", -18.176931416409, 137.9597861365),
+        ("EONET_24107", -19.663703232326, 145.62701520916),
+    )
+    events = tuple(
+        replace(
+            _event(
+                source,
+                event_id=f"eonet:{event_id}",
+                provider_ids=("GDACS",),
+                event_time=NOW - timedelta(days=index),
+                geometry=point_event_geometry(latitude, longitude, source),
+            ),
+            disaster=Disaster.WILDFIRE,
+            location="Australia",
+        )
+        for index, (event_id, latitude, longitude) in enumerate(fixtures)
+    )
+
+    identity = WildfireEventPolicy().identify(events).physical_events
+
+    assert len(identity) == 3
+    assert {event.event.event_id for event in identity} == {
+        "eonet:EONET_24104",
+        "eonet:EONET_24106",
+        "eonet:EONET_24107",
+    }
+
+
+def test_validated_upstream_lineage_reconciles_and_keeps_provenance() -> None:
+    eonet_source = _source("nasa-eonet-wildfires")
+    gdacs_source = _source("gdacs-wildfires", age=timedelta(minutes=10))
+    eonet = _event(
+        eonet_source,
+        event_id="eonet:EONET_24104",
+        provider_ids=("eonet:EONET_24104",),
+        lineage_ids=("gdacs:wf:1031816",),
+    )
+    gdacs = _event(
+        gdacs_source,
+        event_id="gdacs:wf:1031816",
+        provider_ids=("gdacs:wf:1031816",),
+        event_time=NOW - timedelta(minutes=5),
+    )
+
+    identity = DefaultEventPolicy().identify((eonet, gdacs)).physical_events
+
+    assert len(identity) == 1
+    assert identity[0].event.lineage_ids == ("gdacs:wf:1031816",)
+    assert {item.source.source_id for item in identity[0].observations} == {
+        "nasa-eonet-wildfires",
+        "gdacs-wildfires",
+    }
 
 
 def test_merge_keeps_measurement_provenance_and_deduplicates_exact_observations() -> (
@@ -206,3 +291,64 @@ def test_unobserved_geometry_provenance_is_rejected_fail_closed() -> None:
         validate_physical_event_evidence(
             replace(identity.event, geometry=unapproved), identity, _query()
         )
+
+
+def test_physical_event_id_survives_later_corroboration() -> None:
+    first = _event(_source("emsc-earthquakes"), event_id="quake:shared")
+    second = _event(
+        _source("usgs-earthquakes", age=timedelta(minutes=1)),
+        event_id="quake:shared",
+        event_time=NOW - timedelta(seconds=20),
+    )
+    third = _event(
+        _source("secondary-earthquakes", age=timedelta(minutes=2)),
+        event_id="quake:shared",
+        event_time=NOW - timedelta(seconds=10),
+    )
+    policy = DefaultEventPolicy()
+
+    established = policy.identify((first, second)).physical_events[0]
+    enriched = policy.identify((third, second, first)).physical_events[0]
+
+    assert enriched.physical_event_id == established.physical_event_id
+    assert len(enriched.observations) == 3
+
+
+def test_physical_event_id_ignores_geometry_updates_and_earlier_observation_keys() -> (
+    None
+):
+    first = _event(
+        _source("usgs-earthquakes"),
+        event_id="usgs:stable",
+        geometry=point_event_geometry(35.0, 139.0, _source("usgs-earthquakes")),
+    )
+    second = _event(
+        _source("emsc-earthquakes"),
+        event_id="emsc:stable",
+        event_time=NOW - timedelta(seconds=20),
+    )
+    policy = DefaultEventPolicy()
+    established = policy.identify((first, second)).physical_events[0]
+
+    geometry_update = replace(
+        first,
+        geometry=point_event_geometry(36.0, 140.0, first.source),
+    )
+    updated = policy.identify((geometry_update, second)).physical_events[0]
+    assert updated.physical_event_id == established.physical_event_id
+
+    earlier = None
+    for index in range(100):
+        candidate = _event(
+            _source(f"a-corroboration-{index:03d}"),
+            event_id=f"a-corroboration:{index:03d}",
+            event_time=NOW - timedelta(seconds=5),
+        )
+        if event_observation_key(candidate) < min(
+            event_observation_key(first), event_observation_key(second)
+        ):
+            earlier = candidate
+            break
+    assert earlier is not None
+    enriched = policy.identify((earlier, first, second)).physical_events[0]
+    assert enriched.physical_event_id == established.physical_event_id

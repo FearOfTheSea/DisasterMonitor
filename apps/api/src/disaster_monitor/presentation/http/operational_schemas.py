@@ -35,6 +35,16 @@ class ReadinessResponse(BaseModel):
     model: str
 
 
+class MonitoringReadinessResponse(BaseModel):
+    """Durable-monitoring status kept separate from API/model readiness."""
+
+    status: Literal["ready", "degraded", "unavailable"]
+    durable_storage: bool
+    scheduler_worker_configured: bool
+    projection_available: bool
+    detail: str
+
+
 class ProviderFreshnessResponse(BaseModel):
     """Operator-safe source freshness without credentials or raw payloads."""
 

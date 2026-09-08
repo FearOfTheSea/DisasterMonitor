@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -29,10 +29,15 @@ from disaster_monitor.application.agent.tooling import (
     build_disaster_tool_registry,
     execute_plan,
 )
+from disaster_monitor.application.agent.tools.source_tools import (
+    FindDisasterEventTool,
+    SourceToolDependencies,
+)
 from disaster_monitor.application.conversations.memory_recall import MemoryRecallService
 from disaster_monitor.application.disaster import (
     DisasterQuery,
     GeographicScope,
+    ObservationKind,
     ProviderBatch,
 )
 from disaster_monitor.application.evidence.event_resolution import (
@@ -226,6 +231,100 @@ class NewFloodProvider:
 class EmptySituationProvider:
     async def get_situation_reports(self, event, query, *, now):
         return ProviderBatch()
+
+
+class MixedEventProvider:
+    def __init__(self, records: tuple[DisasterEvent, ...]) -> None:
+        self.records = records
+
+    async def find_recent_events(self, query, *, now):
+        return ProviderBatch(self.records)
+
+
+@pytest.mark.asyncio
+async def test_acquisition_observation_cannot_be_selected_as_physical_event() -> None:
+    country = Country("TST", "Testland", (), GeographicArea(0, 10, 0, 10), "UTC")
+    source = SourceReference(
+        "testland-floods",
+        "Test authority",
+        "Flood event",
+        "https://example.test/flood",
+        NOW,
+        NOW,
+        NOW,
+    )
+    physical = DisasterEvent(
+        "test:flood-1", Disaster.FLOOD, "Test City", country, NOW, source
+    )
+    acquisition = replace(
+        physical,
+        event_id="test:acquisition-1",
+        observation_kind=ObservationKind.ACQUISITION,
+    )
+    provider = MixedEventProvider((acquisition, physical))
+    registration = ProviderRegistration(
+        "Testland flood authority",
+        provider,
+        ProviderCapabilities(
+            frozenset({ProviderRole.EVENT_DISCOVERY}),
+            frozenset({Disaster.FLOOD}),
+            frozenset({"TST"}),
+        ),
+        source_id="testland-floods",
+        allowed_hosts=frozenset({"example.test"}),
+        event_provider=provider,
+    )
+    query = DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",))
+    task = ValidatedDisasterTask(
+        "Current flood in Testland",
+        TaskKind.INVESTIGATION,
+        True,
+        Disaster.FLOOD,
+        country,
+        query=query,
+    )
+    state = AgentExecutionState(task, InvestigationPlan("p", "discover", ()))
+    tool = FindDisasterEventTool(
+        SourceToolDependencies(
+            ProviderRegistry((registration,)),
+            FakeCatalog(
+                SourceDescriptor(
+                    "testland-floods",
+                    "Test authority",
+                    "Test floods",
+                    "Testland",
+                    "national_authority",
+                    (SourceInformationRole.EVENT_DISCOVERY,),
+                    (Disaster.FLOOD,),
+                    ("TST",),
+                    ("en",),
+                    "test",
+                    False,
+                    True,
+                    "unknown",
+                    "Attribute to test authority.",
+                    (),
+                    ("find_disaster_event",),
+                    "Testland flood authority",
+                    "implemented",
+                    (GeographicScope.COUNTRY,),
+                )
+            ),
+            provider,
+            EmptySituationProvider(),
+            default_event_policy_registry(),
+            lambda: NOW,
+        )
+    )
+
+    await tool.execute(state)
+
+    assert state.workspace.selected_event == physical
+    assert (
+        state.workspace.selected_event.observation_kind
+        is ObservationKind.PHYSICAL_EVENT
+    )
+    assert any("acquisition observation" in warning for warning in state.warnings)
 
 
 @pytest.mark.asyncio

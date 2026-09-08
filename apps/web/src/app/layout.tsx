@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import '../features/map/ui/map.css';
 import '../features/incidents/ui/activeIncidents.css';
+import '../features/incidents/ui/activeIncidentsControls.css';
 import '../features/map/ui/mapLegends.css';
 import './panels.css';
 import '../features/sources/ui/sourceCatalog.css';

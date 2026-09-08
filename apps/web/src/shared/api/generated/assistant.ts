@@ -2116,6 +2116,12 @@ const apiSchemas = {
           },
         ],
       },
+      lineage_ids: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
       location: {
         type: 'string',
       },
@@ -3022,13 +3028,17 @@ export type ActiveIncidentCountryResponse = {
 };
 
 export type ActiveIncidentResponse = {
-  country: ActiveIncidentCountryResponse;
+  activity_status?: IncidentActivityStatus;
+  country?: ActiveIncidentCountryResponse | null;
   disaster: Disaster;
   event_id: string;
   event_time: string;
+  evidence_sources?: Array<SourceResponse>;
   geometry?: EventGeometryResponse | null;
+  lineage_ids?: Array<string>;
   location: string;
   measurements?: Array<EventMeasurementResponse>;
+  observation_kind?: 'physical_event' | 'acquisition';
   physical_event_id?: string | null;
   provider_ids?: Array<string>;
   provider_tier: ProviderTier;
@@ -3039,8 +3049,13 @@ export type ActiveIncidentResponse = {
 export type ActiveIncidentsSnapshotResponse = {
   correlations?: Array<CompoundHazardCorrelationResponse>;
   coverage?: Array<DisasterIncidentCoverageResponse>;
+  has_more?: boolean;
   incidents?: Array<ActiveIncidentResponse>;
+  next_cursor?: string | null;
+  observations?: Array<ActiveIncidentResponse>;
   retrieved_at: string;
+  snapshot_version?: string | null;
+  total_incident_count?: number | null;
   warnings?: Array<string>;
 };
 
@@ -3288,7 +3303,10 @@ export type DisasterIncidentCoverageResponse = {
   disaster: Disaster;
   incident_count: number;
   providers?: Array<string>;
+  records_seen?: number;
+  scan_complete?: boolean;
   state: 'events_found' | 'no_matching_records' | 'degraded' | 'unavailable';
+  truncated?: boolean;
 };
 
 export type DisasterMediaGalleryResponse = {
@@ -3378,6 +3396,10 @@ export type HealthResponse = {
 export type HTTPValidationError = {
   detail?: Array<ValidationError>;
 };
+
+export type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
+
+export type IncidentView = 'recent' | 'ongoing' | 'recently_updated' | 'historical';
 
 export type IncidentWatchChangeResponse = {
   after_hash: string | null;
@@ -3567,6 +3589,14 @@ export type MeasurementKind =
   | 'fire_radiative_power'
   | 'severity';
 
+export type MonitoringReadinessResponse = {
+  detail: string;
+  durable_storage: boolean;
+  projection_available: boolean;
+  scheduler_worker_configured: boolean;
+  status: 'ready' | 'degraded' | 'unavailable';
+};
+
 export type MultimodalAssetRequest = {
   attribution: string;
   canonical_url?: string | null;
@@ -3719,6 +3749,7 @@ export type SelectedEventResponse = {
   event_time: string;
   geography_status: string;
   geometry?: EventGeometryResponse | null;
+  lineage_ids?: Array<string>;
   location: string;
   measurements?: Array<EventMeasurementResponse>;
   provider_ids?: Array<string>;

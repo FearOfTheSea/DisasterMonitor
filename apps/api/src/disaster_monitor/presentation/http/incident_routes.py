@@ -12,16 +12,19 @@ from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsQuery,
     ActiveIncidentsService,
+    IncidentView,
 )
 from disaster_monitor.application.incidents.manage_incident_watches import (
     IncidentWatchNotFoundError,
     InvalidIncidentWatchScopeError,
     ManageIncidentWatches,
 )
+from disaster_monitor.application.incidents.models import ActiveIncident
 from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
 )
 from disaster_monitor.domain.disaster import (
+    Disaster,
     WatchScopeKind,
 )
 from disaster_monitor.presentation.http.common_response_serialization import (
@@ -92,45 +95,78 @@ async def active_incidents(
     service: Annotated[ActiveIncidentsService, Depends(get_active_incidents_service)],
     time_window_days: Annotated[int, Query(ge=1, le=30)] = 7,
     limit_per_disaster: Annotated[int, Query(ge=1, le=20)] = 10,
+    acquisition_limit_per_disaster: Annotated[int, Query(ge=1, le=500)] = 100,
+    view: Annotated[IncidentView, Query()] = IncidentView.RECENT,
+    hazard: Annotated[str | None, Query(min_length=1)] = None,
+    country: Annotated[str | None, Query(min_length=3, max_length=3)] = None,
+    search: Annotated[str | None, Query(max_length=200)] = None,
+    page_size: Annotated[int | None, Query(ge=1, le=100)] = None,
+    cursor: Annotated[str | None, Query(max_length=2_000)] = None,
 ) -> ActiveIncidentsSnapshotResponse:
     """Return bounded, source-backed worldwide events without model inference."""
-    snapshot = await service.execute(
-        ActiveIncidentsQuery(
-            time_window_days=time_window_days,
-            limit_per_disaster=limit_per_disaster,
+    try:
+        parsed_hazard = None if hazard is None else Disaster(hazard)
+        snapshot = await service.execute(
+            ActiveIncidentsQuery(
+                time_window_days=time_window_days,
+                limit_per_disaster=limit_per_disaster,
+                acquisition_limit_per_disaster=acquisition_limit_per_disaster,
+                view=view,
+                hazard=parsed_hazard,
+                country_code=country,
+                search=search,
+                page_size=page_size,
+                cursor=cursor,
+            )
         )
-    )
+    except (ValueError, KeyError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    def incident_response(incident: ActiveIncident) -> ActiveIncidentResponse:
+        country = incident.country
+        return ActiveIncidentResponse(
+            event_id=incident.event_id,
+            physical_event_id=incident.physical_event_id,
+            disaster=incident.disaster,
+            country=(
+                None
+                if country is None
+                else ActiveIncidentCountryResponse(
+                    code=country.country_code,
+                    name=country.country_name,
+                    association_basis=country.basis.value,
+                    distance_km=country.distance_km,
+                )
+            ),
+            location=incident.location,
+            event_time=incident.event_time,
+            geometry=_event_geometry_response(incident.geometry),
+            measurements=[
+                EventMeasurementResponse(
+                    kind=measurement.kind,
+                    value=measurement.value,
+                    unit=measurement.unit,
+                    source_id=measurement.source.source_id,
+                )
+                for measurement in incident.measurements
+            ],
+            provider_ids=list(incident.provider_ids),
+            lineage_ids=list(incident.lineage_ids),
+            provider_tier=incident.provider_tier,
+            source_authority=incident.source_authority,
+            source=_source_response(incident.source),
+            evidence_sources=[
+                _source_response(source) for source in incident.evidence_sources
+            ],
+            observation_kind=incident.observation_kind.value,
+            activity_status=incident.activity_status,
+        )
+
     return ActiveIncidentsSnapshotResponse(
         retrieved_at=snapshot.retrieved_at,
-        incidents=[
-            ActiveIncidentResponse(
-                event_id=incident.event_id,
-                physical_event_id=incident.physical_event_id,
-                disaster=incident.disaster,
-                country=ActiveIncidentCountryResponse(
-                    code=incident.country.country_code,
-                    name=incident.country.country_name,
-                    association_basis=incident.country.basis.value,
-                    distance_km=incident.country.distance_km,
-                ),
-                location=incident.location,
-                event_time=incident.event_time,
-                geometry=_event_geometry_response(incident.geometry),
-                measurements=[
-                    EventMeasurementResponse(
-                        kind=measurement.kind,
-                        value=measurement.value,
-                        unit=measurement.unit,
-                        source_id=measurement.source.source_id,
-                    )
-                    for measurement in incident.measurements
-                ],
-                provider_ids=list(incident.provider_ids),
-                provider_tier=incident.provider_tier,
-                source_authority=incident.source_authority,
-                source=_source_response(incident.source),
-            )
-            for incident in snapshot.incidents
+        incidents=[incident_response(incident) for incident in snapshot.incidents],
+        observations=[
+            incident_response(incident) for incident in snapshot.observations
         ],
         coverage=[
             DisasterIncidentCoverageResponse(
@@ -139,10 +175,17 @@ async def active_incidents(
                 incident_count=item.incident_count,
                 providers=list(item.providers),
                 detail=item.detail,
+                scan_complete=item.scan_complete,
+                records_seen=item.records_seen,
+                truncated=item.truncated,
             )
             for item in snapshot.coverage
         ],
         warnings=list(snapshot.warnings),
+        snapshot_version=snapshot.snapshot_version,
+        next_cursor=snapshot.next_cursor,
+        has_more=snapshot.has_more,
+        total_incident_count=snapshot.total_incident_count,
         correlations=[
             CompoundHazardCorrelationResponse(
                 correlation_id=item.correlation_id,

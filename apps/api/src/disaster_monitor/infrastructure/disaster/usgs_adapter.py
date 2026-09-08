@@ -69,16 +69,19 @@ def build_usgs_params(
     """Build one bounded USGS query from normalized country geography."""
     starttime = query.date_from or now - timedelta(days=query.time_window_days)
     endtime = query.date_to or now
-    generic_query = not any(
-        (
-            query.discriminator("event_id"),
-            query.date_from,
-            query.date_to,
-            query.prefecture,
-            query.city,
-            query.latitude is not None and query.longitude is not None,
-            query.discriminator("magnitude") is not None,
+    generic_query = (
+        not any(
+            (
+                query.discriminator("event_id"),
+                query.date_from,
+                query.date_to,
+                query.prefecture,
+                query.city,
+                query.latitude is not None and query.longitude is not None,
+                query.discriminator("magnitude") is not None,
+            )
         )
+        and query.selection_intent is WorldwideSelectionIntent.STRONGEST
     )
     area = query.country.geographic_area
     min_latitude = area.min_latitude
@@ -400,6 +403,7 @@ class UsgsEarthquakeAdapter:
             raise DisasterProviderResponseError(
                 "The USGS GeoJSON response had no feature list."
             )
+        result_limit = 50
         events: list[DisasterEvent] = []
         issues: list[ProviderIssue] = []
         for index, raw_feature in enumerate(raw_features):
@@ -437,7 +441,22 @@ class UsgsEarthquakeAdapter:
                     reason_code="empty_result",
                 )
             )
-        return ProviderBatch(records=tuple(events), issues=tuple(issues))
+        scan_complete = len(raw_features) < result_limit
+        if not scan_complete:
+            issues.append(
+                ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: The acquisition limit was reached; "
+                    "additional matching records may exist.",
+                    reason_code="acquisition_limit_reached",
+                )
+            )
+        return ProviderBatch(
+            records=tuple(events),
+            issues=tuple(issues),
+            scan_complete=scan_complete,
+            records_seen=len(raw_features),
+        )
 
     async def find_worldwide_events(
         self, query: WorldwideDisasterQuery, *, now: datetime
@@ -472,6 +491,7 @@ class UsgsEarthquakeAdapter:
             raise DisasterProviderResponseError(
                 "The USGS GeoJSON response had no feature list."
             )
+        result_limit = query.limit
         events: list[WorldwideDisasterEvent] = []
         issues: list[ProviderIssue] = []
         for index, raw_feature in enumerate(raw_features):
@@ -497,7 +517,22 @@ class UsgsEarthquakeAdapter:
                     reason_code="empty_result",
                 )
             )
-        return ProviderBatch(tuple(events), tuple(issues))
+        scan_complete = len(raw_features) < result_limit
+        if not scan_complete:
+            issues.append(
+                ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: The acquisition limit was reached; "
+                    "additional matching records may exist.",
+                    reason_code="acquisition_limit_reached",
+                )
+            )
+        return ProviderBatch(
+            tuple(events),
+            tuple(issues),
+            scan_complete=scan_complete,
+            records_seen=len(raw_features),
+        )
 
     async def aclose(self) -> None:
         if self._owns_client:

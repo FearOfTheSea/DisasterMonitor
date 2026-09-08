@@ -298,6 +298,14 @@ export default function Home() {
           error={activeIncidents.error}
           selectedIncidentId={usableSelectedIncidentId}
           displayTimeWindow={mapLayerState.timeWindow}
+          search={activeIncidents.search}
+          onSearchChange={activeIncidents.setSearch}
+          view={activeIncidents.view}
+          onViewChange={activeIncidents.setView}
+          hazard={activeIncidents.hazard}
+          onHazardChange={activeIncidents.setHazard}
+          onLoadMore={activeIncidents.loadMore}
+          loadingMore={activeIncidents.loadingMore}
           onSelectIncident={handleSelectActiveIncident}
           onRefresh={activeIncidents.refresh}
         />

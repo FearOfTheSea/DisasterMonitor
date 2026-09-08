@@ -235,6 +235,7 @@ def compose_report(
             measurements=packet.event.measurements,
             source=packet.event.source,
             provider_ids=packet.event.provider_ids,
+            lineage_ids=packet.event.lineage_ids,
             geography_status=packet.event.geography_status,
             supplemental_geometry=packet.supplemental_geometry,
         ),

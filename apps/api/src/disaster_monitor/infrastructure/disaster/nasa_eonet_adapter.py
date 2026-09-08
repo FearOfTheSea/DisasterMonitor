@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from math import isfinite
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 
@@ -25,6 +25,7 @@ from disaster_monitor.domain.disaster import (
     EventGeometry,
     EventGeometryKind,
     EventMeasurement,
+    IncidentActivityStatus,
     MeasurementKind,
     SourceAuthority,
     SourceReference,
@@ -37,6 +38,9 @@ from disaster_monitor.infrastructure.disaster.http import (
     SourcePayloadRecorder,
     build_snapshot_capture,
     get_json,
+)
+from disaster_monitor.infrastructure.disaster.nasa_eonet_geometry import (
+    observation_matches_country,
 )
 
 EONET_EVENTS_URL = "https://eonet.gsfc.nasa.gov/api/v3/events"
@@ -138,93 +142,6 @@ def _coordinate(value: object, label: str) -> tuple[float, float]:
     return float(latitude), float(longitude)
 
 
-def _point_in_ring(
-    latitude: float, longitude: float, ring: tuple[tuple[float, float], ...]
-) -> bool:
-    inside = False
-    previous = ring[-1]
-    for current in ring:
-        current_latitude, current_longitude = current
-        previous_latitude, previous_longitude = previous
-        intersects = (current_latitude > latitude) != (previous_latitude > latitude)
-        if intersects:
-            boundary_longitude = (previous_longitude - current_longitude) * (
-                latitude - current_latitude
-            ) / (previous_latitude - current_latitude) + current_longitude
-            if longitude <= boundary_longitude:
-                inside = not inside
-        previous = current
-    return inside
-
-
-def _orientation(
-    first: tuple[float, float],
-    second: tuple[float, float],
-    third: tuple[float, float],
-) -> float:
-    return (second[1] - first[1]) * (third[0] - first[0]) - (second[0] - first[0]) * (
-        third[1] - first[1]
-    )
-
-
-def _on_segment(
-    first: tuple[float, float],
-    second: tuple[float, float],
-    point: tuple[float, float],
-) -> bool:
-    return min(first[0], second[0]) <= point[0] <= max(first[0], second[0]) and min(
-        first[1], second[1]
-    ) <= point[1] <= max(first[1], second[1])
-
-
-def _segments_intersect(
-    first: tuple[float, float],
-    second: tuple[float, float],
-    third: tuple[float, float],
-    fourth: tuple[float, float],
-) -> bool:
-    orientations = (
-        _orientation(first, second, third),
-        _orientation(first, second, fourth),
-        _orientation(third, fourth, first),
-        _orientation(third, fourth, second),
-    )
-    if (orientations[0] > 0) != (orientations[1] > 0) and (orientations[2] > 0) != (
-        orientations[3] > 0
-    ):
-        return True
-    return any(
-        orientation == 0 and _on_segment(start, end, point)
-        for orientation, start, end, point in (
-            (orientations[0], first, second, third),
-            (orientations[1], first, second, fourth),
-            (orientations[2], third, fourth, first),
-            (orientations[3], third, fourth, second),
-        )
-    )
-
-
-def _polygons_intersect(
-    first: tuple[tuple[float, float], ...],
-    second: tuple[tuple[float, float], ...],
-) -> bool:
-    if any(
-        _point_in_ring(latitude, longitude, second) for latitude, longitude in first
-    ):
-        return True
-    if any(
-        _point_in_ring(latitude, longitude, first) for latitude, longitude in second
-    ):
-        return True
-    first_edges = zip(first, first[1:] + first[:1], strict=True)
-    second_edges = zip(second, second[1:] + second[:1], strict=True)
-    return any(
-        _segments_intersect(first_start, first_end, second_start, second_end)
-        for first_start, first_end in first_edges
-        for second_start, second_end in second_edges
-    )
-
-
 class NasaEonetWildfireAdapter:
     """Discover source-backed wildfires from NASA's curated EONET registry."""
 
@@ -274,8 +191,26 @@ class NasaEonetWildfireAdapter:
         except (TypeError, ValueError) as error:
             return None, (_invalid_record(index, error),)
 
+        lifecycle_issues: list[ProviderIssue] = []
+        activity_status = IncidentActivityStatus.UNKNOWN
+        closed = event.get("closed")
+        if closed is not None:
+            try:
+                closed_at = _strict_timestamp(closed, "closed")
+                if closed_at <= now.astimezone(UTC):
+                    activity_status = IncidentActivityStatus.ENDED
+            except ValueError as error:
+                lifecycle_issues.append(
+                    ProviderIssue(
+                        self.provider_name,
+                        f"{self.provider_name}: Event lifecycle metadata was invalid.",
+                        reason_code="invalid_lifecycle",
+                        detail=f"event[{index}]: {error}",
+                    )
+                )
+
         observations: list[_Observation] = []
-        issues: list[ProviderIssue] = []
+        issues: list[ProviderIssue] = lifecycle_issues
         for geometry_index, raw_observation in enumerate(raw_geometry):
             try:
                 observation = _parse_observation(raw_observation)
@@ -312,7 +247,9 @@ class NasaEonetWildfireAdapter:
             (
                 observation
                 for observation in relevant_observations
-                if _observation_matches_country(observation, country, self._geography)
+                if observation_matches_country(
+                    observation.geometry, country, self._geography
+                )
             ),
             key=lambda observation: observation.observed_at,
             default=None,
@@ -346,7 +283,8 @@ class NasaEonetWildfireAdapter:
             snapshot_id=snapshot_id,
         )
         selected_geometry = replace(selected.geometry, source=source)
-        provider_ids = (f"eonet:{raw_id}", *_source_ids(event.get("sources")))
+        provider_ids = (f"eonet:{raw_id}",)
+        lineage_ids = _source_lineage_ids(event.get("sources"))
         measurements = (
             (
                 EventMeasurement(
@@ -370,6 +308,8 @@ class NasaEonetWildfireAdapter:
                     geometry=selected_geometry,
                     measurements=measurements,
                     provider_ids=provider_ids,
+                    lineage_ids=lineage_ids,
+                    activity_status=activity_status,
                 ),
                 tuple(issues),
             )
@@ -384,7 +324,9 @@ class NasaEonetWildfireAdapter:
                 geometry=selected_geometry,
                 measurements=measurements,
                 provider_ids=provider_ids,
+                lineage_ids=lineage_ids,
                 geography_status=EventGeographyStatus.IN_COUNTRY,
+                activity_status=activity_status,
             ),
             tuple(issues),
         )
@@ -476,7 +418,16 @@ class NasaEonetWildfireAdapter:
                     reason_code="empty_result",
                 )
             )
-        return ProviderBatch(tuple(records), tuple(issues))
+        scan_reached_limit = (
+            isinstance(query, WorldwideDisasterQuery)
+            and len(raw_events) >= result_limit
+        )
+        return ProviderBatch(
+            tuple(records),
+            tuple(issues),
+            scan_complete=not scan_reached_limit,
+            records_seen=len(raw_events),
+        )
 
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
@@ -492,6 +443,8 @@ class NasaEonetWildfireAdapter:
                 item for item in result.records if isinstance(item, DisasterEvent)
             ),
             issues=result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def find_worldwide_events(
@@ -510,6 +463,8 @@ class NasaEonetWildfireAdapter:
                 if isinstance(item, WorldwideDisasterEvent)
             ),
             issues=result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def aclose(self) -> None:
@@ -569,16 +524,31 @@ def _parse_observation(raw_observation: object) -> _Observation:
     return _Observation(observed_at, geometry, value, unit)
 
 
-def _source_ids(value: object) -> tuple[str, ...]:
+def _source_lineage_ids(value: object) -> tuple[str, ...]:
     if not isinstance(value, list):
         return ()
     identifiers: list[str] = []
     for item in value:
         if not isinstance(item, Mapping):
             continue
-        identifier = _text(item.get("id"))
-        if identifier and identifier not in identifiers:
-            identifiers.append(identifier)
+        raw_url = _text(item.get("url"))
+        parsed = urlparse(raw_url)
+        if parsed.scheme != "https" or parsed.hostname not in {
+            "gdacs.org",
+            "www.gdacs.org",
+        }:
+            continue
+        parameters = parse_qs(parsed.query)
+        event_type = _text(parameters.get("eventtype", [""])[0]).casefold()
+        event_id = _text(parameters.get("eventid", [""])[0])
+        if (
+            event_type in {"eq", "fl", "tc", "vo", "wf"}
+            and event_id
+            and event_id.isdigit()
+        ):
+            identifier = f"gdacs:{event_type}:{event_id}"
+            if identifier not in identifiers:
+                identifiers.append(identifier)
     return tuple(sorted(identifiers))
 
 
@@ -612,33 +582,6 @@ def _deduplicate_records(
             )
         )
     return list(unique.values()), tuple(issues)
-
-
-def _observation_matches_country(
-    observation: _Observation,
-    country: Country | None,
-    geography: CountryCatalog | None,
-) -> bool:
-    if country is None:
-        return True
-    if geography is None:
-        return False
-    projected_country = geography.get_by_alpha3(country.alpha3_code)
-    if projected_country is None:
-        return False
-    if observation.geometry.kind is EventGeometryKind.POINT:
-        point = observation.geometry.coordinates[0]
-        return geography.contains(projected_country, point.latitude, point.longitude)
-    event_ring = tuple(
-        (point.latitude, point.longitude) for point in observation.geometry.coordinates
-    )
-    country_polygons = projected_country.geographic_area.polygons
-    if not country_polygons:
-        return any(
-            geography.contains(projected_country, latitude, longitude)
-            for latitude, longitude in event_ring
-        )
-    return any(_polygons_intersect(event_ring, polygon) for polygon in country_polygons)
 
 
 def _invalid_record(index: int, error: Exception) -> ProviderIssue:

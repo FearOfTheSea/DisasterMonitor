@@ -15,6 +15,7 @@ from disaster_monitor.application.disaster_aliases import recognized_disasters
 from disaster_monitor.application.investigation.disaster_query_policy import (
     DisasterQueryPolicyRegistry,
     default_disaster_query_policies,
+    selection_intent_for,
 )
 from disaster_monitor.application.investigation.prompt_preparation import (
     normalize_question,
@@ -207,6 +208,7 @@ class DisasterQueryParser:
             event_discriminators=self._disaster_policies.for_disaster(
                 disasters[0]
             ).discriminators(normalized),
+            selection_intent=selection_intent_for(normalized),
         )
         return DisasterQueryParseResult(QueryParseStatus.MATCHED, query=query)
 

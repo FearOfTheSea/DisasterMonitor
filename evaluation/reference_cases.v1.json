@@ -1,0 +1,264 @@
+{
+  "schema_version": "reference-cases.v1",
+  "retrieval_date": "2026-09-08",
+  "attribution": "URLs identify the public source contract or event record; no raw source payloads are stored here.",
+  "baseline": {
+    "status": "not_measured",
+    "denominator": 24,
+    "numerator": null,
+    "recall": null,
+    "matching_rule": "A case is a true positive only when the expected hazard, source-backed geography, occurrence/update interval, and source identity are reachable through the incident view or its explicitly separate observation/context surface. A provider outage, unsupported capability, and unobserved scan are counted separately from an internal retrieval failure."
+  },
+  "cases": [
+    {
+      "id": "eq-east-asia-01",
+      "hazard": "earthquake",
+      "region": "East Asia",
+      "geographic_scope": "Japan and offshore western Pacific",
+      "source_url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
+      "event_interval_utc": {"from": "2026-09-08T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "admit a source-backed earthquake when present; preserve offshore geometry without inventing a country",
+      "why_in_scope": "successful discovery and countryless offshore semantics"
+    },
+    {
+      "id": "eq-east-asia-02",
+      "hazard": "earthquake",
+      "region": "East Asia",
+      "geographic_scope": "Japan",
+      "source_url": "https://www.emsc-csem.org/Earthquake_information/",
+      "event_interval_utc": {"from": "2026-09-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "merge a matching EMSC/USGS observation into one physical incident with both evidence links",
+      "why_in_scope": "duplicate and cross-provider identity"
+    },
+    {
+      "id": "eq-south-asia-01",
+      "hazard": "earthquake",
+      "region": "South Asia",
+      "geographic_scope": "Himalayan region",
+      "source_url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson",
+      "event_interval_utc": {"from": "2026-09-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "retain a distinct nearby earthquake when time, distance, or magnitude prevents a safe merge",
+      "why_in_scope": "nearby unrelated candidate"
+    },
+    {
+      "id": "flood-asia-01",
+      "hazard": "flood",
+      "region": "East Asia",
+      "geographic_scope": "China",
+      "source_url": "https://www.gdacs.org/report.aspx?eventid=1104081&episodeid=17&eventtype=FL",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "retain the GDACS flood incident even when a higher-tier provider also returns observations",
+      "why_in_scope": "lower-tier distinct event must not be suppressed"
+    },
+    {
+      "id": "flood-south-asia-01",
+      "hazard": "flood",
+      "region": "South Asia",
+      "geographic_scope": "India",
+      "source_url": "https://www.gdacs.org/report.aspx?eventid=1104121&episodeid=12&eventtype=FL",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "retain as a separate source-backed flood incident with GDACS provenance",
+      "why_in_scope": "distinct regional flood and lower-tier preservation"
+    },
+    {
+      "id": "flood-americas-01",
+      "hazard": "flood",
+      "region": "North America",
+      "geographic_scope": "Mexico",
+      "source_url": "https://www.gdacs.org/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "expose a GFM acquisition as separate observation context unless a physical flood assertion is available",
+      "why_in_scope": "acquisition identity and non-counting semantics"
+    },
+    {
+      "id": "fire-europe-01",
+      "hazard": "wildfire",
+      "region": "Europe",
+      "geographic_scope": "Mediterranean Europe",
+      "source_url": "https://eonet.gsfc.nasa.gov/docs/v3",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "admit curated EONET wildfire events and preserve their source geometry",
+      "why_in_scope": "successful regional discovery"
+    },
+    {
+      "id": "fire-americas-01",
+      "hazard": "wildfire",
+      "region": "South America",
+      "geographic_scope": "Amazon basin",
+      "source_url": "https://eonet.gsfc.nasa.gov/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "keep an EONET event separate from a nearby GDACS event unless the wildfire policy matches it",
+      "why_in_scope": "ambiguous cross-source wildfire candidate"
+    },
+    {
+      "id": "fire-africa-01",
+      "hazard": "wildfire",
+      "region": "Africa",
+      "geographic_scope": "Southern Africa",
+      "source_url": "https://firms.modaps.eosdis.nasa.gov/",
+      "event_interval_utc": {"from": "2026-09-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "keep thermal observations separate from an incident unless a reviewed event provider corroborates occurrence",
+      "why_in_scope": "observation is not automatically a wildfire"
+    },
+    {
+      "id": "landslide-south-asia-01",
+      "hazard": "landslide",
+      "region": "South Asia",
+      "geographic_scope": "Nepal",
+      "source_url": "https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/COOLR_Events_Points/FeatureServer/0/query",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "return a COOLR event when the official endpoint is available; otherwise show endpoint-unavailable coverage",
+      "why_in_scope": "provider-outage and landslide coverage gap"
+    },
+    {
+      "id": "landslide-southeast-asia-01",
+      "hazard": "landslide",
+      "region": "Southeast Asia",
+      "geographic_scope": "Philippines",
+      "source_url": "https://landslides.nasa.gov/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "preserve a catalog event with source date and geometry; do not infer casualties or impact",
+      "why_in_scope": "missing-geometry/impact separation"
+    },
+    {
+      "id": "landslide-americas-01",
+      "hazard": "landslide",
+      "region": "South America",
+      "geographic_scope": "Andes",
+      "source_url": "https://gis.earthdata.nasa.gov/portal/home/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "keep a descriptive-only record accessible when no source geometry is supplied",
+      "why_in_scope": "geometry-less list semantics"
+    },
+    {
+      "id": "cyclone-west-pacific-01",
+      "hazard": "tropical_cyclone",
+      "region": "Oceania",
+      "geographic_scope": "Western Pacific",
+      "source_url": "https://www.gdacs.org/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "include an ongoing cyclone when source-backed status is ongoing; preserve track/forecast products separately",
+      "why_in_scope": "ongoing lifecycle and forecast geometry"
+    },
+    {
+      "id": "cyclone-north-atlantic-01",
+      "hazard": "tropical_cyclone",
+      "region": "North America",
+      "geographic_scope": "North Atlantic",
+      "source_url": "https://www.nhc.noaa.gov/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "keep official forecast warning context distinct from observed incident occurrence",
+      "why_in_scope": "warning/forecast distinction"
+    },
+    {
+      "id": "cyclone-indian-ocean-01",
+      "hazard": "tropical_cyclone",
+      "region": "Indian Ocean",
+      "geographic_scope": "Northern Indian Ocean",
+      "source_url": "https://www.ncdc.noaa.gov/ibtracs/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "preserve source track time and lifecycle uncertainty without assigning a land country to an offshore storm",
+      "why_in_scope": "offshore and geometry meaning"
+    },
+    {
+      "id": "eruption-southeast-asia-01",
+      "hazard": "volcanic_eruption",
+      "region": "Southeast Asia",
+      "geographic_scope": "Indonesia",
+      "source_url": "https://volcano.si.edu/reports_weekly.cfm",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "use the volcano report's update time for recently-updated queries without changing onset",
+      "why_in_scope": "older-onset/recent-update case"
+    },
+    {
+      "id": "eruption-americas-01",
+      "hazard": "volcanic_eruption",
+      "region": "Central America",
+      "geographic_scope": "Guatemala",
+      "source_url": "https://volcano.si.edu/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "retain a source-backed eruption record even when no impact report is available",
+      "why_in_scope": "observed hazard versus humanitarian situation"
+    },
+    {
+      "id": "eruption-oceania-01",
+      "hazard": "volcanic_eruption",
+      "region": "Oceania",
+      "geographic_scope": "Papua New Guinea and nearby islands",
+      "source_url": "https://www.gdacs.org/report.aspx?eventid=1000148&episodeid=1&eventtype=VO",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "retain distinct GDACS event provenance and avoid double counting a matching WVAR observation",
+      "why_in_scope": "duplicate and upstream-lineage handling"
+    },
+    {
+      "id": "cross-chile-01",
+      "hazard": "earthquake",
+      "region": "South America",
+      "geographic_scope": "Chile / CHL",
+      "source_url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson",
+      "event_interval_utc": {"from": "2026-09-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "accept canonical name Chile and ISO alpha-3 CHL consistently in map, assistant, and watches",
+      "why_in_scope": "known assistant/catalog inconsistency"
+    },
+    {
+      "id": "cross-nepal-01",
+      "hazard": "landslide",
+      "region": "South Asia",
+      "geographic_scope": "Nepal",
+      "source_url": "https://reliefweb.int/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "retain relevant unmatched reports as situation context; do not attach them to a selected incident without hazard/time/geography evidence",
+      "why_in_scope": "assistant association and conservative ambiguity"
+    },
+    {
+      "id": "cross-transboundary-01",
+      "hazard": "flood",
+      "region": "South Asia",
+      "geographic_scope": "transboundary river basin",
+      "source_url": "https://www.gdacs.org/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "count one physical incident globally while preserving each affected-country association and source basis",
+      "why_in_scope": "transboundary geography"
+    },
+    {
+      "id": "cross-outage-01",
+      "hazard": "landslide",
+      "region": "Worldwide",
+      "geographic_scope": "worldwide provider scan",
+      "source_url": "https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/COOLR_Events_Points/FeatureServer",
+      "event_interval_utc": {"from": "2026-09-08T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "show endpoint-missing/unavailable diagnostics and retain any last successful stored evidence",
+      "why_in_scope": "provider outage must not erase healthy evidence"
+    },
+    {
+      "id": "cross-historical-01",
+      "hazard": "flood",
+      "region": "North America",
+      "geographic_scope": "historical event with recent report",
+      "source_url": "https://reliefweb.int/",
+      "event_interval_utc": {"from": "2024-01-01T00:00:00Z", "to": "2024-12-31T23:59:59Z"},
+      "expected_behavior": "historical occurrence remains dated to onset; a recent report is available through update/situation context",
+      "why_in_scope": "onset versus recent update"
+    },
+    {
+      "id": "cross-ambiguous-01",
+      "hazard": "wildfire",
+      "region": "Europe",
+      "geographic_scope": "two nearby candidate events",
+      "source_url": "https://eonet.gsfc.nasa.gov/docs/v3",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "keep ambiguous candidates separate and disclose insufficient identity evidence",
+      "why_in_scope": "false-merge guard"
+    },
+    {
+      "id": "cross-missing-geometry-01",
+      "hazard": "tropical_cyclone",
+      "region": "Worldwide",
+      "geographic_scope": "source record without geometry",
+      "source_url": "https://www.gdacs.org/",
+      "event_interval_utc": {"from": "2026-08-01T00:00:00Z", "to": "2026-09-08T23:59:59Z"},
+      "expected_behavior": "keep the list record accessible, omit map focus, and do not invent a tile center",
+      "why_in_scope": "missing-geometry presentation"
+    }
+  ]
+}

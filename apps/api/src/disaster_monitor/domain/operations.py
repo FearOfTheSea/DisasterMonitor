@@ -24,6 +24,15 @@ class FreshnessState(StrEnum):
     NEVER_INGESTED = "never_ingested"
 
 
+class ProviderAttemptOutcome(StrEnum):
+    """Outcome of one bounded provider acquisition attempt."""
+
+    SUCCESS = "success"
+    EMPTY = "empty"
+    FAILED = "failed"
+    INCOMPLETE = "incomplete"
+
+
 class OperatorDecision(StrEnum):
     """Closed set of attributable reviews; no operational command is implied."""
 
@@ -91,6 +100,25 @@ class SourceSnapshotRecord:
     @property
     def content_available(self) -> bool:
         return self.content_deleted_at is None
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderAttempt:
+    """Durable, source-scoped outcome metadata without raw provider payloads."""
+
+    source_id: str
+    attempted_at: datetime
+    outcome: ProviderAttemptOutcome
+    reason_code: str | None = None
+    retryable: bool = False
+    http_status: int | None = None
+    records_seen: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.source_id.strip() or self.attempted_at.tzinfo is None:
+            raise ValueError("Provider attempts require a source and aware time.")
+        if self.records_seen < 0:
+            raise ValueError("Provider attempt record counts cannot be negative.")
 
 
 @dataclass(frozen=True, slots=True)

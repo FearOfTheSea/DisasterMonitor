@@ -9,6 +9,8 @@ from disaster_monitor.domain.disaster_types import (
     Disaster,
     EventGeographyStatus,
     GeographicArea,
+    IncidentActivityStatus,
+    ObservationKind,
     ProviderTier,
 )
 from disaster_monitor.domain.events import (
@@ -95,6 +97,8 @@ __all__ = [
     "CycloneMapLayer",
     "CycloneMapSemanticRole",
     "Disaster",
+    "IncidentActivityStatus",
+    "ObservationKind",
     "DisasterEvent",
     "EarthquakeEvent",
     "EventAssignmentStatus",

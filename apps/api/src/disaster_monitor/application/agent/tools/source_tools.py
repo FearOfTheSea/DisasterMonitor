@@ -11,7 +11,7 @@ from disaster_monitor.application.agent.models import (
     SourceSelectionSummary,
 )
 from disaster_monitor.application.agent.tools import ToolDescription
-from disaster_monitor.application.disaster import ProviderBatch
+from disaster_monitor.application.disaster import ObservationKind, ProviderBatch
 from disaster_monitor.application.evidence.event_resolution import EventPolicyRegistry
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
@@ -172,9 +172,22 @@ class FindDisasterEventTool(_BaseTool):
         state.warnings.extend(
             issue.message for issue in state.workspace.event_batch.issues
         )
+        physical_records = tuple(
+            record
+            for record in state.workspace.event_batch.records
+            if record.observation_kind is not ObservationKind.ACQUISITION
+        )
+        acquisition_count = len(state.workspace.event_batch.records) - len(
+            physical_records
+        )
+        if acquisition_count:
+            state.warnings.append(
+                f"{acquisition_count} acquisition observation(s) were retained as "
+                "observations and were not treated as physical disaster events."
+            )
         policy = self.dependencies.event_policies.for_disaster(task.query.disaster)
         resolution = policy.resolve(
-            state.workspace.event_batch.records,
+            physical_records,
             task.query,
             now=self.now(),
         )

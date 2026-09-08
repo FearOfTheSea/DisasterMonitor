@@ -1,9 +1,9 @@
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
 
 from disaster_monitor.application.disaster import (
-    GeographicScope,
+    ObservationKind,
     ProviderBatch,
     ProviderIssue,
     WorldwideDisasterEvent,
@@ -12,149 +12,25 @@ from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsQuery,
     IncidentCoverageState,
 )
-from disaster_monitor.application.incidents.active_incidents import (
-    ActiveIncidentsService as ActiveIncidentsServiceType,
-)
-from disaster_monitor.application.sources.provider_registry import (
-    ProviderCapabilities,
-    ProviderRegistration,
-    ProviderRegistry,
-    ProviderRole,
-)
+from disaster_monitor.application.sources.provider_registry import ProviderRegistry
 from disaster_monitor.domain.disaster import (
     Disaster,
-    IncidentWatch,
-    IncidentWatchScope,
     ProviderTier,
     SourceAuthority,
-    SourceReference,
     WatchCoverageState,
-    descriptive_event_geometry,
     point_event_geometry,
 )
-from disaster_monitor.infrastructure.geography.static_country_catalog import (
-    StaticCountryCatalog,
+
+from .active_incidents_support import (
+    NOW,
+    FakeWorldwideProvider,
+    _active_incidents_service,
+    _coverage,
+    _event,
+    _registration,
+    _source,
+    _watch,
 )
-
-NOW = datetime(2026, 8, 20, 6, tzinfo=UTC)
-
-
-class FakeWorldwideProvider:
-    def __init__(
-        self,
-        source_id: str,
-        result: ProviderBatch[WorldwideDisasterEvent] | Exception,
-    ) -> None:
-        self.source_id = source_id
-        self.allowed_hosts = frozenset({f"{source_id}.example"})
-        self.result = result
-        self.queries = []
-
-    async def find_worldwide_events(self, query, *, now):
-        self.queries.append((query, now))
-        if isinstance(self.result, Exception):
-            raise self.result
-        return self.result
-
-
-def _source(
-    source_id: str,
-    event_time: datetime,
-    *,
-    authority: SourceAuthority = SourceAuthority.SCIENTIFIC_AUTHORITY,
-) -> SourceReference:
-    return SourceReference(
-        source_id=source_id,
-        publisher=f"{source_id} publisher",
-        title=f"{source_id} bulletin",
-        canonical_url=f"https://{source_id}.example/events",
-        published_at=event_time,
-        updated_at=event_time + timedelta(minutes=5),
-        retrieved_at=NOW,
-        authority=authority,
-    )
-
-
-def _event(
-    source_id: str,
-    disaster: Disaster,
-    event_id: str,
-    event_time: datetime,
-    *,
-    descriptive: bool = False,
-    latitude: float = 32.5,
-    longitude: float = 133.5,
-    location: str | None = None,
-) -> WorldwideDisasterEvent:
-    source = _source(source_id, event_time)
-    geometry = (
-        descriptive_event_geometry("Provider supplied location text", source)
-        if descriptive
-        else point_event_geometry(latitude, longitude, source)
-    )
-    return WorldwideDisasterEvent(
-        event_id=event_id,
-        disaster=disaster,
-        location=location or f"{disaster.value} location",
-        event_time=event_time,
-        source=source,
-        geometry=geometry,
-        provider_ids=(f"{source_id}:{event_id}",),
-    )
-
-
-def _registration(
-    name: str,
-    provider: FakeWorldwideProvider,
-    disaster: Disaster,
-    *,
-    tier: ProviderTier = ProviderTier.SECONDARY,
-    configured: bool = True,
-) -> ProviderRegistration:
-    return ProviderRegistration(
-        name,
-        provider,
-        ProviderCapabilities(
-            roles=frozenset({ProviderRole.EVENT_DISCOVERY}),
-            disasters=frozenset({disaster}),
-            country_codes=None,
-            requires_configuration=not configured,
-            geographic_scopes=frozenset({GeographicScope.WORLDWIDE}),
-            event_scopes=frozenset({GeographicScope.WORLDWIDE}),
-        ),
-        tier=tier,
-        source_id=provider.source_id,
-        configured=configured,
-        allowed_hosts=provider.allowed_hosts,
-        worldwide_provider=provider,
-    )
-
-
-def _coverage(snapshot):
-    return {item.disaster: item for item in snapshot.coverage}
-
-
-def _active_incidents_service(
-    provider_registry: ProviderRegistry, **kwargs
-) -> ActiveIncidentsServiceType:
-    return ActiveIncidentsServiceType(
-        provider_registry,
-        country_catalog=StaticCountryCatalog(),
-        **kwargs,
-    )
-
-
-def _watch(disaster: Disaster) -> IncidentWatch:
-    return IncidentWatch(
-        watch_id=f"incident-watch:{disaster.value}",
-        disaster=disaster,
-        scope=IncidentWatchScope.worldwide(),
-        enabled=True,
-        refresh_interval_seconds=900,
-        created_at=NOW,
-        updated_at=NOW,
-        next_refresh_at=NOW,
-    )
 
 
 @pytest.mark.asyncio
@@ -260,7 +136,7 @@ async def test_labels_on_land_coordinates_for_each_disaster() -> None:
 
 
 @pytest.mark.asyncio
-async def test_excludes_record_when_country_cannot_be_resolved() -> None:
+async def test_retains_record_when_country_cannot_be_resolved() -> None:
     provider = FakeWorldwideProvider(
         "offshore-floods",
         ProviderBatch(
@@ -283,11 +159,14 @@ async def test_excludes_record_when_country_cannot_be_resolved() -> None:
 
     snapshot = await service.execute()
 
-    assert snapshot.incidents == ()
-    assert _coverage(snapshot)[Disaster.FLOOD].state is IncidentCoverageState.DEGRADED
+    assert [item.event_id for item in snapshot.incidents] == ["offshore-flood"]
+    assert snapshot.incidents[0].country is None
+    assert _coverage(snapshot)[Disaster.FLOOD].state is (
+        IncidentCoverageState.EVENTS_FOUND
+    )
     assert snapshot.warnings == (
-        "A worldwide disaster record could not be associated with a country or "
-        "territory and was excluded from the country-based incident feed.",
+        "A worldwide event has no trusted country association and is retained as a "
+        "countryless incident.",
     )
 
 
@@ -323,7 +202,7 @@ async def test_uses_source_country_when_coordinate_is_offshore() -> None:
 
 
 @pytest.mark.asyncio
-async def test_usable_primary_records_suppress_lower_tier_records() -> None:
+async def test_union_of_provider_tiers_preserves_distinct_records() -> None:
     primary = FakeWorldwideProvider(
         "primary-floods",
         ProviderBatch((_event("primary-floods", Disaster.FLOOD, "primary", NOW),)),
@@ -336,7 +215,7 @@ async def test_usable_primary_records_suppress_lower_tier_records() -> None:
                     "secondary-floods",
                     Disaster.FLOOD,
                     "secondary",
-                    NOW + timedelta(hours=1),
+                    NOW - timedelta(hours=1),
                 ),
             )
         ),
@@ -363,8 +242,112 @@ async def test_usable_primary_records_suppress_lower_tier_records() -> None:
 
     snapshot = await service.execute()
 
-    assert [item.event_id for item in snapshot.incidents] == ["primary"]
-    assert snapshot.incidents[0].provider_tier is ProviderTier.PRIMARY
+    assert [item.event_id for item in snapshot.incidents] == ["primary", "secondary"]
+    assert {item.provider_tier for item in snapshot.incidents} == {
+        ProviderTier.PRIMARY,
+        ProviderTier.SECONDARY,
+    }
+
+
+@pytest.mark.asyncio
+async def test_worldwide_earthquake_identity_merges_cross_source_events() -> None:
+    emsc = FakeWorldwideProvider(
+        "emsc-earthquakes",
+        ProviderBatch(
+            (
+                _event(
+                    "emsc-earthquakes",
+                    Disaster.EARTHQUAKE,
+                    "emsc-1",
+                    NOW,
+                    latitude=35.0,
+                    longitude=139.0,
+                ),
+                _event(
+                    "emsc-earthquakes",
+                    Disaster.EARTHQUAKE,
+                    "emsc-unrelated",
+                    NOW,
+                    latitude=36.5,
+                    longitude=140.5,
+                ),
+            )
+        ),
+    )
+    usgs = FakeWorldwideProvider(
+        "usgs-earthquakes",
+        ProviderBatch(
+            (
+                _event(
+                    "usgs-earthquakes",
+                    Disaster.EARTHQUAKE,
+                    "usgs-1",
+                    NOW - timedelta(seconds=30),
+                    latitude=35.01,
+                    longitude=139.01,
+                ),
+            )
+        ),
+    )
+    service = _active_incidents_service(
+        ProviderRegistry(
+            (
+                _registration("EMSC", emsc, Disaster.EARTHQUAKE),
+                _registration("USGS", usgs, Disaster.EARTHQUAKE),
+            )
+        ),
+        clock=lambda: NOW,
+    )
+
+    snapshot = await service.execute()
+
+    assert len(snapshot.incidents) == 2
+    matched = next(item for item in snapshot.incidents if item.event_id == "emsc-1")
+    assert matched.physical_event_id is not None
+    assert {item.source_id for item in matched.evidence_sources} == {
+        "emsc-earthquakes",
+        "usgs-earthquakes",
+    }
+    assert {item.event_id for item in snapshot.incidents} == {
+        "emsc-1",
+        "emsc-unrelated",
+    }
+
+
+@pytest.mark.asyncio
+async def test_acquisition_observations_are_separate_from_incident_counts() -> None:
+    provider = FakeWorldwideProvider(
+        "gfm-observations",
+        ProviderBatch(
+            (
+                WorldwideDisasterEvent(
+                    event_id="acquisition-1",
+                    disaster=Disaster.FLOOD,
+                    location="Sentinel acquisition",
+                    event_time=NOW,
+                    source=_source("gfm-observations", NOW),
+                    geometry=point_event_geometry(
+                        32.5,
+                        133.5,
+                        _source("gfm-observations", NOW),
+                        estimated=True,
+                    ),
+                    observation_kind=ObservationKind.ACQUISITION,
+                ),
+            )
+        ),
+    )
+    service = _active_incidents_service(
+        ProviderRegistry((_registration("GFM", provider, Disaster.FLOOD),)),
+        clock=lambda: NOW,
+    )
+
+    snapshot = await service.execute()
+
+    assert snapshot.incidents == ()
+    assert len(snapshot.observations) == 1
+    assert snapshot.observations[0].observation_kind is ObservationKind.ACQUISITION
+    assert _coverage(snapshot)[Disaster.FLOOD].incident_count == 0
 
 
 @pytest.mark.asyncio
@@ -563,7 +546,7 @@ async def test_watch_observation_preserves_empty_failure_stale_and_unavailable()
 
 
 @pytest.mark.asyncio
-async def test_query_bounds_are_enforced_and_results_are_bounded() -> None:
+async def test_query_bounds_separate_acquisition_from_result_paging() -> None:
     with pytest.raises(ValueError, match="time_window_days"):
         ActiveIncidentsQuery(time_window_days=0)
     with pytest.raises(ValueError, match="time_window_days"):
@@ -572,6 +555,10 @@ async def test_query_bounds_are_enforced_and_results_are_bounded() -> None:
         ActiveIncidentsQuery(limit_per_disaster=0)
     with pytest.raises(ValueError, match="limit_per_disaster"):
         ActiveIncidentsQuery(limit_per_disaster=21)
+    with pytest.raises(ValueError, match="acquisition_limit_per_disaster"):
+        ActiveIncidentsQuery(acquisition_limit_per_disaster=0)
+    with pytest.raises(ValueError, match="acquisition_limit_per_disaster"):
+        ActiveIncidentsQuery(acquisition_limit_per_disaster=501)
 
     events = tuple(
         _event(
@@ -591,14 +578,57 @@ async def test_query_bounds_are_enforced_and_results_are_bounded() -> None:
     )
 
     snapshot = await service.execute(
-        ActiveIncidentsQuery(time_window_days=3, limit_per_disaster=2)
+        ActiveIncidentsQuery(
+            time_window_days=3,
+            limit_per_disaster=2,
+            acquisition_limit_per_disaster=4,
+        )
     )
 
-    assert [item.event_id for item in snapshot.incidents] == ["quake-0", "quake-1"]
+    assert [item.event_id for item in snapshot.incidents] == [
+        "quake-0",
+        "quake-1",
+        "quake-2",
+        "quake-3",
+        "quake-4",
+    ]
     provider_query, provider_now = provider.queries[0]
     assert provider_query.time_window_days == 3
-    assert provider_query.limit == 2
+    assert provider_query.limit == 4
     assert provider_now == NOW
+
+
+@pytest.mark.asyncio
+async def test_incomplete_provider_scan_is_distinct_from_page_continuation() -> None:
+    provider = FakeWorldwideProvider(
+        "earthquakes",
+        ProviderBatch(
+            (
+                _event(
+                    "earthquakes",
+                    Disaster.EARTHQUAKE,
+                    "quake-1",
+                    NOW,
+                ),
+            ),
+            scan_complete=False,
+            records_seen=50,
+        ),
+    )
+    service = _active_incidents_service(
+        ProviderRegistry(
+            (_registration("Earthquakes", provider, Disaster.EARTHQUAKE),)
+        ),
+        clock=lambda: NOW,
+    )
+
+    snapshot = await service.execute(ActiveIncidentsQuery(page_size=3))
+
+    coverage = _coverage(snapshot)[Disaster.EARTHQUAKE]
+    assert snapshot.has_more is False
+    assert coverage.scan_complete is False
+    assert coverage.records_seen == 50
+    assert coverage.truncated is True
 
 
 @pytest.mark.asyncio
@@ -634,41 +664,3 @@ async def test_descriptive_geometry_remains_without_coordinates() -> None:
     assert snapshot.incidents[0].source_authority is (
         SourceAuthority.SCIENTIFIC_AUTHORITY
     )
-
-
-@pytest.mark.asyncio
-async def test_active_incidents_correlate_only_retained_cross_hazard_records() -> None:
-    earthquake = FakeWorldwideProvider(
-        "earthquakes",
-        ProviderBatch((_event("earthquakes", Disaster.EARTHQUAKE, "quake", NOW),)),
-    )
-    landslide = FakeWorldwideProvider(
-        "landslides",
-        ProviderBatch(
-            (
-                _event(
-                    "landslides",
-                    Disaster.LANDSLIDE,
-                    "slide",
-                    NOW + timedelta(hours=2),
-                    longitude=133.7,
-                ),
-            )
-        ),
-    )
-    service = _active_incidents_service(
-        ProviderRegistry(
-            (
-                _registration("Earthquakes", earthquake, Disaster.EARTHQUAKE),
-                _registration("Landslides", landslide, Disaster.LANDSLIDE),
-            )
-        ),
-        clock=lambda: NOW,
-    )
-
-    snapshot = await service.execute()
-
-    assert len(snapshot.correlations) == 1
-    assert snapshot.correlations[0].first_event_id == "quake"
-    assert snapshot.correlations[0].second_event_id == "slide"
-    assert snapshot.correlations[0].source_ids == ("earthquakes", "landslides")

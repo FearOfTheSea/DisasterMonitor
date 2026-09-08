@@ -15,6 +15,9 @@ from disaster_monitor.application.incidents.refresh_incident_watch import (
     RefreshIncidentWatch,
 )
 from disaster_monitor.application.ingestion.jobs import ScheduledInvestigation
+from disaster_monitor.application.ingestion.projection_jobs import (
+    WorldwideIncidentProjectionScheduler,
+)
 from disaster_monitor.application.ingestion.watch_jobs import (
     IncidentWatchScheduler,
     IncidentWatchWorker,
@@ -59,8 +62,10 @@ async def _migrate(settings: Settings) -> None:
 async def _scheduler(settings: Settings, *, once: bool) -> None:
     repository = _postgres(settings)
     scheduler = IncidentWatchScheduler(repository)
+    projection_scheduler = WorldwideIncidentProjectionScheduler(repository)
     while True:
         await scheduler.enqueue_due(now=datetime.now(UTC))
+        await projection_scheduler.enqueue_due(now=datetime.now(UTC))
         if once:
             return
         await asyncio.sleep(30)
@@ -82,9 +87,14 @@ async def _worker(settings: Settings, *, once: bool) -> None:
         country_catalog=countries,
         geographic_region_catalog=StaticGeographicRegionCatalog(),
         event_policies=investigation.dependencies.event_policies,
+        projection_store=repository,
+        read_from_projection=False,
+        provider_attempt_recorder=repository,
     )
     worker = IncidentWatchWorker(
-        repository, RefreshIncidentWatch(repository, discovery)
+        repository,
+        RefreshIncidentWatch(repository, discovery),
+        projection_refresher=discovery,
     )
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
     try:

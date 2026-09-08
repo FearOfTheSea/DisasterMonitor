@@ -25,6 +25,12 @@ refresh time is due.
 The worker resolves each watch through the registered event-discovery path and records
 deterministic observation and change state.
 
+The same scheduler and worker also maintain the worldwide incident projection. The
+`worldwide-incident-projection` job runs every five minutes, unions the registered
+discovery sources, resolves identities, and appends a versioned projection only after
+the refresh completes. In PostgreSQL mode, incident reads use the latest stored
+projection and do not call providers or the model.
+
 It cannot publish warnings, contact agencies, evacuate people, allocate resources, or
 expand decision authority.
 
@@ -59,6 +65,25 @@ metadata fallback and filesystem blobs for development.
 
 That metadata does not survive restart. Do not use it to support an
 operational-continuity claim.
+
+## Worldwide projection operations
+
+Migration `0008_incident_projection.sql` creates the append-only projection table. It
+is safe to apply through the normal migration service; it does not delete existing
+observations, source snapshots, or watch state.
+
+Inspect the worldwide refresh and stored projection with:
+
+```powershell
+Invoke-RestMethod http://localhost:8001/api/v1/operations/providers
+Invoke-RestMethod "http://localhost:8001/api/v1/incidents?view=recent&page_size=20"
+```
+
+The source status should show the configured source catalog separately from its last
+attempt and last success. If no projection exists yet, the API reports unavailable or
+degraded coverage rather than treating an empty response as global safety. The
+standalone no-database mode remains a bounded live development fallback and is not a
+durable monitoring deployment.
 
 ## Incident Watch operations
 

@@ -3,7 +3,10 @@
 import re
 from typing import Protocol
 
-from disaster_monitor.application.disaster import EventDiscriminator
+from disaster_monitor.application.disaster import (
+    EventDiscriminator,
+    WorldwideSelectionIntent,
+)
 from disaster_monitor.domain.disaster import Disaster
 
 
@@ -38,6 +41,21 @@ class DisasterQueryPolicyRegistry:
 
     def for_disaster(self, disaster: Disaster) -> DisasterQueryPolicy:
         return self._policies.get(disaster, self._default)
+
+
+_STRONGEST = re.compile(
+    r"\b(?:strongest|largest|biggest|highest[- ]magnitude|most powerful)\b",
+    re.IGNORECASE,
+)
+
+
+def selection_intent_for(text: str) -> WorldwideSelectionIntent:
+    """Interpret latest-versus-strongest without letting providers decide."""
+    return (
+        WorldwideSelectionIntent.STRONGEST
+        if _STRONGEST.search(text)
+        else WorldwideSelectionIntent.LATEST
+    )
 
 
 def default_disaster_query_policies() -> DisasterQueryPolicyRegistry:

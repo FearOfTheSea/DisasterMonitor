@@ -89,16 +89,19 @@ def build_emsc_params(
     """Build a bounded EMSC request from normalized country geography."""
     starttime = query.date_from or now - timedelta(days=query.time_window_days)
     endtime = query.date_to or now
-    generic_query = not any(
-        (
-            query.discriminator("event_id"),
-            query.date_from,
-            query.date_to,
-            query.prefecture,
-            query.city,
-            query.latitude is not None and query.longitude is not None,
-            query.discriminator("magnitude") is not None,
+    generic_query = (
+        not any(
+            (
+                query.discriminator("event_id"),
+                query.date_from,
+                query.date_to,
+                query.prefecture,
+                query.city,
+                query.latitude is not None and query.longitude is not None,
+                query.discriminator("magnitude") is not None,
+            )
         )
+        and query.selection_intent is WorldwideSelectionIntent.STRONGEST
     )
     params = _base_params(
         starttime=starttime,
@@ -314,6 +317,8 @@ class EmscEarthquakeAdapter:
             if error.failure.reason_code == "empty_result":
                 return ProviderBatch(issues=(_empty_result(),))
             raise
+        if payload is None:
+            return ProviderBatch(issues=(_empty_result(),))
         if not isinstance(payload, dict) or payload.get("type") != "FeatureCollection":
             raise DisasterProviderResponseError(
                 "The EMSC response was not a GeoJSON FeatureCollection.",
@@ -325,6 +330,7 @@ class EmscEarthquakeAdapter:
                 "The EMSC GeoJSON response had no feature list.",
                 reason_code="invalid_schema",
             )
+        result_limit = int(params["limit"])
         snapshot_id = (
             capture.snapshot.snapshot_id if capture and capture.snapshot else None
         )
@@ -358,7 +364,22 @@ class EmscEarthquakeAdapter:
                     reason_code="country_membership_approximate",
                 )
             )
-        return ProviderBatch(tuple(events), tuple(issues))
+        scan_complete = len(raw_features) < result_limit
+        if not scan_complete:
+            issues.append(
+                ProviderIssue(
+                    self.provider_name,
+                    f"{self.provider_name}: The acquisition limit was reached; "
+                    "additional matching records may exist.",
+                    reason_code="acquisition_limit_reached",
+                )
+            )
+        return ProviderBatch(
+            tuple(events),
+            tuple(issues),
+            scan_complete=scan_complete,
+            records_seen=len(raw_features),
+        )
 
     async def find_recent_events(
         self, query: DisasterQuery, *, now: datetime
@@ -374,6 +395,8 @@ class EmscEarthquakeAdapter:
         return ProviderBatch(
             tuple(item for item in result.records if isinstance(item, DisasterEvent)),
             result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def find_worldwide_events(
@@ -397,6 +420,8 @@ class EmscEarthquakeAdapter:
                 if isinstance(item, WorldwideDisasterEvent)
             ),
             result.issues,
+            scan_complete=result.scan_complete,
+            records_seen=result.records_seen,
         )
 
     async def aclose(self) -> None:

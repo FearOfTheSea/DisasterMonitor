@@ -3,6 +3,9 @@
 from dataclasses import replace
 from datetime import datetime, timedelta
 
+from disaster_monitor.application.ports.incident_projection import (
+    IncidentProjectionRecord,
+)
 from disaster_monitor.domain.disaster import (
     IncidentWatch,
     IncidentWatchChange,
@@ -16,6 +19,8 @@ from disaster_monitor.domain.operations import (
     NormalizedObservationRecord,
     OperatorActionRecord,
     PhysicalEventRecord,
+    ProviderAttempt,
+    ProviderAttemptOutcome,
     ProviderFreshness,
     SourceSnapshotRecord,
     WorldStateVersionRecord,
@@ -25,6 +30,8 @@ from disaster_monitor.domain.operations import (
 
 class InMemoryOperationalRepository:
     """Reference implementation with the same idempotency and retry semantics."""
+
+    durable = False
 
     def __init__(self) -> None:
         self.jobs: dict[str, IngestJob] = {}
@@ -41,6 +48,23 @@ class InMemoryOperationalRepository:
         self.watch_latest_observation: dict[str, str] = {}
         self.watch_latest_successful_observation: dict[str, str] = {}
         self.watch_change_records: dict[str, IncidentWatchChange] = {}
+        self.incident_projections: dict[str, IncidentProjectionRecord] = {}
+        self.provider_attempt_records: dict[str, list[ProviderAttempt]] = {}
+
+    async def record_provider_attempt(self, attempt: ProviderAttempt) -> None:
+        records = self.provider_attempt_records.setdefault(attempt.source_id, [])
+        records.append(attempt)
+        records.sort(key=lambda item: item.attempted_at, reverse=True)
+        del records[100:]
+
+    async def provider_attempts(
+        self, *, source_id: str, limit: int = 100
+    ) -> tuple[ProviderAttempt, ...]:
+        if not 1 <= limit <= 500:
+            raise ValueError(
+                "Provider attempt history limit must be between 1 and 500."
+            )
+        return tuple(self.provider_attempt_records.get(source_id, ())[:limit])
 
     async def enqueue(self, job: IngestJob) -> bool:
         if job.job_id in self.jobs:
@@ -109,6 +133,26 @@ class InMemoryOperationalRepository:
         self.snapshot_records[snapshot.snapshot_id] = snapshot
         self.snapshot_idempotency[snapshot.idempotency_key] = snapshot.snapshot_id
         return True
+
+    async def append_incident_projection(
+        self, projection: IncidentProjectionRecord
+    ) -> bool:
+        existing = self.incident_projections.get(projection.projection_id)
+        if existing is not None:
+            if existing != projection:
+                raise RuntimeError("Incident projection identity was reused.")
+            return False
+        self.incident_projections[projection.projection_id] = projection
+        return True
+
+    async def latest_incident_projection(
+        self,
+    ) -> IncidentProjectionRecord | None:
+        return max(
+            self.incident_projections.values(),
+            key=lambda item: (item.retrieved_at, item.projection_id),
+            default=None,
+        )
 
     async def snapshot_by_idempotency_key(
         self, idempotency_key: str
@@ -232,33 +276,58 @@ class InMemoryOperationalRepository:
         results: list[ProviderFreshness] = []
         for source_id, expectation in sorted(expectations.items()):
             snapshots = await self.snapshots(source_id=source_id, limit=1)
+            attempts = await self.provider_attempts(source_id=source_id, limit=100)
             jobs = sorted(
                 (item for item in self.jobs.values() if item.source_id == source_id),
                 key=lambda item: (item.claimed_at or item.created_at, item.job_id),
                 reverse=True,
             )
             last_job = jobs[0] if jobs else None
+            last_attempt = attempts[0] if attempts else None
             consecutive = 0
-            for job in jobs:
-                if job.status not in {
-                    IngestJobStatus.RETRY,
-                    IngestJobStatus.DEAD_LETTER,
+            for attempt in attempts:
+                if attempt.outcome not in {
+                    ProviderAttemptOutcome.FAILED,
+                    ProviderAttemptOutcome.INCOMPLETE,
                 }:
                     break
                 consecutive += 1
+            if not attempts:
+                for job in jobs:
+                    if job.status not in {
+                        IngestJobStatus.RETRY,
+                        IngestJobStatus.DEAD_LETTER,
+                    }:
+                        break
+                    consecutive += 1
             results.append(
                 freshness_for(
                     source_id=source_id,
                     now=now,
                     expected_freshness=expectation,
                     last_attempt_at=(
-                        (last_job.claimed_at or last_job.created_at)
-                        if last_job
-                        else None
+                        last_attempt.attempted_at
+                        if last_attempt is not None
+                        else (
+                            (last_job.claimed_at or last_job.created_at)
+                            if last_job
+                            else None
+                        )
                     ),
                     last_snapshot=snapshots[0] if snapshots else None,
                     consecutive_failures=consecutive,
-                    latest_error_code=last_job.last_error_code if last_job else None,
+                    latest_error_code=(
+                        last_attempt.reason_code
+                        if last_attempt is not None
+                        and last_attempt.outcome
+                        in {
+                            ProviderAttemptOutcome.FAILED,
+                            ProviderAttemptOutcome.INCOMPLETE,
+                        }
+                        else last_job.last_error_code
+                        if last_job
+                        else None
+                    ),
                 )
             )
         return tuple(results)
