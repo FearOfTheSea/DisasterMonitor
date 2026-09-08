@@ -296,6 +296,7 @@ async def test_emsc_is_secondary_scientific_earthquake_coverage() -> None:
         ).registrations
         assert [(item.name, item.source_id, item.tier) for item in registrations] == [
             ("EMSC SeismicPortal", "emsc-earthquakes", ProviderTier.SECONDARY),
+            ("GDACS earthquakes", "gdacs-earthquakes", ProviderTier.SECONDARY),
             ("USGS", "usgs-earthquakes", ProviderTier.SECONDARY),
         ]
     finally:
@@ -364,6 +365,7 @@ async def test_smithsonian_is_the_sole_primary_volcanic_event_authority() -> Non
 @pytest.mark.parametrize(
     ("disaster", "provider_name", "source_id"),
     (
+        (Disaster.EARTHQUAKE, "GDACS earthquakes", "gdacs-earthquakes"),
         (Disaster.FLOOD, "GDACS floods", "gdacs-floods"),
         (Disaster.WILDFIRE, "GDACS wildfires", "gdacs-wildfires"),
         (

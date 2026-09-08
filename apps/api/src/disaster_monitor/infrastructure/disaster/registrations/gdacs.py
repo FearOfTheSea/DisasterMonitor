@@ -8,6 +8,7 @@ from disaster_monitor.application.sources.provider_registry import (
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
+    GdacsEarthquakeAdapter,
     GdacsFloodAdapter,
     GdacsTropicalCycloneAdapter,
     GdacsVolcanicEruptionAdapter,
@@ -21,6 +22,7 @@ from disaster_monitor.infrastructure.disaster.registrations.common import (
 
 @dataclass(frozen=True, slots=True)
 class GdacsRegistrations:
+    earthquakes: ProviderRegistration
     floods: ProviderRegistration
     wildfires: ProviderRegistration
     tropical_cyclones: ProviderRegistration
@@ -28,6 +30,12 @@ class GdacsRegistrations:
 
 
 def build(context: RegistrationContext) -> GdacsRegistrations:
+    earthquakes = GdacsEarthquakeAdapter(
+        geography=context.geography,
+        snapshot_recorder=context.snapshot_recorder,
+        timeout_seconds=context.settings.disaster_provider_timeout_seconds,
+        max_response_bytes=context.settings.disaster_provider_max_response_bytes,
+    )
     floods = GdacsFloodAdapter(
         geography=context.geography,
         snapshot_recorder=context.snapshot_recorder,
@@ -53,6 +61,12 @@ def build(context: RegistrationContext) -> GdacsRegistrations:
         max_response_bytes=context.settings.disaster_provider_max_response_bytes,
     )
     return GdacsRegistrations(
+        earthquakes=_registration(
+            "GDACS earthquakes",
+            earthquakes,
+            Disaster.EARTHQUAKE,
+            "gdacs-earthquakes",
+        ),
         floods=_registration("GDACS floods", floods, Disaster.FLOOD, "gdacs-floods"),
         wildfires=_registration(
             "GDACS wildfires",
@@ -77,7 +91,8 @@ def build(context: RegistrationContext) -> GdacsRegistrations:
 
 def _registration(
     name: str,
-    adapter: GdacsFloodAdapter
+    adapter: GdacsEarthquakeAdapter
+    | GdacsFloodAdapter
     | GdacsWildfireAdapter
     | GdacsTropicalCycloneAdapter
     | GdacsVolcanicEruptionAdapter,

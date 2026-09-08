@@ -3,6 +3,7 @@
 import json
 from dataclasses import replace
 from importlib.resources import files
+from itertools import chain
 from typing import cast
 
 from disaster_monitor.application.agent.models import (
@@ -15,18 +16,30 @@ from disaster_monitor.domain.disaster import Disaster
 
 class StaticSourceCatalog:
     def __init__(self, configured_overrides: dict[str, bool] | None = None) -> None:
-        resource = files("disaster_monitor.infrastructure.sources.resources").joinpath(
-            "disaster_sources.v1.json"
+        resources = files("disaster_monitor.infrastructure.sources.resources")
+        catalog = json.loads(
+            resources.joinpath("disaster_sources.v1.json").read_text(encoding="utf-8")
         )
-        payload = json.loads(resource.read_text(encoding="utf-8"))
-        self._version = str(payload["version"])
+        rapid_mapping = json.loads(
+            resources.joinpath("copernicus_rapid_mapping_sources.v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self._version = str(catalog["version"])
+        if str(rapid_mapping.get("catalog_version")) != self._version:
+            raise ValueError(
+                "The packaged source catalog resources have version drift."
+            )
         overrides = configured_overrides or {}
         self._sources = tuple(
             replace(
                 descriptor,
                 configured=overrides.get(descriptor.source_id, descriptor.configured),
             )
-            for descriptor in (_descriptor(item) for item in payload["sources"])
+            for descriptor in (
+                _descriptor(item)
+                for item in chain(catalog["sources"], rapid_mapping["sources"])
+            )
         )
         if len({item.source_id for item in self._sources}) != len(self._sources):
             raise ValueError("The packaged source catalog has duplicate source IDs.")

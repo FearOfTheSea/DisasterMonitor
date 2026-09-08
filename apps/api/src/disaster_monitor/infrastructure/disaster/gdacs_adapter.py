@@ -1,6 +1,7 @@
 """Country-neutral GDACS event-discovery adapters."""
 
 from datetime import datetime, timedelta
+from math import isfinite
 from urllib.parse import urlencode
 
 import httpx
@@ -56,6 +57,16 @@ def _identifier(value: object) -> str:
     if isinstance(value, int):
         return str(value)
     return _text(value)
+
+
+def _number(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        parsed = float(value)
+    except (OverflowError, ValueError):
+        return None
+    return parsed if isfinite(parsed) else None
 
 
 def _iso3_code(value: object) -> str:
@@ -207,12 +218,7 @@ class _GdacsEventAdapter:
         geometry, geometry_issue = self._point_geometry(
             raw_feature.get("geometry"), source, index=index
         )
-        severity = _text(properties.get("alertlevel"))
-        measurements = (
-            (EventMeasurement(MeasurementKind.SEVERITY, severity, source=source),)
-            if severity
-            else ()
-        )
+        measurements = self._measurements(properties, source)
         if country_query is None:
             event: WorldwideDisasterEvent | DisasterEvent = WorldwideDisasterEvent(
                 event_id=event_id,
@@ -266,6 +272,18 @@ class _GdacsEventAdapter:
                 geography_status=geography_status,
             )
         return event, (geometry_issue,) if geometry_issue is not None else ()
+
+    def _measurements(
+        self,
+        properties: dict[object, object],
+        source: SourceReference,
+    ) -> tuple[EventMeasurement, ...]:
+        severity = _text(properties.get("alertlevel"))
+        return (
+            (EventMeasurement(MeasurementKind.SEVERITY, severity, source=source),)
+            if severity
+            else ()
+        )
 
     def _event_url(self, properties: dict[object, object], event_id: str) -> str:
         urls = properties.get("url")
@@ -436,6 +454,37 @@ class _GdacsEventAdapter:
     async def aclose(self) -> None:
         if self._owns_client:
             await self._client.aclose()
+
+
+class GdacsEarthquakeAdapter(_GdacsEventAdapter):
+    """Discover GDACS earthquake events without promoting impact estimates."""
+
+    provider_name = "GDACS earthquakes"
+    source_id = "gdacs-earthquakes"
+    disaster = Disaster.EARTHQUAKE
+    event_type = "EQ"
+
+    def _measurements(
+        self,
+        properties: dict[object, object],
+        source: SourceReference,
+    ) -> tuple[EventMeasurement, ...]:
+        measurements = list(super()._measurements(properties, source))
+        severity_data = properties.get("severitydata")
+        magnitude = (
+            _number(severity_data.get("severity"))
+            if isinstance(severity_data, dict)
+            else None
+        )
+        if magnitude is not None:
+            measurements.append(
+                EventMeasurement(
+                    MeasurementKind.MAGNITUDE,
+                    magnitude,
+                    source=source,
+                )
+            )
+        return tuple(measurements)
 
 
 class GdacsTropicalCycloneAdapter(_GdacsEventAdapter):

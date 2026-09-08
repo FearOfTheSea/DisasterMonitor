@@ -7,8 +7,13 @@ import httpx
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery, WorldwideDisasterQuery
-from disaster_monitor.domain.disaster import Disaster, SourceAuthority
+from disaster_monitor.domain.disaster import (
+    Disaster,
+    MeasurementKind,
+    SourceAuthority,
+)
 from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
+    GdacsEarthquakeAdapter,
     GdacsFloodAdapter,
     GdacsVolcanicEruptionAdapter,
     GdacsWildfireAdapter,
@@ -78,6 +83,15 @@ def flood_feature(
 
 
 CASES = (
+    (
+        GdacsEarthquakeAdapter,
+        "gdacs_earthquake_search.json",
+        Disaster.EARTHQUAKE,
+        "EQ",
+        "gdacs-earthquakes",
+        "gdacs:eq:1558059",
+        "NEIC",
+    ),
     (
         GdacsFloodAdapter,
         "gdacs_flood_search.json",
@@ -158,6 +172,15 @@ async def test_gdacs_secondary_adapters_preserve_event_and_upstream_provenance(
         "pageSize": "100",
         "pageNumber": "1",
     }
+    if disaster is Disaster.EARTHQUAKE:
+        assert (
+            next(
+                item.value
+                for item in event.measurements
+                if item.kind is MeasurementKind.MAGNITUDE
+            )
+            == 7.7
+        )
 
     feature = payload["features"][0]  # type: ignore[index]
     feature["properties"]["iso3"] = "JPN"  # type: ignore[index]
@@ -190,8 +213,11 @@ async def test_gdacs_secondary_adapters_skip_wrong_event_type_and_bad_sibling(
 
     assert len(result.records) == 1
     assert result.issues[0].reason_code == "invalid_record"
+    wrong_disaster = (
+        Disaster.FLOOD if disaster is Disaster.EARTHQUAKE else Disaster.EARTHQUAKE
+    )
     wrong = await adapter_type(geography=CATALOG, client=client).find_worldwide_events(
-        WorldwideDisasterQuery(Disaster.EARTHQUAKE), now=NOW
+        WorldwideDisasterQuery(wrong_disaster), now=NOW
     )
     assert wrong.records == ()
     await client.aclose()

@@ -287,18 +287,26 @@ def test_accepts_map_layers_as_typed_situation_evidence() -> None:
 
 
 def test_packaged_copernicus_rapid_mapping_metadata_is_map_evidence_only() -> None:
-    descriptor = StaticSourceCatalog().get("copernicus-rapid-mapping-landslides")
+    catalog = StaticSourceCatalog()
+    source_ids = {
+        Disaster.EARTHQUAKE: "copernicus-rapid-mapping-earthquakes",
+        Disaster.FLOOD: "copernicus-rapid-mapping-floods",
+        Disaster.WILDFIRE: "copernicus-rapid-mapping-wildfires",
+        Disaster.LANDSLIDE: "copernicus-rapid-mapping-landslides",
+        Disaster.TROPICAL_CYCLONE: "copernicus-rapid-mapping-tropical-cyclones",
+        Disaster.VOLCANIC_ERUPTION: ("copernicus-rapid-mapping-volcanic-eruptions"),
+    }
 
-    assert descriptor is not None
-    assert descriptor.provider_registration_name == (
-        "Copernicus EMS Rapid Mapping landslides"
-    )
-    assert descriptor.information_roles == (SourceInformationRole.MAP_LAYERS,)
-    assert descriptor.supported_disasters == (Disaster.LANDSLIDE,)
-    assert descriptor.registered_tool_names == ("retrieve_situation_evidence",)
-    assert descriptor.authority_level == "secondary"
-    assert any("Risk and Recovery" in item for item in descriptor.limitations)
-    assert any("identity" in item for item in descriptor.limitations)
+    for disaster, source_id in source_ids.items():
+        descriptor = catalog.get(source_id)
+
+        assert descriptor is not None
+        assert descriptor.information_roles == (SourceInformationRole.MAP_LAYERS,)
+        assert descriptor.supported_disasters == (disaster,)
+        assert descriptor.registered_tool_names == ("retrieve_situation_evidence",)
+        assert descriptor.authority_level == "secondary"
+        assert any("Risk and Recovery" in item for item in descriptor.limitations)
+        assert any("identity" in item for item in descriptor.limitations)
 
 
 def test_packaged_ibtracs_metadata_is_track_reconciliation_only() -> None:

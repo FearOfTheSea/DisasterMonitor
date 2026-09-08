@@ -15,20 +15,25 @@ from disaster_monitor.infrastructure.disaster.registrations.common import (
 
 
 def build(context: RegistrationContext) -> tuple[ProviderRegistration, ...]:
+    return tuple(_registration(context, disaster) for disaster in Disaster)
+
+
+def _registration(
+    context: RegistrationContext, disaster: Disaster
+) -> ProviderRegistration:
     adapter = CopernicusRapidMappingAdapter(
+        disaster=disaster,
         snapshot_recorder=context.snapshot_recorder,
         timeout_seconds=context.settings.disaster_provider_timeout_seconds,
         max_response_bytes=context.settings.disaster_provider_max_response_bytes,
     )
-    return (
-        ProviderRegistration(
-            "Copernicus EMS Rapid Mapping landslides",
-            adapter,
-            situation_capabilities(frozenset({Disaster.LANDSLIDE}), worldwide=True),
-            tier=ProviderTier.SECONDARY,
-            source_id="copernicus-rapid-mapping-landslides",
-            allowed_hosts=adapter.allowed_hosts,
-            situation_provider=adapter,
-            worldwide_situation_provider=adapter,
-        ),
+    return ProviderRegistration(
+        adapter.provider_name,
+        adapter,
+        situation_capabilities(frozenset({disaster}), worldwide=True),
+        tier=ProviderTier.SECONDARY,
+        source_id=adapter.source_id,
+        allowed_hosts=adapter.allowed_hosts,
+        situation_provider=adapter,
+        worldwide_situation_provider=adapter,
     )

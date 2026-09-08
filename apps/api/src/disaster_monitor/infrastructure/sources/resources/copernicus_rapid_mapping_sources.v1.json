@@ -1,0 +1,264 @@
+{
+  "catalog_version": "2.9.0",
+  "sources": [
+    {
+      "source_id": "copernicus-rapid-mapping-earthquakes",
+      "organization_name": "Copernicus Emergency Management Service",
+      "display_name": "Copernicus EMS Rapid Mapping earthquake map evidence",
+      "jurisdiction": "global on-demand emergency mapping",
+      "authority_level": "secondary",
+      "information_roles": [
+        "map_layers"
+      ],
+      "supported_disasters": [
+        "earthquake"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_public_rapid_mapping_json_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "on-demand activation and product delivery; coverage exists only where an authorised user requested Rapid Mapping",
+      "attribution_guidance": "Credit Copernicus Emergency Management Service Rapid Mapping and link the EMSR activation. Present only delivered feasible delineation or grading products as secondary map evidence associated with an already selected earthquake event.",
+      "limitations": [
+        "This provider performs no event discovery. A Rapid Mapping activation is a response request and does not independently prove event identity or occurrence.",
+        "Only EMSR Rapid Mapping activations categorized as Earthquake can qualify; Risk and Recovery EMSN products are excluded.",
+        "Candidates require same-country, event-time-within-three-days, and centroid-within-100-km checks unless the activation and selected event share the exact normalized GDACS identifier.",
+        "Delineation and grading products apply to requested Areas of Interest and do not establish complete event extent, unmapped impacts, casualties, warnings, response status, or national totals.",
+        "A missing activation is a coverage gap, not evidence that no earthquake occurred."
+      ],
+      "registered_tool_names": [
+        "retrieve_situation_evidence"
+      ],
+      "provider_registration_name": "Copernicus EMS Rapid Mapping earthquakes",
+      "implementation_status": "implemented",
+      "documentation_path": "docs/sources/copernicus-ems-mapping.md",
+      "allowed_hosts": [
+        "mapping.emergency.copernicus.eu",
+        "rapidmapping.emergency.copernicus.eu"
+      ]
+    },
+    {
+      "source_id": "copernicus-rapid-mapping-floods",
+      "organization_name": "Copernicus Emergency Management Service",
+      "display_name": "Copernicus EMS Rapid Mapping flood map evidence",
+      "jurisdiction": "global on-demand emergency mapping",
+      "authority_level": "secondary",
+      "information_roles": [
+        "map_layers"
+      ],
+      "supported_disasters": [
+        "flood"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_public_rapid_mapping_json_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "on-demand activation and product delivery; coverage exists only where an authorised user requested Rapid Mapping",
+      "attribution_guidance": "Credit Copernicus Emergency Management Service Rapid Mapping and link the EMSR activation. Present only delivered feasible delineation or grading products as secondary map evidence associated with an already selected flood event.",
+      "limitations": [
+        "This provider performs no event discovery. A Rapid Mapping activation is a response request and does not independently prove event identity or occurrence.",
+        "Only EMSR Rapid Mapping activations categorized as Flood can qualify; Risk and Recovery EMSN products are excluded.",
+        "Candidates require same-country, event-time-within-three-days, and centroid-within-100-km checks unless the activation and selected event share the exact normalized GDACS identifier.",
+        "Delineation and grading products apply to requested Areas of Interest and do not establish complete event extent, unmapped impacts, casualties, warnings, response status, or national totals.",
+        "A missing activation is a coverage gap, not evidence that no flood occurred."
+      ],
+      "registered_tool_names": [
+        "retrieve_situation_evidence"
+      ],
+      "provider_registration_name": "Copernicus EMS Rapid Mapping floods",
+      "implementation_status": "implemented",
+      "documentation_path": "docs/sources/copernicus-ems-mapping.md",
+      "allowed_hosts": [
+        "mapping.emergency.copernicus.eu",
+        "rapidmapping.emergency.copernicus.eu"
+      ]
+    },
+    {
+      "source_id": "copernicus-rapid-mapping-wildfires",
+      "organization_name": "Copernicus Emergency Management Service",
+      "display_name": "Copernicus EMS Rapid Mapping wildfire map evidence",
+      "jurisdiction": "global on-demand emergency mapping",
+      "authority_level": "secondary",
+      "information_roles": [
+        "map_layers"
+      ],
+      "supported_disasters": [
+        "wildfire"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_public_rapid_mapping_json_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "on-demand activation and product delivery; coverage exists only where an authorised user requested Rapid Mapping",
+      "attribution_guidance": "Credit Copernicus Emergency Management Service Rapid Mapping and link the EMSR activation. Present only delivered feasible delineation or grading products as secondary map evidence associated with an already selected wildfire event.",
+      "limitations": [
+        "This provider performs no event discovery. A Rapid Mapping activation is a response request and does not independently prove event identity or occurrence.",
+        "Only EMSR Rapid Mapping activations categorized as Wildfire can qualify; Risk and Recovery EMSN products are excluded.",
+        "Candidates require same-country, event-time-within-three-days, and centroid-within-100-km checks unless the activation and selected event share the exact normalized GDACS identifier.",
+        "Delineation and grading products apply to requested Areas of Interest and do not establish complete event extent, unmapped impacts, casualties, warnings, response status, or national totals.",
+        "A missing activation is a coverage gap, not evidence that no wildfire occurred."
+      ],
+      "registered_tool_names": [
+        "retrieve_situation_evidence"
+      ],
+      "provider_registration_name": "Copernicus EMS Rapid Mapping wildfires",
+      "implementation_status": "implemented",
+      "documentation_path": "docs/sources/copernicus-ems-mapping.md",
+      "allowed_hosts": [
+        "mapping.emergency.copernicus.eu",
+        "rapidmapping.emergency.copernicus.eu"
+      ]
+    },
+    {
+      "source_id": "copernicus-rapid-mapping-landslides",
+      "organization_name": "Copernicus Emergency Management Service",
+      "display_name": "Copernicus EMS Rapid Mapping landslide map evidence",
+      "jurisdiction": "global on-demand emergency mapping",
+      "authority_level": "secondary",
+      "information_roles": [
+        "map_layers"
+      ],
+      "supported_disasters": [
+        "landslide"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_public_rapid_mapping_json_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "on-demand activation and product delivery; coverage exists only where an authorised user requested Rapid Mapping",
+      "attribution_guidance": "Credit Copernicus Emergency Management Service Rapid Mapping and link the EMSR activation. Present only delivered feasible delineation or grading products as secondary map evidence associated with an already selected landslide event.",
+      "limitations": [
+        "This provider performs no event discovery. A Rapid Mapping activation is a response request and does not independently prove event identity or occurrence.",
+        "Only EMSR Rapid Mapping activations categorized as Mass movement can qualify; Risk and Recovery EMSN preparedness, risk, and recovery assessments are excluded.",
+        "Candidates require same-country, event-time-within-three-days, and centroid-within-100-km checks unless the activation and selected event share the exact normalized GDACS identifier.",
+        "Possible correlation is retained when Copernicus and the selected discovery source do not expose a shared stable event identifier through these integrations.",
+        "Delineation and grading products apply to requested Areas of Interest and do not establish complete event extent, unmapped impacts, casualties, warnings, response status, or national totals.",
+        "The category-filtered public API currently exposes a small set of mass-movement Rapid Mapping activations; absence is not evidence that no landslide occurred."
+      ],
+      "registered_tool_names": [
+        "retrieve_situation_evidence"
+      ],
+      "provider_registration_name": "Copernicus EMS Rapid Mapping landslides",
+      "implementation_status": "implemented",
+      "documentation_path": "docs/sources/copernicus-ems-mapping.md",
+      "allowed_hosts": [
+        "mapping.emergency.copernicus.eu",
+        "rapidmapping.emergency.copernicus.eu"
+      ]
+    },
+    {
+      "source_id": "copernicus-rapid-mapping-tropical-cyclones",
+      "organization_name": "Copernicus Emergency Management Service",
+      "display_name": "Copernicus EMS Rapid Mapping tropical-cyclone map evidence",
+      "jurisdiction": "global on-demand emergency mapping",
+      "authority_level": "secondary",
+      "information_roles": [
+        "map_layers"
+      ],
+      "supported_disasters": [
+        "tropical_cyclone"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_public_rapid_mapping_json_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "on-demand activation and product delivery; coverage exists only where an authorised user requested Rapid Mapping",
+      "attribution_guidance": "Credit Copernicus Emergency Management Service Rapid Mapping and link the EMSR activation. Present only delivered feasible delineation or grading products as secondary map evidence associated with an already selected tropical-cyclone event.",
+      "limitations": [
+        "This provider performs no event discovery. A Rapid Mapping activation is a response request and does not independently prove event identity or occurrence.",
+        "Only EMSR Rapid Mapping activations categorized as Storm can qualify; Risk and Recovery EMSN products are excluded.",
+        "Because the CEMS Storm category also contains non-cyclonic storms, an exact normalized TC GDACS identifier shared with the selected event is mandatory.",
+        "The activation centroid and mapped Areas of Interest are not a storm track, forecast cone, wind field, warning boundary, or complete impact extent.",
+        "A missing activation is a coverage gap, not evidence that no tropical cyclone occurred."
+      ],
+      "registered_tool_names": [
+        "retrieve_situation_evidence"
+      ],
+      "provider_registration_name": "Copernicus EMS Rapid Mapping tropical cyclones",
+      "implementation_status": "implemented",
+      "documentation_path": "docs/sources/copernicus-ems-mapping.md",
+      "allowed_hosts": [
+        "mapping.emergency.copernicus.eu",
+        "rapidmapping.emergency.copernicus.eu"
+      ]
+    },
+    {
+      "source_id": "copernicus-rapid-mapping-volcanic-eruptions",
+      "organization_name": "Copernicus Emergency Management Service",
+      "display_name": "Copernicus EMS Rapid Mapping volcanic-eruption map evidence",
+      "jurisdiction": "global on-demand emergency mapping",
+      "authority_level": "secondary",
+      "information_roles": [
+        "map_layers"
+      ],
+      "supported_disasters": [
+        "volcanic_eruption"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country",
+        "worldwide"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_public_rapid_mapping_json_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "on-demand activation and product delivery; coverage exists only where an authorised user requested Rapid Mapping",
+      "attribution_guidance": "Credit Copernicus Emergency Management Service Rapid Mapping and link the EMSR activation. Present only delivered feasible delineation or grading products as secondary map evidence associated with an already selected volcanic-eruption event.",
+      "limitations": [
+        "This provider performs no event discovery. A Rapid Mapping activation is a response request and does not independently prove event identity or occurrence.",
+        "Only EMSR Rapid Mapping activations categorized as Volcanic activity can qualify; Risk and Recovery EMSN products are excluded.",
+        "Candidates require same-country, event-time-within-three-days, and centroid-within-100-km checks unless the activation and selected event share the exact normalized GDACS identifier.",
+        "Mapped Areas of Interest do not establish ash concentration, ash-cloud trajectory, exclusion zones, complete impacts, casualties, warnings, or national totals.",
+        "A missing activation is a coverage gap, not evidence that no volcanic eruption occurred."
+      ],
+      "registered_tool_names": [
+        "retrieve_situation_evidence"
+      ],
+      "provider_registration_name": "Copernicus EMS Rapid Mapping volcanic eruptions",
+      "implementation_status": "implemented",
+      "documentation_path": "docs/sources/copernicus-ems-mapping.md",
+      "allowed_hosts": [
+        "mapping.emergency.copernicus.eu",
+        "rapidmapping.emergency.copernicus.eu"
+      ]
+    }
+  ]
+}

@@ -21,6 +21,7 @@ def test_gdacs_registration_family_has_named_members() -> None:
     registrations = build_gdacs(RegistrationContext(settings, geography, None))
 
     assert isinstance(registrations, GdacsRegistrations)
+    assert registrations.earthquakes.source_id == "gdacs-earthquakes"
     assert registrations.floods.source_id == "gdacs-floods"
     assert registrations.wildfires.source_id == "gdacs-wildfires"
     assert registrations.tropical_cyclones.source_id == "gdacs-tropical-cyclones"
@@ -66,6 +67,16 @@ def test_aggregate_provider_registration_order_and_identities_are_stable() -> No
             "secondary",
             ("event_discovery",),
             ("flood",),
+            ("www.gdacs.org",),
+            True,
+            True,
+            False,
+        ),
+        (
+            "gdacs-earthquakes",
+            "secondary",
+            ("event_discovery",),
+            ("earthquake",),
             ("www.gdacs.org",),
             True,
             True,
@@ -132,11 +143,79 @@ def test_aggregate_provider_registration_order_and_identities_are_stable() -> No
             False,
         ),
         (
+            "copernicus-rapid-mapping-earthquakes",
+            "secondary",
+            ("situation_evidence",),
+            ("earthquake",),
+            (
+                "mapping.emergency.copernicus.eu",
+                "rapidmapping.emergency.copernicus.eu",
+            ),
+            False,
+            False,
+            True,
+        ),
+        (
+            "copernicus-rapid-mapping-floods",
+            "secondary",
+            ("situation_evidence",),
+            ("flood",),
+            (
+                "mapping.emergency.copernicus.eu",
+                "rapidmapping.emergency.copernicus.eu",
+            ),
+            False,
+            False,
+            True,
+        ),
+        (
+            "copernicus-rapid-mapping-wildfires",
+            "secondary",
+            ("situation_evidence",),
+            ("wildfire",),
+            (
+                "mapping.emergency.copernicus.eu",
+                "rapidmapping.emergency.copernicus.eu",
+            ),
+            False,
+            False,
+            True,
+        ),
+        (
             "copernicus-rapid-mapping-landslides",
             "secondary",
             ("situation_evidence",),
             ("landslide",),
-            ("rapidmapping.emergency.copernicus.eu",),
+            (
+                "mapping.emergency.copernicus.eu",
+                "rapidmapping.emergency.copernicus.eu",
+            ),
+            False,
+            False,
+            True,
+        ),
+        (
+            "copernicus-rapid-mapping-tropical-cyclones",
+            "secondary",
+            ("situation_evidence",),
+            ("tropical_cyclone",),
+            (
+                "mapping.emergency.copernicus.eu",
+                "rapidmapping.emergency.copernicus.eu",
+            ),
+            False,
+            False,
+            True,
+        ),
+        (
+            "copernicus-rapid-mapping-volcanic-eruptions",
+            "secondary",
+            ("situation_evidence",),
+            ("volcanic_eruption",),
+            (
+                "mapping.emergency.copernicus.eu",
+                "rapidmapping.emergency.copernicus.eu",
+            ),
             False,
             False,
             True,

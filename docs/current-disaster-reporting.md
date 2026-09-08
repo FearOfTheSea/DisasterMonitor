@@ -92,9 +92,10 @@ See [noaa-nws-weather-alerts.md](sources/noaa-nws-weather-alerts.md).
 
 ## Providers
 
-- EMSC SeismicPortal and USGS provide bounded named-country and worldwide scientific
-  earthquake discovery. EMSC is secondary corroboration and can share an originating
-  network with USGS. Agreement is not automatically independent confirmation.
+- EMSC SeismicPortal, GDACS, and USGS provide bounded named-country and worldwide
+  earthquake discovery. GDACS retains NEIC/USGS lineage; EMSC can also share an
+  originating network with USGS. Agreement is not automatically independent
+  confirmation.
 - GDACS provides bounded named-country and worldwide tropical-cyclone discovery.
 - NOAA IBTrACS can reconcile one active track after GDACS selects a cyclone. It
   requires a unique non-generic name, onset, and track-proximity match. It remains
@@ -135,10 +136,11 @@ See [noaa-nws-weather-alerts.md](sources/noaa-nws-weather-alerts.md).
   landslide discovery from the COOLR report catalogue. Runtime evidence remains
   secondary. Accepted reports use only the documented GLC and LRC import classes.
   The catalogue is not complete real-time surveillance.
-- Copernicus EMS Rapid Mapping adds sparse secondary landslide map evidence after
-  selection. It requires an EMSR Mass movement activation plus conservative country,
-  time, centroid, and delivered feasible DEL/GRA checks. EMSN risk assessments and
-  activation-only claims are excluded.
+- Copernicus EMS Rapid Mapping adds sparse secondary map evidence for every configured
+  hazard after selection. It requires an exact CEMS hazard category, country agreement,
+  shared GDACS identity or conservative time/centroid bounds, and a delivered feasible
+  DEL/GRA product. Tropical cyclones require shared identity because `Storm` is broader
+  than that hazard. EMSN risk assessments and activation-only claims are excluded.
 - Smithsonian/GVP provides bounded named-country and worldwide volcanic-eruption
   discovery from explicit WVAR eruptive-activity report types, with source-backed GVP
   identity and point geometry. It does not admit unrest or other observations and is

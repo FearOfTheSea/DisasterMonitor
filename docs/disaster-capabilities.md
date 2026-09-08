@@ -26,12 +26,13 @@ dynamically imports or constructs providers.
 | CEMS Global Flood Monitoring (GFM) | Primary | Event discovery | Flood | Named countries and worldwide | Country-clipped class-1 `ensemble_flood_extent` statistics |
 | GDACS floods | Secondary | Event discovery | Flood | Named countries and worldwide | GloFAS/FloodList-derived curated events; centroid only |
 | EMSC SeismicPortal | Secondary | Event discovery and scientific corroboration | Earthquake | Named countries and worldwide | Maintained-country validation; CC BY 4.0 FDSN event data |
+| GDACS earthquakes | Secondary | Event discovery | Earthquake | Named countries and worldwide | NEIC-derived event observation; no modelled impact promotion |
 | USGS | Secondary | Event discovery | Earthquake | Named countries and worldwide | Country validation for named scope |
 | NASA EONET Wildfires | Primary | Event discovery | Wildfire | Named countries and worldwide | EONET geometry and maintained-country validation |
 | GDACS wildfires | Secondary | Event discovery | Wildfire | Named countries and worldwide | GWIS-derived event curation; FIRMS-dependent upstream |
 | NASA FIRMS observations | Secondary | Satellite observation | Wildfire | Selected named-country or worldwide event | `NASA_FIRMS_MAP_KEY`; exact event point; aggregated possible correlation only |
 | NASA COOLR Landslides | Primary | Event discovery | Landslide | Named countries and worldwide | COOLR point and maintained-country validation |
-| Copernicus EMS Rapid Mapping landslides | Secondary | Mapping evidence | Landslide | Selected named-country or worldwide event | EMSR Mass movement; time/centroid match; delivered feasible DEL/GRA product |
+| Copernicus EMS Rapid Mapping | Secondary | Mapping evidence | All six configured disasters | Selected named-country or worldwide event | Exact hazard category; shared GDACS ID or bounded time/centroid match; tropical cyclones require shared ID; delivered feasible DEL/GRA product |
 | GDACS tropical cyclones | Secondary | Event discovery | Tropical cyclone | Named countries and worldwide | None |
 | NOAA IBTrACS track reconciliation | Secondary | Scientific verification and map layers | Tropical cyclone | Selected GDACS named-country or worldwide event | Unique name/start/track match against v04r01 active subset |
 | NOAA NHC/CPHC cyclone forecasts | Primary | Operational forecast map layers | Tropical cyclone | Selected GDACS named-country or worldwide event | Active Atlantic/Eastern/Central Pacific product; unique name/center match |
@@ -160,11 +161,12 @@ directives, or resource orders.
 GFM provides primary global named-country and bounded countryless worldwide flood
 event discovery.
 
-EMSC and USGS provide global named-country and countryless worldwide earthquake event
-discovery. GDACS provides that scope for tropical cyclones.
+EMSC, GDACS, and USGS provide global named-country and countryless worldwide earthquake
+event discovery. GDACS also provides that scope for tropical cyclones.
 
-EMSC is an aggregated scientific catalogue. A record shared with a contributing
-network represented by USGS is not independent corroboration.
+EMSC is an aggregated scientific catalogue. GDACS earthquake records retain their
+NEIC/USGS lineage. Records shared with a contributing network represented by USGS are
+not independent corroboration.
 
 NASA EONET is a curated secondary wildfire registry. NASA COOLR is a secondary
 landslide report catalogue. Both are bounded event-discovery paths, not complete
@@ -176,16 +178,18 @@ geographic and reporting biases.
 
 A missing record from either source does not prove that the disaster did not occur.
 
-Copernicus EMS Rapid Mapping can add sparse landslide map evidence after COOLR selects
-an event.
+Copernicus EMS Rapid Mapping can add sparse map evidence after any configured hazard
+selects an event.
 
-An EMSR activation must pass country, time, centroid, and delivered feasible DEL/GRA
-product checks.
+An EMSR activation must match the exact hazard category and pass country and delivered
+feasible DEL/GRA product checks. Association requires either a shared normalized GDACS
+identifier or conservative time and centroid bounds. Tropical cyclones require the
+shared ID because the CEMS Storm category also contains non-cyclonic events.
 
 EMSN risk and preparedness products are excluded. Activation alone does not confirm
 occurrence. An absent activation says nothing about occurrence.
 
-GDACS FL, WF, and VO provide fallback secondary discovery.
+GDACS EQ, FL, WF, and VO provide fallback secondary discovery.
 
 Their upstream lineage matters. FL overlaps the Copernicus/EC-JRC family used by GFM.
 WF is produced by GWIS from FIRMS detections. VO summarizes VAA and Smithsonian

@@ -1,4 +1,4 @@
-"""Event-associated Copernicus EMS Rapid Mapping evidence for landslides."""
+"""Event-associated Copernicus EMS Rapid Mapping evidence."""
 
 import re
 import unicodedata
@@ -56,6 +56,57 @@ _POINT = re.compile(
     re.IGNORECASE,
 )
 _RAPID_CODE = re.compile(r"^EMSR\d+$", re.IGNORECASE)
+_GDACS_ID = re.compile(r"^(EQ|FL|WF|TC|VO)(\d+)$", re.IGNORECASE)
+
+
+@dataclass(frozen=True, slots=True)
+class _HazardProfile:
+    query_category: str
+    response_category: str
+    source_id: str
+    provider_name: str
+    requires_shared_id: bool = False
+
+
+_HAZARD_PROFILES = {
+    Disaster.EARTHQUAKE: _HazardProfile(
+        "earthquake",
+        "Earthquake",
+        "copernicus-rapid-mapping-earthquakes",
+        "Copernicus EMS Rapid Mapping earthquakes",
+    ),
+    Disaster.FLOOD: _HazardProfile(
+        "flood",
+        "Flood",
+        "copernicus-rapid-mapping-floods",
+        "Copernicus EMS Rapid Mapping floods",
+    ),
+    Disaster.WILDFIRE: _HazardProfile(
+        "wildfire",
+        "Wildfire",
+        "copernicus-rapid-mapping-wildfires",
+        "Copernicus EMS Rapid Mapping wildfires",
+    ),
+    Disaster.LANDSLIDE: _HazardProfile(
+        "mass",
+        "Mass movement",
+        "copernicus-rapid-mapping-landslides",
+        "Copernicus EMS Rapid Mapping landslides",
+    ),
+    Disaster.TROPICAL_CYCLONE: _HazardProfile(
+        "storm",
+        "Storm",
+        "copernicus-rapid-mapping-tropical-cyclones",
+        "Copernicus EMS Rapid Mapping tropical cyclones",
+        True,
+    ),
+    Disaster.VOLCANIC_ERUPTION: _HazardProfile(
+        "volcanic",
+        "Volcanic activity",
+        "copernicus-rapid-mapping-volcanic-eruptions",
+        "Copernicus EMS Rapid Mapping volcanic eruptions",
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,23 +120,35 @@ class _Activation:
     latitude: float
     longitude: float
     distance_km: float
+    provider_event_ids: tuple[str, ...]
+    correlation: CorrelationStatus
 
 
 class CopernicusRapidMappingAdapter:
-    """Attach delivered crisis maps to a selected landslide event."""
+    """Attach delivered crisis maps to a selected event of one hazard."""
 
-    provider_name = "Copernicus EMS Rapid Mapping landslides"
-    source_id = "copernicus-rapid-mapping-landslides"
-    allowed_hosts = frozenset({"rapidmapping.emergency.copernicus.eu"})
+    allowed_hosts = frozenset(
+        {
+            "mapping.emergency.copernicus.eu",
+            "rapidmapping.emergency.copernicus.eu",
+        }
+    )
 
     def __init__(
         self,
         *,
+        disaster: Disaster = Disaster.LANDSLIDE,
         client: httpx.AsyncClient | None = None,
         snapshot_recorder: SourcePayloadRecorder | None = None,
         timeout_seconds: float = 10.0,
         max_response_bytes: int = 2_000_000,
     ) -> None:
+        if disaster not in _HAZARD_PROFILES:
+            raise ValueError(f"Unsupported Rapid Mapping disaster: {disaster}")
+        self.disaster = disaster
+        self._profile = _HAZARD_PROFILES[disaster]
+        self.provider_name = self._profile.provider_name
+        self.source_id = self._profile.source_id
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._snapshot_recorder = snapshot_recorder
@@ -98,10 +161,7 @@ class CopernicusRapidMappingAdapter:
         *,
         now: datetime,
     ) -> ProviderBatch[SituationReport]:
-        if (
-            query.disaster is not Disaster.LANDSLIDE
-            or event.disaster is not Disaster.LANDSLIDE
-        ):
+        if query.disaster is not self.disaster or event.disaster is not self.disaster:
             return ProviderBatch()
         if event.country.alpha3_code != query.country.alpha3_code:
             return ProviderBatch()
@@ -124,10 +184,7 @@ class CopernicusRapidMappingAdapter:
         *,
         now: datetime,
     ) -> ProviderBatch[SituationReport]:
-        if (
-            query.disaster is not Disaster.LANDSLIDE
-            or event.disaster is not Disaster.LANDSLIDE
-        ):
+        if query.disaster is not self.disaster or event.disaster is not self.disaster:
             return ProviderBatch()
         return await self._get_reports(
             event,
@@ -148,19 +205,19 @@ class CopernicusRapidMappingAdapter:
     ) -> ProviderBatch[SituationReport]:
         point = _event_point(event)
         if point is None:
-            return ProviderBatch(issues=(_geometry_unavailable(),))
+            return ProviderBatch(issues=(_geometry_unavailable(self.provider_name),))
         latitude, longitude = point
         list_capture = build_snapshot_capture(
             self._snapshot_recorder,
             source_id=self.source_id,
-            parameters={"category": "mass", "limit": "100"},
+            parameters={"category": self._profile.query_category, "limit": "100"},
             rights_id="copernicus-data-legal-notice",
             retrieved_at=now,
         )
         payload = await get_json(
             self._client,
             _ACTIVATION_INFO_URL,
-            params={"category": "mass", "limit": 100},
+            params={"category": self._profile.query_category, "limit": 100},
             capture=list_capture,
             allowed_hosts=self.allowed_hosts,
             max_bytes=self._max_response_bytes,
@@ -169,7 +226,9 @@ class CopernicusRapidMappingAdapter:
         if not isinstance(payload, dict) or not isinstance(
             payload.get("results"), list
         ):
-            return ProviderBatch(issues=(_invalid_schema("activation list"),))
+            return ProviderBatch(
+                issues=(_invalid_schema(self.provider_name, "activation list"),)
+            )
 
         candidates: list[_Activation] = []
         issues: list[ProviderIssue] = []
@@ -181,14 +240,18 @@ class CopernicusRapidMappingAdapter:
                     latitude=latitude,
                     longitude=longitude,
                     required_country_names=required_country_names,
+                    expected_category=self._profile.response_category,
+                    selected_provider_ids=(event.event_id, *event.provider_ids),
+                    requires_shared_id=self._profile.requires_shared_id,
                 )
             except (TypeError, ValueError, OverflowError) as error:
-                issues.append(_invalid_record(index, error))
+                issues.append(_invalid_record(self.provider_name, index, error))
                 continue
             if activation is not None:
                 candidates.append(activation)
         candidates.sort(
             key=lambda item: (
+                item.correlation is not CorrelationStatus.MATCHED,
                 abs(item.event_time - event.event_time),
                 item.distance_km,
                 item.code,
@@ -196,7 +259,7 @@ class CopernicusRapidMappingAdapter:
         )
         if not candidates:
             if not issues:
-                issues.append(_empty_result())
+                issues.append(_empty_result(self.provider_name))
             return ProviderBatch(issues=tuple(issues))
 
         for activation in candidates[:_MAX_CANDIDATES]:
@@ -218,7 +281,9 @@ class CopernicusRapidMappingAdapter:
             )
             result = _detail_result(detail, activation.code)
             if result is None:
-                issues.append(_invalid_schema(f"activation {activation.code}"))
+                issues.append(
+                    _invalid_schema(self.provider_name, f"activation {activation.code}")
+                )
                 continue
             product_types = _qualifying_product_types(result)
             if not product_types:
@@ -276,17 +341,20 @@ class CopernicusRapidMappingAdapter:
                 ),
                 facts=facts,
                 event_id=event.event_id,
-                correlation=CorrelationStatus.POSSIBLE,
+                correlation=activation.correlation,
                 reported_event_time=activation.event_time,
                 locations=(activation.name,),
                 countries=countries,
                 country_codes=country_codes,
-                disaster=Disaster.LANDSLIDE,
-                provider_event_ids=(f"cems:{activation.code}",),
+                disaster=self.disaster,
+                provider_event_ids=(
+                    f"cems:{activation.code}",
+                    *activation.provider_event_ids,
+                ),
             )
             return ProviderBatch((report,), tuple(issues))
 
-        issues.append(_no_qualifying_product())
+        issues.append(_no_qualifying_product(self.provider_name))
         return ProviderBatch(issues=tuple(issues))
 
     async def aclose(self) -> None:
@@ -315,13 +383,16 @@ def _parse_activation(
     latitude: float,
     longitude: float,
     required_country_names: tuple[str, ...],
+    expected_category: str,
+    selected_provider_ids: tuple[str, ...],
+    requires_shared_id: bool,
 ) -> _Activation | None:
     if not isinstance(value, dict):
         raise TypeError("activation is not an object")
     code = _text(value.get("code"))
     if not _RAPID_CODE.fullmatch(code):
         return None
-    if _text(value.get("category")).casefold() != "mass movement":
+    if _text(value.get("category")).casefold() != expected_category.casefold():
         return None
     if _positive_int(value.get("n_products")) is None:
         return None
@@ -334,8 +405,6 @@ def _parse_activation(
     mapped_time = normalize_timestamp(value.get("eventTime"))
     if mapped_time is None:
         raise ValueError("event time is missing")
-    if abs(mapped_time - event_time) > _MAX_TIME_DIFFERENCE:
-        return None
     mapped_point = _wkt_point(value.get("centroid"))
     if mapped_point is None:
         raise ValueError("centroid is missing")
@@ -346,7 +415,15 @@ def _parse_activation(
         mapped_latitude,
         mapped_longitude,
     )
-    if distance > _MAX_DISTANCE_KM:
+    gdacs_id = _gdacs_provider_id(value.get("gdacsId"))
+    selected_ids = {item.casefold() for item in selected_provider_ids}
+    has_shared_id = gdacs_id is not None and gdacs_id.casefold() in selected_ids
+    if requires_shared_id and not has_shared_id:
+        return None
+    if not has_shared_id and (
+        abs(mapped_time - event_time) > _MAX_TIME_DIFFERENCE
+        or distance > _MAX_DISTANCE_KM
+    ):
         return None
     name = sanitize_provider_text(_text(value.get("name")), limit=240)
     if not name:
@@ -361,7 +438,19 @@ def _parse_activation(
         latitude=mapped_latitude,
         longitude=mapped_longitude,
         distance_km=distance,
+        provider_event_ids=(gdacs_id,) if gdacs_id is not None else (),
+        correlation=(
+            CorrelationStatus.MATCHED if has_shared_id else CorrelationStatus.POSSIBLE
+        ),
     )
+
+
+def _gdacs_provider_id(value: object) -> str | None:
+    match = _GDACS_ID.fullmatch(_text(value))
+    if match is None:
+        return None
+    event_type, event_id = match.groups()
+    return f"gdacs:{event_type.lower()}:{event_id}"
 
 
 def _detail_result(payload: object, code: str) -> dict[str, object] | None:
@@ -464,45 +553,45 @@ def _distance_km(
     return 2 * 6_371.0088 * asin(min(1.0, sqrt(value)))
 
 
-def _geometry_unavailable() -> ProviderIssue:
+def _geometry_unavailable(provider_name: str) -> ProviderIssue:
     return ProviderIssue(
-        CopernicusRapidMappingAdapter.provider_name,
+        provider_name,
         "Copernicus EMS Rapid Mapping: The selected event has no source-backed "
         "point for conservative map correlation.",
         reason_code="event_geometry_unavailable",
     )
 
 
-def _invalid_schema(context: str) -> ProviderIssue:
+def _invalid_schema(provider_name: str, context: str) -> ProviderIssue:
     return ProviderIssue(
-        CopernicusRapidMappingAdapter.provider_name,
+        provider_name,
         "Copernicus EMS Rapid Mapping: The response had no supported schema.",
         reason_code="invalid_schema",
         detail=context,
     )
 
 
-def _invalid_record(index: int, error: Exception) -> ProviderIssue:
+def _invalid_record(provider_name: str, index: int, error: Exception) -> ProviderIssue:
     return ProviderIssue(
-        CopernicusRapidMappingAdapter.provider_name,
+        provider_name,
         "Copernicus EMS Rapid Mapping: A malformed activation was skipped.",
         reason_code="invalid_record",
         detail=f"results[{index}]: {error}",
     )
 
 
-def _empty_result() -> ProviderIssue:
+def _empty_result(provider_name: str) -> ProviderIssue:
     return ProviderIssue(
-        CopernicusRapidMappingAdapter.provider_name,
+        provider_name,
         "Copernicus EMS Rapid Mapping: No conservatively correlated Rapid Mapping "
         "activation was found.",
         reason_code="empty_result",
     )
 
 
-def _no_qualifying_product() -> ProviderIssue:
+def _no_qualifying_product(provider_name: str) -> ProviderIssue:
     return ProviderIssue(
-        CopernicusRapidMappingAdapter.provider_name,
+        provider_name,
         "Copernicus EMS Rapid Mapping: Matching activation metadata had no delivered "
         "feasible delineation or grading product.",
         reason_code="no_qualifying_mapping_product",

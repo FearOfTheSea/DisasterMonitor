@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [121.3517, -8.3101]},
+      "properties": {
+        "eventtype": "EQ",
+        "eventid": 1558059,
+        "episodeid": 1725109,
+        "glide": "EQ-2026-000001-IDN",
+        "name": "Earthquake in Indonesia",
+        "description": "Earthquake in Indonesia",
+        "url": {
+          "details": "https://www.gdacs.org/gdacsapi/api/events/geteventdata?eventtype=EQ&eventid=1558059"
+        },
+        "alertlevel": "Red",
+        "country": "Indonesia",
+        "fromdate": "2026-08-14T21:58:21",
+        "todate": "2026-08-14T21:58:21",
+        "datemodified": "2026-09-08T06:41:44",
+        "iso3": "IDN",
+        "source": "NEIC",
+        "sourceid": "",
+        "affectedcountries": [{"iso3": "IDN", "countryname": "Indonesia"}],
+        "severitydata": {
+          "severity": 7.7,
+          "severitytext": "Magnitude 7.7M, Depth:10km",
+          "severityunit": "M"
+        }
+      }
+    }
+  ]
+}

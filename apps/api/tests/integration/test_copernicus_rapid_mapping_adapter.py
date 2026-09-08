@@ -7,6 +7,9 @@ import httpx
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery
+from disaster_monitor.application.evidence.source_evidence_policy import (
+    validate_situation_evidence,
+)
 from disaster_monitor.domain.disaster import (
     CorrelationStatus,
     Country,
@@ -37,31 +40,36 @@ DETAIL = (
 ).read_bytes()
 
 
-def landslide_event(*, geometry: bool = True) -> DisasterEvent:
+def disaster_event(
+    disaster: Disaster = Disaster.LANDSLIDE,
+    *,
+    geometry: bool = True,
+    provider_ids: tuple[str, ...] = ("coolr:fixture",),
+) -> DisasterEvent:
     source = SourceReference(
-        source_id="selected-landslide",
-        publisher="Selected landslide provider",
-        title="Selected landslide",
-        canonical_url="https://example.test/landslide",
+        source_id=f"selected-{disaster.value}",
+        publisher="Selected event provider",
+        title="Selected event",
+        canonical_url="https://example.test/event",
         published_at=NOW,
         updated_at=NOW,
         retrieved_at=NOW,
     )
     return DisasterEvent(
-        event_id="landslide:selected",
-        disaster=Disaster.LANDSLIDE,
+        event_id=f"{disaster.value}:selected",
+        disaster=disaster,
         location="San Felice a Cancello, Campania",
         country=ITALY,
         event_time=datetime(2024, 8, 27, 13, tzinfo=UTC),
         source=source,
         geometry=point_event_geometry(40.81, 14.61, source) if geometry else None,
-        provider_ids=("coolr:fixture",),
+        provider_ids=provider_ids,
     )
 
 
-def landslide_query() -> DisasterQuery:
+def disaster_query(disaster: Disaster = Disaster.LANDSLIDE) -> DisasterQuery:
     return DisasterQuery(
-        Disaster.LANDSLIDE,
+        disaster,
         ITALY,
         "August 27, 2024",
         ("2024-08-27",),
@@ -96,7 +104,7 @@ async def test_rapid_mapping_requires_a_correlated_delivered_crisis_product() ->
     )
 
     result = await adapter.get_situation_reports(
-        landslide_event(), landslide_query(), now=NOW
+        disaster_event(), disaster_query(), now=NOW
     )
 
     assert result.issues == ()
@@ -123,6 +131,165 @@ async def test_rapid_mapping_requires_a_correlated_delivered_crisis_product() ->
     assert requests[1].url.params["code"] == "EMSR751"
     assert len(snapshots) == 2
     assert snapshots[0].rights_id == "copernicus-data-legal-notice"
+    assert (
+        validate_situation_evidence(
+            report,
+            disaster_query(),
+            source_id=adapter.source_id,
+            allowed_hosts=adapter.allowed_hosts,
+        )
+        is report
+    )
+    await client.aclose()
+
+
+RAPID_MAPPING_CASES = (
+    (
+        Disaster.EARTHQUAKE,
+        "earthquake",
+        "Earthquake",
+        "copernicus-rapid-mapping-earthquakes",
+    ),
+    (Disaster.FLOOD, "flood", "Flood", "copernicus-rapid-mapping-floods"),
+    (
+        Disaster.WILDFIRE,
+        "wildfire",
+        "Wildfire",
+        "copernicus-rapid-mapping-wildfires",
+    ),
+    (
+        Disaster.LANDSLIDE,
+        "mass",
+        "Mass movement",
+        "copernicus-rapid-mapping-landslides",
+    ),
+    (
+        Disaster.TROPICAL_CYCLONE,
+        "storm",
+        "Storm",
+        "copernicus-rapid-mapping-tropical-cyclones",
+    ),
+    (
+        Disaster.VOLCANIC_ERUPTION,
+        "volcanic",
+        "Volcanic activity",
+        "copernicus-rapid-mapping-volcanic-eruptions",
+    ),
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("disaster", "query_category", "response_category", "source_id"),
+    RAPID_MAPPING_CASES,
+)
+async def test_rapid_mapping_supports_each_configured_disaster_category(
+    disaster: Disaster,
+    query_category: str,
+    response_category: str,
+    source_id: str,
+) -> None:
+    requests: list[httpx.Request] = []
+    activations = json.loads(ACTIVATIONS)
+    activation = activations["results"][0]
+    activation["category"] = response_category
+    activation["name"] = f"{response_category} in Campania Region, Italy"
+    event_provider_ids = ("coolr:fixture",)
+    if disaster is Disaster.TROPICAL_CYCLONE:
+        activation["gdacsId"] = "TC1001230"
+        event_provider_ids = ("gdacs:tc:1001230",)
+    activations["results"] = [activation]
+    detail = json.loads(DETAIL)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        payload = detail if "public-activations/" in request.url.path else activations
+        return httpx.Response(200, json=payload, request=request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = CopernicusRapidMappingAdapter(disaster=disaster, client=client)
+
+    result = await adapter.get_situation_reports(
+        disaster_event(disaster, provider_ids=event_provider_ids),
+        disaster_query(disaster),
+        now=NOW,
+    )
+
+    assert result.issues == ()
+    assert len(result.records) == 1
+    assert result.records[0].disaster is disaster
+    assert result.records[0].source.source_id == source_id
+    assert requests[0].url.params["category"] == query_category
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_non_cyclonic_storm_without_shared_gdacs_identity_is_excluded() -> None:
+    activations = json.loads(ACTIVATIONS)
+    activation = activations["results"][0]
+    activation["category"] = "Storm"
+    activation["name"] = "Storm in Campania Region, Italy"
+    activation["gdacsId"] = None
+    activations["results"] = [activation]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=activations, request=request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = CopernicusRapidMappingAdapter(
+        disaster=Disaster.TROPICAL_CYCLONE,
+        client=client,
+    )
+
+    result = await adapter.get_situation_reports(
+        disaster_event(
+            Disaster.TROPICAL_CYCLONE,
+            provider_ids=("gdacs:tc:1001230",),
+        ),
+        disaster_query(Disaster.TROPICAL_CYCLONE),
+        now=NOW,
+    )
+
+    assert result.records == ()
+    assert result.issues[0].reason_code == "empty_result"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_rapid_mapping_retains_shared_gdacs_identity() -> None:
+    activations = json.loads(ACTIVATIONS)
+    activation = activations["results"][0]
+    activation["category"] = "Flood"
+    activation["gdacsId"] = "FL1104081"
+    activation["eventTime"] = "2024-08-01T12:00:00"
+    activation["centroid"] = "POINT (9.190 45.464)"
+    activations["results"] = [activation]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = (
+            json.loads(DETAIL)
+            if "public-activations/" in request.url.path
+            else activations
+        )
+        return httpx.Response(200, json=payload, request=request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = CopernicusRapidMappingAdapter(disaster=Disaster.FLOOD, client=client)
+
+    result = await adapter.get_situation_reports(
+        disaster_event(
+            Disaster.FLOOD,
+            provider_ids=("cems-gfm:fixture", "gdacs:fl:1104081"),
+        ),
+        disaster_query(Disaster.FLOOD),
+        now=NOW,
+    )
+
+    assert result.records[0].correlation is CorrelationStatus.MATCHED
+    assert result.records[0].provider_event_ids == (
+        "cems:EMSR751",
+        "gdacs:fl:1104081",
+    )
     await client.aclose()
 
 
@@ -150,7 +317,7 @@ async def test_activation_without_feasible_delineation_or_grading_is_not_evidenc
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     result = await CopernicusRapidMappingAdapter(client=client).get_situation_reports(
-        landslide_event(), landslide_query(), now=NOW
+        disaster_event(), disaster_query(), now=NOW
     )
 
     assert result.records == ()
@@ -170,7 +337,7 @@ async def test_rapid_mapping_never_runs_for_other_hazards_or_unbounded_geometry(
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     adapter = CopernicusRapidMappingAdapter(client=client)
-    event = landslide_event()
+    event = disaster_event()
 
     wrong = await adapter.get_situation_reports(
         event,
@@ -178,7 +345,7 @@ async def test_rapid_mapping_never_runs_for_other_hazards_or_unbounded_geometry(
         now=NOW,
     )
     geometryless = await adapter.get_situation_reports(
-        landslide_event(geometry=False), landslide_query(), now=NOW
+        disaster_event(geometry=False), disaster_query(), now=NOW
     )
 
     assert wrong.records == ()
@@ -200,7 +367,7 @@ async def test_rapid_mapping_preserves_retryable_provider_failure() -> None:
 
     with pytest.raises(DisasterProviderError) as raised:
         await CopernicusRapidMappingAdapter(client=client).get_situation_reports(
-            landslide_event(), landslide_query(), now=NOW
+            disaster_event(), disaster_query(), now=NOW
         )
 
     assert raised.value.failure.reason_code == "http_server_error"

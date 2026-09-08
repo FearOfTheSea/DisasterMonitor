@@ -1,75 +1,83 @@
-# Copernicus EMS Rapid Mapping landslide evidence
+# Copernicus EMS Rapid Mapping evidence
 
-Copernicus Emergency Management Service (CEMS) Rapid Mapping is secondary mapping
-evidence for a selected landslide.
+Copernicus Emergency Management Service (CEMS) Rapid Mapping is secondary map
+evidence for an already selected disaster event. It is not an event-discovery provider.
 
-It is not an event-discovery provider. DisasterMonitor uses the public Rapid Mapping
-JSON APIs without credentials.
+DisasterMonitor uses the credential-free public Rapid Mapping JSON APIs for all six
+configured hazards:
 
-An activation request alone never proves that a landslide occurred.
+| Disaster | API query | Required response category | Source ID |
+| --- | --- | --- | --- |
+| Earthquake | `earthquake` | `Earthquake` | `copernicus-rapid-mapping-earthquakes` |
+| Flood | `flood` | `Flood` | `copernicus-rapid-mapping-floods` |
+| Wildfire | `wildfire` | `Wildfire` | `copernicus-rapid-mapping-wildfires` |
+| Landslide | `mass` | `Mass movement` | `copernicus-rapid-mapping-landslides` |
+| Tropical cyclone | `storm` | `Storm` | `copernicus-rapid-mapping-tropical-cyclones` |
+| Volcanic eruption | `volcanic` | `Volcanic activity` | `copernicus-rapid-mapping-volcanic-eruptions` |
 
-The activation-list request is limited to 100 `Mass movement` records.
+The original landslide source ID remains unchanged. Each additional hazard has its own
+stable source ID and executable registration so catalog capability and runtime routing
+cannot drift into a broad, ambiguous provider declaration.
 
-A candidate must meet every condition below:
+## Admission and correlation
+
+An activation request alone never proves that a disaster occurred. A candidate must:
 
 - use an `EMSR` Rapid Mapping code;
+- match the configured CEMS category exactly;
 - name the selected country for a country-scoped request;
-- report an event time within three days of the selected event;
-- place its activation centroid within 100 km of the selected source-backed point; and
-- advertise at least one product.
+- advertise at least one product; and
+- supply an event time and valid WGS84 centroid.
 
-At most five ranked candidates receive a detail request.
+When CEMS publishes a `gdacsId`, DisasterMonitor normalizes identifiers such as
+`FL1104081` to `gdacs:fl:1104081`. An exact identifier shared with the selected physical
+event is a matched association. This path remains subject to hazard and country checks,
+but it does not require a moving or broad event to remain within the fallback
+time-and-centroid bounds.
 
-The detail must contain a feasible, delivered delineation (`DEL`) or grading (`GRA`)
-product with a published map.
+Without a shared identifier, the activation time must be within three days and its
+centroid within 100 km of the selected source-backed event point. That conservative
+geotemporal path retains `possible` correlation metadata. At most five ranked
+candidates receive a detail request, with exact-ID candidates ranked first.
 
-Reference (`REF`) products and activation metadata alone do not qualify.
+The CEMS `Storm` category also contains non-cyclonic storms. Tropical-cyclone evidence
+therefore requires an exact shared `TC` GDACS identifier; the fallback geotemporal path
+is disabled for that hazard.
 
-Qualifying output is one `possible`-correlation situation report.
+The detail response must contain a feasible, delivered delineation (`DEL`) or grading
+(`GRA`) product with a published map. Reference (`REF`) products and activation
+metadata alone do not qualify. Risk and Recovery (`EMSN`) activations are excluded.
 
-It preserves the EMSR code, event and activation times, product types, activation title,
-centroid-match context, source link, and snapshot.
+Qualifying reports preserve the EMSR code, normalized GDACS ID when present, event and
+activation times, delivered product types, activation title, source link, and immutable
+snapshot provenance. Product statistics are not imported as total extent, damage,
+casualties, warnings, response status, or national totals. Areas of Interest are
+requested mapping areas and need not cover the complete event. A storm activation is
+not a forecast track, cone, or wind field; a volcanic activation is not an ash advisory
+or ash-concentration product.
 
-It does not import product statistics as total event extent, damage, casualties,
-warnings, response status, or national totals.
+The service runs on demand. An authorised user must request an activation, so missing
+results are a coverage gap rather than evidence that no event occurred.
 
-Areas of Interest are requested mapping areas. They need not cover the complete event.
+## Live verification
 
-Risk and Recovery (`EMSN`) activations are excluded.
-
-Those products can describe preparedness, susceptibility, risk, or recovery instead of
-confirmed occurrence.
-
-CEMS Rapid Mapping and NASA COOLR expose no shared stable event ID in the integrated
-interfaces.
-
-Temporal and spatial agreement therefore does not become an exact identity claim.
-
-The service runs on demand. An authorised user must request an activation.
-
-Many real landslides will have no CEMS product.
-
-During the 2026-08-24 live check, the category-filtered Rapid Mapping API exposed three
-historical mass-movement activations.
-
-EMSR751, “Mass movement in Campania Region, Italy,” reported event time 2024-08-27 and
-a feasible final `GRA` product.
-
-The current active window had no recent qualifying mass-movement activation.
-
-This absence is a coverage gap. It is not evidence of no landslide.
+The public activation API was checked on 2026-09-08. It returned records in every
+configured category: 8 earthquakes, 88 floods, more than 100 wildfires, 3 mass
+movements, 25 storms, and 1 volcanic-activity activation. Live detail requests
+qualified EMSR884 (earthquake in Venezuela, `GRA`), EMSR927 (flood in Nepal, `GRA`),
+EMSR929 (wildfire in Greece, `DEL`), EMSR751 (mass movement in Italy, `GRA`), EMSR872
+(Tropical Cyclone Sinlaku, `GRA`), and EMSR912 (volcanic activity in Guatemala, `DEL`).
 
 Payload snapshots use rights identifier `copernicus-data-legal-notice`.
 
-Deterministic tests cover response-list and detail schemas, EMSR-only admission,
-product delivery, country/time/distance correlation, and risk-assessment exclusion.
-They also cover missing geometry, wrong-disaster exclusion, snapshots, routing, and
-source policy.
+Deterministic tests cover all six category mappings, stable source IDs, shared GDACS
+identity, fallback country/time/distance correlation, EMSR-only admission, delivered
+product qualification, risk-assessment exclusion, missing geometry, snapshots,
+routing, and source policy.
 
-References checked 2026-08-24:
+References checked 2026-09-08:
 
 - `https://mapping.emergency.copernicus.eu/about/how-to-harvest-cems-mapping-data/emergency-response-data/`
-- `https://mapping.emergency.copernicus.eu/about/rapid-mapping-manual/product-overview/`
-- `https://mapping.emergency.copernicus.eu/about/rapid-mapping-manual/product-overview/what-is-delivered-in-a-product/`
+- `https://mapping.emergency.copernicus.eu/about/rapid-mapping-portfolio/`
 - `https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations-info/`
-- `https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations/?code=EMSR751`
+- `https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations/?code=EMSR916`

@@ -525,8 +525,14 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
 
     assert {item.source_id for item in catalog.sources()} == {
         "cems-gfm-floods",
+        "copernicus-rapid-mapping-earthquakes",
+        "copernicus-rapid-mapping-floods",
         "copernicus-rapid-mapping-landslides",
+        "copernicus-rapid-mapping-tropical-cyclones",
+        "copernicus-rapid-mapping-volcanic-eruptions",
+        "copernicus-rapid-mapping-wildfires",
         "emsc-earthquakes",
+        "gdacs-earthquakes",
         "gdacs-floods",
         "gdacs-tropical-cyclones",
         "gdacs-volcanic-eruptions",

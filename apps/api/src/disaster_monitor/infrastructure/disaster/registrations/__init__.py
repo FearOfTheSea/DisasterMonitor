@@ -58,6 +58,7 @@ def build_provider_registrations(
     return (
         *build_cems_gfm(context),
         gdacs.floods,
+        gdacs.earthquakes,
         *build_emsc(context),
         *build_usgs(context),
         *build_nasa_eonet(context),

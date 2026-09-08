@@ -1,5 +1,5 @@
 {
-  "version": "2.8.0",
+  "version": "2.9.0",
   "sources": [
     {
       "source_id": "cems-gfm-floods",
@@ -158,36 +158,6 @@
       "allowed_hosts": [
         "gis.earthdata.nasa.gov"
       ]
-    },
-    {
-      "source_id": "copernicus-rapid-mapping-landslides",
-      "organization_name": "Copernicus Emergency Management Service",
-      "display_name": "Copernicus EMS Rapid Mapping landslide map evidence",
-      "jurisdiction": "global on-demand emergency mapping",
-      "authority_level": "secondary",
-      "information_roles": ["map_layers"],
-      "supported_disasters": ["landslide"],
-      "country_codes": null,
-      "geographic_scopes": ["country", "worldwide"],
-      "supported_languages": ["en"],
-      "endpoint_kind": "official_public_rapid_mapping_json_api",
-      "requires_configuration": false,
-      "configured": true,
-      "expected_freshness": "on-demand activation and product delivery; coverage exists only where an authorised user requested Rapid Mapping",
-      "attribution_guidance": "Credit Copernicus Emergency Management Service Rapid Mapping and link the EMSR activation. Present only delivered feasible delineation or grading products as secondary map evidence associated with an already selected landslide event.",
-      "limitations": [
-        "This provider performs no event discovery. A Rapid Mapping activation is a response request and does not independently prove event identity or occurrence.",
-        "Only EMSR Rapid Mapping activations categorized as Mass movement can qualify; Risk and Recovery EMSN preparedness, risk, and recovery assessments are excluded.",
-        "An activation qualifies only after same-country, event-time-within-three-days, and centroid-within-100-km checks against a selected source-backed point, followed by a delivered feasible DEL or GRA product check.",
-        "Possible correlation is retained because Copernicus and NASA COOLR do not expose a shared stable event identifier through these integrations.",
-        "Delineation and grading products apply to requested Areas of Interest and do not establish complete event extent, unmapped impacts, casualties, warnings, response status, or national totals.",
-        "The category-filtered public API currently exposes a small set of mass-movement Rapid Mapping activations; absence is not evidence that no landslide occurred."
-      ],
-      "registered_tool_names": ["retrieve_situation_evidence"],
-      "provider_registration_name": "Copernicus EMS Rapid Mapping landslides",
-      "implementation_status": "implemented",
-      "documentation_path": "docs/sources/copernicus-ems-mapping.md",
-      "allowed_hosts": ["rapidmapping.emergency.copernicus.eu"]
     },
     {
       "source_id": "gdacs-tropical-cyclones",
@@ -376,6 +346,35 @@
       ],
       "registered_tool_names": ["find_disaster_event"],
       "provider_registration_name": "GDACS volcanic eruptions",
+      "implementation_status": "implemented",
+      "documentation_path": "docs/sources/gdacs-secondary-events.md",
+      "allowed_hosts": ["www.gdacs.org"]
+    },
+    {
+      "source_id": "gdacs-earthquakes",
+      "organization_name": "Global Disaster Alert and Coordination System",
+      "display_name": "GDACS earthquake event discovery",
+      "jurisdiction": "global disaster alert and coordination system",
+      "authority_level": "secondary",
+      "information_roles": ["event_discovery"],
+      "supported_disasters": ["earthquake"],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_geojson_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "near-real-time earthquake event list derived from NEIC/USGS inputs; exact latency and revision timing are source-dependent",
+      "attribution_guidance": "Attribute the record to GDACS and retain NEIC as the upstream source label. Treat it as a resilient secondary event observation, not independent corroboration of USGS or a source for modelled impacts.",
+      "limitations": [
+        "GDACS earthquake records use NEIC/USGS event parameters, so agreement with USGS is not independent corroboration.",
+        "Country queries require a structured GDACS ISO-3 association and a usable point classified against maintained country geometry.",
+        "Only event identity, source-reported magnitude, point, time, and alert label are admitted; GDACS exposure, vulnerability, loss, casualty, tsunami, and response estimates are excluded.",
+        "The point is an epicentre, not a shaking footprint, damage boundary, or warning area.",
+        "A missing GDACS record is not evidence that no earthquake occurred."
+      ],
+      "registered_tool_names": ["find_disaster_event"],
+      "provider_registration_name": "GDACS earthquakes",
       "implementation_status": "implemented",
       "documentation_path": "docs/sources/gdacs-secondary-events.md",
       "allowed_hosts": ["www.gdacs.org"]

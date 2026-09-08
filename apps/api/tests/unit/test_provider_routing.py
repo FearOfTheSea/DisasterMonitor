@@ -44,6 +44,7 @@ assert JAPAN is not None and VENEZUELA is not None
 EXPECTED_EVENT_DISCOVERY_AUTHORITIES = {
     Disaster.EARTHQUAKE: (
         ("EMSC SeismicPortal", "emsc-earthquakes", ProviderTier.SECONDARY),
+        ("GDACS earthquakes", "gdacs-earthquakes", ProviderTier.SECONDARY),
         ("USGS", "usgs-earthquakes", ProviderTier.SECONDARY),
     ),
     Disaster.FLOOD: (
@@ -306,7 +307,9 @@ async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -
         situation = registry.select(
             _query(Disaster.WILDFIRE), ProviderRole.SITUATION_EVIDENCE
         )
-        assert situation.registrations == ()
+        assert [item.source_id for item in situation.registrations] == [
+            "copernicus-rapid-mapping-wildfires"
+        ]
         assert situation.unavailable_configuration == (
             "NASA FIRMS observations",
             "ReliefWeb",
@@ -336,10 +339,15 @@ async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -
             (item.name, item.source_id, item.tier) for item in situation.registrations
         ] == [
             (
+                "Copernicus EMS Rapid Mapping wildfires",
+                "copernicus-rapid-mapping-wildfires",
+                ProviderTier.SECONDARY,
+            ),
+            (
                 "NASA FIRMS observations",
                 "nasa-firms-observations",
                 ProviderTier.SECONDARY,
-            )
+            ),
         ]
         registration = situation.registrations[0]
         assert registration.capabilities.roles == frozenset(
@@ -354,41 +362,39 @@ async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -
 
 
 @pytest.mark.asyncio
-async def test_copernicus_rapid_mapping_is_landslide_map_evidence_not_discovery() -> (
-    None
-):
+async def test_copernicus_rapid_mapping_is_map_evidence_for_every_disaster() -> None:
     service = build_current_disaster_report(
         Settings(_env_file=None), country_catalog=CATALOG
     )
     try:
         registry = service.provider_registry
-        country = registry.select(
-            _query(Disaster.LANDSLIDE), ProviderRole.SITUATION_EVIDENCE
-        )
-        worldwide = registry.select(
-            WorldwideDisasterQuery(Disaster.LANDSLIDE),
-            ProviderRole.SITUATION_EVIDENCE,
-        )
-
-        assert [
-            (item.name, item.source_id, item.tier) for item in country.registrations
-        ] == [
-            (
-                "Copernicus EMS Rapid Mapping landslides",
-                "copernicus-rapid-mapping-landslides",
-                ProviderTier.SECONDARY,
+        for disaster in Disaster:
+            source_id = {
+                Disaster.EARTHQUAKE: "copernicus-rapid-mapping-earthquakes",
+                Disaster.FLOOD: "copernicus-rapid-mapping-floods",
+                Disaster.WILDFIRE: "copernicus-rapid-mapping-wildfires",
+                Disaster.LANDSLIDE: "copernicus-rapid-mapping-landslides",
+                Disaster.TROPICAL_CYCLONE: (
+                    "copernicus-rapid-mapping-tropical-cyclones"
+                ),
+                Disaster.VOLCANIC_ERUPTION: (
+                    "copernicus-rapid-mapping-volcanic-eruptions"
+                ),
+            }[disaster]
+            country = registry.select(_query(disaster), ProviderRole.SITUATION_EVIDENCE)
+            worldwide = registry.select(
+                WorldwideDisasterQuery(disaster),
+                ProviderRole.SITUATION_EVIDENCE,
             )
-        ]
-        assert country.unavailable_configuration == ("ReliefWeb",)
-        assert [item.name for item in worldwide.registrations] == [
-            "Copernicus EMS Rapid Mapping landslides"
-        ]
-        assert all(
-            item.name != "Copernicus EMS Rapid Mapping landslides"
-            for item in registry.select(
-                _query(Disaster.LANDSLIDE), ProviderRole.EVENT_DISCOVERY
-            ).registrations
-        )
+
+            assert source_id in {item.source_id for item in country.registrations}
+            assert source_id in {item.source_id for item in worldwide.registrations}
+            assert all(
+                item.source_id != source_id
+                for item in registry.select(
+                    _query(disaster), ProviderRole.EVENT_DISCOVERY
+                ).registrations
+            )
     finally:
         await service.aclose()
 
@@ -417,6 +423,11 @@ async def test_cyclone_map_sources_are_situation_context_not_discovery() -> None
                 ProviderTier.PRIMARY,
             ),
             (
+                "Copernicus EMS Rapid Mapping tropical cyclones",
+                "copernicus-rapid-mapping-tropical-cyclones",
+                ProviderTier.SECONDARY,
+            ),
+            (
                 "NOAA IBTrACS track reconciliation",
                 "noaa-ibtracs-tracks",
                 ProviderTier.SECONDARY,
@@ -425,6 +436,7 @@ async def test_cyclone_map_sources_are_situation_context_not_discovery() -> None
         assert country.unavailable_configuration == ("ReliefWeb",)
         assert [item.name for item in worldwide.registrations] == [
             "NOAA NHC/CPHC cyclone forecasts",
+            "Copernicus EMS Rapid Mapping tropical cyclones",
             "NOAA IBTrACS track reconciliation",
         ]
         discovery_names = {

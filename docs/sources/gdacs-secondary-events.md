@@ -2,10 +2,10 @@
 
 DisasterMonitor uses the official GDACS GeoJSON event-list API for bounded global and
 named-country discovery.
-It covers tropical cyclones (`TC`), floods (`FL`), wildfires (`WF`), and volcanic
-eruptions (`VO`).
+It covers earthquakes (`EQ`), tropical cyclones (`TC`), floods (`FL`), wildfires
+(`WF`), and volcanic eruptions (`VO`).
 
-All four registrations have secondary tier and secondary source authority.
+All five registrations have secondary tier and secondary source authority.
 
 The API requires no key and returns at most 100 records per page.
 
@@ -32,11 +32,31 @@ They also retain onset/end/update times, structured ISO-3 associations, source l
 event point, canonical detail link, and alert label.
 
 The publisher string retains the per-record upstream label, such as GLOFAS, GWIS, NOAA,
-or a VAAC.
+NEIC, or a VAAC.
 
 Country projection requires structured GDACS country association and a usable point.
 Classify the point against maintained country geometry. Do not treat it as an event
 boundary.
+
+## Earthquakes (`EQ`)
+
+GDACS derives earthquake parameters from NEIC/USGS and combines them with modelled
+exposure, vulnerability, and coping-capacity data for its alert score. DisasterMonitor
+uses this integration only as a resilient secondary event observation.
+
+The adapter admits event and episode IDs, GLIDE ID when present, structured countries,
+epicentre, event/update times, upstream label, alert label, and the structured
+source-reported magnitude. It deliberately excludes population exposure, vulnerability,
+loss probabilities, casualties, tsunami implications, damage, and response estimates.
+
+GDACS and direct USGS observations are not independent corroboration. Earthquake event
+identity remains governed by the existing earthquake policy: country agreement,
+source-backed event times within 90 seconds, points within 30 km, and no conflicting
+magnitudes beyond the maintained tolerance.
+
+The public API was live-checked on 2026-09-08 with a bounded August 2026 query. It
+returned `EQ` records labelled `NEIC`, including event `1558059`, the M7.7 earthquake
+in Indonesia at 2026-08-14 21:58:21 UTC.
 
 ## Floods (`FL`)
 
@@ -126,12 +146,13 @@ and routing.
 
 Tropical-cyclone-specific tests remain in their existing fixture suite.
 
-References checked 2026-08-24:
+References checked 2026-09-08:
 
 - `https://www.gdacs.org/gdacsapi/swagger/index.html`
 - `https://www.gdacs.org/Documents/2025/GDACS_API_quickstart_v2.pdf`
 - `https://data.gdacs.org/About/termofuse.aspx`
 - `https://www.gdacs.org/Knowledge/models_fl.aspx`
+- `https://www.gdacs.org/Knowledge/models_eq.aspx`
 - `https://data.gdacs.org/Knowledge/models_wf.aspx`
 - `https://www.gdacs.org/Knowledge/models_vo.aspx`
 - `https://www.gdacs.org/documents/2025/GDACS_MHEWS_guide.pdf`
