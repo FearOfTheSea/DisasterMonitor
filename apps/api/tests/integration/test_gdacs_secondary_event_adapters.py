@@ -167,6 +167,7 @@ async def test_gdacs_secondary_adapters_preserve_event_and_upstream_provenance(
     params = dict(requests[0].url.params.multi_items())
     assert params == {
         "eventlist": event_type,
+        "alertlevel": "Green;Orange;Red",
         "fromDate": (NOW - timedelta(days=30)).isoformat(),
         "toDate": NOW.isoformat(),
         "pageSize": "100",
@@ -351,3 +352,108 @@ async def test_gdacs_empty_first_page_retains_empty_result_contract() -> None:
     assert [issue.reason_code for issue in result.issues] == ["empty_result"]
     assert len(requests) == 1
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_discovery_explicitly_requests_green_alert_events() -> None:
+    """GDACS defaults exclude real green-alert disasters when the filter is absent."""
+    query = WorldwideDisasterQuery(disaster=Disaster.FLOOD)
+    payload = fixture("gdacs_flood_search.json")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        included = request.url.params.get("alertlevel") == "Green;Orange;Red"
+        return httpx.Response(
+            200,
+            json=payload if included else {"type": "FeatureCollection", "features": []},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        batch = await GdacsFloodAdapter(client=client).find_worldwide_events(
+            query, now=NOW
+        )
+    assert batch.records
+
+
+@pytest.mark.asyncio
+async def test_country_discovery_applies_scope_before_provider_pagination() -> None:
+    country = CATALOG.get_by_alpha3("JPN")
+    assert country is not None
+    query = DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",))
+    requests: list[httpx.Request] = []
+    payload = {
+        "type": "FeatureCollection",
+        "features": [flood_feature(123, iso3="JPN", latitude=35, longitude=139)],
+    }
+    async with client_for(payload, requests) as client:
+        batch = await GdacsFloodAdapter(
+            geography=CATALOG, client=client
+        ).find_recent_events(query, now=NOW)
+    assert batch.records
+    assert requests[0].url.params["country"] == "Japan"
+
+
+@pytest.mark.asyncio
+async def test_empty_country_name_filter_falls_back_to_iso3_validated_scan() -> None:
+    country = CATALOG.get_by_alpha3("JPN")
+    assert country is not None
+    requests: list[httpx.Request] = []
+    payload = {
+        "type": "FeatureCollection",
+        "features": [flood_feature(123, iso3="JPN", latitude=35, longitude=139)],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={"type": "FeatureCollection", "features": []}
+            if "country" in request.url.params
+            else payload,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await GdacsFloodAdapter(
+            geography=CATALOG, client=client
+        ).find_recent_events(
+            DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",)), now=NOW
+        )
+    assert result.records[0].country.alpha3_code == "JPN"
+    assert len(requests) == 2
+    assert "country" not in requests[1].url.params
+
+
+@pytest.mark.asyncio
+async def test_transient_country_filter_failure_falls_back_to_bounded_global_scan() -> (
+    None
+):
+    country = CATALOG.get_by_alpha3("JPN")
+    assert country is not None
+    requests: list[httpx.Request] = []
+    payload = {
+        "type": "FeatureCollection",
+        "features": [flood_feature(123, iso3="JPN", latitude=35, longitude=139)],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if len(requests) <= 2:
+            raise httpx.ReadTimeout("country filter timed out", request=request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=json.dumps(payload).encode(),
+            request=request,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await GdacsFloodAdapter(
+            geography=CATALOG, client=client
+        ).find_recent_events(
+            DisasterQuery(Disaster.FLOOD, country, "recent", ("latest",)), now=NOW
+        )
+
+    assert [event.event_id for event in result.records] == ["gdacs:fl:123"]
+    assert len(requests) == 3
+    assert all("country" in request.url.params for request in requests[:2])
+    assert "country" not in requests[2].url.params
+    assert [issue.reason_code for issue in result.issues] == ["country_filter_fallback"]

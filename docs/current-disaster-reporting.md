@@ -168,6 +168,7 @@ Adapters use `apps/api/.env` or the process environment:
 
 ```text
 DISASTER_PROVIDER_TIMEOUT_SECONDS=10
+GDACS_PROVIDER_TIMEOUT_SECONDS=30
 DISASTER_PROVIDER_MAX_RESPONSE_BYTES=1000000
 # Optional approved ReliefWeb application name. Leave unset to disable it.
 # RELIEFWEB_APP_NAME=
@@ -178,8 +179,25 @@ DISASTER_PROVIDER_MAX_RESPONSE_BYTES=1000000
 Default tests use deterministic fixtures. They do not require network access,
 Ollama, or cloud credentials.
 
+GDACS has its own bounded timeout because its event-list and event-detail endpoints
+frequently take longer than the general provider budget; other providers continue to
+use `DISASTER_PROVIDER_TIMEOUT_SECONDS`.
+
 Run the optional live smoke test with:
 
 ```powershell
 uv run --project apps/api python scripts/live_disaster_smoke.py
 ```
+
+## Retrieval reliability
+
+GDACS event searches explicitly request green, orange, and red alert levels. The
+provider's default alert filtering must not become an implicit disaster-occurrence
+threshold. Named-country reports can also retrieve exact-event GDACS Sendai impact
+observations through the independent `gdacs-situation-reports` registration. Regional
+counts retain their observation periods and preliminary secondary-source status.
+They are never summed into national totals or inferred from modelled alert scores.
+
+See [assistant report reliability](assistant-report-reliability.md) for the diagnosis
+and design, and [GDACS observed impacts](sources/gdacs-situation-reports.md) for the
+admission contract.

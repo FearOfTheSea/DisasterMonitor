@@ -163,6 +163,7 @@ async def test_gdacs_query_is_tropical_cyclone_only_and_bounded() -> None:
 
     assert params == {
         "eventlist": "TC",
+        "alertlevel": "Green;Orange;Red",
         "fromDate": (NOW - timedelta(days=5)).isoformat(),
         "toDate": NOW.isoformat(),
         "pageSize": "100",
@@ -220,7 +221,9 @@ async def test_gdacs_country_query_rejects_unrelated_country_evidence() -> None:
 
     assert result.records == ()
     assert result.issues == ()
-    assert len(requests) == 1
+    assert len(requests) == 2
+    assert requests[0].url.params["country"] == "Japan"
+    assert "country" not in requests[1].url.params
     await client.aclose()
 
 

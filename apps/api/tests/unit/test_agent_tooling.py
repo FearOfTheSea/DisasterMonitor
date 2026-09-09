@@ -633,6 +633,7 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
         "emsc-earthquakes",
         "gdacs-earthquakes",
         "gdacs-floods",
+        "gdacs-situation-reports",
         "gdacs-tropical-cyclones",
         "gdacs-volcanic-eruptions",
         "gdacs-wildfires",

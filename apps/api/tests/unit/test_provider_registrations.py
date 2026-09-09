@@ -287,4 +287,20 @@ def test_aggregate_provider_registration_order_and_identities_are_stable() -> No
             False,
             True,
         ),
+        (
+            "gdacs-situation-reports",
+            "secondary",
+            ("situation_evidence",),
+            (
+                "earthquake",
+                "flood",
+                "tropical_cyclone",
+                "volcanic_eruption",
+                "wildfire",
+            ),
+            ("www.gdacs.org",),
+            False,
+            False,
+            True,
+        ),
     ]

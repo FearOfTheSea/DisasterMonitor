@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     ollama_vision_timeout_seconds: float = Field(default=180.0, gt=0, le=600)
     ollama_vision_max_tokens: int = Field(default=384, ge=64, le=2048)
     disaster_provider_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    gdacs_provider_timeout_seconds: float = Field(default=30.0, gt=0, le=60)
     disaster_provider_max_response_bytes: int = Field(
         default=1_000_000, ge=10_000, le=5_000_000
     )

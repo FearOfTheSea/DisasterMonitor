@@ -308,7 +308,8 @@ async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -
             _query(Disaster.WILDFIRE), ProviderRole.SITUATION_EVIDENCE
         )
         assert [item.source_id for item in situation.registrations] == [
-            "copernicus-rapid-mapping-wildfires"
+            "copernicus-rapid-mapping-wildfires",
+            "gdacs-situation-reports",
         ]
         assert situation.unavailable_configuration == (
             "NASA FIRMS observations",
@@ -341,6 +342,11 @@ async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -
             (
                 "Copernicus EMS Rapid Mapping wildfires",
                 "copernicus-rapid-mapping-wildfires",
+                ProviderTier.SECONDARY,
+            ),
+            (
+                "GDACS situation reports",
+                "gdacs-situation-reports",
                 ProviderTier.SECONDARY,
             ),
             (
@@ -425,6 +431,11 @@ async def test_cyclone_map_sources_are_situation_context_not_discovery() -> None
             (
                 "Copernicus EMS Rapid Mapping tropical cyclones",
                 "copernicus-rapid-mapping-tropical-cyclones",
+                ProviderTier.SECONDARY,
+            ),
+            (
+                "GDACS situation reports",
+                "gdacs-situation-reports",
                 ProviderTier.SECONDARY,
             ),
             (

@@ -6,6 +6,10 @@
 .investigation-case,
 .investigation-case > *,
 .operator-action-card,
+.report-sections p {
+  white-space: pre-line;
+}
+
 .report-sources a {
   min-width: 0;
 }

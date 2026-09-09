@@ -158,7 +158,8 @@ def test_reliefweb_is_optional_and_only_supports_named_country_situations() -> N
         query, ProviderRole.SITUATION_EVIDENCE
     )
     assert [registration.name for registration in unavailable.registrations] == [
-        "Copernicus EMS Rapid Mapping earthquakes"
+        "Copernicus EMS Rapid Mapping earthquakes",
+        "GDACS situation reports",
     ]
     assert unavailable.unavailable_configuration == ("ReliefWeb",)
     assert disabled.source_catalog.get("reliefweb-situation-reports") is not None
@@ -172,6 +173,7 @@ def test_reliefweb_is_optional_and_only_supports_named_country_situations() -> N
     available = enabled.provider_registry.select(query, ProviderRole.SITUATION_EVIDENCE)
     assert [registration.name for registration in available.registrations] == [
         "Copernicus EMS Rapid Mapping earthquakes",
+        "GDACS situation reports",
         "ReliefWeb",
     ]
     assert enabled.source_catalog.get("reliefweb-situation-reports").configured is True

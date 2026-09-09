@@ -589,6 +589,53 @@
       "allowed_hosts": [
         "api.weather.gov"
       ]
+    },
+    {
+      "source_id": "gdacs-situation-reports",
+      "organization_name": "Global Disaster Alert and Coordination System",
+      "display_name": "GDACS observed impact reports",
+      "jurisdiction": "global disaster alert and coordination system",
+      "authority_level": "secondary",
+      "information_roles": [
+        "casualty_reporting",
+        "physical_damage",
+        "humanitarian_situation_reporting",
+        "emergency_response"
+      ],
+      "supported_disasters": [
+        "earthquake",
+        "flood",
+        "wildfire",
+        "tropical_cyclone",
+        "volcanic_eruption"
+      ],
+      "country_codes": null,
+      "geographic_scopes": [
+        "country"
+      ],
+      "supported_languages": [
+        "en"
+      ],
+      "endpoint_kind": "official_geojson_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "Source-dependent manual impact updates; each observation retains its publication time and observation period.",
+      "attribution_guidance": "Attribute to GDACS and the supplied upstream source. Sendai observations are secondary, locally scoped reports, never independent confirmation or national totals.",
+      "limitations": [
+        "Requires one exact GDACS event identifier linked to the selected physical event and matching country and hazard.",
+        "Only supported structured Sendai impact observations are admitted. Modelled exposure, alert scores, loss estimates and inferred response actions are excluded.",
+        "Local observations can overlap and are never summed. Missing observations mean unknown impacts.",
+        "The source latest flag identifies an episode contribution; older observations remain dated and are not silently erased."
+      ],
+      "registered_tool_names": [
+        "retrieve_situation_evidence"
+      ],
+      "provider_registration_name": "GDACS situation reports",
+      "implementation_status": "implemented",
+      "documentation_path": "docs/sources/gdacs-situation-reports.md",
+      "allowed_hosts": [
+        "www.gdacs.org"
+      ]
     }
   ]
 }

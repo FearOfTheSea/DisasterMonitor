@@ -14,6 +14,7 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterQuery,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
+from disaster_monitor.application.ports.provider_failures import ProviderFailureReason
 from disaster_monitor.application.ports.temporal_normalization import (
     normalize_timestamp,
 )
@@ -46,6 +47,14 @@ _GDACS_MAX_PAGE_SIZE = 100
 _GDACS_MAX_PAGES = 5
 _GDACS_MAX_RECORDS = _GDACS_MAX_PAGE_SIZE * _GDACS_MAX_PAGES
 _GDACS_RIGHTS_ID = "gdacs-terms-of-use"
+_COUNTRY_FILTER_FALLBACK_REASONS = frozenset(
+    {
+        ProviderFailureReason.TIMEOUT,
+        ProviderFailureReason.NETWORK_ERROR,
+        ProviderFailureReason.RATE_LIMITED,
+        ProviderFailureReason.HTTP_SERVER_ERROR,
+    }
+)
 
 
 def _text(value: object) -> str:
@@ -112,10 +121,16 @@ def build_gdacs_params(
     )
     return {
         "eventlist": event_type,
+        "alertlevel": "Green;Orange;Red",
         "fromDate": start.isoformat(),
         "toDate": end.isoformat(),
         "pageSize": _GDACS_MAX_PAGE_SIZE,
         "pageNumber": page_number,
+        **(
+            {"country": query.country.canonical_name}
+            if isinstance(query, DisasterQuery)
+            else {}
+        ),
     }
 
 
@@ -337,6 +352,7 @@ class _GdacsEventAdapter:
         *,
         now: datetime,
         country_query: DisasterQuery | None = None,
+        country_filter: bool = True,
     ) -> ProviderBatch[WorldwideDisasterEvent | DisasterEvent]:
         events: list[WorldwideDisasterEvent | DisasterEvent] = []
         issues: list[ProviderIssue] = []
@@ -350,11 +366,15 @@ class _GdacsEventAdapter:
                 event_type=self.event_type,
                 page_number=page_number,
             )
+            if not country_filter:
+                params.pop("country", None)
             capture = build_snapshot_capture(
                 self._snapshot_recorder,
                 source_id=self.source_id,
                 parameters={
                     "eventtype": self.event_type,
+                    "country": str(params.get("country", "")),
+                    "alertlevel": str(params["alertlevel"]),
                     "from": str(params["fromDate"]),
                     "to": str(params["toDate"]),
                     "page": str(page_number),
@@ -460,7 +480,32 @@ class _GdacsEventAdapter:
             return ProviderBatch(
                 issues=(_country_projection_unusable(self.provider_name, -1),)
             )
-        result = await self._fetch_events(query, now=now, country_query=query)
+        try:
+            result = await self._fetch_events(query, now=now, country_query=query)
+        except DisasterProviderError as error:
+            if error.failure.reason_code not in _COUNTRY_FILTER_FALLBACK_REASONS:
+                raise
+            try:
+                result = await self._fetch_events(
+                    query, now=now, country_query=query, country_filter=False
+                )
+            except DisasterProviderError as fallback_error:
+                raise fallback_error from error
+            result = ProviderBatch(
+                records=result.records,
+                issues=(
+                    _country_filter_fallback(self.provider_name, error),
+                    *result.issues,
+                ),
+                scan_complete=result.scan_complete,
+                records_seen=result.records_seen,
+            )
+        if not result.records and all(
+            issue.reason_code == "empty_result" for issue in result.issues
+        ):
+            result = await self._fetch_events(
+                query, now=now, country_query=query, country_filter=False
+            )
         return ProviderBatch(
             records=tuple(
                 event for event in result.records if isinstance(event, DisasterEvent)
@@ -610,4 +655,19 @@ def _empty_result(provider_name: str) -> ProviderIssue:
         provider_name,
         f"{provider_name}: The provider returned no matching records.",
         reason_code="empty_result",
+    )
+
+
+def _country_filter_fallback(
+    provider_name: str, error: DisasterProviderError
+) -> ProviderIssue:
+    failure = error.failure
+    return ProviderIssue(
+        provider_name,
+        f"{provider_name}: The country-scoped request failed; a bounded global "
+        "scan was used with local country validation.",
+        reason_code="country_filter_fallback",
+        retryable=failure.retryable,
+        http_status=failure.http_status,
+        detail=failure.detail or str(error),
     )

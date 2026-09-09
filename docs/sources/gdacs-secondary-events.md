@@ -20,6 +20,13 @@ A later page failure keeps earlier valid records and adds a typed provider issue
 Reaching the limit emits `pagination_limit_reached`. It does not claim exhaustive
 coverage.
 
+Named-country scans send the maintained country name to GDACS and still revalidate
+every returned event locally from structured ISO-3 associations and point geometry.
+If the scoped request exhausts its transient retries, one bounded global scan is
+attempted with the same local admission rules. The report retains a diagnostic that
+the scoped request failed; this fallback does not turn an unvalidated global result
+into country evidence or claim exhaustive coverage.
+
 GDACS asks API users to acknowledge “Global Disaster Alert and Coordination System,
 GDACS.” Its terms describe products as modelled or semi-automatic outputs.
 The outputs use information from scientific institutions and authoritative sources.
@@ -156,3 +163,14 @@ References checked 2026-09-08:
 - `https://data.gdacs.org/Knowledge/models_wf.aspx`
 - `https://www.gdacs.org/Knowledge/models_vo.aspx`
 - `https://www.gdacs.org/documents/2025/GDACS_MHEWS_guide.pdf`
+
+## September 2026 retrieval correction
+
+The event-list request explicitly includes `alertlevel=Green;Orange;Red`. Live
+comparison found that omitting this parameter excluded the Pakistan FL 1104136
+event despite its availability in the detail API. This changes acquisition coverage,
+not source authority or event admission. Existing bounds and pagination still apply.
+
+Observed impacts are handled by the separate
+[GDACS situation adapter](gdacs-situation-reports.md), after event selection; discovery
+continues to exclude impact estimates and situation claims.

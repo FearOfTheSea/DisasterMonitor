@@ -33,31 +33,31 @@ def build(context: RegistrationContext) -> GdacsRegistrations:
     earthquakes = GdacsEarthquakeAdapter(
         geography=context.geography,
         snapshot_recorder=context.snapshot_recorder,
-        timeout_seconds=context.settings.disaster_provider_timeout_seconds,
+        timeout_seconds=context.settings.gdacs_provider_timeout_seconds,
         max_response_bytes=context.settings.disaster_provider_max_response_bytes,
     )
     floods = GdacsFloodAdapter(
         geography=context.geography,
         snapshot_recorder=context.snapshot_recorder,
-        timeout_seconds=context.settings.disaster_provider_timeout_seconds,
+        timeout_seconds=context.settings.gdacs_provider_timeout_seconds,
         max_response_bytes=context.settings.disaster_provider_max_response_bytes,
     )
     cyclones = GdacsTropicalCycloneAdapter(
         geography=context.geography,
         snapshot_recorder=context.snapshot_recorder,
-        timeout_seconds=context.settings.disaster_provider_timeout_seconds,
+        timeout_seconds=context.settings.gdacs_provider_timeout_seconds,
         max_response_bytes=context.settings.disaster_provider_max_response_bytes,
     )
     wildfires = GdacsWildfireAdapter(
         geography=context.geography,
         snapshot_recorder=context.snapshot_recorder,
-        timeout_seconds=context.settings.disaster_provider_timeout_seconds,
+        timeout_seconds=context.settings.gdacs_provider_timeout_seconds,
         max_response_bytes=context.settings.disaster_provider_max_response_bytes,
     )
     volcanoes = GdacsVolcanicEruptionAdapter(
         geography=context.geography,
         snapshot_recorder=context.snapshot_recorder,
-        timeout_seconds=context.settings.disaster_provider_timeout_seconds,
+        timeout_seconds=context.settings.gdacs_provider_timeout_seconds,
         max_response_bytes=context.settings.disaster_provider_max_response_bytes,
     )
     return GdacsRegistrations(

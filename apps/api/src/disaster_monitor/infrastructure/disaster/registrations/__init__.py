@@ -5,6 +5,7 @@ from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.http import SourcePayloadRecorder
 from disaster_monitor.infrastructure.disaster.registrations import (
     copernicus_ems_mapping,
+    gdacs_situation,
 )
 from disaster_monitor.infrastructure.disaster.registrations.cems_gfm import (
     build as build_cems_gfm,
@@ -72,6 +73,7 @@ def build_provider_registrations(
         *build_smithsonian_gvp(context),
         gdacs.volcanic_eruptions,
         *build_reliefweb(context),
+        *gdacs_situation.build(context),
     )
 
 
