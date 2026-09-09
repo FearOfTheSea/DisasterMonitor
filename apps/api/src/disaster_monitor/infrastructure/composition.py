@@ -3,6 +3,7 @@
 from disaster_monitor.infrastructure.app_composition import build_app_dependencies
 from disaster_monitor.infrastructure.composition_builders import (
     build_agent_model,
+    build_breaking_news_feeds,
     build_conversation_deletion_store,
     build_conversation_repository,
     build_country_catalog,
@@ -30,6 +31,7 @@ __all__ = [
     "EventMediaServices",
     "OperationalServices",
     "build_app_dependencies",
+    "build_breaking_news_feeds",
     "build_event_media_services",
     "build_operational_services",
     "build_conversation_repository",

@@ -3030,6 +3030,7 @@ export type ActiveIncidentCountryResponse = {
 export type ActiveIncidentResponse = {
   activity_status?: IncidentActivityStatus;
   country?: ActiveIncidentCountryResponse | null;
+  detection?: IncidentDetectionTimelineResponse;
   disaster: Disaster;
   event_id: string;
   event_time: string;
@@ -3044,6 +3045,7 @@ export type ActiveIncidentResponse = {
   provider_tier: ProviderTier;
   source: SourceResponse;
   source_authority: SourceAuthority;
+  verification_status?: 'provisional_news_detected' | 'source_backed' | 'rejected';
 };
 
 export type ActiveIncidentsSnapshotResponse = {
@@ -3398,6 +3400,15 @@ export type HTTPValidationError = {
 };
 
 export type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
+
+export type IncidentDetectionTimelineResponse = {
+  assistant_ready_at?: string | null;
+  candidate_created_at?: string | null;
+  first_observed_at?: string | null;
+  monitor_visible_at?: string | null;
+  news_break_at?: string | null;
+  verified_at?: string | null;
+};
 
 export type IncidentView = 'recent' | 'ongoing' | 'recently_updated' | 'historical';
 

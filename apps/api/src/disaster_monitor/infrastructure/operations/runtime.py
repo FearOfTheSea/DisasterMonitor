@@ -15,6 +15,10 @@ from disaster_monitor.application.incidents.refresh_incident_watch import (
     RefreshIncidentWatch,
 )
 from disaster_monitor.application.ingestion.jobs import ScheduledInvestigation
+from disaster_monitor.application.ingestion.news_candidates import (
+    NewsCandidateIngestion,
+)
+from disaster_monitor.application.ingestion.news_jobs import NewsFeedScheduler
 from disaster_monitor.application.ingestion.projection_jobs import (
     WorldwideIncidentProjectionScheduler,
 )
@@ -23,6 +27,7 @@ from disaster_monitor.application.ingestion.watch_jobs import (
     IncidentWatchWorker,
 )
 from disaster_monitor.infrastructure.composition import (
+    build_breaking_news_feeds,
     build_country_catalog,
     build_operational_services,
 )
@@ -63,8 +68,13 @@ async def _scheduler(settings: Settings, *, once: bool) -> None:
     repository = _postgres(settings)
     scheduler = IncidentWatchScheduler(repository)
     projection_scheduler = WorldwideIncidentProjectionScheduler(repository)
+    news_feeds = build_breaking_news_feeds(settings)
+    news_scheduler = NewsFeedScheduler(
+        repository, tuple(feed.source_id for feed in news_feeds)
+    )
     while True:
         await scheduler.enqueue_due(now=datetime.now(UTC))
+        await news_scheduler.enqueue_due(now=datetime.now(UTC))
         await projection_scheduler.enqueue_due(now=datetime.now(UTC))
         if once:
             return
@@ -90,11 +100,17 @@ async def _worker(settings: Settings, *, once: bool) -> None:
         projection_store=repository,
         read_from_projection=False,
         provider_attempt_recorder=repository,
+        candidate_store=repository,
     )
+    news_refreshers = {
+        feed.source_id: NewsCandidateIngestion(feed, repository)
+        for feed in build_breaking_news_feeds(settings)
+    }
     worker = IncidentWatchWorker(
         repository,
         RefreshIncidentWatch(repository, discovery),
         projection_refresher=discovery,
+        news_refreshers=news_refreshers,
     )
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
     try:

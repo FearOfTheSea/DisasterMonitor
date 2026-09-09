@@ -253,6 +253,15 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
         },
         "observation_kind": "physical_event",
         "activity_status": "unknown",
+        "verification_status": "source_backed",
+        "detection": {
+            "news_break_at": None,
+            "first_observed_at": None,
+            "candidate_created_at": None,
+            "verified_at": None,
+            "monitor_visible_at": None,
+            "assistant_ready_at": None,
+        },
     }
     assert body["correlations"] == []
     assert body["warnings"] == ["Fixture provider returned a partial response."]

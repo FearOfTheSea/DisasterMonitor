@@ -13,6 +13,18 @@ export type ObservationKind = 'physical_event' | 'acquisition';
 
 export type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
 
+export type IncidentVerificationStatus =
+  'provisional_news_detected' | 'source_backed' | 'rejected';
+
+export type IncidentDetectionTimeline = {
+  news_break_at: string | null;
+  first_observed_at: string | null;
+  candidate_created_at: string | null;
+  verified_at: string | null;
+  monitor_visible_at: string | null;
+  assistant_ready_at: string | null;
+};
+
 export type IncidentView = 'recent' | 'ongoing' | 'recently_updated' | 'historical';
 
 export type IncidentSourceAuthority =
@@ -86,6 +98,8 @@ export type ActiveIncident = {
   evidence_sources?: IncidentSource[];
   observation_kind?: ObservationKind;
   activity_status?: IncidentActivityStatus;
+  verification_status?: IncidentVerificationStatus;
+  detection?: IncidentDetectionTimeline;
 };
 
 export type IncidentMapRecord = Omit<ActiveIncident, 'country'> & {

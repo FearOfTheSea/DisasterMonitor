@@ -11,6 +11,7 @@ from disaster_monitor.domain.disaster import (
     IncidentWatchChange,
     IncidentWatchObservation,
 )
+from disaster_monitor.domain.news import IncidentCandidate, NewsObservation
 from disaster_monitor.domain.operations import (
     AuditEventRecord,
     EventObservationLinkRecord,
@@ -49,6 +50,8 @@ class InMemoryOperationalRepository:
         self.watch_latest_successful_observation: dict[str, str] = {}
         self.watch_change_records: dict[str, IncidentWatchChange] = {}
         self.incident_projections: dict[str, IncidentProjectionRecord] = {}
+        self.news_observations: dict[str, NewsObservation] = {}
+        self.incident_candidate_revisions: dict[str, IncidentCandidate] = {}
         self.provider_attempt_records: dict[str, list[ProviderAttempt]] = {}
 
     async def record_provider_attempt(self, attempt: ProviderAttempt) -> None:
@@ -152,6 +155,43 @@ class InMemoryOperationalRepository:
             self.incident_projections.values(),
             key=lambda item: (item.retrieved_at, item.projection_id),
             default=None,
+        )
+
+    async def append_news_observation(self, observation: NewsObservation) -> bool:
+        existing = self.news_observations.get(observation.observation_id)
+        if existing is not None:
+            return False
+        self.news_observations[observation.observation_id] = observation
+        return True
+
+    async def append_incident_candidate(self, candidate: IncidentCandidate) -> bool:
+        existing = self.incident_candidate_revisions.get(candidate.revision_id)
+        if existing is not None:
+            if existing != candidate:
+                raise RuntimeError("Incident candidate revision identity was reused.")
+            return False
+        self.incident_candidate_revisions[candidate.revision_id] = candidate
+        return True
+
+    async def latest_incident_candidates(
+        self, *, since: datetime
+    ) -> tuple[IncidentCandidate, ...]:
+        latest: dict[str, IncidentCandidate] = {}
+        for candidate in self.incident_candidate_revisions.values():
+            if candidate.news_break_at < since:
+                continue
+            current = latest.get(candidate.candidate_id)
+            if current is None or (
+                candidate.candidate_created_at,
+                candidate.revision_id,
+            ) > (current.candidate_created_at, current.revision_id):
+                latest[candidate.candidate_id] = candidate
+        return tuple(
+            sorted(
+                latest.values(),
+                key=lambda item: (item.news_break_at, item.candidate_id),
+                reverse=True,
+            )
         )
 
     async def snapshot_by_idempotency_key(

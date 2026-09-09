@@ -51,6 +51,7 @@ from disaster_monitor.application.ports.conversation_deletion import (
 from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.memory_store import MemoryStore
+from disaster_monitor.application.ports.news import BreakingNewsFeed
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
@@ -109,6 +110,10 @@ from disaster_monitor.infrastructure.memory.memory_repository import (
 )
 from disaster_monitor.infrastructure.memory.postgres_repository import (
     PostgresMemoryRepository,
+)
+from disaster_monitor.infrastructure.news.feeds import (
+    GdeltDocNewsFeed,
+    LicensedJsonNewsFeed,
 )
 from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
     FilesystemBlobStore,
@@ -185,6 +190,37 @@ def build_operational_services(
         persistence,
         OperationalEvidenceRecorder(configured_repository),
     )
+
+
+def build_breaking_news_feeds(settings: Settings) -> tuple[BreakingNewsFeed, ...]:
+    """Build only feeds that are explicitly enabled and fully configured."""
+    if not settings.news_sensing_enabled:
+        return ()
+    feeds: list[BreakingNewsFeed] = []
+    if settings.gdelt_news_enabled:
+        feeds.append(
+            GdeltDocNewsFeed(
+                timeout_seconds=settings.news_feed_timeout_seconds,
+                maximum_response_bytes=settings.disaster_provider_max_response_bytes,
+            )
+        )
+    for source_id, endpoint, secret in (
+        ("ap-news", settings.ap_news_endpoint, settings.ap_news_token),
+        ("reuters-news", settings.reuters_news_endpoint, settings.reuters_news_token),
+    ):
+        if endpoint and secret is not None:
+            feeds.append(
+                LicensedJsonNewsFeed(
+                    source_id=source_id,
+                    endpoint=endpoint,
+                    token=secret.get_secret_value(),
+                    timeout_seconds=settings.news_feed_timeout_seconds,
+                    maximum_response_bytes=(
+                        settings.disaster_provider_max_response_bytes
+                    ),
+                )
+            )
+    return tuple(feeds)
 
 
 def build_conversation_repository(

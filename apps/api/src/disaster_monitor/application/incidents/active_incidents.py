@@ -22,6 +22,10 @@ from disaster_monitor.application.incidents.models import (
     IncidentCoverageState,
     IncidentView,
 )
+from disaster_monitor.application.incidents.news_projection import (
+    coverage_with_news_candidates,
+    merge_news_candidates,
+)
 from disaster_monitor.application.incidents.projection_codec import (
     projection_to_snapshot,
     snapshot_to_projection,
@@ -38,6 +42,7 @@ from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.incident_projection import (
     IncidentProjectionStore,
 )
+from disaster_monitor.application.ports.news import NewsCandidateStore
 from disaster_monitor.application.ports.provider_status import ProviderAttemptWriter
 from disaster_monitor.application.sources.provider_registry import (
     ProviderRegistry,
@@ -67,6 +72,7 @@ class ActiveIncidentsService:
         projection_store: IncidentProjectionStore | None = None,
         read_from_projection: bool = False,
         provider_attempt_recorder: ProviderAttemptWriter | None = None,
+        candidate_store: NewsCandidateStore | None = None,
     ) -> None:
         self._clock = clock
         self._retrieval = IncidentRetrieval(
@@ -83,6 +89,7 @@ class ActiveIncidentsService:
         self._projection_store = projection_store
         self._read_from_projection = read_from_projection
         self._provider_attempt_recorder = provider_attempt_recorder
+        self._candidate_store = candidate_store
         self._snapshot_cache: dict[str, ActiveIncidentsSnapshot] = {}
 
     async def execute(
@@ -101,6 +108,7 @@ class ActiveIncidentsService:
         """Acquire providers once, persist the complete result, and return a page."""
         bounded_query = query or ActiveIncidentsQuery()
         now = self._clock()
+        previous_incidents = await self._previous_incidents()
         results = await asyncio.gather(
             *(
                 self._retrieval.worldwide(disaster, bounded_query, now=now)
@@ -113,7 +121,7 @@ class ActiveIncidentsService:
                     await self._provider_attempt_recorder.record_provider_attempt(
                         attempt
                     )
-        incidents = tuple(
+        provider_incidents = tuple(
             sorted(
                 (incident for result in results for incident in result.incidents),
                 key=lambda incident: (
@@ -123,6 +131,19 @@ class ActiveIncidentsService:
                     incident.source.source_id,
                 ),
             )
+        )
+        candidates = (
+            await self._candidate_store.latest_incident_candidates(
+                since=now - timedelta(days=bounded_query.time_window_days)
+            )
+            if self._candidate_store is not None
+            else ()
+        )
+        incidents = merge_news_candidates(
+            provider_incidents,
+            candidates,
+            visible_at=now,
+            previous_incidents=previous_incidents,
         )
         observations = tuple(
             sorted(
@@ -142,10 +163,22 @@ class ActiveIncidentsService:
         full_snapshot = ActiveIncidentsSnapshot(
             retrieved_at=now,
             incidents=incidents,
-            coverage=tuple(result.coverage for result in results),
+            coverage=coverage_with_news_candidates(
+                tuple(result.coverage for result in results), candidates, incidents
+            ),
             warnings=tuple(
                 dict.fromkeys(
-                    warning for result in results for warning in result.warnings
+                    (
+                        *(warning for result in results for warning in result.warnings),
+                        *(
+                            (
+                                "Provisional news-detected incidents are visible while "
+                                "authoritative corroboration is pending.",
+                            )
+                            if candidates
+                            else ()
+                        ),
+                    )
                 )
             ),
             observations=observations,
@@ -180,6 +213,17 @@ class ActiveIncidentsService:
             )
         self._remember_snapshot(snapshot)
         return _page_snapshot(snapshot, query)
+
+    async def _previous_incidents(self) -> tuple[ActiveIncident, ...]:
+        if self._projection_store is None:
+            return ()
+        projection = await self._projection_store.latest_incident_projection()
+        if projection is None:
+            return ()
+        try:
+            return projection_to_snapshot(projection).incidents
+        except ValueError:
+            return ()
 
     async def observe_watch(self, watch: IncidentWatch) -> IncidentWatchObservation:
         return await observe_watch(self._retrieval, watch, now=self._clock())

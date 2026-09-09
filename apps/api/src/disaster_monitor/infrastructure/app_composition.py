@@ -69,6 +69,7 @@ from disaster_monitor.infrastructure.app_dependencies import (
 )
 from disaster_monitor.infrastructure.composition_builders import (
     build_agent_model,
+    build_breaking_news_feeds,
     build_conversation_deletion_store,
     build_conversation_repository,
     build_country_catalog,
@@ -161,10 +162,6 @@ def build_app_dependencies(
         )
     )
     retrieval = investigation.dependencies
-    worldwide_report = (
-        configured.worldwide_disaster_report
-        or WorldwideDisasterReportService(retrieval.provider_registry)
-    )
     configured_active_incidents = (
         configured.active_incidents_service
         or ActiveIncidentsService(
@@ -182,12 +179,22 @@ def build_app_dependencies(
                 operational.repository, PostgresOperationalRepository
             ),
             provider_attempt_recorder=operational.repository,
+            candidate_store=operational.repository,
+        )
+    )
+    worldwide_report = (
+        configured.worldwide_disaster_report
+        or WorldwideDisasterReportService(
+            retrieval.provider_registry,
+            incident_reader=configured_active_incidents,
         )
     )
     query_parser = configured.disaster_query_parser or build_disaster_query_parser(
         country_catalog
     )
     source_catalog = build_source_catalog(settings)
+    breaking_news_feeds = build_breaking_news_feeds(settings)
+    configured_news_ids = {feed.source_id for feed in breaking_news_feeds}
     configured_weather_alerts = (
         configured.weather_alerts_service
         or build_weather_alerts_service(
@@ -206,7 +213,16 @@ def build_app_dependencies(
                     "configured": True,
                     "provider_tier": "primary",
                     "execution_roles": ("weather_alerts",),
-                }
+                },
+                **{
+                    source_id: {
+                        "registered": True,
+                        "configured": source_id in configured_news_ids,
+                        "provider_tier": "secondary",
+                        "execution_roles": ("breaking_news_discovery",),
+                    }
+                    for source_id in ("gdelt-news", "ap-news", "reuters-news")
+                },
             },
         )
     )

@@ -38,6 +38,10 @@ from disaster_monitor.domain.incident_watch_documents import (
     measurement_document,
     source_document,
 )
+from disaster_monitor.domain.news import (
+    IncidentCandidateStatus,
+    IncidentDetectionTimeline,
+)
 
 
 def snapshot_to_projection(
@@ -127,6 +131,17 @@ def _incident_document(value: ActiveIncident) -> dict[str, object]:
         "evidence_sources": [source_document(item) for item in value.evidence_sources],
         "observation_kind": value.observation_kind.value,
         "activity_status": value.activity_status.value,
+        "verification_status": value.verification_status.value,
+        "detection": {
+            "news_break_at": _optional_time(value.detection.news_break_at),
+            "first_observed_at": _optional_time(value.detection.first_observed_at),
+            "candidate_created_at": _optional_time(
+                value.detection.candidate_created_at
+            ),
+            "verified_at": _optional_time(value.detection.verified_at),
+            "monitor_visible_at": _optional_time(value.detection.monitor_visible_at),
+            "assistant_ready_at": _optional_time(value.detection.assistant_ready_at),
+        },
     }
 
 
@@ -151,6 +166,7 @@ def _incident_from_document(value: object) -> ActiveIncident:
                 else None
             ),
         )
+    detection_item = _mapping(item.get("detection", {}))
     return ActiveIncident(
         event_id=str(item["event_id"]),
         physical_event_id=(
@@ -175,7 +191,34 @@ def _incident_from_document(value: object) -> ActiveIncident:
         evidence_sources=evidence_sources,
         observation_kind=ObservationKind(str(item["observation_kind"])),
         activity_status=IncidentActivityStatus(str(item["activity_status"])),
+        verification_status=IncidentCandidateStatus(
+            str(item.get("verification_status", IncidentCandidateStatus.SOURCE_BACKED))
+        ),
+        detection=IncidentDetectionTimeline(
+            news_break_at=_optional_datetime(detection_item.get("news_break_at")),
+            first_observed_at=_optional_datetime(
+                detection_item.get("first_observed_at")
+            ),
+            candidate_created_at=_optional_datetime(
+                detection_item.get("candidate_created_at")
+            ),
+            verified_at=_optional_datetime(detection_item.get("verified_at")),
+            monitor_visible_at=_optional_datetime(
+                detection_item.get("monitor_visible_at")
+            ),
+            assistant_ready_at=_optional_datetime(
+                detection_item.get("assistant_ready_at")
+            ),
+        ),
     )
+
+
+def _optional_time(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _optional_datetime(value: object) -> datetime | None:
+    return datetime.fromisoformat(str(value)) if value is not None else None
 
 
 def _coverage_document(value: DisasterIncidentCoverage) -> dict[str, object]:

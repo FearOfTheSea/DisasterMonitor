@@ -20,6 +20,10 @@ from disaster_monitor.domain.disaster import (
     SourceAuthority,
     SourceReference,
 )
+from disaster_monitor.domain.news import (
+    IncidentCandidateStatus,
+    IncidentDetectionTimeline,
+)
 from disaster_monitor.domain.operations import ProviderAttempt
 
 
@@ -112,6 +116,8 @@ class ActiveIncident:
     evidence_sources: tuple[SourceReference, ...] = ()
     observation_kind: ObservationKind = ObservationKind.PHYSICAL_EVENT
     activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
+    verification_status: IncidentCandidateStatus = IncidentCandidateStatus.SOURCE_BACKED
+    detection: IncidentDetectionTimeline = IncidentDetectionTimeline()
 
 
 @dataclass(frozen=True, slots=True)

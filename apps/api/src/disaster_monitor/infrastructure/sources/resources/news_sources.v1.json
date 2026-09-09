@@ -1,0 +1,87 @@
+{
+  "catalog_version": "3.0.0",
+  "sources": [
+    {
+      "source_id": "gdelt-news",
+      "organization_name": "GDELT Project",
+      "display_name": "GDELT multilingual news discovery",
+      "jurisdiction": "global news discovery",
+      "authority_level": "secondary",
+      "information_roles": ["event_discovery"],
+      "supported_disasters": ["earthquake", "flood", "wildfire", "landslide", "tropical_cyclone", "volcanic_eruption"],
+      "country_codes": null,
+      "geographic_scopes": ["worldwide"],
+      "supported_languages": ["multilingual"],
+      "endpoint_kind": "public_news_metadata_api",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "15-minute scheduled discovery; upstream indexing and rate limits can add delay",
+      "attribution_guidance": "Attribute each item to its original publisher and preserve its canonical URL and publication timestamp; GDELT is the discovery index, not the reporting authority.",
+      "limitations": [
+        "Only publishers in the versioned major-news allowlist can create provisional incident candidates.",
+        "News metadata is not authoritative confirmation of a physical event, impact, casualty, warning, or response status.",
+        "Items without source coordinates remain list-visible but cannot create a map point.",
+        "Rate limits and upstream indexing gaps are explicit ingestion failures, not evidence that no disaster occurred."
+      ],
+      "registered_tool_names": [],
+      "provider_registration_name": "GDELT news sensing",
+      "implementation_status": "implemented_news_sensing",
+      "documentation_path": "docs/news-sensing.md",
+      "allowed_hosts": ["api.gdeltproject.org"]
+    },
+    {
+      "source_id": "ap-news",
+      "organization_name": "Associated Press",
+      "display_name": "AP licensed news gateway",
+      "jurisdiction": "global licensed journalism",
+      "authority_level": "secondary",
+      "information_roles": ["event_discovery"],
+      "supported_disasters": ["earthquake", "flood", "wildfire", "landslide", "tropical_cyclone", "volcanic_eruption"],
+      "country_codes": null,
+      "geographic_scopes": ["worldwide"],
+      "supported_languages": ["provider-dependent"],
+      "endpoint_kind": "licensed_normalized_gateway",
+      "requires_configuration": true,
+      "configured": false,
+      "expected_freshness": "15-minute scheduled ingestion after gateway publication",
+      "attribution_guidance": "Attribute every report to Associated Press and retain the licensed canonical URL and timestamps.",
+      "limitations": [
+        "Requires a licensed gateway endpoint and bearer credential.",
+        "A news report creates only a provisional candidate until authoritative corroboration is present.",
+        "Full article content is not stored by this adapter."
+      ],
+      "registered_tool_names": [],
+      "provider_registration_name": "AP news sensing",
+      "implementation_status": "implemented_requires_configuration",
+      "documentation_path": "docs/news-sensing.md",
+      "allowed_hosts": []
+    },
+    {
+      "source_id": "reuters-news",
+      "organization_name": "Reuters",
+      "display_name": "Reuters licensed news gateway",
+      "jurisdiction": "global licensed journalism",
+      "authority_level": "secondary",
+      "information_roles": ["event_discovery"],
+      "supported_disasters": ["earthquake", "flood", "wildfire", "landslide", "tropical_cyclone", "volcanic_eruption"],
+      "country_codes": null,
+      "geographic_scopes": ["worldwide"],
+      "supported_languages": ["provider-dependent"],
+      "endpoint_kind": "licensed_normalized_gateway",
+      "requires_configuration": true,
+      "configured": false,
+      "expected_freshness": "15-minute scheduled ingestion after gateway publication",
+      "attribution_guidance": "Attribute every report to Reuters and retain the licensed canonical URL and timestamps.",
+      "limitations": [
+        "Requires a licensed gateway endpoint and bearer credential.",
+        "A news report creates only a provisional candidate until authoritative corroboration is present.",
+        "Full article content is not stored by this adapter."
+      ],
+      "registered_tool_names": [],
+      "provider_registration_name": "Reuters news sensing",
+      "implementation_status": "implemented_requires_configuration",
+      "documentation_path": "docs/news-sensing.md",
+      "allowed_hosts": []
+    }
+  ]
+}

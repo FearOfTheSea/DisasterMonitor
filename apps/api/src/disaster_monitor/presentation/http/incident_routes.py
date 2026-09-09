@@ -43,6 +43,7 @@ from disaster_monitor.presentation.http.schemas import (
     DisasterIncidentCoverageResponse,
     EventMeasurementResponse,
     EvidenceSnapshotResponse,
+    IncidentDetectionTimelineResponse,
     IncidentWatchChangeResponse,
     IncidentWatchCreateRequest,
     IncidentWatchEnabledRequest,
@@ -160,6 +161,15 @@ async def active_incidents(
             ],
             observation_kind=incident.observation_kind.value,
             activity_status=incident.activity_status,
+            verification_status=incident.verification_status.value,
+            detection=IncidentDetectionTimelineResponse(
+                news_break_at=incident.detection.news_break_at,
+                first_observed_at=incident.detection.first_observed_at,
+                candidate_created_at=incident.detection.candidate_created_at,
+                verified_at=incident.detection.verified_at,
+                monitor_visible_at=incident.detection.monitor_visible_at,
+                assistant_ready_at=incident.detection.assistant_ready_at,
+            ),
         )
 
     return ActiveIncidentsSnapshotResponse(

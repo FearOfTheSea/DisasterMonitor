@@ -359,6 +359,8 @@ export function ActiveIncidentsPanel({
                   const timestamp = sourceTimestamp(incident);
                   const title = displayActiveIncidentCountry(incident);
                   const context = displayActiveIncidentContext(incident);
+                  const provisional =
+                    incident.verification_status === 'provisional_news_detected';
                   return (
                     <article
                       key={`${incident.disaster}:${incident.event_id}`}
@@ -386,6 +388,12 @@ export function ActiveIncidentsPanel({
                           </span>
                         </span>
                         <strong className="incident-card-location">{title}</strong>
+                        {provisional ? (
+                          <span className="incident-provisional-status">
+                            <strong>Provisional news report</strong>
+                            <small>Authoritative confirmation pending</small>
+                          </span>
+                        ) : null}
                         {context ? (
                           <small className="incident-card-source-location">
                             {context}
@@ -434,6 +442,18 @@ export function ActiveIncidentsPanel({
                           <small>
                             {timestamp.label}: {formatTime(timestamp.value)}
                           </small>
+                          {incident.detection?.news_break_at ? (
+                            <small>
+                              News first published:{' '}
+                              {formatTime(incident.detection.news_break_at)}
+                            </small>
+                          ) : null}
+                          {incident.detection?.monitor_visible_at ? (
+                            <small>
+                              Visible in monitoring:{' '}
+                              {formatTime(incident.detection.monitor_visible_at)}
+                            </small>
+                          ) : null}
                         </div>
                         {incident.geometry?.kind === 'descriptive' && (
                           <small className="incident-geometry-note">

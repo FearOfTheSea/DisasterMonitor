@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -21,6 +21,10 @@ from disaster_monitor.application.disaster import (
 )
 from disaster_monitor.application.evidence.source_evidence_policy import (
     validate_worldwide_event_evidence,
+)
+from disaster_monitor.application.incidents.models import (
+    ActiveIncident,
+    ActiveIncidentsSnapshot,
 )
 from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
@@ -48,8 +52,13 @@ from disaster_monitor.domain.disaster import (
     MeasurementKind,
     ProviderTier,
     SituationReport,
+    SourceAuthority,
     SourceReference,
     point_event_geometry,
+)
+from disaster_monitor.domain.news import (
+    IncidentCandidateStatus,
+    IncidentDetectionTimeline,
 )
 from disaster_monitor.infrastructure.composition import build_current_disaster_report
 from disaster_monitor.infrastructure.configuration import Settings
@@ -108,6 +117,20 @@ class NoGeneralModel:
         raise AssertionError("worldwide disaster requests must stay source-backed")
 
 
+class ProjectionReader:
+    def __init__(self, incident: ActiveIncident) -> None:
+        self.incident = incident
+
+    async def execute(self, query=None):
+        return ActiveIncidentsSnapshot(
+            retrieved_at=NOW,
+            incidents=(self.incident,),
+            coverage=(),
+            warnings=(),
+            snapshot_version="projection:1",
+        )
+
+
 def _event() -> WorldwideDisasterEvent:
     source = SourceReference(
         source_id="synthetic-floods",
@@ -126,6 +149,56 @@ def _event() -> WorldwideDisasterEvent:
         source=source,
         geometry=point_event_geometry(1.0, 2.0, source),
     )
+
+
+@pytest.mark.asyncio
+async def test_worldwide_assistant_reads_provisional_event_from_shared_projection() -> (
+    None
+):
+    source = SourceReference(
+        source_id="ap-news",
+        publisher="Associated Press",
+        title="Wildfire forces evacuations near Antalya, Turkey",
+        canonical_url="https://apnews.com/article/antalya-fire",
+        published_at=NOW - timedelta(hours=2),
+        updated_at=None,
+        retrieved_at=NOW - timedelta(minutes=10),
+    )
+    incident = ActiveIncident(
+        event_id="news-candidate:antalya",
+        disaster=Disaster.WILDFIRE,
+        country=None,
+        location="Antalya, Turkey",
+        event_time=NOW - timedelta(hours=2),
+        geometry=None,
+        measurements=(),
+        provider_ids=("ap-news",),
+        provider_tier=ProviderTier.SECONDARY,
+        source_authority=SourceAuthority.SECONDARY,
+        source=source,
+        evidence_sources=(source,),
+        verification_status=IncidentCandidateStatus.PROVISIONAL_NEWS_DETECTED,
+        detection=IncidentDetectionTimeline(
+            news_break_at=NOW - timedelta(hours=2),
+            first_observed_at=NOW - timedelta(minutes=10),
+            candidate_created_at=NOW - timedelta(minutes=9),
+            monitor_visible_at=NOW - timedelta(minutes=5),
+            assistant_ready_at=NOW - timedelta(minutes=5),
+        ),
+    )
+    service = WorldwideDisasterReportService(
+        ProviderRegistry(()),
+        incident_reader=ProjectionReader(incident),
+        clock=lambda: NOW,
+    )
+
+    report = await service.execute(WorldwideDisasterQuery(Disaster.WILDFIRE))
+
+    assert report.selected_event is not None
+    assert report.selected_event.event_id == "news-candidate:antalya"
+    assert report.response_type == "current_disaster_worldwide_provisional"
+    assert "Provisional" in report.message
+    assert report.sources == (source,)
 
 
 def _tiered_event(

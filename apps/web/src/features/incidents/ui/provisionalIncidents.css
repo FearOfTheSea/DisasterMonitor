@@ -1,0 +1,16 @@
+.incident-provisional-status {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: 0.45rem;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.5rem;
+}
+
+.incident-provisional-status small {
+  color: var(--muted);
+}

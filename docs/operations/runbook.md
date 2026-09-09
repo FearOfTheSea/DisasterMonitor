@@ -31,6 +31,11 @@ discovery sources, resolves identities, and appends a versioned projection only 
 the refresh completes. In PostgreSQL mode, incident reads use the latest stored
 projection and do not call providers or the model.
 
+Configured news feeds run every 15 minutes and append immutable observations and
+candidate revisions. The following five-minute projection refresh incorporates
+eligible provisional candidates, so both the monitoring surface and worldwide
+assistant path read the same state. See [Major-news disaster sensing](../news-sensing.md).
+
 It cannot publish warnings, contact agencies, evacuate people, allocate resources, or
 expand decision authority.
 
@@ -68,7 +73,8 @@ operational-continuity claim.
 
 ## Worldwide projection operations
 
-Migration `0008_incident_projection.sql` creates the append-only projection table. It
+Migration `0008_incident_projection.sql` creates the append-only projection table;
+`0009_news_candidates.sql` adds append-only news observations and candidate revisions. They
 is safe to apply through the normal migration service; it does not delete existing
 observations, source snapshots, or watch state.
 

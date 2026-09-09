@@ -25,8 +25,15 @@ class StaticSourceCatalog:
                 encoding="utf-8"
             )
         )
+        news = json.loads(
+            resources.joinpath("news_sources.v1.json").read_text(encoding="utf-8")
+        )
         self._version = str(catalog["version"])
-        if str(rapid_mapping.get("catalog_version")) != self._version:
+        supplemental_versions = (rapid_mapping, news)
+        if any(
+            str(supplement.get("catalog_version")) != self._version
+            for supplement in supplemental_versions
+        ):
             raise ValueError(
                 "The packaged source catalog resources have version drift."
             )
@@ -38,7 +45,9 @@ class StaticSourceCatalog:
             )
             for descriptor in (
                 _descriptor(item)
-                for item in chain(catalog["sources"], rapid_mapping["sources"])
+                for item in chain(
+                    catalog["sources"], rapid_mapping["sources"], news["sources"]
+                )
             )
         )
         if len({item.source_id for item in self._sources}) != len(self._sources):

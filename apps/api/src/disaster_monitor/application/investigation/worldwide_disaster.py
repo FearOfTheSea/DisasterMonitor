@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Protocol
 
 from disaster_monitor.application.disaster import (
     DisasterReport,
@@ -15,6 +16,11 @@ from disaster_monitor.application.disaster import (
 from disaster_monitor.application.evidence.source_evidence_policy import (
     validate_worldwide_event_evidence,
     validate_worldwide_situation_evidence,
+)
+from disaster_monitor.application.incidents.models import (
+    ActiveIncident,
+    ActiveIncidentsQuery,
+    ActiveIncidentsSnapshot,
 )
 from disaster_monitor.application.investigation.worldwide_disaster_policy import (
     WorldwideDisasterPolicyRegistry,
@@ -33,10 +39,17 @@ from disaster_monitor.domain.disaster import (
     ProviderTier,
     SituationReport,
 )
+from disaster_monitor.domain.news import IncidentCandidateStatus
 
 
 def _now_utc() -> datetime:
     return datetime.now(UTC)
+
+
+class ProjectedIncidentReader(Protocol):
+    async def execute(
+        self, query: ActiveIncidentsQuery | None = None
+    ) -> ActiveIncidentsSnapshot: ...
 
 
 class WorldwideDisasterReportService:
@@ -48,13 +61,32 @@ class WorldwideDisasterReportService:
         *,
         policies: WorldwideDisasterPolicyRegistry | None = None,
         clock: Callable[[], datetime] = _now_utc,
+        incident_reader: ProjectedIncidentReader | None = None,
     ) -> None:
         self._provider_registry = provider_registry
         self._policies = policies or default_worldwide_disaster_policy_registry()
         self._clock = clock
+        self._incident_reader = incident_reader
 
     async def execute(self, query: WorldwideDisasterQuery) -> DisasterReport:
         now = self._clock()
+        if self._incident_reader is not None:
+            snapshot = await self._incident_reader.execute(
+                ActiveIncidentsQuery(
+                    time_window_days=min(query.time_window_days, 30),
+                    hazard=query.disaster,
+                )
+            )
+            projected = self._policies.for_disaster(query.disaster).select(
+                tuple(_worldwide_event(item) for item in snapshot.incidents), query
+            )
+            if projected is not None:
+                incident = next(
+                    item
+                    for item in snapshot.incidents
+                    if item.event_id == projected.event_id
+                )
+                return _projected_report(incident, query, now, self._policies)
         warnings: list[str] = []
         selection = self._provider_registry.select(query, ProviderRole.EVENT_DISCOVERY)
         if not selection.registrations:
@@ -263,6 +295,87 @@ def _failed_report(detail: str, now: datetime, warnings: list[str]) -> DisasterR
         capability_gaps=("Worldwide event discovery is unavailable.",),
         investigation_actions=("Attempted the configured worldwide event lookup.",),
         termination_reason="worldwide_event_verification_failed",
+    )
+
+
+def _worldwide_event(incident: ActiveIncident) -> WorldwideDisasterEvent:
+    return WorldwideDisasterEvent(
+        event_id=incident.event_id,
+        disaster=incident.disaster,
+        location=incident.location,
+        event_time=incident.event_time,
+        source=incident.source,
+        geometry=incident.geometry,
+        measurements=incident.measurements,
+        provider_ids=incident.provider_ids,
+        lineage_ids=incident.lineage_ids,
+        observation_kind=incident.observation_kind,
+        activity_status=incident.activity_status,
+    )
+
+
+def _projected_report(
+    incident: ActiveIncident,
+    query: WorldwideDisasterQuery,
+    now: datetime,
+    policies: WorldwideDisasterPolicyRegistry,
+) -> DisasterReport:
+    event = _worldwide_event(incident)
+    summary = SelectedEventSummary(
+        event_id=event.event_id,
+        disaster=event.disaster,
+        location=event.location,
+        event_time=event.event_time,
+        geometry=event.geometry,
+        measurements=event.measurements,
+        source=event.source,
+        provider_ids=event.provider_ids,
+        lineage_ids=event.lineage_ids,
+        geography_status=EventGeographyStatus.WORLDWIDE,
+    )
+    provisional = (
+        incident.verification_status
+        is IncidentCandidateStatus.PROVISIONAL_NEWS_DETECTED
+    )
+    status = (
+        "Provisional — a major-news report was detected; authoritative-source "
+        "confirmation is pending."
+        if provisional
+        else "This incident is source-backed in the shared monitoring projection."
+    )
+    detail = policies.for_disaster(query.disaster).describe_selection(event, query)
+    source_lines = "\n".join(
+        f"- {source.publisher} - {source.title} ({source.canonical_url})"
+        for source in incident.evidence_sources or (incident.source,)
+    )
+    sections = (
+        ReportSection("Verification status", status),
+        ReportSection("Situation summary", detail),
+        ReportSection("Sources", source_lines),
+        ReportSection("Projection freshness", f"Retrieved at {_utc_text(now)}."),
+    )
+    return DisasterReport(
+        message="\n\n".join(
+            f"## {section.title}\n{section.content}" for section in sections
+        ),
+        response_type=(
+            "current_disaster_worldwide_provisional"
+            if provisional
+            else policies.for_disaster(query.disaster).response_type(query)
+        ),
+        selected_event=summary,
+        retrieval_time=now,
+        sources=incident.evidence_sources or (incident.source,),
+        warnings=((status,) if provisional else ()),
+        sections=sections,
+        partial=True,
+        capability_gaps=(
+            ("Authoritative corroboration is pending.",) if provisional else ()
+        ),
+        investigation_actions=("Read the shared durable incident projection.",),
+        termination_reason=(
+            "provisional_news_detected" if provisional else "projected_incident_found"
+        ),
     )
 
 

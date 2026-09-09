@@ -115,6 +115,15 @@ class ActiveIncidentCountryResponse(BaseModel):
     distance_km: Annotated[float, Field(ge=0)] | None = None
 
 
+class IncidentDetectionTimelineResponse(BaseModel):
+    news_break_at: datetime | None = None
+    first_observed_at: datetime | None = None
+    candidate_created_at: datetime | None = None
+    verified_at: datetime | None = None
+    monitor_visible_at: datetime | None = None
+    assistant_ready_at: datetime | None = None
+
+
 class ActiveIncidentResponse(BaseModel):
     """One worldwide event with exact provider evidence and authority."""
 
@@ -134,6 +143,12 @@ class ActiveIncidentResponse(BaseModel):
     evidence_sources: list[SourceResponse] = Field(default_factory=list)
     observation_kind: Literal["physical_event", "acquisition"] = "physical_event"
     activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
+    verification_status: Literal[
+        "provisional_news_detected", "source_backed", "rejected"
+    ] = "source_backed"
+    detection: IncidentDetectionTimelineResponse = Field(
+        default_factory=IncidentDetectionTimelineResponse
+    )
 
 
 class CompoundHazardCorrelationResponse(BaseModel):

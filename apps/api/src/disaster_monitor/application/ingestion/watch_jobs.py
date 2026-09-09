@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
@@ -27,6 +27,10 @@ from disaster_monitor.domain.operations import (
 
 class IncidentWatchRefresher(Protocol):
     async def execute(self, watch_id: str) -> object: ...
+
+
+class NewsFeedRefresher(Protocol):
+    async def refresh(self) -> object: ...
 
 
 class IncidentWatchQueueStore(Protocol):
@@ -66,11 +70,13 @@ class IncidentWatchWorker:
         refresher: IncidentWatchRefresher,
         *,
         projection_refresher: IncidentProjectionRefresher | None = None,
+        news_refreshers: Mapping[str, NewsFeedRefresher] | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._repository = repository
         self._refresher = refresher
         self._projection_refresher = projection_refresher
+        self._news_refreshers = dict(news_refreshers or {})
         self._clock = clock
 
     async def run_once(self, worker_id: str) -> IngestJob | None:
@@ -89,6 +95,20 @@ class IncidentWatchWorker:
                 return job
             try:
                 await self._projection_refresher.refresh()
+            except Exception as error:
+                await self._repository.fail(
+                    job.job_id,
+                    failed_at=now,
+                    error_code=_public_error_code(error),
+                    retry_at=now + timedelta(seconds=min(300, 2**job.attempt_count)),
+                )
+            else:
+                await self._repository.complete(job.job_id, completed_at=now)
+            return job
+        news_refresher = self._news_refreshers.get(job.source_id)
+        if news_refresher is not None:
+            try:
+                await news_refresher.refresh()
             except Exception as error:
                 await self._repository.fail(
                     job.job_id,

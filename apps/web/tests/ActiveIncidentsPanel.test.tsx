@@ -77,6 +77,43 @@ function snapshot(incidents: ActiveIncident[] = [INCIDENT]): ActiveIncidentsSnap
 afterEach(cleanup);
 
 describe('ActiveIncidentsPanel', () => {
+  it('labels provisional news incidents and exposes the detection clock', async () => {
+    const user = userEvent.setup();
+    const provisional: ActiveIncident = {
+      ...INCIDENT,
+      event_id: 'news-candidate:antalya',
+      country: null,
+      location: 'Antalya, Turkey',
+      geometry: null,
+      provider_tier: 'secondary',
+      source_authority: 'secondary',
+      verification_status: 'provisional_news_detected',
+      detection: {
+        news_break_at: '2026-08-20T04:00:00Z',
+        first_observed_at: '2026-08-20T04:10:00Z',
+        candidate_created_at: '2026-08-20T04:11:00Z',
+        verified_at: null,
+        monitor_visible_at: '2026-08-20T04:15:00Z',
+        assistant_ready_at: '2026-08-20T04:15:00Z',
+      },
+    };
+
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot([provisional])}
+        status="success"
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Provisional news report')).toBeVisible();
+    expect(screen.getByText('Authoritative confirmation pending')).toBeVisible();
+    await user.click(screen.getByText('Source details'));
+    expect(screen.getByText(/News first published:/)).toBeVisible();
+    expect(screen.getByText(/Visible in monitoring:/)).toBeVisible();
+  });
+
   it('renders all coverage states, source metadata, warnings, and selection', async () => {
     const user = userEvent.setup();
     const onSelectIncident = vi.fn();

@@ -10,6 +10,7 @@ from disaster_monitor.application.ports.ingest_jobs import (
     IngestJobQueue,
     JobStatusReader,
 )
+from disaster_monitor.application.ports.news import NewsCandidateStore
 from disaster_monitor.application.ports.operator_actions import OperatorActionStore
 from disaster_monitor.application.ports.provider_status import (
     ProviderAttemptWriter,
@@ -34,6 +35,7 @@ class OperationalRepository(
     ProviderStatusReader,
     ProviderAttemptWriter,
     IncidentProjectionStore,
+    NewsCandidateStore,
     Protocol,
 ):
     """Complete persistence surface used only to assemble the runtime."""

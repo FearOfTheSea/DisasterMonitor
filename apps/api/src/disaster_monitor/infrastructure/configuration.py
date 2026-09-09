@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     )
     event_media_blob_root: Path = Path("data/event-media/blobs")
     reliefweb_app_name: str | None = None
+    news_sensing_enabled: bool = True
+    gdelt_news_enabled: bool = True
+    news_feed_timeout_seconds: float = Field(default=15.0, gt=0, le=60)
+    ap_news_endpoint: str | None = None
+    ap_news_token: SecretStr | None = Field(default=None, repr=False)
+    reuters_news_endpoint: str | None = None
+    reuters_news_token: SecretStr | None = Field(default=None, repr=False)
     nasa_firms_map_key: SecretStr | None = Field(default=None, repr=False)
     operational_database_url: SecretStr | None = Field(default=None, repr=False)
     operational_blob_root: Path = Path("data/operational/blobs")

@@ -1,0 +1,1 @@
+"""Breaking-news feed adapters."""
