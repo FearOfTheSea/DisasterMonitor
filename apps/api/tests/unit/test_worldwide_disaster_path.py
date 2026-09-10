@@ -156,7 +156,7 @@ async def test_worldwide_assistant_reads_provisional_event_from_shared_projectio
     None
 ):
     source = SourceReference(
-        source_id="ap-news",
+        source_id="gdelt-news",
         publisher="Associated Press",
         title="Wildfire forces evacuations near Antalya, Turkey",
         canonical_url="https://apnews.com/article/antalya-fire",
@@ -172,7 +172,7 @@ async def test_worldwide_assistant_reads_provisional_event_from_shared_projectio
         event_time=NOW - timedelta(hours=2),
         geometry=None,
         measurements=(),
-        provider_ids=("ap-news",),
+        provider_ids=("gdelt-news",),
         provider_tier=ProviderTier.SECONDARY,
         source_authority=SourceAuthority.SECONDARY,
         source=source,

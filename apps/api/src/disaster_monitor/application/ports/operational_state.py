@@ -23,6 +23,7 @@ from disaster_monitor.application.ports.snapshots import (
     SnapshotRetentionStore,
     SnapshotWriter,
 )
+from disaster_monitor.application.ports.web_collection import WebCollectionStore
 
 
 class OperationalRepository(
@@ -36,6 +37,7 @@ class OperationalRepository(
     ProviderAttemptWriter,
     IncidentProjectionStore,
     NewsCandidateStore,
+    WebCollectionStore,
     Protocol,
 ):
     """Complete persistence surface used only to assemble the runtime."""

@@ -27,6 +27,7 @@ from disaster_monitor.domain.operations import (
     WorldStateVersionRecord,
     freshness_for,
 )
+from disaster_monitor.domain.web_collection import WebFetchAudit, WebFetchState
 
 
 class InMemoryOperationalRepository:
@@ -53,6 +54,40 @@ class InMemoryOperationalRepository:
         self.news_observations: dict[str, NewsObservation] = {}
         self.incident_candidate_revisions: dict[str, IncidentCandidate] = {}
         self.provider_attempt_records: dict[str, list[ProviderAttempt]] = {}
+        self.web_fetch_states: dict[str, WebFetchState] = {}
+        self._web_fetch_audits: dict[str, WebFetchAudit] = {}
+
+    async def read_web_fetch_state(self, source_id: str) -> WebFetchState | None:
+        return self.web_fetch_states.get(source_id)
+
+    async def save_web_fetch_state(self, state: WebFetchState) -> None:
+        self.web_fetch_states[state.source_id] = state
+
+    async def append_web_fetch_audit(self, audit: WebFetchAudit) -> bool:
+        existing = self._web_fetch_audits.get(audit.audit_id)
+        if existing is not None:
+            if existing != audit:
+                raise RuntimeError("Web fetch audit identity was reused.")
+            return False
+        self._web_fetch_audits[audit.audit_id] = audit
+        return True
+
+    async def web_fetch_audits(
+        self, *, source_id: str, limit: int = 100
+    ) -> tuple[WebFetchAudit, ...]:
+        if not 1 <= limit <= 500:
+            raise ValueError("Web fetch audit limit must be between 1 and 500.")
+        return tuple(
+            sorted(
+                (
+                    audit
+                    for audit in self._web_fetch_audits.values()
+                    if audit.source_id == source_id
+                ),
+                key=lambda audit: (audit.attempted_at, audit.audit_id),
+                reverse=True,
+            )[:limit]
+        )
 
     async def record_provider_attempt(self, attempt: ProviderAttempt) -> None:
         records = self.provider_attempt_records.setdefault(attempt.source_id, [])

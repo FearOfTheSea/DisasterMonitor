@@ -1,4 +1,4 @@
-"""Bounded HTTP adapters for licensed and multilingual news metadata feeds."""
+"""Bounded HTTP adapter for multilingual public news metadata."""
 
 from __future__ import annotations
 
@@ -62,54 +62,6 @@ class GdeltDocNewsFeed:
         )
 
 
-class LicensedJsonNewsFeed:
-    """Configured licensed feed with a narrow normalized JSON contract.
-
-    Deployments adapt AP or Reuters gateway responses to ``items`` containing
-    id, publisher, title, url, published_at, and optional updated_at fields.
-    Credentials and licensed content remain outside the application boundary.
-    """
-
-    def __init__(
-        self,
-        *,
-        source_id: str,
-        endpoint: str,
-        token: str,
-        timeout_seconds: float = 10,
-        maximum_response_bytes: int = 1_000_000,
-        client: httpx.AsyncClient | None = None,
-    ) -> None:
-        if not endpoint.startswith("https://") or not token.strip():
-            raise ValueError("Licensed news feeds require HTTPS and a credential.")
-        self.source_id = source_id
-        self._endpoint = endpoint
-        self._token = token
-        self._timeout_seconds = timeout_seconds
-        self._maximum_response_bytes = maximum_response_bytes
-        self._client = client
-
-    async def fetch_since(
-        self, *, since: datetime, now: datetime
-    ) -> tuple[NewsFeedItem, ...]:
-        _validate_window(since, now)
-        payload = await _get_json(
-            self._client,
-            self._endpoint,
-            timeout_seconds=self._timeout_seconds,
-            maximum_response_bytes=self._maximum_response_bytes,
-            params={
-                "published_after": since.isoformat(),
-                "published_before": now.isoformat(),
-            },
-            headers={"Authorization": f"Bearer {self._token}"},
-        )
-        records = payload.get("items", []) if isinstance(payload, dict) else []
-        return tuple(
-            item for record in records if (item := _licensed_item(record)) is not None
-        )
-
-
 def _gdelt_item(value: object, index: int) -> NewsFeedItem | None:
     if not isinstance(value, dict):
         return None
@@ -139,33 +91,6 @@ def _gdelt_item(value: object, index: int) -> NewsFeedItem | None:
     )
 
 
-def _licensed_item(value: object) -> NewsFeedItem | None:
-    if not isinstance(value, dict):
-        return None
-    try:
-        return NewsFeedItem(
-            external_id=str(value["id"]),
-            publisher=str(value["publisher"]),
-            title=str(value["title"]),
-            canonical_url=str(value["url"]),
-            published_at=_iso_datetime(value["published_at"]),
-            updated_at=(
-                _iso_datetime(value["updated_at"])
-                if value.get("updated_at") is not None
-                else None
-            ),
-        )
-    except (KeyError, TypeError, ValueError):
-        return None
-
-
-def _iso_datetime(value: object) -> datetime:
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        raise ValueError("News timestamps must include a timezone.")
-    return parsed
-
-
 def _parse_gdelt_datetime(value: object) -> datetime | None:
     if not isinstance(value, str):
         return None
@@ -193,14 +118,13 @@ async def _get_json(
     timeout_seconds: float,
     maximum_response_bytes: int,
     params: dict[str, str],
-    headers: dict[str, str] | None = None,
 ) -> object:
     if client is not None:
-        response = await client.get(url, params=params, headers=headers)
+        response = await client.get(url, params=params)
         response.raise_for_status()
         return _bounded_json(response, maximum_response_bytes)
     async with httpx.AsyncClient(timeout=timeout_seconds) as temporary_client:
-        response = await temporary_client.get(url, params=params, headers=headers)
+        response = await temporary_client.get(url, params=params)
         response.raise_for_status()
         return _bounded_json(response, maximum_response_bytes)
 

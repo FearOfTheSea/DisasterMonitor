@@ -55,12 +55,14 @@ These tests demonstrate the bounded local mechanism. They do not demonstrate pro
 completeness, timely global detection, alert usefulness, or operational response
 outcomes.
 
-Major-news sensing is implemented as a 15-minute AP/Reuters gateway and GDELT metadata
+Major-news sensing is implemented as a 15-minute GDELT metadata
 lane with append-only observations, provisional candidate revisions, six detection
 timestamps, and a shared assistant/monitoring projection. Automated tests establish
 the deterministic lifecycle, persistence contract, projection transport, and
 provisional UI language. They do not establish the external 12-hour recall claim;
-licensed live feeds and an independent news-break denominator remain promotion gates.
+approved controlled-web sources and an independent news-break denominator remain
+promotion gates. The bounded RSS/sitemap foundation is implemented, but no live
+publisher has been admitted.
 
 Those claims remain promotion-pending. They require locked live episodes and
 supervised human evaluation.

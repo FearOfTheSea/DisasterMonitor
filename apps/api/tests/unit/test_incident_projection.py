@@ -111,7 +111,7 @@ async def test_projection_publishes_news_candidate_with_complete_detection_clock
     repository = InMemoryOperationalRepository()
     published = NOW - timedelta(hours=2)
     source = SourceReference(
-        source_id="ap-news",
+        source_id="gdelt-news",
         publisher="Associated Press",
         title="Wildfire forces evacuations near Antalya, Turkey",
         canonical_url="https://apnews.com/article/antalya-fire",
@@ -183,7 +183,7 @@ async def test_reconciliation_preserves_counts_and_detection_clocks() -> None:
     repository = InMemoryOperationalRepository()
     published = NOW - timedelta(hours=2)
     source = SourceReference(
-        source_id="ap-news",
+        source_id="gdelt-news",
         publisher="Associated Press",
         title="Wildfire forces evacuations near Antalya, Turkey",
         canonical_url="https://apnews.com/article/antalya-fire",

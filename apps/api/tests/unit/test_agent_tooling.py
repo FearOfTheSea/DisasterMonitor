@@ -623,7 +623,6 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
     catalog = StaticSourceCatalog()
 
     assert {item.source_id for item in catalog.sources()} == {
-        "ap-news",
         "cems-gfm-floods",
         "copernicus-rapid-mapping-earthquakes",
         "copernicus-rapid-mapping-floods",
@@ -646,14 +645,12 @@ def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> No
         "noaa-nhc-cyclone-forecast",
         "nws-weather-alerts",
         "reliefweb-situation-reports",
-        "reuters-news",
         "smithsonian-usgs-volcanic-activity",
         "usgs-earthquakes",
     }
     assert {item.implementation_status for item in catalog.sources()} == {
         "implemented",
         "implemented_news_sensing",
-        "implemented_requires_configuration",
         "implemented_weather_alerts",
     }
     assert all(

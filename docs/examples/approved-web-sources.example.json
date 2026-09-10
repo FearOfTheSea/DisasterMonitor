@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "sources": [
+    {
+      "source_id": "example-disabled-news",
+      "publisher_name": "Example News",
+      "feed_url": "https://example.com/disasters.xml",
+      "allowed_hosts": ["example.com"],
+      "allowed_path_prefixes": ["/disasters", "/articles/"],
+      "acquisition_mode": "rss_atom",
+      "user_agent": "DisasterMonitor/1.0 (+mailto:operations@example.org)",
+      "contact_email": "operations@example.org",
+      "robots_policy_url": "https://example.com/robots.txt",
+      "terms_url": "https://example.com/terms",
+      "reviewed_at": "2026-09-10T00:00:00Z",
+      "review_expires_at": "2026-10-10T00:00:00Z",
+      "crawl_delay_seconds": 900,
+      "request_limit_per_run": 1,
+      "maximum_response_bytes": 100000,
+      "enabled": false,
+      "kill_switch_reason": "Example only; no source admission has been approved."
+    }
+  ]
+}

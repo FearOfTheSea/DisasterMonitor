@@ -19,7 +19,7 @@ NOW = datetime(2026, 9, 9, 12, tzinfo=UTC)
 
 
 class FakeNewsFeed:
-    source_id = "ap-news"
+    source_id = "approved-web-test-feed"
 
     async def fetch_since(self, *, since: datetime, now: datetime):
         assert since == NOW - timedelta(minutes=30)
@@ -80,7 +80,7 @@ async def test_news_ingestion_is_idempotent() -> None:
 @pytest.mark.asyncio
 async def test_non_disaster_headline_is_observed_but_not_promoted() -> None:
     class NonDisasterFeed:
-        source_id = "reuters-news"
+        source_id = "unapproved-test-feed"
 
         async def fetch_since(self, *, since: datetime, now: datetime):
             return (
@@ -109,12 +109,12 @@ async def test_non_disaster_headline_is_observed_but_not_promoted() -> None:
 @pytest.mark.asyncio
 async def test_news_scheduler_enqueues_each_feed_once_per_interval() -> None:
     repository = InMemoryOperationalRepository()
-    scheduler = NewsFeedScheduler(repository, ("ap-news", "gdelt-news"))
+    scheduler = NewsFeedScheduler(repository, ("source-a", "gdelt-news"))
 
     assert await scheduler.enqueue_due(now=NOW) == 2
     assert await scheduler.enqueue_due(now=NOW) == 0
     assert {job.source_id for job in repository.jobs.values()} == {
-        "ap-news",
+        "source-a",
         "gdelt-news",
     }
 
@@ -150,7 +150,7 @@ async def test_reports_for_same_hazard_place_and_day_form_one_candidate() -> Non
     repository = InMemoryOperationalRepository()
 
     class ReutersFeed:
-        source_id = "reuters-news"
+        source_id = "approved-web-test-feed-b"
 
         async def fetch_since(self, *, since: datetime, now: datetime):
             return (
@@ -174,7 +174,7 @@ async def test_reports_for_same_hazard_place_and_day_form_one_candidate() -> Non
     )
     assert len(candidates) == 1
     assert {source.source_id for source in candidates[0].sources} == {
-        "ap-news",
-        "reuters-news",
+        "approved-web-test-feed",
+        "approved-web-test-feed-b",
     }
     assert candidates[0].news_break_at == NOW - timedelta(hours=2)

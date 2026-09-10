@@ -193,7 +193,7 @@ def build_app_dependencies(
         country_catalog
     )
     source_catalog = build_source_catalog(settings)
-    breaking_news_feeds = build_breaking_news_feeds(settings)
+    breaking_news_feeds = build_breaking_news_feeds(settings, operational.repository)
     configured_news_ids = {feed.source_id for feed in breaking_news_feeds}
     configured_weather_alerts = (
         configured.weather_alerts_service
@@ -221,7 +221,7 @@ def build_app_dependencies(
                         "provider_tier": "secondary",
                         "execution_roles": ("breaking_news_discovery",),
                     }
-                    for source_id in ("gdelt-news", "ap-news", "reuters-news")
+                    for source_id in ("gdelt-news",)
                 },
             },
         )

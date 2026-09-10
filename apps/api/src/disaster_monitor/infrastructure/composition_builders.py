@@ -55,6 +55,7 @@ from disaster_monitor.application.ports.news import BreakingNewsFeed
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
+from disaster_monitor.application.ports.web_collection import WebCollectionStore
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
 from disaster_monitor.application.sources.provider_registry import (
     ProviderRegistry,
@@ -111,9 +112,15 @@ from disaster_monitor.infrastructure.memory.memory_repository import (
 from disaster_monitor.infrastructure.memory.postgres_repository import (
     PostgresMemoryRepository,
 )
+from disaster_monitor.infrastructure.news.controlled_web import (
+    BoundedWebFetcher,
+    ControlledWebNewsFeed,
+)
 from disaster_monitor.infrastructure.news.feeds import (
     GdeltDocNewsFeed,
-    LicensedJsonNewsFeed,
+)
+from disaster_monitor.infrastructure.news.web_source_registry import (
+    StaticApprovedWebSourceRegistry,
 )
 from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
     FilesystemBlobStore,
@@ -192,8 +199,13 @@ def build_operational_services(
     )
 
 
-def build_breaking_news_feeds(settings: Settings) -> tuple[BreakingNewsFeed, ...]:
-    """Build only feeds that are explicitly enabled and fully configured."""
+def build_breaking_news_feeds(
+    settings: Settings,
+    web_collection_store: WebCollectionStore | None = None,
+    *,
+    now: datetime | None = None,
+) -> tuple[BreakingNewsFeed, ...]:
+    """Build explicitly enabled public news-discovery feeds."""
     if not settings.news_sensing_enabled:
         return ()
     feeds: list[BreakingNewsFeed] = []
@@ -204,22 +216,19 @@ def build_breaking_news_feeds(settings: Settings) -> tuple[BreakingNewsFeed, ...
                 maximum_response_bytes=settings.disaster_provider_max_response_bytes,
             )
         )
-    for source_id, endpoint, secret in (
-        ("ap-news", settings.ap_news_endpoint, settings.ap_news_token),
-        ("reuters-news", settings.reuters_news_endpoint, settings.reuters_news_token),
-    ):
-        if endpoint and secret is not None:
-            feeds.append(
-                LicensedJsonNewsFeed(
-                    source_id=source_id,
-                    endpoint=endpoint,
-                    token=secret.get_secret_value(),
-                    timeout_seconds=settings.news_feed_timeout_seconds,
-                    maximum_response_bytes=(
-                        settings.disaster_provider_max_response_bytes
-                    ),
-                )
+    if settings.approved_web_source_registry_path is not None:
+        if web_collection_store is None:
+            raise ValueError(
+                "Controlled web sources require an operational state store."
             )
+        registry = StaticApprovedWebSourceRegistry(
+            settings.approved_web_source_registry_path
+        )
+        fetcher = BoundedWebFetcher(timeout_seconds=settings.news_feed_timeout_seconds)
+        feeds.extend(
+            ControlledWebNewsFeed(source, fetcher, web_collection_store)
+            for source in registry.admitted(now=now or datetime.now(UTC))
+        )
     return tuple(feeds)
 
 

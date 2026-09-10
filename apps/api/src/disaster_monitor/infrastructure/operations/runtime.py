@@ -68,7 +68,7 @@ async def _scheduler(settings: Settings, *, once: bool) -> None:
     repository = _postgres(settings)
     scheduler = IncidentWatchScheduler(repository)
     projection_scheduler = WorldwideIncidentProjectionScheduler(repository)
-    news_feeds = build_breaking_news_feeds(settings)
+    news_feeds = build_breaking_news_feeds(settings, repository)
     news_scheduler = NewsFeedScheduler(
         repository, tuple(feed.source_id for feed in news_feeds)
     )
@@ -104,7 +104,7 @@ async def _worker(settings: Settings, *, once: bool) -> None:
     )
     news_refreshers = {
         feed.source_id: NewsCandidateIngestion(feed, repository)
-        for feed in build_breaking_news_feeds(settings)
+        for feed in build_breaking_news_feeds(settings, repository)
     }
     worker = IncidentWatchWorker(
         repository,

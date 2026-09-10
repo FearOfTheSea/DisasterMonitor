@@ -10,16 +10,14 @@ answers.
 ## Runtime
 
 The scheduler enqueues configured news feeds every 15 minutes. GDELT discovery is
-enabled by default. AP and Reuters are supported through a licensed gateway contract
-that returns normalized `items` with `id`, `publisher`, `title`, `url`,
-`published_at`, and optional `updated_at` fields. Configure gateways with:
+enabled by default. Set `NEWS_SENSING_ENABLED=false` to disable the lane or
+`GDELT_NEWS_ENABLED=false` to disable GDELT discovery. There are no licensed news
+gateway endpoints or credentials in this design.
 
-- `AP_NEWS_ENDPOINT` and `AP_NEWS_TOKEN`
-- `REUTERS_NEWS_ENDPOINT` and `REUTERS_NEWS_TOKEN`
-
-Set `NEWS_SENSING_ENABLED=false` to disable the lane or
-`GDELT_NEWS_ENABLED=false` to disable GDELT discovery. Provider credentials remain
-server-side.
+Direct public-web collection is disabled by default. Its controlled rollout and source
+admission requirements are defined in `docs/news-web-scraping-rollout.md`. The bounded
+RSS/sitemap foundation is available behind `APPROVED_WEB_SOURCE_REGISTRY_PATH`, but no
+publisher is packaged or enabled and no live-source admission has been granted.
 
 The worker records all received news metadata. Promotion to a provisional candidate
 requires exactly one recognized hazard, major-impact language, and a publisher in
@@ -54,5 +52,6 @@ cannot produce a map marker; the system does not fabricate a point.
 
 The implementation creates the mechanism needed to measure a 12-hour objective. It
 does not prove 12-hour global recall. Promotion still requires an independently
-timestamped live-news denominator, licensed-feed deployment, and a sustained
-evaluation across hazards, regions, languages, outages, duplicates, and corrections.
+timestamped live-news denominator, approved public-web source coverage, and a
+sustained evaluation across hazards, regions, languages, outages, duplicates, and
+corrections.

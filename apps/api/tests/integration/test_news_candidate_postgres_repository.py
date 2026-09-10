@@ -20,7 +20,7 @@ async def test_postgres_news_candidate_survives_repository_recreation(
     now = datetime.now(UTC)
     identity = uuid4().hex
     source = SourceReference(
-        source_id="ap-news",
+        source_id="gdelt-news",
         publisher="Associated Press",
         title="Major wildfire forces evacuations near Test Region",
         canonical_url=f"https://apnews.com/article/{identity}",
