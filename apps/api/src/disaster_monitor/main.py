@@ -11,37 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
-from disaster_monitor.application.ground_imagery.service import GroundImageryService
-from disaster_monitor.application.incidents.active_incidents import (
-    ActiveIncidentsService,
-)
-from disaster_monitor.application.investigation.current_disaster_report import (
-    CurrentDisasterReportService,
-)
-from disaster_monitor.application.investigation.disaster_query_parser import (
-    DisasterQueryParser,
-)
-from disaster_monitor.application.investigation.worldwide_disaster import (
-    WorldwideDisasterReportService,
-)
-from disaster_monitor.application.ports.agent_model import AgentModel
-from disaster_monitor.application.ports.conversation_deletion import (
-    ConversationDeletionStore,
-)
-from disaster_monitor.application.ports.conversation_store import ConversationStore
-from disaster_monitor.application.ports.event_media import (
-    EventMediaDiscovery,
-    MediaAssetStore,
-)
-from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
-from disaster_monitor.application.ports.language_model import LanguageModel
-from disaster_monitor.application.ports.memory_store import MemoryStore
-from disaster_monitor.application.ports.operational_state import OperationalRepository
-from disaster_monitor.application.ports.specialist_model import SpecialistModel
-from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
-from disaster_monitor.application.satellite_imagery import SatelliteImageryService
-from disaster_monitor.application.source_catalog import SourceCatalogService
-from disaster_monitor.application.weather_alerts import WeatherAlertsService
 from disaster_monitor.infrastructure.app_dependencies import AppDependencies
 from disaster_monitor.infrastructure.composition import (
     AppDependencyOverrides,
@@ -55,90 +24,27 @@ from disaster_monitor.presentation.http.routes import get_operational_metrics
 
 def create_app(
     settings: Settings | None = None,
-    model: LanguageModel | None = None,
-    current_disaster_report: CurrentDisasterReportService | None = None,
-    disaster_query_parser: DisasterQueryParser | None = None,
-    agent_model: AgentModel | None = None,
-    visual_analyzer: VisualAnalyzer | None = None,
-    operational_repository: OperationalRepository | None = None,
-    country_catalog_automation: CountryCatalogUpdateAutomation | None = None,
-    worldwide_disaster_report: WorldwideDisasterReportService | None = None,
-    event_media: EventMediaDiscovery | None = None,
-    media_asset_store: MediaAssetStore | None = None,
-    active_incidents_service: ActiveIncidentsService | None = None,
-    conversation_repository: ConversationStore | None = None,
-    satellite_imagery_service: SatelliteImageryService | None = None,
-    ground_imagery_service: GroundImageryService | None = None,
-    source_catalog_service: SourceCatalogService | None = None,
-    weather_alerts_service: WeatherAlertsService | None = None,
-    specialist_model: SpecialistModel | None = None,
-    memory_repository: MemoryStore | None = None,
-    conversation_deletion_store: ConversationDeletionStore | None = None,
     *,
     overrides: AppDependencyOverrides | None = None,
     dependencies: AppDependencies | None = None,
 ) -> FastAPI:
     """Bootstrap FastAPI from typed overrides or a prebuilt dependency graph."""
     app_settings = settings or Settings()
-    legacy_overrides = AppDependencyOverrides(
-        model=model,
-        current_disaster_report=current_disaster_report,
-        disaster_query_parser=disaster_query_parser,
-        agent_model=agent_model,
-        visual_analyzer=visual_analyzer,
-        operational_repository=operational_repository,
-        country_catalog_automation=country_catalog_automation,
-        worldwide_disaster_report=worldwide_disaster_report,
-        event_media=event_media,
-        media_asset_store=media_asset_store,
-        active_incidents_service=active_incidents_service,
-        conversation_repository=conversation_repository,
-        satellite_imagery_service=satellite_imagery_service,
-        ground_imagery_service=ground_imagery_service,
-        source_catalog_service=source_catalog_service,
-        weather_alerts_service=weather_alerts_service,
-        specialist_model=specialist_model,
-        memory_repository=memory_repository,
-        conversation_deletion_store=conversation_deletion_store,
-    )
-    has_legacy_overrides = any(
-        value is not None
-        for value in (
-            model,
-            current_disaster_report,
-            disaster_query_parser,
-            agent_model,
-            visual_analyzer,
-            operational_repository,
-            country_catalog_automation,
-            worldwide_disaster_report,
-            event_media,
-            media_asset_store,
-            active_incidents_service,
-            conversation_repository,
-            satellite_imagery_service,
-            ground_imagery_service,
-            source_catalog_service,
-            weather_alerts_service,
-            specialist_model,
-            memory_repository,
-            conversation_deletion_store,
-        )
-    )
-    if overrides is not None and has_legacy_overrides:
-        raise ValueError("Use either typed overrides or legacy keyword overrides.")
-    if dependencies is not None and (overrides is not None or has_legacy_overrides):
+    if dependencies is not None and overrides is not None:
         raise ValueError("Prebuilt dependencies cannot be combined with overrides.")
 
     metrics = (
         dependencies.agent_diagnostics
         if dependencies is not None
         and isinstance(dependencies.agent_diagnostics, OperationalMetrics)
+        else overrides.agent_diagnostics
+        if overrides is not None
+        and isinstance(overrides.agent_diagnostics, OperationalMetrics)
         else OperationalMetrics()
     )
     app_dependencies = dependencies
     if app_dependencies is None:
-        configured_overrides = overrides or legacy_overrides
+        configured_overrides = overrides or AppDependencyOverrides()
         if configured_overrides.agent_diagnostics is None:
             configured_overrides = replace(
                 configured_overrides,

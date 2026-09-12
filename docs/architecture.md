@@ -73,8 +73,9 @@ inputs, `composition_builders` owns focused adapter/service factories, and
 stable import facade.
 
 `AppDependencyOverrides` is the typed composition input. The production bootstrap
-can also accept a prebuilt `AppDependencies` container. Legacy individual test
-overrides remain a thin compatibility facade.
+can also accept a prebuilt `AppDependencies` container. `main.create_app` exposes
+only those two dependency-customization paths; individual legacy dependency keyword
+arguments are not part of the application factory.
 
 Presentation constructs HTTP metrics. It supplies agent diagnostics through the
 application-owned `AgentDiagnostics` protocol. Infrastructure never imports
@@ -182,6 +183,15 @@ operation, and conversation deletion retains its atomic deletion boundary.
 
 The ingestion implementation is split into queue jobs, watch jobs, evidence snapshot
 persistence, and decision review recording. Its old combined module is exports only.
+
+PostgreSQL operational persistence is split by responsibility across migration
+execution, ingestion queue jobs, evidence snapshots/world state, provider status and
+freshness, operator/audit records, and incident projections. The stable
+`PostgresIngestionRepository` name is a thin aggregate of those components, and
+`PostgresOperationalRepository` composes it with the watch, news, and web-collection
+repositories. The aggregate preserves one DSN/connection boundary and the existing
+port behavior; SQL and row mapping remain in the infrastructure components that own
+each responsibility.
 
 HTTP transcript reads, evidence history, and queue metrics delegate to
 `ConversationQueries`, `EvidenceHistoryQuery`, and `QueueStatusQuery`. Application

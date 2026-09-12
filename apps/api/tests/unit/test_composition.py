@@ -1,4 +1,5 @@
 from collections.abc import Awaitable, Callable
+from inspect import signature
 from pathlib import Path
 
 import pytest
@@ -128,6 +129,29 @@ def test_create_app_accepts_prebuilt_dependencies(
     app = create_app(settings=settings, dependencies=dependencies)
 
     assert app.state.dependencies is dependencies
+
+
+def test_create_app_accepts_typed_dependency_overrides(tmp_path: Path) -> None:
+    repository = InMemoryOperationalRepository()
+    model = FakeLanguageModel()
+
+    app = create_app(
+        settings=_settings(tmp_path),
+        overrides=AppDependencyOverrides(
+            model=model,
+            operational_repository=repository,
+        ),
+    )
+
+    assert app.state.dependencies.language_model is model
+    assert app.state.dependencies.operational_repository is repository
+
+
+def test_create_app_dependency_customization_surface_is_typed() -> None:
+    parameters = signature(create_app).parameters
+
+    assert set(parameters) == {"settings", "overrides", "dependencies"}
+    assert parameters["overrides"].kind is parameters["dependencies"].kind
 
 
 def test_prebuilt_dependencies_reuse_application_diagnostics_metrics(

@@ -37,12 +37,13 @@ from disaster_monitor.domain.disaster import (
     SourceReference,
     point_event_geometry,
 )
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.main import create_app
 
 
 @pytest.mark.asyncio
 async def test_health_endpoint_does_not_need_the_model() -> None:
-    app = create_app(model=FakeLanguageModel())
+    app = create_app(overrides=AppDependencyOverrides(model=FakeLanguageModel()))
     transport = httpx.ASGITransport(app=app)
 
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -54,7 +55,7 @@ async def test_health_endpoint_does_not_need_the_model() -> None:
 
 @pytest.mark.asyncio
 async def test_monitoring_readiness_discloses_in_memory_mode() -> None:
-    app = create_app(model=FakeLanguageModel())
+    app = create_app(overrides=AppDependencyOverrides(model=FakeLanguageModel()))
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -157,7 +158,12 @@ async def test_current_cyclone_serializes_supplemental_forecast_geometry() -> No
         provider_capabilities=capabilities,
         clock=lambda: NOW,
     )
-    app = create_app(model=FakeLanguageModel(), current_disaster_report=service)
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            current_disaster_report=service,
+        )
+    )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -214,7 +220,7 @@ async def test_current_cyclone_serializes_supplemental_forecast_geometry() -> No
 @pytest.mark.asyncio
 async def test_readiness_and_assistant_use_injected_fake_model() -> None:
     model = FakeLanguageModel(response_text="The fake model can answer locally.")
-    app = create_app(model=model)
+    app = create_app(overrides=AppDependencyOverrides(model=model))
     transport = httpx.ASGITransport(app=app)
 
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -271,7 +277,9 @@ async def test_map_context_question_cannot_be_reclassified_by_agent_model() -> N
     )
     agent_model = ShouldNotInterpretMapQuestion()
     model = FakeLanguageModel(response_text="I can explain the supplied map context.")
-    app = create_app(model=model, agent_model=agent_model)
+    app = create_app(
+        overrides=AppDependencyOverrides(model=model, agent_model=agent_model)
+    )
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -301,7 +309,7 @@ async def test_general_map_command_executes_the_agent_country_tool() -> None:
         response_text="",
         tool_calls=(ModelToolCall("fit_country", {"country_code": "JPN"}),),
     )
-    app = create_app(model=model)
+    app = create_app(overrides=AppDependencyOverrides(model=model))
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -336,9 +344,13 @@ async def test_general_map_command_executes_the_agent_country_tool() -> None:
 
 @pytest.mark.asyncio
 async def test_assistant_validation_and_model_error_mapping() -> None:
-    validation_app = create_app(model=FakeLanguageModel())
+    validation_app = create_app(
+        overrides=AppDependencyOverrides(model=FakeLanguageModel())
+    )
     error_app = create_app(
-        model=FakeLanguageModel(error=ConnectionError("offline")),
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(error=ConnectionError("offline")),
+        ),
     )
 
     async with httpx.AsyncClient(
@@ -364,8 +376,10 @@ async def test_current_disaster_request_returns_event_report_and_source_metadata
     None
 ):
     app = create_app(
-        model=FakeLanguageModel(error=ConnectionError("model is not needed")),
-        current_disaster_report=build_current_service(),
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(error=ConnectionError("model is not needed")),
+            current_disaster_report=build_current_service(),
+        ),
     )
 
     async with httpx.AsyncClient(
@@ -479,7 +493,12 @@ async def test_earthquake_news_never_falls_through_to_general_model(
         provider_capabilities=injected_capabilities(),
         clock=lambda: NOW,
     )
-    app = create_app(model=model, current_disaster_report=service)
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=service,
+        )
+    )
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

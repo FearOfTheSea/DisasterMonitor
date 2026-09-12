@@ -50,6 +50,7 @@ from disaster_monitor.domain.disaster import (
     SourceReference,
     point_event_geometry,
 )
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -523,28 +524,30 @@ if __name__ == "__main__":
     fake_model = FakeSystemModel()
     uvicorn.run(
         create_app(
-            model=fake_model,
-            agent_model=StructuredAgentModel(
-                fake_model,
-                operator_action_ids=tuple(sorted(OPERATOR_ACTION_IDS)),
-            ),
-            current_disaster_report=CurrentDisasterReportService(
-                FakeSystemEventProvider(),
-                FakeSystemSituationProvider(),
-                provider_capabilities=(
-                    ProviderCapabilities(
-                        frozenset({ProviderRole.EVENT_DISCOVERY}),
-                        frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
-                        None,
-                    ),
-                    ProviderCapabilities(
-                        frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                        frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
-                        None,
+            overrides=AppDependencyOverrides(
+                model=fake_model,
+                agent_model=StructuredAgentModel(
+                    fake_model,
+                    operator_action_ids=tuple(sorted(OPERATOR_ACTION_IDS)),
+                ),
+                current_disaster_report=CurrentDisasterReportService(
+                    FakeSystemEventProvider(),
+                    FakeSystemSituationProvider(),
+                    provider_capabilities=(
+                        ProviderCapabilities(
+                            frozenset({ProviderRole.EVENT_DISCOVERY}),
+                            frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
+                            None,
+                        ),
+                        ProviderCapabilities(
+                            frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                            frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
+                            None,
+                        ),
                     ),
                 ),
+                active_incidents_service=build_system_active_incidents_service(),
             ),
-            active_incidents_service=build_system_active_incidents_service(),
         ),
         host="127.0.0.1",
         port=8787,

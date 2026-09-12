@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -11,6 +11,12 @@ from typing import Protocol
 from disaster_monitor.application.disaster import DisasterQuery, DisasterReport
 from disaster_monitor.application.evidence.snapshot_persistence import (
     SnapshotPersistenceService,
+)
+from disaster_monitor.application.ingestion.failure_policy import (
+    SCHEDULED_REQUEST_NOT_REGISTERED_ERROR_CODE,
+    SOURCE_NOT_REGISTERED_ERROR_CODE,
+    classify_ingestion_failure,
+    terminal_failure,
 )
 from disaster_monitor.application.ports.ingest_jobs import IngestJobQueue
 from disaster_monitor.application.ports.source_payload import (
@@ -95,24 +101,23 @@ class ScheduledInvestigationWorker:
             return None
         query = self._queries.get(job.canonical_request_identity)
         if query is None:
-            await self._repository.fail(
-                job.job_id,
+            await record_terminal_failure(
+                self._repository,
+                job,
                 failed_at=now,
-                error_code="scheduled_request_not_registered",
-                retry_at=now,
+                error_code=SCHEDULED_REQUEST_NOT_REGISTERED_ERROR_CODE,
             )
             return job
-        try:
+
+        async def execute() -> None:
             await self._investigator.execute(query)
-        except Exception as error:
-            await self._repository.fail(
-                job.job_id,
-                failed_at=now,
-                error_code=_public_error_code(error),
-                retry_at=now + timedelta(seconds=min(300, 2**job.attempt_count)),
-            )
-        else:
-            await self._repository.complete(job.job_id, completed_at=now)
+
+        await execute_claimed_job(
+            self._repository,
+            job,
+            failed_at=now,
+            work=execute,
+        )
         return job
 
 
@@ -163,35 +168,78 @@ class IngestionWorker:
             return None
         acquirer = self._acquirers.get(job.source_id)
         if acquirer is None:
-            await self._repository.fail(
-                job.job_id,
+            await record_terminal_failure(
+                self._repository,
+                job,
                 failed_at=now,
-                error_code="source_not_registered",
-                retry_at=now,
+                error_code=SOURCE_NOT_REGISTERED_ERROR_CODE,
             )
             return job
-        try:
+
+        async def acquire_and_persist() -> None:
             payload = await acquirer.acquire(job.canonical_request_identity)
             if payload.source_id != job.source_id:
                 raise ValueError("Acquirer source identity escaped its registration.")
             await self._persistence.persist(payload)
-        except Exception as error:
-            retry_at = now + timedelta(seconds=min(300, 2**job.attempt_count))
-            await self._repository.fail(
-                job.job_id,
-                failed_at=now,
-                error_code=_public_error_code(error),
-                retry_at=retry_at,
-            )
-        else:
-            await self._repository.complete(job.job_id, completed_at=now)
+
+        await execute_claimed_job(
+            self._repository,
+            job,
+            failed_at=now,
+            work=acquire_and_persist,
+        )
         return job
 
 
-def _public_error_code(error: Exception) -> str:
-    name = error.__class__.__name__.lower()
-    if "timeout" in name:
-        return "timeout"
-    if isinstance(error, ValueError):
-        return "invalid_payload"
-    return "provider_failure"
+async def execute_claimed_job(
+    repository: IngestJobQueue,
+    job: IngestJob,
+    *,
+    failed_at: datetime,
+    work: Callable[[], Awaitable[object]],
+) -> None:
+    """Complete or fail one claimed job using the shared failure policy."""
+    try:
+        await work()
+    except Exception as error:
+        await record_execution_failure(
+            repository, job, failed_at=failed_at, error=error
+        )
+    else:
+        await repository.complete(job.job_id, completed_at=failed_at)
+
+
+async def record_execution_failure(
+    repository: IngestJobQueue,
+    job: IngestJob,
+    *,
+    failed_at: datetime,
+    error: Exception,
+) -> None:
+    decision = classify_ingestion_failure(
+        error,
+        failed_at=failed_at,
+        attempt_count=job.attempt_count,
+    )
+    await repository.fail(
+        job.job_id,
+        failed_at=failed_at,
+        error_code=decision.error_code,
+        retry_at=decision.retry_at,
+    )
+
+
+async def record_terminal_failure(
+    repository: IngestJobQueue,
+    job: IngestJob,
+    *,
+    failed_at: datetime,
+    error_code: str,
+) -> None:
+    decision = terminal_failure(error_code)
+    await repository.fail(
+        job.job_id,
+        failed_at=failed_at,
+        error_code=decision.error_code,
+        retry_at=decision.retry_at,
+    )

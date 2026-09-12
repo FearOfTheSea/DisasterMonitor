@@ -15,6 +15,9 @@ from disaster_monitor.application.evidence.retention import (
     SnapshotRetentionExecutor,
     SnapshotRetentionPolicy,
 )
+from disaster_monitor.application.ingestion.failure_policy import (
+    bounded_retry_delay,
+)
 from disaster_monitor.application.ingestion.operational_ingestion import (
     IngestionScheduler,
     IngestionWorker,
@@ -60,6 +63,10 @@ from disaster_monitor.infrastructure.operations.runtime import scheduled_investi
 NOW = datetime(2026, 8, 13, 3, tzinfo=UTC)
 
 
+def test_ingestion_retry_delay_is_bounded() -> None:
+    assert bounded_retry_delay(9) == timedelta(seconds=300)
+
+
 class FakeAcquirer:
     def __init__(self, source_id: str = "global-test-source") -> None:
         self.source_id = source_id
@@ -79,6 +86,20 @@ class FakeAcquirer:
             observed_at=None,
             rights_id="global-test-terms",
         )
+
+
+class ProviderTimeoutishError(RuntimeError):
+    """Provider failure whose class name must not be treated as a timeout."""
+
+
+class FailingAcquirer:
+    def __init__(self, error: Exception, source_id: str = "global-test-source") -> None:
+        self.error = error
+        self.source_id = source_id
+
+    async def acquire(self, request_identity: str) -> AcquiredSourcePayload:
+        del request_identity
+        raise self.error
 
 
 @pytest.mark.asyncio
@@ -134,7 +155,6 @@ async def test_missing_acquirer_dead_letters_without_expanding_authority(
         source_id="unknown-source",
         request_identity=request,
         scheduled_for=NOW,
-        max_attempts=1,
     )
     await repository.enqueue(job)
     worker = IngestionWorker(
@@ -150,6 +170,209 @@ async def test_missing_acquirer_dead_letters_without_expanding_authority(
     assert failed.status == IngestJobStatus.DEAD_LETTER
     assert failed.last_error_code == "source_not_registered"
     assert not repository.snapshot_records
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "error_code", "status", "scheduled_for"),
+    (
+        (
+            TimeoutError("upstream timeout"),
+            "timeout",
+            IngestJobStatus.RETRY,
+            NOW + timedelta(seconds=2),
+        ),
+        (
+            ProviderTimeoutishError("provider detail"),
+            "provider_failure",
+            IngestJobStatus.RETRY,
+            NOW + timedelta(seconds=2),
+        ),
+        (
+            ValueError("malformed provider payload"),
+            "invalid_payload",
+            IngestJobStatus.DEAD_LETTER,
+            NOW,
+        ),
+    ),
+)
+async def test_ingestion_worker_applies_stable_failure_policy(
+    tmp_path: Path,
+    error: Exception,
+    error_code: str,
+    status: IngestJobStatus,
+    scheduled_for: datetime,
+) -> None:
+    repository = InMemoryOperationalRepository()
+    job = scheduled_job(
+        source_id="global-test-source",
+        request_identity="request:failure-policy",
+        scheduled_for=NOW,
+        max_attempts=5,
+    )
+    assert await repository.enqueue(job)
+    worker = IngestionWorker(
+        repository,
+        SnapshotPersistenceService(repository, FilesystemBlobStore(tmp_path)),
+        {"global-test-source": FailingAcquirer(error)},
+        clock=lambda: NOW,
+    )
+
+    await worker.run_once("worker-1")
+
+    failed = repository.jobs[job.job_id]
+    assert failed.status is status
+    assert failed.last_error_code == error_code
+    assert failed.scheduled_for == scheduled_for
+    assert failed.claimed_by is None
+    assert failed.claimed_at is None
+
+
+@pytest.mark.asyncio
+async def test_terminal_source_registration_failure_ignores_remaining_attempts(
+    tmp_path: Path,
+) -> None:
+    repository = InMemoryOperationalRepository()
+    job = scheduled_job(
+        source_id="unregistered-source",
+        request_identity="request:unregistered-source",
+        scheduled_for=NOW,
+        max_attempts=5,
+    )
+    assert await repository.enqueue(job)
+    worker = IngestionWorker(
+        repository,
+        SnapshotPersistenceService(repository, FilesystemBlobStore(tmp_path)),
+        {},
+        clock=lambda: NOW,
+    )
+
+    await worker.run_once("worker-1")
+
+    failed = repository.jobs[job.job_id]
+    assert failed.status is IngestJobStatus.DEAD_LETTER
+    assert failed.attempt_count == 1
+    assert failed.last_error_code == "source_not_registered"
+
+
+@pytest.mark.asyncio
+async def test_terminal_scheduled_request_failure_ignores_remaining_attempts() -> None:
+    repository = InMemoryOperationalRepository()
+    job = scheduled_job(
+        source_id="global-test-source",
+        request_identity="request:unregistered-scheduled-request",
+        scheduled_for=NOW,
+        max_attempts=5,
+    )
+    assert await repository.enqueue(job)
+    worker = ScheduledInvestigationWorker(
+        repository,
+        investigator=object(),  # type: ignore[arg-type]
+        tasks=(),
+        clock=lambda: NOW,
+    )
+
+    await worker.run_once("worker-1")
+
+    failed = repository.jobs[job.job_id]
+    assert failed.status is IngestJobStatus.DEAD_LETTER
+    assert failed.attempt_count == 1
+    assert failed.last_error_code == "scheduled_request_not_registered"
+
+
+@pytest.mark.asyncio
+async def test_retryable_failure_dead_letters_at_max_attempts(tmp_path: Path) -> None:
+    repository = InMemoryOperationalRepository()
+    job = scheduled_job(
+        source_id="global-test-source",
+        request_identity="request:max-attempts",
+        scheduled_for=NOW,
+        max_attempts=1,
+    )
+    assert await repository.enqueue(job)
+    worker = IngestionWorker(
+        repository,
+        SnapshotPersistenceService(repository, FilesystemBlobStore(tmp_path)),
+        {"global-test-source": FailingAcquirer(RuntimeError("provider unavailable"))},
+        clock=lambda: NOW,
+    )
+
+    await worker.run_once("worker-1")
+
+    failed = repository.jobs[job.job_id]
+    assert failed.status is IngestJobStatus.DEAD_LETTER
+    assert failed.last_error_code == "provider_failure"
+
+
+@pytest.mark.asyncio
+async def test_scheduled_and_acquisition_workers_share_failure_policy(
+    tmp_path: Path,
+) -> None:
+    country = StaticCountryCatalog().get_by_alpha3("VNM")
+    assert country is not None
+    query = DisasterQuery(
+        Disaster.FLOOD,
+        country,
+        "scheduled",
+        ("event_overview",),
+        time_window_days=7,
+    )
+    task = ScheduledInvestigation(
+        "global-test-source",
+        "request:shared-policy",
+        query,
+        timedelta(minutes=30),
+    )
+
+    class FailingInvestigator:
+        async def execute(self, selected_query: DisasterQuery):
+            assert selected_query is query
+            raise ProviderTimeoutishError("upstream timeout-like provider failure")
+
+    scheduled_repository = InMemoryOperationalRepository()
+    acquisition_repository = InMemoryOperationalRepository()
+    scheduled = scheduled_job(
+        source_id=task.source_id,
+        request_identity=task.request_identity,
+        scheduled_for=NOW,
+    )
+    acquired = scheduled_job(
+        source_id=task.source_id,
+        request_identity=task.request_identity,
+        scheduled_for=NOW,
+    )
+    assert await scheduled_repository.enqueue(scheduled)
+    assert await acquisition_repository.enqueue(acquired)
+
+    scheduled_worker = ScheduledInvestigationWorker(
+        scheduled_repository,
+        FailingInvestigator(),
+        (task,),
+        clock=lambda: NOW,
+    )
+    acquisition_worker = IngestionWorker(
+        acquisition_repository,
+        SnapshotPersistenceService(
+            acquisition_repository, FilesystemBlobStore(tmp_path / "blobs")
+        ),
+        {task.source_id: FailingAcquirer(ProviderTimeoutishError("provider failure"))},
+        clock=lambda: NOW,
+    )
+
+    await scheduled_worker.run_once("worker-1")
+    await acquisition_worker.run_once("worker-1")
+
+    scheduled_failed = scheduled_repository.jobs[scheduled.job_id]
+    acquired_failed = acquisition_repository.jobs[acquired.job_id]
+    assert (
+        scheduled_failed.status,
+        scheduled_failed.last_error_code,
+        scheduled_failed.scheduled_for,
+    ) == (
+        acquired_failed.status,
+        acquired_failed.last_error_code,
+        acquired_failed.scheduled_for,
+    )
 
 
 @pytest.mark.asyncio

@@ -36,6 +36,7 @@ from disaster_monitor.domain.disaster import (
     SourceAuthority,
     SourceReference,
 )
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.main import create_app
 
 NOW = datetime(2026, 8, 20, 6, tzinfo=UTC)
@@ -164,9 +165,11 @@ class RecordingActiveIncidentsService:
 async def test_active_incidents_response_preserves_typed_source_evidence() -> None:
     service = RecordingActiveIncidentsService()
     app = create_app(
-        model=FakeLanguageModel(),
-        current_disaster_report=_current_service(),
-        active_incidents_service=service,  # type: ignore[arg-type]
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            current_disaster_report=_current_service(),
+            active_incidents_service=service,  # type: ignore[arg-type]
+        ),
     )
 
     async with httpx.AsyncClient(
@@ -329,9 +332,11 @@ async def test_active_incidents_serializes_resolvable_compound_correlations() ->
             return correlated_snapshot
 
     app = create_app(
-        model=FakeLanguageModel(),
-        current_disaster_report=_current_service(),
-        active_incidents_service=CorrelatedService(),  # type: ignore[arg-type]
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            current_disaster_report=_current_service(),
+            active_incidents_service=CorrelatedService(),  # type: ignore[arg-type]
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -365,9 +370,11 @@ async def test_active_incidents_serializes_resolvable_compound_correlations() ->
 async def test_active_incidents_http_query_bounds_are_validated() -> None:
     service = RecordingActiveIncidentsService()
     app = create_app(
-        model=FakeLanguageModel(),
-        current_disaster_report=_current_service(),
-        active_incidents_service=service,  # type: ignore[arg-type]
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            current_disaster_report=_current_service(),
+            active_incidents_service=service,  # type: ignore[arg-type]
+        ),
     )
 
     async with httpx.AsyncClient(

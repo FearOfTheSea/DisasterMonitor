@@ -19,6 +19,7 @@ from disaster_monitor.domain.disaster import (
     WatchIncident,
     point_event_geometry,
 )
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
@@ -63,8 +64,10 @@ async def test_incident_watch_crud_timeline_and_read_contract(tmp_path: Path) ->
             country_catalog_root=tmp_path / "countries",
             country_catalog_automatic_updates=False,
         ),
-        model=FakeLanguageModel(),
-        operational_repository=repository,
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            operational_repository=repository,
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -139,8 +142,10 @@ async def test_incident_watch_http_validation_preserves_scope_rules(
             country_catalog_root=tmp_path / "countries",
             country_catalog_automatic_updates=False,
         ),
-        model=FakeLanguageModel(),
-        operational_repository=InMemoryOperationalRepository(),
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            operational_repository=InMemoryOperationalRepository(),
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

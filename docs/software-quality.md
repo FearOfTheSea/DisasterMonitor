@@ -100,6 +100,18 @@ LOC identifies review candidates; it does not measure design quality by itself.
 Generated code is exempt from hand-maintained LOC thresholds when its source of truth
 and freshness check are explicit.
 
+## Compatibility and deprecation
+
+Compatibility code is temporary and must remain a translation or composition boundary;
+it must not become a new implementation home. New production code must not depend on a
+deprecated compatibility surface. Every compatibility shim must name its migration
+path and objective removal condition.
+
+Extending a compatibility surface requires an explicitly documented exception with a
+scope, owner, and removal condition; convenience alone is not sufficient. Compatibility
+behavior must have boundary tests for as long as the shim exists. Prefer typed
+composition inputs over expanding individual dependency-injection parameters.
+
 ## Quality attributes
 
 Maintainability guides design, but it is not the only quality attribute:

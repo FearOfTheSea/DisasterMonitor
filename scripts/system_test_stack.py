@@ -40,6 +40,7 @@ from disaster_monitor.application.sources.provider_registry import (
     ProviderRole,
 )
 from disaster_monitor.domain.disaster import Disaster
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.disaster.composite import (
     CompositeDisasterEventProvider,
@@ -72,30 +73,32 @@ def main() -> int:
             country_catalog_automatic_updates=False,
             country_catalog_root=Path(catalog_directory.name),
         ),
-        model=fake_model,
-        agent_model=StructuredAgentModel(
-            fake_model,
-            operator_action_ids=tuple(sorted(OPERATOR_ACTION_IDS)),
-        ),
-        current_disaster_report=CurrentDisasterReportService(
-            CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
-            FakeSystemSituationProvider(),
-            provider_capabilities=(
-                ProviderCapabilities(
-                    frozenset({ProviderRole.EVENT_DISCOVERY}),
-                    frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
-                    None,
-                ),
-                ProviderCapabilities(
-                    frozenset({ProviderRole.SITUATION_EVIDENCE}),
-                    frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
-                    None,
-                ),
+        overrides=AppDependencyOverrides(
+            model=fake_model,
+            agent_model=StructuredAgentModel(
+                fake_model,
+                operator_action_ids=tuple(sorted(OPERATOR_ACTION_IDS)),
             ),
-            clock=lambda: NOW,
+            current_disaster_report=CurrentDisasterReportService(
+                CompositeDisasterEventProvider((FakeSystemEventProvider(),)),
+                FakeSystemSituationProvider(),
+                provider_capabilities=(
+                    ProviderCapabilities(
+                        frozenset({ProviderRole.EVENT_DISCOVERY}),
+                        frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
+                        None,
+                    ),
+                    ProviderCapabilities(
+                        frozenset({ProviderRole.SITUATION_EVIDENCE}),
+                        frozenset({Disaster.EARTHQUAKE, Disaster.FLOOD}),
+                        None,
+                    ),
+                ),
+                clock=lambda: NOW,
+            ),
+            active_incidents_service=active_incidents,
+            operational_repository=repository,
         ),
-        active_incidents_service=active_incidents,
-        operational_repository=repository,
     )
     app.state.dependencies = replace(
         app.state.dependencies,

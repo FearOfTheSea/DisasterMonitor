@@ -19,6 +19,7 @@ from disaster_monitor.domain.multimodal import (
     DamageLevel,
     VisualAnalysisConfiguration,
 )
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.main import create_app
 
 
@@ -26,11 +27,13 @@ from disaster_monitor.main import create_app
 async def test_fatality_request_is_focused_and_missing_is_not_zero() -> None:
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
     app = create_app(
-        model=model,
-        current_disaster_report=build_current_service(
-            fact_category="fatalities",
-            fact_label="Fatalities",
-            fact_value="2",
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=build_current_service(
+                fact_category="fatalities",
+                fact_label="Fatalities",
+                fact_value="2",
+            ),
         ),
     )
     async with httpx.AsyncClient(
@@ -67,7 +70,12 @@ async def test_decision_support_request_returns_advisory_evidence_bounded_option
     None
 ):
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
-    app = create_app(model=model, current_disaster_report=build_current_service())
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=build_current_service(),
+        )
+    )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -175,12 +183,14 @@ async def test_decision_support_api_preserves_uncertain_source_status(
 ) -> None:
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
     app = create_app(
-        model=model,
-        current_disaster_report=build_current_service(
-            fact_category="injuries",
-            fact_label="Injuries",
-            fact_value="12",
-            fact_status=fact_status,
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=build_current_service(
+                fact_category="injuries",
+                fact_label="Injuries",
+                fact_value="12",
+                fact_status=fact_status,
+            ),
         ),
     )
     async with httpx.AsyncClient(
@@ -222,7 +232,12 @@ async def test_image_request_runs_supported_text_path_and_reports_capability_gap
     None
 ):
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
-    app = create_app(model=model, current_disaster_report=build_current_service())
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=build_current_service(),
+        )
+    )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -268,9 +283,11 @@ async def test_invalid_agent_model_output_uses_default_plan_not_general_model() 
         error=AssertionError("general model must not be called")
     )
     app = create_app(
-        model=general,
-        agent_model=agent_model,
-        current_disaster_report=build_current_service(),
+        overrides=AppDependencyOverrides(
+            model=general,
+            agent_model=agent_model,
+            current_disaster_report=build_current_service(),
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -336,9 +353,11 @@ async def test_operator_image_crosses_real_http_boundary_into_typed_cop() -> Non
     visual = FakeVisualAnalyzer()
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
     app = create_app(
-        model=model,
-        current_disaster_report=build_current_service(),
-        visual_analyzer=visual,
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=build_current_service(),
+            visual_analyzer=visual,
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -403,7 +422,12 @@ async def test_operator_image_crosses_real_http_boundary_into_typed_cop() -> Non
 @pytest.mark.asyncio
 async def test_invalid_inline_image_encoding_is_rejected_before_investigation() -> None:
     model = FakeLanguageModel(error=AssertionError("model must not be called"))
-    app = create_app(model=model, current_disaster_report=build_current_service())
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=build_current_service(),
+        )
+    )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:

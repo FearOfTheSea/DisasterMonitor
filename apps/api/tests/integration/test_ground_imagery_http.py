@@ -41,6 +41,7 @@ from disaster_monitor.domain.imagery.regions import (
     RegionSourceKind,
     polygon_from_geojson,
 )
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.infrastructure.ground_imagery.artifact_store import (
     FilesystemImageryArtifactStore,
 )
@@ -207,7 +208,7 @@ async def test_ground_imagery_http_exposes_region_time_sensor_states_and_manifes
     None
 ):
     service = _service()
-    app = create_app(ground_imagery_service=service)
+    app = create_app(overrides=AppDependencyOverrides(ground_imagery_service=service))
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -276,7 +277,7 @@ async def test_ground_imagery_http_preserves_needs_region_without_catalog_search
         country_code="BRA",
         event_time=datetime(2024, 5, 5, tzinfo=UTC),
     )
-    app = create_app(ground_imagery_service=service)
+    app = create_app(overrides=AppDependencyOverrides(ground_imagery_service=service))
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -294,7 +295,7 @@ async def test_ground_imagery_http_publishes_validated_artifacts(
     tmp_path: Path,
 ) -> None:
     service = _service(tmp_path)
-    app = create_app(ground_imagery_service=service)
+    app = create_app(overrides=AppDependencyOverrides(ground_imagery_service=service))
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:

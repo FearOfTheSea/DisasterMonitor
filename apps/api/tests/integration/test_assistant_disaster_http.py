@@ -55,7 +55,10 @@ from disaster_monitor.domain.disaster import (
     SourceReference,
     point_event_geometry,
 )
-from disaster_monitor.infrastructure.composition import build_current_disaster_report
+from disaster_monitor.infrastructure.composition import (
+    AppDependencyOverrides,
+    build_current_disaster_report,
+)
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -144,11 +147,13 @@ async def test_explicit_worldwide_earthquake_news_uses_global_usgs_scope() -> No
     media_discovery = RecordingMediaDiscovery()
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
     app = create_app(
-        model=model,
-        current_disaster_report=build_current_service(),
-        worldwide_disaster_report=worldwide_report,
-        event_media=media_discovery,
-        media_asset_store=EmptyMediaStore(),
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=build_current_service(),
+            worldwide_disaster_report=worldwide_report,
+            event_media=media_discovery,
+            media_asset_store=EmptyMediaStore(),
+        ),
     )
 
     async with httpx.AsyncClient(
@@ -238,10 +243,12 @@ async def test_current_event_returns_three_typed_source_photos_and_serves_bytes(
             )
 
     app = create_app(
-        model=FakeLanguageModel(error=AssertionError("model must not be called")),
-        current_disaster_report=build_current_service(),
-        event_media=Discovery(),
-        media_asset_store=Store(),
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(error=AssertionError("model must not be called")),
+            current_disaster_report=build_current_service(),
+            event_media=Discovery(),
+            media_asset_store=Store(),
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -399,7 +406,12 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
         provider_capabilities=injected_capabilities(),
         clock=lambda: retrieval_time,
     )
-    app = create_app(model=model, current_disaster_report=service)
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=model,
+            current_disaster_report=service,
+        )
+    )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -434,9 +446,11 @@ async def test_current_disaster_routes_one_normalized_japan_query_without_model(
 @pytest.mark.asyncio
 async def test_current_disaster_partial_situation_failure() -> None:
     app = create_app(
-        model=FakeLanguageModel(error=ConnectionError("model is not needed")),
-        current_disaster_report=build_current_service(
-            situation_error=TimeoutError("offline")
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(error=ConnectionError("model is not needed")),
+            current_disaster_report=build_current_service(
+                situation_error=TimeoutError("offline")
+            ),
         ),
     )
 
@@ -466,12 +480,14 @@ async def test_current_disaster_is_honest_when_event_source_has_no_match() -> No
             return ProviderBatch()
 
     app = create_app(
-        model=FakeLanguageModel(error=ConnectionError("model is not needed")),
-        current_disaster_report=CurrentDisasterReportService(
-            EmptyEventProvider(),
-            EmptySituationProvider(),
-            provider_capabilities=injected_capabilities(),
-            clock=lambda: NOW,
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(error=ConnectionError("model is not needed")),
+            current_disaster_report=CurrentDisasterReportService(
+                EmptyEventProvider(),
+                EmptySituationProvider(),
+                provider_capabilities=injected_capabilities(),
+                clock=lambda: NOW,
+            ),
         ),
     )
     async with httpx.AsyncClient(
@@ -531,7 +547,7 @@ async def test_unsafe_disaster_ambiguity_never_escapes_to_general_model(
     question: str, expected_type: str, expected_text: str
 ) -> None:
     model = FakeLanguageModel(error=AssertionError("general model must not be called"))
-    app = create_app(model=model)
+    app = create_app(overrides=AppDependencyOverrides(model=model))
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -549,7 +565,7 @@ async def test_unsafe_disaster_ambiguity_never_escapes_to_general_model(
 @pytest.mark.asyncio
 async def test_general_disaster_knowledge_delegates_without_live_source_claim() -> None:
     model = FakeLanguageModel(response_text="Earthquakes result from fault movement.")
-    app = create_app(model=model)
+    app = create_app(overrides=AppDependencyOverrides(model=model))
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

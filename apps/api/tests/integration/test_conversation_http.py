@@ -46,6 +46,7 @@ from disaster_monitor.domain.conversation import (
     ConversationRole,
 )
 from disaster_monitor.domain.disaster import Disaster, IncidentWatchScope
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.conversations.memory_repository import (
     InMemoryConversationRepository,
@@ -132,7 +133,12 @@ async def test_assistant_http_exposes_and_persists_a_bounded_investigation_case(
                 investigation_case=_investigation_case(),
             )
 
-    app = create_app(model=FakeLanguageModel(), conversation_repository=repository)
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            conversation_repository=repository,
+        )
+    )
     app.dependency_overrides[get_conversation_turn] = lambda: RunConversationTurn(
         Assistant(), repository
     )
@@ -195,8 +201,10 @@ async def test_assistant_http_exposes_and_persists_typed_operator_actions() -> N
             )
 
     app = create_app(
-        model=FakeLanguageModel(),
-        conversation_repository=repository,
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            conversation_repository=repository,
+        ),
     )
     app.dependency_overrides[get_conversation_turn] = lambda: RunConversationTurn(
         Assistant(), repository
@@ -276,9 +284,11 @@ async def test_conversation_turn_persists_typed_memory_and_deletion_hides_it() -
             long_term_memory_enabled=True,
             event_media_enabled=False,
         ),
-        model=FakeLanguageModel(),
-        conversation_repository=conversations,
-        memory_repository=memories,
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            conversation_repository=conversations,
+            memory_repository=memories,
+        ),
     )
     conversation_turn = RunConversationTurn(
         Assistant(),
@@ -312,8 +322,10 @@ async def test_conversation_turn_persists_typed_memory_and_deletion_hides_it() -
 async def test_conversation_http_lifecycle_and_assistant_persistence() -> None:
     model = FakeLanguageModel(response_text="A persisted answer.")
     app = create_app(
-        model=model,
-        conversation_repository=InMemoryConversationRepository(),
+        overrides=AppDependencyOverrides(
+            model=model,
+            conversation_repository=InMemoryConversationRepository(),
+        ),
     )
 
     async with httpx.AsyncClient(
@@ -362,8 +374,10 @@ async def test_conversation_http_lifecycle_and_assistant_persistence() -> None:
 @pytest.mark.asyncio
 async def test_conversation_http_rejects_unknown_and_deletes_cascade() -> None:
     app = create_app(
-        model=FakeLanguageModel(),
-        conversation_repository=InMemoryConversationRepository(),
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            conversation_repository=InMemoryConversationRepository(),
+        ),
     )
 
     async with httpx.AsyncClient(
@@ -450,10 +464,12 @@ async def test_reloaded_conversation_reconstructs_media_report_and_legacy_text()
             return None
 
     app = create_app(
-        model=FakeLanguageModel(),
-        conversation_repository=repository,
-        media_asset_store=Store(),
-        event_media=Discovery(),
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            conversation_repository=repository,
+            media_asset_store=Store(),
+            event_media=Discovery(),
+        ),
     )
     conversation_turn = RunConversationTurn(Assistant(), repository, clock=lambda: NOW)
     app.dependency_overrides[get_conversation_turn] = lambda: conversation_turn

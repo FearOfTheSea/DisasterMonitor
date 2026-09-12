@@ -15,6 +15,7 @@ from disaster_monitor.application.satellite_imagery import (
     SatelliteImageryUnavailableError,
     SatelliteImageryUpstreamError,
 )
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.infrastructure.satellite_imagery.providers import (
     NasaGibsImageryProvider,
     PlanetImageryProvider,
@@ -90,10 +91,12 @@ def test_catalog_has_exact_source_capabilities_without_credentials() -> None:
 @pytest.mark.asyncio
 async def test_http_catalog_disables_unconfigured_credentialed_providers() -> None:
     app = create_app(
-        satellite_imagery_service=_service(
-            sentinel_instance_id=None,
-            planet_api_key=None,
-            planet_mosaic_name=None,
+        overrides=AppDependencyOverrides(
+            satellite_imagery_service=_service(
+                sentinel_instance_id=None,
+                planet_api_key=None,
+                planet_mosaic_name=None,
+            )
         )
     )
     async with httpx.AsyncClient(
@@ -337,7 +340,9 @@ async def test_protected_tile_http_response_never_returns_credentials_or_url() -
         return httpx.Response(200, content=PNG, headers={"content-type": "image/png"})
 
     service = _service(sentinel_client=_client(handler))
-    app = create_app(satellite_imagery_service=service)
+    app = create_app(
+        overrides=AppDependencyOverrides(satellite_imagery_service=service)
+    )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:

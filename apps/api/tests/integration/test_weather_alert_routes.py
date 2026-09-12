@@ -14,6 +14,7 @@ from disaster_monitor.application.weather_alerts import (
     WeatherAlertUrgency,
 )
 from disaster_monitor.infrastructure.composition import (
+    AppDependencyOverrides,
     build_current_disaster_report,
     build_source_catalog,
 )
@@ -87,8 +88,10 @@ async def test_weather_alert_and_source_catalog_transport_is_bounded_and_typed()
     None
 ):
     app = create_app(
-        weather_alerts_service=FakeWeatherAlertsService(),  # type: ignore[arg-type]
-        source_catalog_service=_source_catalog_service(),
+        overrides=AppDependencyOverrides(
+            weather_alerts_service=FakeWeatherAlertsService(),  # type: ignore[arg-type]
+            source_catalog_service=_source_catalog_service(),
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

@@ -143,19 +143,20 @@ class InMemoryOperationalRepository:
         *,
         failed_at: datetime,
         error_code: str,
-        retry_at: datetime,
+        retry_at: datetime | None,
     ) -> IngestJobStatus:
         del failed_at
         job = self.jobs[job_id]
-        status = (
-            IngestJobStatus.DEAD_LETTER
-            if job.attempt_count >= job.max_attempts
-            else IngestJobStatus.RETRY
-        )
+        if retry_at is None or job.attempt_count >= job.max_attempts:
+            status = IngestJobStatus.DEAD_LETTER
+            next_scheduled_for = job.scheduled_for
+        else:
+            status = IngestJobStatus.RETRY
+            next_scheduled_for = retry_at
         self.jobs[job_id] = replace(
             job,
             status=status,
-            scheduled_for=retry_at,
+            scheduled_for=next_scheduled_for,
             claimed_by=None,
             claimed_at=None,
             last_error_code=error_code,

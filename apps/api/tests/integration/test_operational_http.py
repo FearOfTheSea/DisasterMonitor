@@ -15,6 +15,7 @@ from disaster_monitor.application.ports.geography import (
 )
 from disaster_monitor.application.ports.source_payload import AcquiredSourcePayload
 from disaster_monitor.domain.operations import WorldStateVersionRecord
+from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
     FilesystemBlobStore,
@@ -101,8 +102,10 @@ async def test_operational_status_history_and_attributed_review(tmp_path: Path) 
             trusted_operator_identity_enabled=True,
             trusted_operator_identity_header="x-custom-operator",
         ),
-        model=FakeLanguageModel(),
-        operational_repository=repository,
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            operational_repository=repository,
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -165,8 +168,10 @@ async def test_operator_review_is_fail_closed_without_identity_boundary(
 ) -> None:
     app = create_app(
         settings=Settings(operational_blob_root=tmp_path),
-        model=FakeLanguageModel(),
-        operational_repository=InMemoryOperationalRepository(),
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            operational_repository=InMemoryOperationalRepository(),
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -192,9 +197,11 @@ async def test_country_catalog_status_and_manual_update(tmp_path: Path) -> None:
             operational_blob_root=tmp_path,
             country_catalog_root=tmp_path / "geography",
         ),
-        model=FakeLanguageModel(),
-        operational_repository=InMemoryOperationalRepository(),
-        country_catalog_automation=automation,
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            operational_repository=InMemoryOperationalRepository(),
+            country_catalog_automation=automation,
+        ),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

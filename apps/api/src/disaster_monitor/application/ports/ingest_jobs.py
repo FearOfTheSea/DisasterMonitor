@@ -10,6 +10,8 @@ from disaster_monitor.domain.operations import (
 
 
 class IngestJobQueue(Protocol):
+    """Queue lifecycle; a missing retry time means terminal failure."""
+
     async def enqueue(self, job: IngestJob) -> bool: ...
 
     async def claim(self, worker_id: str, *, now: datetime) -> IngestJob | None: ...
@@ -22,7 +24,7 @@ class IngestJobQueue(Protocol):
         *,
         failed_at: datetime,
         error_code: str,
-        retry_at: datetime,
+        retry_at: datetime | None,
     ) -> IngestJobStatus: ...
 
 

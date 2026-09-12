@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Protocol
 
 from disaster_monitor.application.incidents.refresh_incident_watch import (
     IncidentWatchRefreshNotFoundError,
     IncidentWatchRefreshRetryableError,
 )
+from disaster_monitor.application.ingestion.failure_policy import (
+    SCHEDULED_REQUEST_NOT_REGISTERED_ERROR_CODE,
+)
 from disaster_monitor.application.ingestion.jobs import (
-    _public_error_code,
+    record_execution_failure,
+    record_terminal_failure,
     scheduled_job,
 )
 from disaster_monitor.application.ingestion.projection_jobs import (
@@ -86,21 +90,18 @@ class IncidentWatchWorker:
             return None
         if job.source_id == WorldwideIncidentProjectionScheduler.source_id:
             if self._projection_refresher is None:
-                await self._repository.fail(
-                    job.job_id,
+                await record_terminal_failure(
+                    self._repository,
+                    job,
                     failed_at=now,
                     error_code="projection_refresher_not_registered",
-                    retry_at=now,
                 )
                 return job
             try:
                 await self._projection_refresher.refresh()
             except Exception as error:
-                await self._repository.fail(
-                    job.job_id,
-                    failed_at=now,
-                    error_code=_public_error_code(error),
-                    retry_at=now + timedelta(seconds=min(300, 2**job.attempt_count)),
+                await record_execution_failure(
+                    self._repository, job, failed_at=now, error=error
                 )
             else:
                 await self._repository.complete(job.job_id, completed_at=now)
@@ -110,40 +111,31 @@ class IncidentWatchWorker:
             try:
                 await news_refresher.refresh()
             except Exception as error:
-                await self._repository.fail(
-                    job.job_id,
-                    failed_at=now,
-                    error_code=_public_error_code(error),
-                    retry_at=now + timedelta(seconds=min(300, 2**job.attempt_count)),
+                await record_execution_failure(
+                    self._repository, job, failed_at=now, error=error
                 )
             else:
                 await self._repository.complete(job.job_id, completed_at=now)
             return job
         if job.source_id != IncidentWatchScheduler.source_id:
-            await self._repository.fail(
-                job.job_id,
+            await record_terminal_failure(
+                self._repository,
+                job,
                 failed_at=now,
-                error_code="scheduled_request_not_registered",
-                retry_at=now,
+                error_code=SCHEDULED_REQUEST_NOT_REGISTERED_ERROR_CODE,
             )
             return job
         try:
             await self._refresher.execute(job.canonical_request_identity)
         except IncidentWatchRefreshNotFoundError:
             await self._repository.complete(job.job_id, completed_at=now)
-        except IncidentWatchRefreshRetryableError:
-            await self._repository.fail(
-                job.job_id,
-                failed_at=now,
-                error_code="provider_failure",
-                retry_at=now + timedelta(seconds=min(300, 2**job.attempt_count)),
+        except IncidentWatchRefreshRetryableError as error:
+            await record_execution_failure(
+                self._repository, job, failed_at=now, error=error
             )
         except Exception as error:
-            await self._repository.fail(
-                job.job_id,
-                failed_at=now,
-                error_code=_public_error_code(error),
-                retry_at=now + timedelta(seconds=min(300, 2**job.attempt_count)),
+            await record_execution_failure(
+                self._repository, job, failed_at=now, error=error
             )
         else:
             await self._repository.complete(job.job_id, completed_at=now)
