@@ -45,6 +45,8 @@ services:
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
       EVENT_MEDIA_BLOB_ROOT: /var/lib/disaster-monitor/event-media
+      GROUND_IMAGERY_STORAGE_ROOT: /var/lib/disaster-monitor/ground-imagery
+      GROUND_IMAGERY_STORAGE_BUDGET_BYTES: "21474836480"
       OPERATIONAL_AUTO_MIGRATE: "false"
       COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
       COUNTRY_CATALOG_AUTOMATIC_UPDATES: "true"
@@ -64,6 +66,7 @@ services:
     volumes:
       - operational-blobs:/var/lib/disaster-monitor/blobs
       - event-media-blobs:/var/lib/disaster-monitor/event-media
+      - ground-imagery-data:/var/lib/disaster-monitor/ground-imagery
       - country-catalog-data:/var/lib/disaster-monitor/geography
     ports:
       - "8001:8001"
@@ -101,6 +104,7 @@ services:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
+      GROUND_IMAGERY_STORAGE_ROOT: /var/lib/disaster-monitor/ground-imagery
       COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
     depends_on:
       migrate:
@@ -108,6 +112,7 @@ services:
     restart: unless-stopped
     volumes:
       - operational-blobs:/var/lib/disaster-monitor/blobs
+      - ground-imagery-data:/var/lib/disaster-monitor/ground-imagery
       - country-catalog-data:/var/lib/disaster-monitor/geography
 
   backup-tool:
@@ -134,5 +139,6 @@ volumes:
   postgres-data:
   operational-blobs:
   event-media-blobs:
+  ground-imagery-data:
   operational-backups:
   country-catalog-data:

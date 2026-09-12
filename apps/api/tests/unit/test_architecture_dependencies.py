@@ -37,6 +37,7 @@ INFRASTRUCTURE_APPLICATION_SURFACE = {
     "disaster_monitor.application.source_intelligence",
     "disaster_monitor.application.source_catalog",
     "disaster_monitor.application.weather_alerts",
+    "disaster_monitor.application.ground_imagery.models",
 }
 
 DISASTER_POLICY_MODULES = {
@@ -47,6 +48,9 @@ DISASTER_POLICY_MODULES = {
     "disaster_monitor.domain.hazards.incident_priority",
     "disaster_monitor.application.investigation.report_profiles",
     "disaster_monitor.application.investigation.worldwide_disaster_policy",
+    "disaster_monitor.application.ground_imagery.resolve_region",
+    "disaster_monitor.application.ground_imagery.temporal_policy",
+    "disaster_monitor.application.incidents.imagery_context",
 }
 
 

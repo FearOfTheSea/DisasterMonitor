@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
+from disaster_monitor.application.ground_imagery.service import GroundImageryService
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
@@ -67,6 +68,7 @@ def create_app(
     active_incidents_service: ActiveIncidentsService | None = None,
     conversation_repository: ConversationStore | None = None,
     satellite_imagery_service: SatelliteImageryService | None = None,
+    ground_imagery_service: GroundImageryService | None = None,
     source_catalog_service: SourceCatalogService | None = None,
     weather_alerts_service: WeatherAlertsService | None = None,
     specialist_model: SpecialistModel | None = None,
@@ -92,6 +94,7 @@ def create_app(
         active_incidents_service=active_incidents_service,
         conversation_repository=conversation_repository,
         satellite_imagery_service=satellite_imagery_service,
+        ground_imagery_service=ground_imagery_service,
         source_catalog_service=source_catalog_service,
         weather_alerts_service=weather_alerts_service,
         specialist_model=specialist_model,
@@ -114,6 +117,7 @@ def create_app(
             active_incidents_service,
             conversation_repository,
             satellite_imagery_service,
+            ground_imagery_service,
             source_catalog_service,
             weather_alerts_service,
             specialist_model,
@@ -186,7 +190,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["DELETE", "GET", "POST"],
+        allow_methods=["DELETE", "GET", "POST", "PUT"],
         allow_headers=["Content-Type"],
     )
     app.state.dependencies = app_dependencies

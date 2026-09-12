@@ -95,6 +95,8 @@ The application surface for infrastructure adapters is deliberately narrow:
 - Boundary models in `application/agent/models.py`, `disaster.py`, `dto.py`,
   `media.py`, `multimodal.py`, `satellite_imagery.py`, `source_catalog.py`,
   `source_intelligence.py`, and `weather_alerts.py`
+- `application/ports/ground_imagery/**` and the domain models under
+  `domain/imagery/**`
 - The visual-analysis prompt contract in
   `application/prompts/visual_analysis.py`
 
@@ -133,6 +135,7 @@ application helpers that change with them:
 | `decision` | Options, hypotheses, scenarios, triage autonomy, attributable operator review |
 | `sources` | Provider registry selection and source scouting |
 | `media_analysis` | Media discovery and visual-analysis orchestration |
+| `ground_imagery` | Event-scoped region/time planning, independent Sentinel-1/Sentinel-2 catalog selection, artifact preparation, provenance manifests, and Ground view status |
 | `learning` | Offline learning, drift evaluation, governed optimization |
 | `agent` | Bounded agent planning, execution, tools, and task validation |
 | `ports` | Consumer-owned external seams and shared boundary admission rules |
@@ -145,6 +148,14 @@ cannot acquire implementation dependencies on other capabilities. Evidence depen
 on sources and agent boundary models; incidents depends on evidence and sources.
 Conversation turns invoke the `AssistantResponder` port rather than a concrete
 investigation use case. Shared assistant text admission lives beside that port.
+
+Ground view consumes an `IncidentImageryContextReader` application port. Its resolver
+owns region priority, fallback radii, geometry roles, and temporal policy; CDSE STAC,
+Sentinel Hub Process, GeoBoundaries, raster validation, and artifact storage are
+infrastructure adapters. The incident adapter projects already-admitted incident
+geometry into that port and does not expose provider implementations inward. The
+current deployment persists request metadata and selection mappings in PostgreSQL
+when configured, with an in-process store for local development.
 
 Incident retrieval is owned by `incidents/retrieval.py`. Interactive discovery in
 `active_incidents.py` and watch projection in `watch_observation.py` consume that

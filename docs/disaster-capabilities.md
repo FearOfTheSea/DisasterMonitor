@@ -284,8 +284,11 @@ event.
 The gallery uses exact registered page and asset hosts. It remains outside the
 provider and evidence matrix.
 
-Analytical or arbitrary satellite and aerial image retrieval, official-warning overlay
-providers, CARTO, TerraLabo, and open-ended source crawling remain unsupported.
+Arbitrary analytical or satellite/aerial image retrieval, official-warning overlay
+providers, CARTO, TerraLabo, and open-ended source crawling remain unsupported. The
+bounded event-focused Sentinel-1/Sentinel-2 Ground view is available separately for
+selected incidents; it does not provide arbitrary imagery, damage classification, or
+building-level impact claims. See [Ground view](ground-imagery.md).
 
 GFM uses official server-side statistics only for flood event discovery. It does not
 expose raster products as general imagery.

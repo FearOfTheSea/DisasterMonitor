@@ -10,6 +10,7 @@ import '../features/sources/ui/sourceCatalog.css';
 import '../features/commands/ui/commandPalette.css';
 import '../features/assistant/ui/assistant.css';
 import '../features/operations/ui/operations.css';
+import '../features/imagery/ui/groundImagery.css';
 import './responsive.css';
 
 export const metadata: Metadata = {

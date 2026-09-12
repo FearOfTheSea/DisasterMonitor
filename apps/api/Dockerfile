@@ -21,6 +21,7 @@ RUN groupadd --gid 10001 disastermonitor \
     && useradd --uid 10001 --gid disastermonitor --create-home disastermonitor \
     && mkdir -p /var/lib/disaster-monitor/blobs \
         /var/lib/disaster-monitor/event-media \
+        /var/lib/disaster-monitor/ground-imagery \
         /var/lib/disaster-monitor/geography \
     && chown -R disastermonitor:disastermonitor /var/lib/disaster-monitor
 COPY --from=builder --chown=disastermonitor:disastermonitor /app/.venv /app/.venv

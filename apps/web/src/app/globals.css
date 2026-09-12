@@ -432,6 +432,19 @@ input[type='radio'] {
   padding: 8px 13px;
 }
 
+.selected-incident-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-incident-ground-button {
+  background: var(--surface) !important;
+  border-color: var(--line-strong) !important;
+  color: var(--accent) !important;
+}
+
 .selected-incident-summary > details {
   border-left: 1px solid var(--line);
   color: var(--muted);

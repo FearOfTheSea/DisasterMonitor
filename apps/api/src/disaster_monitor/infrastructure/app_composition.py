@@ -76,6 +76,7 @@ from disaster_monitor.infrastructure.composition_builders import (
     build_country_catalog_automation,
     build_disaster_query_parser,
     build_event_media_services,
+    build_ground_imagery_service,
     build_investigation_resources,
     build_language_model,
     build_memory_repository,
@@ -242,6 +243,10 @@ def build_app_dependencies(
         configured.satellite_imagery_service
         or build_satellite_imagery_service(settings)
     )
+    configured_ground_imagery = (
+        configured.ground_imagery_service
+        or build_ground_imagery_service(settings, configured_active_incidents)
+    )
 
     def clock() -> datetime:
         return datetime.now(UTC)
@@ -327,6 +332,7 @@ def build_app_dependencies(
             country_catalog,
         ),
         satellite_imagery=configured_satellite_imagery,
+        ground_imagery=configured_ground_imagery,
         media_assets=media_services.store,
         operational_repository=operational.repository,
         provider_freshness=ProviderFreshnessService(
@@ -354,6 +360,7 @@ def build_app_dependencies(
                 lambda: close_resource(configured_visual_analyzer),
                 lambda: close_resource(media_services.discovery),
                 configured_satellite_imagery.aclose,
+                configured_ground_imagery.aclose,
                 lambda: close_resource(configured_weather_alerts),
             ),
         ),

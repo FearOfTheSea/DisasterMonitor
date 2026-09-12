@@ -120,11 +120,20 @@ uv run --directory apps/api pytest -q tests/evaluation
 Multimodal preparation and operator-study commands are documented in
 [multimodal-awareness.md](multimodal-awareness.md).
 
+The event-focused [Ground view](ground-imagery.md) is implemented as a bounded
+Sentinel-1/Sentinel-2 catalog, temporal-selection, provenance, validated-COG, and
+desktop-panel path. Public catalog discovery works without credentials; authenticated
+rendering remains readiness-gated. Automated domain, adapter, HTTP, artifact, and
+frontend tests pass. The worker lease/quota accounting, GFM/CEMS region-mask
+ingestion, export packages, retention cleanup, and live-provider acceptance gates
+from the plan are not complete, so this is not yet a full production imagery claim.
+
 ## Unsupported
 
-Automatic imagery retrieval, generic live weather, forecasting, radar, geocoding,
-arbitrary source crawling, automatic source trust promotion, and hosted models remain
-unsupported.
+Generic live weather, forecasting, radar, geocoding, arbitrary source crawling,
+automatic source trust promotion, hosted models, and arbitrary satellite/aerial
+retrieval remain unsupported. The bounded event-focused Ground view is documented
+separately above.
 Production authentication/TLS, multi-user persistence, cloud deployment, public
 warnings, evacuation directives, and resource orders also remain unsupported.
 

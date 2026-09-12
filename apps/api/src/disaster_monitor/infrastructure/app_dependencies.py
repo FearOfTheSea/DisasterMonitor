@@ -15,6 +15,7 @@ from disaster_monitor.application.decision.record_operator_action import (
     RecordOperatorAction,
 )
 from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
+from disaster_monitor.application.ground_imagery.service import GroundImageryService
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
@@ -94,6 +95,7 @@ class AppDependencies:
     weather_alerts: WeatherAlertsService
     incident_watches: ManageIncidentWatches
     satellite_imagery: SatelliteImageryService
+    ground_imagery: GroundImageryService
     media_assets: MediaAssetStore
     operational_repository: OperationalRepository
     provider_freshness: ProviderFreshnessService

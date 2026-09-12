@@ -29,9 +29,11 @@ function relativeEventTime(value: string): string {
 export function SelectedIncidentSummary({
   incident,
   onAsk,
+  onGroundView,
 }: {
   incident?: IncidentMapRecord;
   onAsk: () => void;
+  onGroundView?: () => void;
 }) {
   if (!incident) return null;
   const sourceCount = Math.max(1, incident.provider_ids.length);
@@ -52,9 +54,20 @@ export function SelectedIncidentSummary({
           {relativeEventTime(incident.event_time)} · {sourceCount}{' '}
           {sourceCount === 1 ? 'trusted source' : 'trusted sources'}
         </p>
-        <button type="button" onClick={onAsk}>
-          View what we know
-        </button>
+        <div className="selected-incident-actions">
+          <button type="button" onClick={onAsk}>
+            View what we know
+          </button>
+          {onGroundView ? (
+            <button
+              type="button"
+              className="selected-incident-ground-button"
+              onClick={onGroundView}
+            >
+              Open Ground view
+            </button>
+          ) : null}
+        </div>
       </div>
       <details>
         <summary>Technical details</summary>

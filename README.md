@@ -42,6 +42,21 @@ PLANET_API_KEY=your-private-api-key
 PLANET_MOSAIC_NAME=your-accessible-mosaic-name
 ```
 
+The separate event-focused Ground view searches real Sentinel-1 and Sentinel-2
+acquisitions around a selected incident through the public CDSE STAC API. It can
+show catalog metadata without credentials; preparing downloadable COGs requires a
+CDSE OAuth client:
+
+```dotenv
+CDSE_CLIENT_ID=your-cdse-client-id
+CDSE_CLIENT_SECRET=your-cdse-client-secret
+```
+
+Ground view stores validated artifacts under `GROUND_IMAGERY_STORAGE_ROOT` (20 GiB
+by default). It is regional observational context, not a building-level damage or
+passability assessment. See [docs/ground-imagery.md](docs/ground-imagery.md) for
+the implemented boundary and current release gaps.
+
 ## Run with Compose
 
 ```powershell

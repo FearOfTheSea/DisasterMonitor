@@ -13,6 +13,7 @@ import { CommandPalette } from '@/features/commands/ui/CommandPalette';
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
 import { SelectedIncidentSummary } from '@/features/incidents/ui/SelectedIncidentSummary';
+import { GroundImageryPanel } from '@/features/imagery/ui/GroundImageryPanel';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import {
   filterCorrelationsForDisplay,
@@ -105,11 +106,18 @@ export default function Home() {
     handleSelectActiveIncident,
     handleSelectWatchIncident,
   } = useMapWorkspace(activeIncidents);
-  const { activePanel, togglePanel, closePanel, openOperationsAt, openSourceCatalog } =
-    useWorkspacePanels();
+  const {
+    activePanel,
+    togglePanel,
+    closePanel,
+    openOperationsAt,
+    openSourceCatalog,
+    openGroundImagery,
+  } = useWorkspacePanels();
   const assistantOpen = activePanel === 'assistant';
   const operationsOpen = activePanel === 'operations';
   const sourceCatalogOpen = activePanel === 'sources';
+  const groundImageryOpen = activePanel === 'imagery';
   const areaOfInterest = useMemo(
     () => assistantMapAreaOfInterest(conversation.messages),
     [conversation.messages],
@@ -289,7 +297,7 @@ export default function Home() {
         </div>
       </header>
       <section
-        className={`workspace${assistantOpen ? ' workspace-assistant-open' : ''}${operationsOpen ? ' workspace-operations-open' : ''}${sourceCatalogOpen ? ' workspace-source-catalog-open' : ''}`}
+        className={`workspace${assistantOpen ? ' workspace-assistant-open' : ''}${operationsOpen ? ' workspace-operations-open' : ''}${sourceCatalogOpen ? ' workspace-source-catalog-open' : ''}${groundImageryOpen ? ' workspace-ground-imagery-open' : ''}`}
       >
         <ActiveIncidentsPanel
           snapshot={displayedSnapshot}
@@ -355,6 +363,7 @@ export default function Home() {
           <SelectedIncidentSummary
             incident={selectedIncident}
             onAsk={() => togglePanel('assistant')}
+            onGroundView={openGroundImagery}
           />
         </div>
         {activePanel ? (
@@ -392,6 +401,13 @@ export default function Home() {
           />
         )}
         {sourceCatalogOpen && <SourceCatalog onClose={closePanel} />}
+        {groundImageryOpen && selectedIncident ? (
+          <GroundImageryPanel
+            incidentId={selectedIncident.event_id}
+            incidentLabel={selectedIncident.country?.name ?? selectedIncident.location}
+            onClose={closePanel}
+          />
+        ) : null}
       </section>
       <nav className="mobile-navigation" aria-label="Primary navigation">
         <button type="button" className="mobile-navigation-active" onClick={closePanel}>

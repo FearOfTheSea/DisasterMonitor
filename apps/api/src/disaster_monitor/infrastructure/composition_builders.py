@@ -28,6 +28,16 @@ from disaster_monitor.application.evidence.source_evidence_policy import (
     validate_event_evidence,
     validate_situation_evidence,
 )
+from disaster_monitor.application.ground_imagery.resolve_region import (
+    GroundImageryRegionResolver,
+)
+from disaster_monitor.application.ground_imagery.service import GroundImageryService
+from disaster_monitor.application.incidents.active_incidents import (
+    ActiveIncidentsService,
+)
+from disaster_monitor.application.incidents.imagery_context import (
+    ActiveIncidentImageryContextReader,
+)
 from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -94,6 +104,29 @@ from disaster_monitor.infrastructure.geography.country_catalog_updates import (
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
+)
+from disaster_monitor.infrastructure.ground_imagery.artifact_store import (
+    FilesystemImageryArtifactStore,
+)
+from disaster_monitor.infrastructure.ground_imagery.cdse_catalog import CDSEStacCatalog
+from disaster_monitor.infrastructure.ground_imagery.geoboundaries import (
+    GeoBoundariesPlaceLookup,
+)
+from disaster_monitor.infrastructure.ground_imagery.geometry import (
+    GeodesicGeometryEngine,
+)
+from disaster_monitor.infrastructure.ground_imagery.memory_repository import (
+    InMemoryGroundImageryRequestStore,
+)
+from disaster_monitor.infrastructure.ground_imagery.postgres_repository import (
+    PostgresGroundImageryRequestStore,
+)
+from disaster_monitor.infrastructure.ground_imagery.raster_artifacts import (
+    RasterioCogValidator,
+    RasterioStoredArtifactTileRenderer,
+)
+from disaster_monitor.infrastructure.ground_imagery.sentinel_hub import (
+    SentinelHubProcessRenderer,
 )
 from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAdapter
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
@@ -345,6 +378,7 @@ def build_satellite_imagery_service(settings: Settings) -> SatelliteImageryServi
         if settings.planet_api_key is not None
         else None
     )
+
     return SatelliteImageryService(
         (
             NasaGibsImageryProvider(),
@@ -361,6 +395,71 @@ def build_satellite_imagery_service(settings: Settings) -> SatelliteImageryServi
                 maximum_response_bytes=(settings.disaster_provider_max_response_bytes),
             ),
         )
+    )
+
+
+def build_ground_imagery_service(
+    settings: Settings,
+    active_incidents: ActiveIncidentsService,
+) -> GroundImageryService:
+    """Construct the event-focused catalog, processing, and artifact workflow."""
+    geometry = GeodesicGeometryEngine()
+    artifact_store = FilesystemImageryArtifactStore(
+        settings.ground_imagery_storage_root,
+        maximum_total_bytes=settings.ground_imagery_storage_budget_bytes,
+    )
+    dsn = (
+        settings.operational_database_url.get_secret_value()
+        if settings.operational_database_url is not None
+        else ""
+    )
+    request_store = (
+        PostgresGroundImageryRequestStore(dsn)
+        if dsn
+        else InMemoryGroundImageryRequestStore()
+    )
+    client_id = (
+        settings.cdse_client_id.get_secret_value()
+        if settings.cdse_client_id is not None
+        else None
+    )
+    client_secret = (
+        settings.cdse_client_secret.get_secret_value()
+        if settings.cdse_client_secret is not None
+        else None
+    )
+    renderer = (
+        SentinelHubProcessRenderer(
+            client_id=client_id,
+            client_secret=client_secret,
+            process_url=settings.cdse_process_url,
+            token_url=settings.cdse_token_url,
+            timeout_seconds=settings.gdacs_provider_timeout_seconds,
+            maximum_response_bytes=settings.ground_imagery_process_max_response_bytes,
+        )
+        if client_id and client_secret
+        else None
+    )
+    return GroundImageryService(
+        ActiveIncidentImageryContextReader(active_incidents),
+        GroundImageryRegionResolver(
+            geometry,
+            place_lookup=GeoBoundariesPlaceLookup(
+                timeout_seconds=settings.gdacs_provider_timeout_seconds,
+                maximum_response_bytes=settings.country_catalog_max_response_bytes,
+            ),
+        ),
+        CDSEStacCatalog(
+            endpoint=settings.cdse_stac_url,
+            timeout_seconds=settings.gdacs_provider_timeout_seconds,
+            maximum_response_bytes=settings.ground_imagery_catalog_max_response_bytes,
+        ),
+        request_store,
+        renderer=renderer,
+        raster_validator=RasterioCogValidator(),
+        artifact_store=artifact_store,
+        tile_renderer=RasterioStoredArtifactTileRenderer(artifact_store),
+        enabled=settings.ground_imagery_enabled,
     )
 
 

@@ -1,7 +1,9 @@
 # Multimodal situational awareness
 
 Disaster Monitor has a bounded, local-first multimodal path for operator-supplied PNG
-or JPEG images. It does not retrieve analytical imagery.
+or JPEG images. The separate event-focused Ground view can retrieve selected,
+provenance-bearing Sentinel-1/Sentinel-2 observation artifacts, but those artifacts
+do not enter the multimodal visual-analysis path automatically.
 
 An API caller can attach at most three images to `POST /api/v1/assistant`.
 Each image can be no larger than 5 MB.
@@ -189,9 +191,10 @@ exist. Automated harness tests cannot satisfy it.
 
 ## Intentionally unsupported
 
-There is no automatic analytical or satellite-image retrieval, continuous
-satellite/aerial monitoring, live raster service, official-warning overlay provider,
-arbitrary map publication, or OCR pipeline.
+There is no continuous satellite/aerial monitoring, live arbitrary raster service,
+official-warning overlay provider, arbitrary map publication, or OCR pipeline. The
+bounded Ground view is a separate observation-context capability; it does not make
+analytical imagery available to the assistant or claim automated damage inference.
 There is no persistent multimodal database, background worker, hosted vision model,
 or operational instruction generation.
 

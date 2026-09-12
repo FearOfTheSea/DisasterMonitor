@@ -1,0 +1,327 @@
+.ground-imagery-panel {
+  width: min(560px, calc(100% - var(--incident-rail)));
+}
+
+.ground-imagery-panel-header {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 22px 24px;
+}
+
+.ground-imagery-panel-header h2,
+.ground-imagery-panel-header p {
+  margin: 0;
+}
+
+.ground-imagery-panel-header h2 {
+  font-size: 1.3rem;
+  font-weight: 730;
+  letter-spacing: -0.01em;
+  margin-top: 3px;
+}
+
+.ground-imagery-panel-header p {
+  color: var(--muted);
+  font-size: 0.73rem;
+  line-height: 1.4;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.ground-imagery-kicker,
+.ground-imagery-sensor-code {
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ground-imagery-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-color: #aeb9c8 transparent;
+  scrollbar-width: thin;
+}
+
+.ground-imagery-section,
+.ground-imagery-actions {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 11px;
+  padding: 18px 24px;
+}
+
+.ground-imagery-section-heading,
+.ground-imagery-sensor-card > header,
+.ground-imagery-outcome-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.ground-imagery-section-heading > div,
+.ground-imagery-sensor-card > header > div,
+.ground-imagery-outcome-heading > strong {
+  min-width: 0;
+}
+
+.ground-imagery-section h3,
+.ground-imagery-section p,
+.ground-imagery-sensor-card h4,
+.ground-imagery-sensor-card p,
+.ground-imagery-outcome p,
+.ground-imagery-actions p {
+  margin: 0;
+}
+
+.ground-imagery-section h3 {
+  font-size: 0.82rem;
+  font-weight: 740;
+}
+
+.ground-imagery-section-heading p,
+.ground-imagery-sensor-card > header p,
+.ground-imagery-note,
+.ground-imagery-explanation,
+.ground-imagery-provenance,
+.ground-imagery-actions p {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  margin-top: 3px;
+}
+
+.ground-imagery-status {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-size: 0.64rem;
+  font-weight: 740;
+  line-height: 1.2;
+  padding: 4px 7px;
+  text-transform: capitalize;
+}
+
+.ground-imagery-status.is-positive {
+  background: var(--success-soft);
+  border-color: #b9dec8;
+  color: var(--success);
+}
+
+.ground-imagery-status.is-warning {
+  background: var(--warning-soft);
+  border-color: #efd99e;
+  color: var(--warning);
+}
+
+.ground-imagery-status.is-negative {
+  background: var(--danger-soft);
+  border-color: #efc4c8;
+  color: var(--danger);
+}
+
+.ground-imagery-status.is-neutral {
+  background: var(--surface-soft);
+}
+
+.ground-imagery-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.ground-imagery-facts > div {
+  display: grid;
+  gap: 2px;
+}
+
+.ground-imagery-facts dt {
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  font-weight: 740;
+}
+
+.ground-imagery-facts dd {
+  color: var(--ink);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ground-imagery-empty,
+.ground-imagery-error {
+  background: var(--surface-soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+}
+
+.ground-imagery-empty strong,
+.ground-imagery-error strong {
+  font-size: 0.74rem;
+}
+
+.ground-imagery-empty p,
+.ground-imagery-error p {
+  color: var(--muted);
+  font-size: 0.71rem;
+  line-height: 1.45;
+}
+
+.ground-imagery-error {
+  background: var(--danger-soft);
+  border-style: solid;
+  border-color: #efc4c8;
+  border-left: 3px solid var(--danger);
+  margin: 14px 24px 0;
+}
+
+.ground-imagery-error strong {
+  color: var(--danger);
+}
+
+.ground-imagery-error button,
+.ground-imagery-actions button,
+.ground-imagery-outcome-actions button {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 720;
+  min-height: 32px;
+  padding: 6px 9px;
+  width: fit-content;
+}
+
+.ground-imagery-error button:hover,
+.ground-imagery-actions button:hover:not(:disabled),
+.ground-imagery-outcome-actions button:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.ground-imagery-loading {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.72rem;
+  gap: 9px;
+  padding: 18px 24px;
+}
+
+.ground-imagery-sensors {
+  gap: 14px;
+}
+
+.ground-imagery-sensor-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+}
+
+.ground-imagery-sensor-card > header > div {
+  align-items: flex-start;
+  display: flex;
+  gap: 9px;
+}
+
+.ground-imagery-sensor-code {
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid #b9ddd8;
+  border-radius: 7px;
+  display: flex;
+  height: 29px;
+  justify-content: center;
+  width: 29px;
+}
+
+.ground-imagery-sensor-card h4 {
+  font-size: 0.76rem;
+  font-weight: 740;
+}
+
+.ground-imagery-outcomes {
+  display: grid;
+  gap: 7px;
+}
+
+.ground-imagery-outcome {
+  background: var(--surface-soft);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+}
+
+.ground-imagery-outcome:has(.is-positive) {
+  border-left-color: var(--success);
+}
+
+.ground-imagery-outcome-heading strong {
+  font-size: 0.71rem;
+  line-height: 1.35;
+}
+
+.ground-imagery-observation-time,
+.ground-imagery-quality {
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.ground-imagery-quality {
+  color: var(--success);
+  font-weight: 680;
+}
+
+.ground-imagery-outcome-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ground-imagery-outcome-actions a {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.ground-imagery-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ground-imagery-actions p {
+  flex-basis: 100%;
+}
+
+.ground-imagery-provenance {
+  margin: auto 24px 0;
+  padding: 15px 0 20px;
+  overflow-wrap: anywhere;
+}

@@ -1,6 +1,7 @@
 .assistant-panel,
 .operations-panel,
-.source-catalog-panel {
+.source-catalog-panel,
+.ground-imagery-panel {
   background: var(--surface);
   border-left: 1px solid var(--line);
   display: flex;
@@ -21,13 +22,15 @@
 }
 
 .operations-panel,
-.source-catalog-panel {
+.source-catalog-panel,
+.ground-imagery-panel {
   width: min(var(--operations-rail), calc(100% - var(--incident-rail)));
 }
 
 .assistant-panel-header,
 .operations-panel-header,
-.source-catalog-header {
+.source-catalog-header,
+.ground-imagery-panel-header {
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
   padding: 22px 24px;

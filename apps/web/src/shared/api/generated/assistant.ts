@@ -1178,6 +1178,783 @@ const apiSchemas = {
     required: ['kind', 'value', 'source_id'],
     type: 'object',
   },
+  GroundImageryArtifactResponse: {
+    properties: {
+      artifact_id: {
+        type: 'string',
+      },
+      byte_count: {
+        type: 'integer',
+      },
+      content_type: {
+        type: 'string',
+      },
+      created_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      grid: {
+        $ref: '#/components/schemas/GroundImageryGridResponse',
+      },
+      output_kind: {
+        type: 'string',
+      },
+      role: {
+        type: 'string',
+      },
+      selection_id: {
+        type: 'string',
+      },
+      sensor: {
+        $ref: '#/components/schemas/Sensor',
+      },
+      sha256: {
+        type: 'string',
+      },
+      source_product_ids: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      storage_key: {
+        type: 'string',
+      },
+    },
+    required: [
+      'artifact_id',
+      'selection_id',
+      'sensor',
+      'role',
+      'output_kind',
+      'content_type',
+      'storage_key',
+      'byte_count',
+      'sha256',
+      'source_product_ids',
+      'grid',
+      'created_at',
+    ],
+    type: 'object',
+  },
+  GroundImageryGridResponse: {
+    properties: {
+      crs: {
+        type: 'string',
+      },
+      height: {
+        type: 'integer',
+      },
+      max_x: {
+        type: 'number',
+      },
+      max_y: {
+        type: 'number',
+      },
+      min_x: {
+        type: 'number',
+      },
+      min_y: {
+        type: 'number',
+      },
+      pixel_size_m: {
+        type: 'number',
+      },
+      resolution_label: {
+        type: 'string',
+      },
+      width: {
+        type: 'integer',
+      },
+    },
+    required: [
+      'crs',
+      'min_x',
+      'min_y',
+      'max_x',
+      'max_y',
+      'pixel_size_m',
+      'width',
+      'height',
+      'resolution_label',
+    ],
+    type: 'object',
+  },
+  GroundImageryManifestResponse: {
+    properties: {
+      artifacts: {
+        items: {
+          additionalProperties: true,
+          type: 'object',
+        },
+        type: 'array',
+      },
+      disaster: {
+        type: 'string',
+      },
+      incident_id: {
+        type: 'string',
+      },
+      manifest_version: {
+        type: 'string',
+      },
+      observations: {
+        items: {
+          additionalProperties: true,
+          type: 'object',
+        },
+        type: 'array',
+      },
+      onset: {
+        anyOf: [
+          {
+            additionalProperties: true,
+            type: 'object',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      reason_codes: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      reference_time: {
+        type: 'string',
+      },
+      region: {
+        anyOf: [
+          {
+            additionalProperties: true,
+            type: 'object',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      request_id: {
+        type: 'string',
+      },
+      request_version: {
+        type: 'integer',
+      },
+      selections: {
+        items: {
+          additionalProperties: true,
+          type: 'object',
+        },
+        type: 'array',
+      },
+      state: {
+        type: 'string',
+      },
+      temporal_policy_version: {
+        type: 'string',
+      },
+    },
+    required: [
+      'manifest_version',
+      'request_id',
+      'request_version',
+      'incident_id',
+      'disaster',
+      'region',
+      'temporal_policy_version',
+      'reference_time',
+      'onset',
+      'state',
+      'reason_codes',
+      'observations',
+      'selections',
+    ],
+    type: 'object',
+  },
+  GroundImageryObservationResponse: {
+    properties: {
+      acquisition_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      captured_end: {
+        format: 'date-time',
+        type: 'string',
+      },
+      captured_start: {
+        format: 'date-time',
+        type: 'string',
+      },
+      cloud_cover_fraction: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      footprint: {
+        additionalProperties: true,
+        type: 'object',
+      },
+      mode: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      observation_id: {
+        type: 'string',
+      },
+      orbit_direction: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      platform: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      polarizations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      product_id: {
+        type: 'string',
+      },
+      quality: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/GroundImageryQualityResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      readiness: {
+        type: 'string',
+      },
+      relative_orbit: {
+        anyOf: [
+          {
+            type: 'integer',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      revision: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      sensor: {
+        $ref: '#/components/schemas/Sensor',
+      },
+      source_url: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: [
+      'observation_id',
+      'sensor',
+      'product_id',
+      'acquisition_id',
+      'revision',
+      'platform',
+      'captured_start',
+      'captured_end',
+      'readiness',
+      'footprint',
+      'mode',
+      'relative_orbit',
+      'orbit_direction',
+      'polarizations',
+      'cloud_cover_fraction',
+      'quality',
+      'source_url',
+    ],
+    type: 'object',
+  },
+  GroundImageryQualityResponse: {
+    properties: {
+      component_usable_fractions: {
+        additionalProperties: {
+          type: 'number',
+        },
+        type: 'object',
+      },
+      covered_fraction: {
+        type: 'number',
+      },
+      mask_definition: {
+        type: 'string',
+      },
+      obscured_fraction: {
+        type: 'number',
+      },
+      quality_state: {
+        type: 'string',
+      },
+      uncertain_fraction: {
+        type: 'number',
+      },
+      uncovered_fraction: {
+        type: 'number',
+      },
+      usable_fraction: {
+        type: 'number',
+      },
+    },
+    required: [
+      'covered_fraction',
+      'usable_fraction',
+      'obscured_fraction',
+      'uncertain_fraction',
+      'uncovered_fraction',
+      'component_usable_fractions',
+      'quality_state',
+      'mask_definition',
+    ],
+    type: 'object',
+  },
+  GroundImageryReadinessResponse: {
+    properties: {
+      detail: {
+        type: 'string',
+      },
+      state: {
+        type: 'string',
+      },
+    },
+    required: ['state', 'detail'],
+    type: 'object',
+  },
+  GroundImageryRegionResolutionResponse: {
+    properties: {
+      alternatives: {
+        items: {
+          additionalProperties: true,
+          type: 'object',
+        },
+        type: 'array',
+      },
+      reason_code: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      region: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/GroundImageryRegionResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      state: {
+        enum: ['resolved', 'ambiguous', 'needs_region'],
+        type: 'string',
+      },
+      warnings: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+    },
+    required: ['state', 'region'],
+    type: 'object',
+  },
+  GroundImageryRegionResponse: {
+    properties: {
+      association: {
+        type: 'string',
+      },
+      core: {
+        additionalProperties: true,
+        type: 'object',
+      },
+      geometry_hash: {
+        type: 'string',
+      },
+      inspection: {
+        additionalProperties: true,
+        type: 'object',
+      },
+      region_id: {
+        type: 'string',
+      },
+      source_footprints: {
+        items: {
+          additionalProperties: true,
+          type: 'object',
+        },
+        type: 'array',
+      },
+      version: {
+        type: 'integer',
+      },
+    },
+    required: [
+      'region_id',
+      'version',
+      'geometry_hash',
+      'association',
+      'core',
+      'inspection',
+      'source_footprints',
+    ],
+    type: 'object',
+  },
+  GroundImageryRequestResponse: {
+    properties: {
+      artifacts: {
+        items: {
+          $ref: '#/components/schemas/GroundImageryArtifactResponse',
+        },
+        type: 'array',
+      },
+      disaster: {
+        type: 'string',
+      },
+      incident_id: {
+        type: 'string',
+      },
+      next_check_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      reason_codes: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      reference_time: {
+        format: 'date-time',
+        type: 'string',
+      },
+      region: {
+        $ref: '#/components/schemas/GroundImageryRegionResolutionResponse',
+      },
+      request_id: {
+        type: 'string',
+      },
+      request_version: {
+        type: 'integer',
+      },
+      sensors: {
+        items: {
+          $ref: '#/components/schemas/GroundImagerySensorStatusResponse',
+        },
+        type: 'array',
+      },
+      state: {
+        type: 'string',
+      },
+      temporal_plan: {
+        $ref: '#/components/schemas/GroundImageryTemporalPlanResponse',
+      },
+      watch_enabled: {
+        type: 'boolean',
+      },
+      watch_interval_seconds: {
+        anyOf: [
+          {
+            type: 'integer',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: [
+      'request_id',
+      'request_version',
+      'incident_id',
+      'disaster',
+      'state',
+      'reason_codes',
+      'reference_time',
+      'region',
+      'temporal_plan',
+      'sensors',
+    ],
+    type: 'object',
+  },
+  GroundImagerySelectionResponse: {
+    properties: {
+      age_class: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      alternative_observation_ids: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      explanation: {
+        type: 'string',
+      },
+      label: {
+        type: 'string',
+      },
+      observation: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/GroundImageryObservationResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      reason: {
+        type: 'string',
+      },
+      role: {
+        type: 'string',
+      },
+      selection_id: {
+        type: 'string',
+      },
+      sensor: {
+        $ref: '#/components/schemas/Sensor',
+      },
+    },
+    required: [
+      'selection_id',
+      'sensor',
+      'role',
+      'label',
+      'observation',
+      'reason',
+      'explanation',
+      'age_class',
+      'alternative_observation_ids',
+    ],
+    type: 'object',
+  },
+  GroundImagerySensorStatusResponse: {
+    properties: {
+      failure_code: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      failure_detail: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      next_cursor: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      scan_complete: {
+        type: 'boolean',
+      },
+      scanned_count: {
+        type: 'integer',
+      },
+      selections: {
+        items: {
+          $ref: '#/components/schemas/GroundImagerySelectionResponse',
+        },
+        type: 'array',
+      },
+      sensor: {
+        $ref: '#/components/schemas/Sensor',
+      },
+    },
+    required: [
+      'sensor',
+      'scanned_count',
+      'scan_complete',
+      'next_cursor',
+      'failure_code',
+      'failure_detail',
+      'selections',
+    ],
+    type: 'object',
+  },
+  GroundImageryTemporalPlanResponse: {
+    properties: {
+      impact_start_earliest: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      impact_start_latest: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      onset_precision: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      onset_source_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      policy_version: {
+        type: 'string',
+      },
+      reference_time: {
+        format: 'date-time',
+        type: 'string',
+      },
+      windows: {
+        items: {
+          $ref: '#/components/schemas/GroundImageryTimeWindowResponse',
+        },
+        type: 'array',
+      },
+    },
+    required: [
+      'policy_version',
+      'reference_time',
+      'impact_start_earliest',
+      'impact_start_latest',
+      'onset_precision',
+      'onset_source_id',
+      'windows',
+    ],
+    type: 'object',
+  },
+  GroundImageryTimeWindowResponse: {
+    properties: {
+      end: {
+        format: 'date-time',
+        type: 'string',
+      },
+      expanded_end: {
+        format: 'date-time',
+        type: 'string',
+      },
+      expanded_start: {
+        format: 'date-time',
+        type: 'string',
+      },
+      role: {
+        type: 'string',
+      },
+      sensor: {
+        $ref: '#/components/schemas/Sensor',
+      },
+      start: {
+        format: 'date-time',
+        type: 'string',
+      },
+    },
+    required: ['role', 'sensor', 'start', 'end', 'expanded_start', 'expanded_end'],
+    type: 'object',
+  },
   InvestigationCaseCountryResponse: {
     properties: {
       country_code: {
@@ -2156,6 +2933,10 @@ const apiSchemas = {
       'geography_status',
     ],
     type: 'object',
+  },
+  Sensor: {
+    enum: ['sentinel-1', 'sentinel-2'],
+    type: 'string',
   },
   SetTimeWindowOperatorActionResponse: {
     additionalProperties: false,
@@ -3389,6 +4170,231 @@ export type FootprintRequest = {
   crs?: 'EPSG:4326';
 };
 
+export type GroundImageryArtifactResponse = {
+  artifact_id: string;
+  byte_count: number;
+  content_type: string;
+  created_at: string;
+  grid: GroundImageryGridResponse;
+  output_kind: string;
+  role: string;
+  selection_id: string;
+  sensor: Sensor;
+  sha256: string;
+  source_product_ids: Array<string>;
+  storage_key: string;
+};
+
+export type GroundImageryCreateRequest = {
+  context_margin_km?: number | null;
+  fallback_radius_km?: number | null;
+  idempotency_key?: string | null;
+  incident_id: string;
+  onset_earliest?: string | null;
+  onset_latest?: string | null;
+  onset_source_id?: string | null;
+  owner_scope?: string;
+  reference_time?: string | null;
+  region?: {
+    [key: string]: unknown;
+  } | null;
+  sensors?: Array<Sensor>;
+};
+
+export type GroundImageryGridResponse = {
+  crs: string;
+  height: number;
+  max_x: number;
+  max_y: number;
+  min_x: number;
+  min_y: number;
+  pixel_size_m: number;
+  resolution_label: string;
+  width: number;
+};
+
+export type GroundImageryManifestResponse = {
+  artifacts?: Array<{
+    [key: string]: unknown;
+  }>;
+  disaster: string;
+  incident_id: string;
+  manifest_version: string;
+  observations: Array<{
+    [key: string]: unknown;
+  }>;
+  onset: {
+    [key: string]: unknown;
+  } | null;
+  reason_codes: Array<string>;
+  reference_time: string;
+  region: {
+    [key: string]: unknown;
+  } | null;
+  request_id: string;
+  request_version: number;
+  selections: Array<{
+    [key: string]: unknown;
+  }>;
+  state: string;
+  temporal_policy_version: string;
+};
+
+export type GroundImageryObservationPageResponse = {
+  next_cursor: string | null;
+  observations: Array<GroundImageryObservationResponse>;
+  total: number;
+};
+
+export type GroundImageryObservationResponse = {
+  acquisition_id: string | null;
+  captured_end: string;
+  captured_start: string;
+  cloud_cover_fraction: number | null;
+  footprint: {
+    [key: string]: unknown;
+  };
+  mode: string | null;
+  observation_id: string;
+  orbit_direction: string | null;
+  platform: string | null;
+  polarizations: Array<string>;
+  product_id: string;
+  quality: GroundImageryQualityResponse | null;
+  readiness: string;
+  relative_orbit: number | null;
+  revision: string | null;
+  sensor: Sensor;
+  source_url: string | null;
+};
+
+export type GroundImageryPrepareRequest = {
+  output_kind?: string | null;
+  overview?: boolean;
+  role: string;
+  sensor: Sensor;
+};
+
+export type GroundImageryQualityResponse = {
+  component_usable_fractions: {
+    [key: string]: number;
+  };
+  covered_fraction: number;
+  mask_definition: string;
+  obscured_fraction: number;
+  quality_state: string;
+  uncertain_fraction: number;
+  uncovered_fraction: number;
+  usable_fraction: number;
+};
+
+export type GroundImageryReadinessResponse = {
+  detail: string;
+  state: string;
+};
+
+export type GroundImageryRegionRequest = {
+  context_margin_km?: number | null;
+  region: {
+    [key: string]: unknown;
+  };
+};
+
+export type GroundImageryRegionResolutionResponse = {
+  alternatives?: Array<{
+    [key: string]: unknown;
+  }>;
+  reason_code?: string | null;
+  region: GroundImageryRegionResponse | null;
+  state: 'resolved' | 'ambiguous' | 'needs_region';
+  warnings?: Array<string>;
+};
+
+export type GroundImageryRegionResponse = {
+  association: string;
+  core: {
+    [key: string]: unknown;
+  };
+  geometry_hash: string;
+  inspection: {
+    [key: string]: unknown;
+  };
+  region_id: string;
+  source_footprints: Array<{
+    [key: string]: unknown;
+  }>;
+  version: number;
+};
+
+export type GroundImageryRequestResponse = {
+  artifacts?: Array<GroundImageryArtifactResponse>;
+  disaster: string;
+  incident_id: string;
+  next_check_at?: string | null;
+  reason_codes: Array<string>;
+  reference_time: string;
+  region: GroundImageryRegionResolutionResponse;
+  request_id: string;
+  request_version: number;
+  sensors: Array<GroundImagerySensorStatusResponse>;
+  state: string;
+  temporal_plan: GroundImageryTemporalPlanResponse;
+  watch_enabled?: boolean;
+  watch_interval_seconds?: number | null;
+};
+
+export type GroundImagerySelectionRequest = {
+  observation_id: string;
+  role: string;
+  sensor: Sensor;
+};
+
+export type GroundImagerySelectionResponse = {
+  age_class: string | null;
+  alternative_observation_ids: Array<string>;
+  explanation: string;
+  label: string;
+  observation: GroundImageryObservationResponse | null;
+  reason: string;
+  role: string;
+  selection_id: string;
+  sensor: Sensor;
+};
+
+export type GroundImagerySensorStatusResponse = {
+  failure_code: string | null;
+  failure_detail: string | null;
+  next_cursor: string | null;
+  scan_complete: boolean;
+  scanned_count: number;
+  selections: Array<GroundImagerySelectionResponse>;
+  sensor: Sensor;
+};
+
+export type GroundImageryTemporalPlanResponse = {
+  impact_start_earliest: string | null;
+  impact_start_latest: string | null;
+  onset_precision: string | null;
+  onset_source_id: string | null;
+  policy_version: string;
+  reference_time: string;
+  windows: Array<GroundImageryTimeWindowResponse>;
+};
+
+export type GroundImageryTimeWindowResponse = {
+  end: string;
+  expanded_end: string;
+  expanded_start: string;
+  role: string;
+  sensor: Sensor;
+  start: string;
+};
+
+export type GroundImageryWatchRequest = {
+  enabled: boolean;
+  interval_seconds?: number | null;
+};
+
 export type HealthResponse = {
   service: string;
   status: string;
@@ -3767,6 +4773,8 @@ export type SelectedEventResponse = {
   source: SourceResponse;
   supplemental_geometry?: Array<CycloneMapLayerResponse>;
 };
+
+export type Sensor = 'sentinel-1' | 'sentinel-2';
 
 export type SetTimeWindowOperatorActionResponse = {
   action_id: string;

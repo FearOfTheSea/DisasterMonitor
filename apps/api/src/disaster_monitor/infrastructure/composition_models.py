@@ -10,6 +10,7 @@ from disaster_monitor.application.evidence.operational_evidence import (
 from disaster_monitor.application.evidence.snapshot_persistence import (
     SnapshotPersistenceService,
 )
+from disaster_monitor.application.ground_imagery.service import GroundImageryService
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
@@ -78,6 +79,7 @@ class AppDependencyOverrides:
     active_incidents_service: ActiveIncidentsService | None = None
     conversation_repository: ConversationStore | None = None
     satellite_imagery_service: SatelliteImageryService | None = None
+    ground_imagery_service: GroundImageryService | None = None
     source_catalog_service: SourceCatalogService | None = None
     weather_alerts_service: WeatherAlertsService | None = None
     specialist_model: SpecialistModel | None = None

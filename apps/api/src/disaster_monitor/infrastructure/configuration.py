@@ -38,6 +38,25 @@ class Settings(BaseSettings):
     copernicus_sentinel_hub_layer_id: str = Field(
         default="TRUE_COLOR", pattern=r"^[A-Za-z0-9_-]+$"
     )
+    cdse_stac_url: str = "https://stac.dataspace.copernicus.eu/v1/search"
+    cdse_process_url: str = "https://sh.dataspace.copernicus.eu/process/v1"
+    cdse_token_url: str = (
+        "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/"
+        "protocol/openid-connect/token"
+    )
+    cdse_client_id: SecretStr | None = Field(default=None, repr=False)
+    cdse_client_secret: SecretStr | None = Field(default=None, repr=False)
+    ground_imagery_enabled: bool = True
+    ground_imagery_catalog_max_response_bytes: int = Field(
+        default=8_000_000, ge=10_000, le=8_388_608
+    )
+    ground_imagery_process_max_response_bytes: int = Field(
+        default=128 * 1024 * 1024, ge=1_000_000, le=256 * 1024 * 1024
+    )
+    ground_imagery_storage_root: Path = Path("data/ground-imagery")
+    ground_imagery_storage_budget_bytes: int = Field(
+        default=20 * 1024**3, ge=1_000_000, le=100 * 1024**3
+    )
     planet_api_key: SecretStr | None = Field(default=None, repr=False)
     planet_mosaic_name: str | None = Field(default=None, max_length=200)
     event_media_enabled: bool = True

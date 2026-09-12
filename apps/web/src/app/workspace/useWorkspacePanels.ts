@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-type WorkspacePanel = 'assistant' | 'operations' | 'sources';
+type WorkspacePanel = 'assistant' | 'operations' | 'sources' | 'imagery';
 type PanelState = { panel: WorkspacePanel | null; headingId?: string };
 
 export function useWorkspacePanels() {
@@ -16,6 +16,7 @@ export function useWorkspacePanels() {
     [],
   );
   const openSourceCatalog = useCallback(() => setState({ panel: 'sources' }), []);
+  const openGroundImagery = useCallback(() => setState({ panel: 'imagery' }), []);
   useEffect(() => {
     const panelWasOpen = previousPanel.current !== null;
     previousPanel.current = state.panel;
@@ -23,7 +24,7 @@ export function useWorkspacePanels() {
       const timer = window.setTimeout(() => {
         const activeElement = document.activeElement;
         const isPanelControl = activeElement?.closest(
-          '#assistant-panel, #operations-panel, #source-catalog-panel',
+          '#assistant-panel, #operations-panel, #source-catalog-panel, #ground-imagery-panel',
         );
         if (activeElement instanceof HTMLElement && !isPanelControl) {
           returnFocusTarget.current = activeElement;
@@ -51,5 +52,6 @@ export function useWorkspacePanels() {
     closePanel,
     openOperationsAt,
     openSourceCatalog,
+    openGroundImagery,
   };
 }
