@@ -10,6 +10,7 @@ from disaster_monitor.application.disaster import (
     QueryParseStatus,
     RequestClassification,
     RequestType,
+    WorldwideSelectionIntent,
 )
 from disaster_monitor.application.disaster_aliases import recognized_disasters
 from disaster_monitor.application.investigation.disaster_query_policy import (
@@ -67,6 +68,51 @@ _MONTHS = {
 _COORDINATES = re.compile(
     r"(?<![\w.])(-?\d{1,3}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)(?![\w.])"
 )
+_PLACE_AFTER_IN = re.compile(
+    r"\b(?:in|from|across|near|around|at)\s+"
+    r"([A-Z][A-Za-z .'-]{1,60}?)(?=[?.!,]|\s+(?:on|and)\b|$)"
+)
+
+
+def location_hint_from_text(text: str, country_catalog: CountryCatalog) -> str | None:
+    """Extract a bounded named place without treating it as country identity."""
+    for match in _PLACE_AFTER_IN.finditer(text):
+        candidate = _clean_location_hint(match.group(1), country_catalog)
+        if candidate is not None:
+            return candidate
+    return None
+
+
+def location_hint_from_mentions(
+    mentions: tuple[str, ...], country_catalog: CountryCatalog
+) -> str | None:
+    """Resolve model-provided bounded place mentions without reparsing the request."""
+    for mention in mentions:
+        candidate = _clean_location_hint(mention, country_catalog)
+        if candidate is not None:
+            return candidate
+    return None
+
+
+def _clean_location_hint(value: str, country_catalog: CountryCatalog) -> str | None:
+    candidate = value.strip(" ,")
+    if not candidate:
+        return None
+    country_matches = country_catalog.find_mentions(candidate)
+    if len(country_matches) == 1:
+        country = country_matches[0]
+        country_terms = (
+            country.canonical_name,
+            country.alpha3_code,
+            *country.aliases,
+        )
+        if any(candidate.casefold() == term.casefold() for term in country_terms):
+            return None
+        for term in sorted(country_terms, key=len, reverse=True):
+            candidate = re.sub(
+                rf"(?<!\w){re.escape(term)}(?!\w)", "", candidate, flags=re.I
+            ).strip(" ,")
+    return candidate or None
 
 
 def has_explicit_date(text: str) -> bool:
@@ -190,6 +236,10 @@ class DisasterQueryParser:
                     ),
                 )
         coordinates = _extract_coordinates(normalized)
+        location_hint = location_hint_from_text(normalized, self._country_catalog)
+        selection_intent = selection_intent_for(normalized)
+        if date_range is not None and location_hint:
+            selection_intent = WorldwideSelectionIntent.STRONGEST
         prefecture_match = re.search(
             r"\b([A-Z][a-z]+(?:[- ][A-Z][a-z]+)*)\s+Prefecture\b", normalized
         )
@@ -203,12 +253,13 @@ class DisasterQueryParser:
             date_to=date_range[1] if date_range else None,
             prefecture=prefecture_match.group(1) if prefecture_match else None,
             city=city_match.group(1) if city_match else None,
+            location_hint=location_hint,
             latitude=coordinates[0],
             longitude=coordinates[1],
             event_discriminators=self._disaster_policies.for_disaster(
                 disasters[0]
             ).discriminators(normalized),
-            selection_intent=selection_intent_for(normalized),
+            selection_intent=selection_intent,
         )
         return DisasterQueryParseResult(QueryParseStatus.MATCHED, query=query)
 
@@ -222,6 +273,7 @@ class DisasterQueryParser:
                     query.time_intent == "specified",
                     query.prefecture is not None,
                     query.city is not None,
+                    query.location_hint is not None,
                     query.latitude is not None,
                     bool(query.event_discriminators),
                 )

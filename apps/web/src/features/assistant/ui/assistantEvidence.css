@@ -1,0 +1,134 @@
+.claim-inspection-section,
+.evidence-timeline {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+}
+
+.claim-inspection-section h3,
+.evidence-timeline h3 {
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.evidence-section-heading,
+.claim-inspection-heading,
+.evidence-timeline-entry-heading,
+.claim-inspection-source {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.evidence-section-heading > span {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 720;
+  padding: 4px 7px;
+}
+
+.evidence-section-note,
+.claim-inspection small,
+.claim-inspection-source small,
+.claim-variant small,
+.evidence-timeline-entry small,
+.evidence-timeline-entry time {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.claim-inspection-list,
+.claim-variant-list,
+.evidence-timeline-list {
+  display: grid;
+  gap: 9px;
+}
+
+.claim-inspection,
+.evidence-timeline-entry {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+}
+
+.claim-inspection-heading > div:first-child,
+.evidence-timeline-entry-heading {
+  min-width: 0;
+}
+
+.claim-inspection-heading > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.claim-inspection p,
+.evidence-timeline-entry p,
+.claim-variant p {
+  line-height: 1.55;
+  margin: 0;
+}
+
+.claim-inspection-why {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.claim-inspection-gap {
+  background: var(--warning-soft);
+  border-left: 3px solid var(--warning-icon);
+  color: var(--warning);
+  font-size: 0.74rem;
+  padding: 7px 8px;
+}
+
+.claim-inspection details {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.claim-inspection summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.claim-variant-list {
+  margin-top: 8px;
+}
+
+.claim-variant {
+  background: var(--surface);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.claim-variant-contradiction {
+  border-left-color: var(--danger);
+}
+
+.evidence-timeline-entry-heading strong {
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.evidence-timeline-entry-heading time {
+  flex: 0 0 auto;
+  text-align: right;
+}

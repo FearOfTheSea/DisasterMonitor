@@ -4,16 +4,14 @@ export type SatelliteSourceId =
   | 'nasa-modis-aqua-true-color'
   | 'nasa-goes-east-geocolor'
   | 'nasa-goes-west-geocolor'
-  | 'nasa-himawari-9-visible'
-  | 'copernicus-sentinel-2-true-color'
-  | 'planet-configured-mosaic';
+  | 'nasa-himawari-9-visible';
 
 export type SatelliteMapState = {
   sourceId: SatelliteSourceId;
   observationTime?: string;
 };
 
-export type SatelliteTemporalMode = 'daily' | 'subdaily' | 'fixed';
+export type SatelliteTemporalMode = 'daily' | 'subdaily';
 
 type DirectGibsAccess = {
   kind: 'direct-gibs';
@@ -22,21 +20,17 @@ type DirectGibsAccess = {
   format: 'jpeg' | 'png';
 };
 
-type DisasterMonitorApiAccess = {
-  kind: 'disaster-monitor-api';
-};
-
 export type SatelliteImagerySource = {
   id: SatelliteSourceId;
   displayName: string;
-  providerId: 'nasa-gibs' | 'copernicus-sentinel-hub' | 'planet';
+  providerId: 'nasa-gibs';
   provider: string;
   temporalMode: SatelliteTemporalMode;
   temporalStepMinutes?: number;
   attribution: string;
   maximumUsefulZoom: number;
   available: boolean;
-  access: DirectGibsAccess | DisasterMonitorApiAccess;
+  access: DirectGibsAccess;
 };
 
 const GIBS_ATTRIBUTION =
@@ -144,29 +138,6 @@ export const SATELLITE_IMAGERY_SOURCES: readonly SatelliteImagerySource[] = [
       format: 'png',
     },
   },
-  {
-    id: 'copernicus-sentinel-2-true-color',
-    displayName: 'Copernicus Sentinel-2 True Color',
-    providerId: 'copernicus-sentinel-hub',
-    provider: 'Copernicus Data Space / Sentinel Hub',
-    temporalMode: 'daily',
-    attribution:
-      'Contains modified Copernicus Sentinel data; served through the configured Sentinel Hub service',
-    maximumUsefulZoom: 14,
-    available: false,
-    access: { kind: 'disaster-monitor-api' },
-  },
-  {
-    id: 'planet-configured-mosaic',
-    displayName: 'Planet configured mosaic',
-    providerId: 'planet',
-    provider: 'Planet',
-    temporalMode: 'fixed',
-    attribution: '© Planet Labs PBC; configured mosaic',
-    maximumUsefulZoom: 18,
-    available: false,
-    access: { kind: 'disaster-monitor-api' },
-  },
 ];
 
 const SOURCES_BY_ID = new Map(
@@ -183,7 +154,6 @@ export function observationTimeForSource(
   source: SatelliteImagerySource,
   now = new Date(),
 ): string | undefined {
-  if (source.temporalMode === 'fixed') return undefined;
   if (source.temporalMode === 'daily') return now.toISOString().slice(0, 10);
   const step = source.temporalStepMinutes ?? 1;
   const rounded = new Date(now);
@@ -195,7 +165,6 @@ export function validObservationTime(
   source: SatelliteImagerySource,
   value: string | undefined,
 ): boolean {
-  if (source.temporalMode === 'fixed') return value === undefined;
   if (!value) return false;
   if (source.temporalMode === 'daily') return validDailyDate(value);
   const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):00Z$/.exec(value);

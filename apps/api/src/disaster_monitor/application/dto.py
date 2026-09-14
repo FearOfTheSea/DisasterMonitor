@@ -8,6 +8,10 @@ from disaster_monitor.application.agent.investigation_cases import (
 )
 from disaster_monitor.application.agent.operator_actions import OperatorAction
 from disaster_monitor.application.disaster import ReportSection, SelectedEventSummary
+from disaster_monitor.application.evidence.inspection import (
+    EvidenceClaimInspection,
+    EvidenceTimelineEntry,
+)
 from disaster_monitor.application.media import DisasterMediaGallery
 from disaster_monitor.domain.decision import DecisionSupportArtifact
 from disaster_monitor.domain.disaster import SourceReference
@@ -145,3 +149,5 @@ class AssistantAnswer:
     media_gallery: DisasterMediaGallery | None = None
     operator_actions: tuple[OperatorAction, ...] = ()
     investigation_case: InvestigationCaseArtifact | None = None
+    claims: tuple[EvidenceClaimInspection, ...] = ()
+    timeline: tuple[EvidenceTimelineEntry, ...] = ()

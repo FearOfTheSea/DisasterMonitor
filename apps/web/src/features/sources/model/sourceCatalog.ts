@@ -25,6 +25,10 @@ export type SourceCatalogItem = {
   attribution: string;
   limitations: string[];
   operational_state: SourceOperationalState;
+  rights_id?: string | null;
+  access_model?: 'public' | 'free_account' | 'self_hosted' | 'paid' | null;
+  license_name?: string | null;
+  rights_reviewed_at?: string | null;
 };
 
 export type SourceCatalogSnapshot = {

@@ -1,0 +1,24 @@
+{
+  "schema_version": "product-scope.v1",
+  "status": "accepted",
+  "accepted_at": "2026-09-13",
+  "north_star": "evidence-native local-first disaster intelligence workstation",
+  "principles": [
+    "evidence_inspection",
+    "monitoring_resilience",
+    "spatial_context",
+    "interoperability"
+  ],
+  "non_goals": [
+    "public_warning_issuance",
+    "evacuation_directives",
+    "resource_orders",
+    "model_created_facts"
+  ],
+  "data_entitlement_policy": [
+    "public",
+    "free_account",
+    "self_hosted"
+  ],
+  "model_role": "interface_and_reasoning_aid_only"
+}

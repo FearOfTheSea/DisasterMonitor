@@ -13,6 +13,10 @@ from disaster_monitor.presentation.http.event_schemas import (
     SelectedEventResponse,
     SourceResponse,
 )
+from disaster_monitor.presentation.http.evidence_schemas import (
+    EvidenceClaimResponse,
+    EvidenceTimelineEntryResponse,
+)
 from disaster_monitor.presentation.http.multimodal_schemas import (
     CommonOperationalPictureResponse,
     MultimodalAssetRequest,
@@ -160,6 +164,8 @@ class AssistantResponse(BaseModel):
     operator_actions: list[AssistantOperatorActionResponse] = Field(
         default_factory=list
     )
+    claims: list[EvidenceClaimResponse] = Field(default_factory=list)
+    timeline: list[EvidenceTimelineEntryResponse] = Field(default_factory=list)
 
 
 class ConversationMessageResponse(BaseModel):

@@ -24,6 +24,16 @@ class FreshnessState(StrEnum):
     NEVER_INGESTED = "never_ingested"
 
 
+class ProviderHealthState(StrEnum):
+    """Operational posture; it is not a statement that a hazard is absent."""
+
+    HEALTHY = "healthy"
+    STALE = "stale"
+    DEGRADED = "degraded"
+    UNAVAILABLE = "unavailable"
+    MISCONFIGURED = "misconfigured"
+
+
 class ProviderAttemptOutcome(StrEnum):
     """Outcome of one bounded provider acquisition attempt."""
 
@@ -113,12 +123,20 @@ class ProviderAttempt:
     retryable: bool = False
     http_status: int | None = None
     records_seen: int = 0
+    published_at: datetime | None = None
+    parse_failure: bool = False
+    admission_failure: bool = False
+    truncated: bool = False
+    hazard: str | None = None
 
     def __post_init__(self) -> None:
         if not self.source_id.strip() or self.attempted_at.tzinfo is None:
             raise ValueError("Provider attempts require a source and aware time.")
         if self.records_seen < 0:
             raise ValueError("Provider attempt record counts cannot be negative.")
+        for value in (self.published_at,):
+            if value is not None and value.tzinfo is None:
+                raise ValueError("Provider attempt publication times must be aware.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +154,10 @@ class IngestJob:
     claimed_by: str | None = None
     claimed_at: datetime | None = None
     last_error_code: str | None = None
+    lease_expires_at: datetime | None = None
+    fencing_token: int = 0
+    last_failed_at: datetime | None = None
+    diagnostic: str | None = None
 
     def __post_init__(self) -> None:
         if not self.job_id or not self.source_id or not self.canonical_request_identity:
@@ -144,6 +166,11 @@ class IngestJob:
             raise ValueError("Ingest job times must be timezone-aware.")
         if self.attempt_count < 0 or self.max_attempts < 1:
             raise ValueError("Ingest job attempt limits are invalid.")
+        if self.fencing_token < 0:
+            raise ValueError("Ingest job fencing tokens cannot be negative.")
+        for value in (self.claimed_at, self.lease_expires_at, self.last_failed_at):
+            if value is not None and value.tzinfo is None:
+                raise ValueError("Ingest job lease and failure times must be aware.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +239,39 @@ class ProviderFreshness:
     expected_freshness_seconds: int
     consecutive_failures: int
     latest_error_code: str | None = None
+    health_state: ProviderHealthState = ProviderHealthState.MISCONFIGURED
+    source_publication_age_seconds: int | None = None
+    retrieval_lag_seconds: int | None = None
+    parse_failures: int = 0
+    admission_failures: int = 0
+    truncated: bool = False
+    stale_projection_age_seconds: int | None = None
+    hazard: str | None = None
+
+
+def current_attempt_diagnostics(
+    attempts: tuple[ProviderAttempt, ...],
+) -> tuple[int, int, bool, str | None]:
+    """Summarize only the current attempt or its consecutive failure run."""
+    active: list[ProviderAttempt] = []
+    for attempt in attempts:
+        if active and attempt.outcome not in {
+            ProviderAttemptOutcome.FAILED,
+            ProviderAttemptOutcome.INCOMPLETE,
+        }:
+            break
+        active.append(attempt)
+        if attempt.outcome not in {
+            ProviderAttemptOutcome.FAILED,
+            ProviderAttemptOutcome.INCOMPLETE,
+        }:
+            break
+    return (
+        sum(item.parse_failure for item in active),
+        sum(item.admission_failure for item in active),
+        any(item.truncated for item in active),
+        next((item.hazard for item in active if item.hazard is not None), None),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +318,14 @@ def freshness_for(
     last_snapshot: SourceSnapshotRecord | None,
     consecutive_failures: int,
     latest_error_code: str | None,
+    source_publication_age_seconds: int | None = None,
+    retrieval_lag_seconds: int | None = None,
+    parse_failures: int = 0,
+    admission_failures: int = 0,
+    truncated: bool = False,
+    stale_projection_age_seconds: int | None = None,
+    hazard: str | None = None,
+    configured: bool = True,
 ) -> ProviderFreshness:
     """Classify freshness without hiding upstream acquisition failures."""
     if last_snapshot is None:
@@ -265,6 +333,11 @@ def freshness_for(
             FreshnessState.UNAVAILABLE
             if consecutive_failures
             else FreshnessState.NEVER_INGESTED
+        )
+        health = (
+            ProviderHealthState.MISCONFIGURED
+            if not configured
+            else ProviderHealthState.UNAVAILABLE
         )
         return ProviderFreshness(
             source_id,
@@ -276,12 +349,29 @@ def freshness_for(
             int(expected_freshness.total_seconds()),
             consecutive_failures,
             latest_error_code,
+            health,
+            source_publication_age_seconds,
+            retrieval_lag_seconds,
+            parse_failures,
+            admission_failures,
+            truncated,
+            stale_projection_age_seconds,
+            hazard,
         )
     age = max(0, int((now - last_snapshot.effective_at).total_seconds()))
     state = (
         FreshnessState.FRESH
         if age <= expected_freshness.total_seconds()
         else FreshnessState.STALE
+    )
+    health = (
+        ProviderHealthState.MISCONFIGURED
+        if not configured
+        else ProviderHealthState.DEGRADED
+        if consecutive_failures or parse_failures or admission_failures or truncated
+        else ProviderHealthState.STALE
+        if state is FreshnessState.STALE
+        else ProviderHealthState.HEALTHY
     )
     return ProviderFreshness(
         source_id,
@@ -293,6 +383,14 @@ def freshness_for(
         int(expected_freshness.total_seconds()),
         consecutive_failures,
         latest_error_code,
+        health,
+        source_publication_age_seconds,
+        retrieval_lag_seconds,
+        parse_failures,
+        admission_failures,
+        truncated,
+        stale_projection_age_seconds,
+        hazard,
     )
 
 

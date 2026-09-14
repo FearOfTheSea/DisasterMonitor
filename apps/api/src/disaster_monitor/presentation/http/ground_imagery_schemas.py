@@ -173,6 +173,22 @@ class GroundImageryArtifactResponse(BaseModel):
     created_at: datetime
 
 
+class GroundImageryJobResponse(BaseModel):
+    job_id: str
+    request_version: int
+    sensor: Sensor
+    role: str
+    status: str
+    attempt: int
+    max_attempts: int
+    next_attempt_at: datetime
+    claimed_at: datetime | None = None
+    lease_expires_at: datetime | None = None
+    fencing_token: int
+    error_code: str | None = None
+    diagnostic: str | None = None
+
+
 class GroundImagerySensorStatusResponse(BaseModel):
     sensor: Sensor
     scanned_count: int
@@ -198,6 +214,7 @@ class GroundImageryRequestResponse(BaseModel):
     watch_enabled: bool = False
     watch_interval_seconds: int | None = None
     artifacts: list[GroundImageryArtifactResponse] = Field(default_factory=list)
+    jobs: list[GroundImageryJobResponse] = Field(default_factory=list)
 
 
 class GroundImageryObservationPageResponse(BaseModel):

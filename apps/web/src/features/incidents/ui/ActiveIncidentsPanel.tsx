@@ -16,6 +16,7 @@ import {
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
 import { DisasterIcon } from '@/features/incidents/ui/DisasterIcon';
 import type { MapTimeWindow } from '@/shared/model/displayTimeWindow';
+import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 
 type ActiveIncidentsPanelProps = {
   snapshot?: ActiveIncidentsSnapshot;
@@ -171,17 +172,26 @@ export function ActiveIncidentsPanel({
           <h2>What&apos;s happening</h2>
           <p>Recent events reported by trusted sources</p>
         </div>
-        <button
-          type="button"
-          onClick={() => void onRefresh()}
-          disabled={status === 'loading'}
-        >
-          {status === 'loading'
-            ? 'Updating…'
-            : snapshot
-              ? `Retrieved ${formatTime(snapshot.retrieved_at)}`
-              : 'Not retrieved'}
-        </button>
+        <div className="active-incidents-header-actions">
+          {snapshot ? (
+            <DataAgeBadge
+              kind="projection"
+              timestamp={snapshot.retrieved_at}
+              label="Monitoring snapshot"
+            />
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void onRefresh()}
+            disabled={status === 'loading'}
+          >
+            {status === 'loading'
+              ? 'Updating…'
+              : snapshot
+                ? `Retrieved ${formatTime(snapshot.retrieved_at)}`
+                : 'Not retrieved'}
+          </button>
+        </div>
       </header>
       <div className="incident-search">
         <svg
@@ -442,6 +452,15 @@ export function ActiveIncidentsPanel({
                           <small>
                             {timestamp.label}: {formatTime(timestamp.value)}
                           </small>
+                          <DataAgeBadge
+                            kind="source"
+                            timestamp={
+                              incident.source.updated_at ??
+                              incident.source.published_at ??
+                              incident.source.retrieved_at
+                            }
+                            ageSeconds={incident.source.source_age_seconds}
+                          />
                           {incident.detection?.news_break_at ? (
                             <small>
                               News first published:{' '}

@@ -1,7 +1,7 @@
 """Normalize provider records into a bounded, source-attributed evidence packet."""
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import datetime
 from typing import Protocol
@@ -14,6 +14,11 @@ from disaster_monitor.application.evidence.evidence_correlation import (
 from disaster_monitor.application.evidence.evidence_state import (
     build_evidence_world_state,
     source_is_stale,
+)
+from disaster_monitor.application.evidence.inspection import (
+    EvidenceTimelineEntry,
+    build_claim_inspections,
+    build_evidence_timeline,
 )
 from disaster_monitor.application.evidence.source_evidence_policy import (
     validate_physical_event_evidence,
@@ -107,6 +112,7 @@ def build_evidence_packet(
     warnings: tuple[str, ...],
     retrieved_at: datetime,
     physical_event: PhysicalEventIdentity | None = None,
+    additional_timeline: Iterable[EvidenceTimelineEntry] = (),
     correlation: Callable[
         [SituationReport, DisasterEvent], CorrelationStatus
     ] = correlate_situation_report,
@@ -211,6 +217,15 @@ def build_evidence_packet(
             )
 
     projection_reports = _deduplicate_reports(reports)
+    claims = build_claim_inspections(world_state)
+    timeline = build_evidence_timeline(
+        event,
+        projection_reports,
+        world_state,
+        warnings=(*warnings, *correlation_warnings),
+        retrieved_at=retrieved_at,
+        additional=additional_timeline,
+    )
 
     sources: list[SourceReference] = [event.source]
     if physical_event is not None:
@@ -320,6 +335,8 @@ def build_evidence_packet(
         partial=partial,
         world_state=world_state,
         supplemental_geometry=_supplemental_geometry(projection_reports),
+        claims=claims,
+        timeline=timeline,
     )
 
 
@@ -351,6 +368,7 @@ class EvidenceReconciler:
         warnings: tuple[str, ...],
         retrieved_at: datetime,
         physical_event: PhysicalEventIdentity | None = None,
+        additional_timeline: Iterable[EvidenceTimelineEntry] = (),
     ) -> EvidencePacket:
         policies: _CorrelationPolicies
         if self._correlation_policies is None:
@@ -364,5 +382,6 @@ class EvidenceReconciler:
             warnings=warnings,
             retrieved_at=retrieved_at,
             physical_event=physical_event,
+            additional_timeline=additional_timeline,
             correlation=policies.for_disaster(query.disaster).correlate,
         )

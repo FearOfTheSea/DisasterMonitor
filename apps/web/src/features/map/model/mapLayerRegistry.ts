@@ -46,8 +46,7 @@ export const MAP_LAYER_REGISTRY = [
     category: 'imagery',
     defaultVisible: false,
     purpose: 'Adds one selected satellite raster beneath source-backed vector layers.',
-    sourceDescription:
-      'NASA GIBS public imagery or a configured Copernicus Sentinel Hub or Planet mosaic served through DisasterMonitor.',
+    sourceDescription: 'NASA GIBS public imagery served directly from NASA.',
     freshnessSemantics:
       'The control selects a requested observation date or UTC time. The client does not claim that imagery exists for that request.',
     authorityDescription:
@@ -56,7 +55,7 @@ export const MAP_LAYER_REGISTRY = [
       'Provider-specific attribution is shown for the selected imagery source.',
     limitations: [
       'Imagery is not live.',
-      'Cloud, revisit, processing, and configured-mosaic limits may affect what is visible.',
+      'Cloud, revisit, and processing limits may affect what is visible.',
     ],
   },
   {

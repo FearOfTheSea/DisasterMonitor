@@ -27,6 +27,8 @@ class SourceResponse(BaseModel):
     published_at: datetime | None = None
     updated_at: datetime | None = None
     retrieved_at: datetime
+    authority: SourceAuthority = SourceAuthority.SECONDARY
+    source_age_seconds: float | None = None
     snapshot_id: str | None = None
 
 

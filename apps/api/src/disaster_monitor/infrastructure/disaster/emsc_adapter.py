@@ -14,6 +14,7 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
     WorldwideSelectionIntent,
+    retrieval_time_bounds,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.temporal_normalization import (
@@ -87,8 +88,12 @@ def build_emsc_params(
     query: DisasterQuery, *, now: datetime
 ) -> dict[str, str | int | float]:
     """Build a bounded EMSC request from normalized country geography."""
-    starttime = query.date_from or now - timedelta(days=query.time_window_days)
-    endtime = query.date_to or now
+    starttime, endtime = retrieval_time_bounds(query, now=now)
+    regional_event_query = bool(
+        query.location_hint
+        and query.date_from is not None
+        and query.date_to is not None
+    )
     generic_query = (
         not any(
             (
@@ -97,6 +102,7 @@ def build_emsc_params(
                 query.date_to,
                 query.prefecture,
                 query.city,
+                query.location_hint,
                 query.latitude is not None and query.longitude is not None,
                 query.discriminator("magnitude") is not None,
             )
@@ -107,7 +113,7 @@ def build_emsc_params(
         starttime=starttime,
         endtime=endtime,
         limit=50,
-        orderby="magnitude" if generic_query else "time",
+        orderby=("magnitude" if generic_query or regional_event_query else "time"),
     )
     area = query.country.geographic_area
     params.update(

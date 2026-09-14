@@ -299,6 +299,8 @@ function normalizeAssistantResponse(value: ApiAssistantResponse): AssistantRespo
       ? normalizeMediaGallery(value.media_gallery)
       : value.media_gallery,
     operator_actions: value.operator_actions ?? [],
+    claims: value.claims ?? [],
+    timeline: value.timeline ?? [],
   };
 }
 

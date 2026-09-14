@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import {
   fetchCountryCatalogStatus,
   fetchEvidenceHistory,
+  fetchProviderBudgets,
   fetchProviderFreshness,
   recordOperatorReview,
   requestCountryCatalogUpdate,
@@ -12,6 +13,7 @@ import {
 import type {
   CountryCatalogStatus,
   EvidenceSnapshot,
+  ProviderBudget,
   ProviderFreshness,
 } from '@/shared/types/operations';
 import type {
@@ -57,6 +59,7 @@ export function OperationsPanel({
   displayedCorrelations = [],
 }: OperationsPanelProps) {
   const [providers, setProviders] = useState<ProviderFreshness[]>([]);
+  const [budgets, setBudgets] = useState<ProviderBudget[]>([]);
   const [history, setHistory] = useState<EvidenceSnapshot[]>([]);
   const [countryCatalog, setCountryCatalog] = useState<CountryCatalogStatus | null>(
     null,
@@ -85,14 +88,16 @@ export function OperationsPanel({
     setLoading(true);
     setError(null);
     try {
-      const [nextProviders, nextHistory, nextCatalog] = await Promise.all([
+      const [nextProviders, nextHistory, nextCatalog, nextBudgets] = await Promise.all([
         fetchProviderFreshness(signal),
         fetchEvidenceHistory(signal),
         fetchCountryCatalogStatus(signal),
+        fetchProviderBudgets(signal),
       ]);
       setProviders(nextProviders);
       setHistory(nextHistory);
       setCountryCatalog(nextCatalog);
+      setBudgets(nextBudgets ?? []);
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
         setError(caught instanceof Error ? caught.message : 'Operations data failed.');
@@ -104,28 +109,12 @@ export function OperationsPanel({
 
   useEffect(() => {
     const controller = new AbortController();
-    void Promise.all([
-      fetchProviderFreshness(controller.signal),
-      fetchEvidenceHistory(controller.signal),
-      fetchCountryCatalogStatus(controller.signal),
-    ])
-      .then(([nextProviders, nextHistory, nextCatalog]) => {
-        setProviders(nextProviders);
-        setHistory(nextHistory);
-        setCountryCatalog(nextCatalog);
-      })
-      .catch((caught) => {
-        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-          setError(
-            caught instanceof Error ? caught.message : 'Operations data failed.',
-          );
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
+    const timer = window.setTimeout(() => void refresh(controller.signal), 0);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [refresh]);
 
   async function updateCountryCatalog() {
     setCatalogUpdating(true);
@@ -272,6 +261,31 @@ export function OperationsPanel({
                 </div>
                 <small>Evidence time: {formatTime(provider.effective_at)}</small>
                 <small>Evidence age: {formatDuration(provider.age_seconds)}</small>
+                <small>
+                  Operational health:{' '}
+                  {(provider.health_state ?? provider.state).replaceAll('_', ' ')}
+                </small>
+                <small>
+                  Source publication age:{' '}
+                  {formatDuration(provider.source_publication_age_seconds ?? null)}
+                </small>
+                <small>
+                  Retrieval lag:{' '}
+                  {formatDuration(provider.retrieval_lag_seconds ?? null)}
+                </small>
+                <small>
+                  Parse/admission failures: {provider.parse_failures ?? 0}/
+                  {provider.admission_failures ?? 0}
+                </small>
+                <small>Truncated: {provider.truncated ? 'yes' : 'no'}</small>
+                {provider.stale_projection_age_seconds !== null &&
+                provider.stale_projection_age_seconds !== undefined ? (
+                  <small>
+                    Projection age:{' '}
+                    {formatDuration(provider.stale_projection_age_seconds)}
+                  </small>
+                ) : null}
+                {provider.hazard ? <small>Hazard: {provider.hazard}</small> : null}
                 <small>Last attempt: {formatTime(provider.last_attempt_at)}</small>
                 <small>Last success: {formatTime(provider.last_success_at)}</small>
                 <small>
@@ -290,6 +304,39 @@ export function OperationsPanel({
               </p>
             )}
           </div>
+        </section>
+        <section className="operations-section">
+          <div className="operations-heading">
+            <div>
+              <h3>Provider budget ledger</h3>
+              <p>Reserved work is visible before requests are sent upstream.</p>
+            </div>
+          </div>
+          {budgets.length === 0 ? (
+            <p>No provider budget windows are active.</p>
+          ) : (
+            <div className="provider-budget-grid">
+              {budgets.map((budget) => (
+                <article
+                  key={`${budget.provider_id}:${budget.budget_window}`}
+                  className="provider-budget"
+                >
+                  <div>
+                    <strong>{budget.provider_id}</strong>
+                    <span>{budget.budget_window} window</span>
+                  </div>
+                  <small>
+                    Remaining: {budget.remaining_units} / {budget.limit_units} units
+                  </small>
+                  <small>
+                    Reserved/settled/released: {budget.reserved_units}/
+                    {budget.settled_units}/{budget.released_units}
+                  </small>
+                  <small>Resets: {formatTime(budget.reset_at)}</small>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
         <section className="operations-section">
           <h3>Latest immutable snapshots</h3>

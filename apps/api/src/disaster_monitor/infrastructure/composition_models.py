@@ -39,6 +39,7 @@ from disaster_monitor.application.ports.geography import CountryCatalogUpdateAut
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.memory_store import MemoryStore
 from disaster_monitor.application.ports.operational_state import OperationalRepository
+from disaster_monitor.application.ports.provider_budget import ProviderBudgetLedger
 from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
@@ -54,6 +55,7 @@ class OperationalServices:
     repository: OperationalRepository
     snapshots: SnapshotPersistenceService
     evidence: OperationalEvidenceRecorder
+    provider_budget: ProviderBudgetLedger | None = None
 
 
 @dataclass(frozen=True, slots=True)

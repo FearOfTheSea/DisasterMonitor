@@ -21,6 +21,13 @@
   padding: 30px 24px 18px;
 }
 
+.active-incidents-header-actions {
+  align-items: flex-end;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
 .active-incidents-header h2,
 .active-incidents-header p,
 .incident-list-section h3,
@@ -178,44 +185,11 @@
   margin-right: 6px;
 }
 
-.incident-coverage-status,
 .incident-list-section {
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 10px;
   padding: 20px 24px;
-}
-
-.incident-coverage-status {
-  order: 3;
-}
-
-.coverage-heading-row {
-  align-items: center;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 16px 0 8px;
-}
-
-.coverage-heading-row h3 {
-  font-size: 0.8rem;
-  margin: 0;
-}
-
-.coverage-heading-row .incident-retrieval-time {
-  border: 0;
-  margin-top: 3px;
-  padding: 0;
-}
-
-.incident-display-filter-note {
-  background: var(--accent-soft);
-  border-left: 3px solid var(--accent);
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-  line-height: 1.4;
-  margin: 0;
-  padding: 7px 8px;
 }
 
 .incident-section-heading {
@@ -263,81 +237,6 @@
   border-radius: 999px;
   color: var(--warning);
   padding: 4px 7px;
-}
-
-.incident-coverage-grid {
-  display: grid;
-  gap: 0;
-}
-
-.coverage-item {
-  border-bottom: 1px solid #e8edf3;
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 8px 0;
-}
-
-.coverage-item:last-child {
-  border-bottom: 0;
-}
-
-.coverage-item > div {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-}
-
-.coverage-item strong {
-  align-items: center;
-  display: inline-flex;
-  font-size: 0.7rem;
-  font-weight: 650;
-  gap: 7px;
-  line-height: 1.25;
-  min-width: 0;
-}
-
-.coverage-item small {
-  color: var(--muted);
-  font-size: 0.64rem;
-  line-height: 1.35;
-  padding-left: 23px;
-}
-
-.coverage-state {
-  align-items: center;
-  display: inline-flex;
-  flex: 0 0 auto;
-  font-size: 0.64rem;
-  font-weight: 680;
-  gap: 5px;
-  line-height: 1.2;
-  text-align: right;
-}
-
-.coverage-state svg {
-  fill: none;
-  height: 13px;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.6;
-  width: 13px;
-}
-
-.coverage-events_found {
-  color: var(--success);
-}
-
-.coverage-no_matching_records {
-  color: var(--muted);
-}
-
-.coverage-degraded,
-.coverage-unavailable {
-  color: var(--warning);
 }
 
 .incident-warnings {

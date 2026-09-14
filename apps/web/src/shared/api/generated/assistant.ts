@@ -269,6 +269,12 @@ const apiSchemas = {
   },
   AssistantResponse: {
     properties: {
+      claims: {
+        items: {
+          $ref: '#/components/schemas/EvidenceClaimResponse',
+        },
+        type: 'array',
+      },
       common_operational_picture: {
         anyOf: [
           {
@@ -403,6 +409,12 @@ const apiSchemas = {
       sources: {
         items: {
           $ref: '#/components/schemas/SourceResponse',
+        },
+        type: 'array',
+      },
+      timeline: {
+        items: {
+          $ref: '#/components/schemas/EvidenceTimelineEntryResponse',
         },
         type: 'array',
       },
@@ -1178,6 +1190,287 @@ const apiSchemas = {
     required: ['kind', 'value', 'source_id'],
     type: 'object',
   },
+  EvidenceClaimResponse: {
+    additionalProperties: false,
+    properties: {
+      alternatives: {
+        items: {
+          $ref: '#/components/schemas/EvidenceClaimVariantResponse',
+        },
+        type: 'array',
+      },
+      claim_id: {
+        type: 'string',
+      },
+      claim_key: {
+        type: 'string',
+      },
+      contradictions: {
+        items: {
+          $ref: '#/components/schemas/EvidenceClaimVariantResponse',
+        },
+        type: 'array',
+      },
+      disposition: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/EvidenceDisposition',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      gap: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      label: {
+        type: 'string',
+      },
+      observed_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      published_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      retrieved_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/SourceResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      status: {
+        $ref: '#/components/schemas/FactStatus',
+      },
+      value: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      why: {
+        type: 'string',
+      },
+    },
+    required: [
+      'claim_id',
+      'claim_key',
+      'label',
+      'value',
+      'status',
+      'disposition',
+      'why',
+      'source',
+    ],
+    type: 'object',
+  },
+  EvidenceClaimVariantResponse: {
+    additionalProperties: false,
+    properties: {
+      disposition: {
+        $ref: '#/components/schemas/EvidenceDisposition',
+      },
+      observation_id: {
+        type: 'string',
+      },
+      observed_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      published_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      rule_id: {
+        type: 'string',
+      },
+      source: {
+        $ref: '#/components/schemas/SourceResponse',
+      },
+      status: {
+        $ref: '#/components/schemas/FactStatus',
+      },
+      value: {
+        type: 'string',
+      },
+    },
+    required: [
+      'observation_id',
+      'value',
+      'status',
+      'disposition',
+      'source',
+      'retrieved_at',
+      'rule_id',
+    ],
+    type: 'object',
+  },
+  EvidenceDisposition: {
+    enum: ['current', 'superseded', 'conflicting', 'duplicate', 'unusable'],
+    type: 'string',
+  },
+  EvidenceTimelineEntryResponse: {
+    additionalProperties: false,
+    properties: {
+      claim_key: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      detail: {
+        type: 'string',
+      },
+      entry_id: {
+        type: 'string',
+      },
+      event_type: {
+        $ref: '#/components/schemas/EvidenceTimelineEventType',
+      },
+      occurred_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      published_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      related_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      retrieved_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/SourceResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      status: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      title: {
+        type: 'string',
+      },
+    },
+    required: ['entry_id', 'event_type', 'occurred_at', 'title', 'detail', 'source'],
+    type: 'object',
+  },
+  EvidenceTimelineEventType: {
+    enum: [
+      'normalized_observation',
+      'coverage_status',
+      'warning_lifecycle',
+      'situation_report',
+      'imagery_acquisition',
+      'imagery_selection',
+      'watch_change',
+      'claim_reconciliation',
+    ],
+    type: 'string',
+  },
+  FactStatus: {
+    enum: ['confirmed', 'preliminary', 'estimated', 'disputed', 'unknown'],
+    type: 'string',
+  },
   GroundImageryArtifactResponse: {
     properties: {
       artifact_id: {
@@ -1277,6 +1570,92 @@ const apiSchemas = {
       'width',
       'height',
       'resolution_label',
+    ],
+    type: 'object',
+  },
+  GroundImageryJobResponse: {
+    properties: {
+      attempt: {
+        type: 'integer',
+      },
+      claimed_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      diagnostic: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      error_code: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      fencing_token: {
+        type: 'integer',
+      },
+      job_id: {
+        type: 'string',
+      },
+      lease_expires_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      max_attempts: {
+        type: 'integer',
+      },
+      next_attempt_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      request_version: {
+        type: 'integer',
+      },
+      role: {
+        type: 'string',
+      },
+      sensor: {
+        $ref: '#/components/schemas/Sensor',
+      },
+      status: {
+        type: 'string',
+      },
+    },
+    required: [
+      'job_id',
+      'request_version',
+      'sensor',
+      'role',
+      'status',
+      'attempt',
+      'max_attempts',
+      'next_attempt_at',
+      'fencing_token',
     ],
     type: 'object',
   },
@@ -1668,6 +2047,12 @@ const apiSchemas = {
       },
       incident_id: {
         type: 'string',
+      },
+      jobs: {
+        items: {
+          $ref: '#/components/schemas/GroundImageryJobResponse',
+        },
+        type: 'array',
       },
       next_check_at: {
         anyOf: [
@@ -3031,8 +3416,28 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  SourceAuthority: {
+    enum: [
+      'national_authority',
+      'scientific_authority',
+      'humanitarian_aggregator',
+      'secondary',
+    ],
+    type: 'string',
+  },
   SourceCatalogItemResponse: {
     properties: {
+      access_model: {
+        anyOf: [
+          {
+            enum: ['public', 'free_account', 'self_hosted', 'paid'],
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       attribution: {
         type: 'string',
       },
@@ -3081,6 +3486,16 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      license_name: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       limitations: {
         items: {
           type: 'string',
@@ -3095,6 +3510,26 @@ const apiSchemas = {
       },
       publisher: {
         type: 'string',
+      },
+      rights_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      rights_reviewed_at: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       source_id: {
         type: 'string',
@@ -3339,6 +3774,9 @@ const apiSchemas = {
   },
   SourceResponse: {
     properties: {
+      authority: {
+        $ref: '#/components/schemas/SourceAuthority',
+      },
       canonical_url: {
         type: 'string',
       },
@@ -3364,6 +3802,16 @@ const apiSchemas = {
         anyOf: [
           {
             type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source_age_seconds: {
+        anyOf: [
+          {
+            type: 'number',
           },
           {
             type: 'null',
@@ -3900,6 +4348,7 @@ export type AssistantRequest = {
 };
 
 export type AssistantResponse = {
+  claims?: Array<EvidenceClaimResponse>;
   common_operational_picture?: CommonOperationalPictureResponse | null;
   conversation_id: string;
   decision_support?: DecisionSupportResponse | null;
@@ -3922,6 +4371,7 @@ export type AssistantResponse = {
   sections?: Array<ReportSectionResponse>;
   selected_event?: SelectedEventResponse | null;
   sources?: Array<SourceResponse>;
+  timeline?: Array<EvidenceTimelineEntryResponse>;
   warnings?: Array<string>;
 };
 
@@ -4148,6 +4598,38 @@ export type EventMeasurementResponse = {
   value: number | string;
 };
 
+export type EvidenceClaimResponse = {
+  alternatives?: Array<EvidenceClaimVariantResponse>;
+  claim_id: string;
+  claim_key: string;
+  contradictions?: Array<EvidenceClaimVariantResponse>;
+  disposition: EvidenceDisposition | null;
+  gap?: string | null;
+  label: string;
+  observed_at?: string | null;
+  published_at?: string | null;
+  retrieved_at?: string | null;
+  source: SourceResponse | null;
+  status: FactStatus;
+  value: string | null;
+  why: string;
+};
+
+export type EvidenceClaimVariantResponse = {
+  disposition: EvidenceDisposition;
+  observation_id: string;
+  observed_at?: string | null;
+  published_at?: string | null;
+  retrieved_at: string;
+  rule_id: string;
+  source: SourceResponse;
+  status: FactStatus;
+  value: string;
+};
+
+export type EvidenceDisposition =
+  'current' | 'superseded' | 'conflicting' | 'duplicate' | 'unusable';
+
 export type EvidenceSnapshotResponse = {
   content_available: boolean;
   content_deleted_at?: string | null;
@@ -4164,6 +4646,33 @@ export type EvidenceSnapshotResponse = {
   snapshot_id: string;
   source_id: string;
 };
+
+export type EvidenceTimelineEntryResponse = {
+  claim_key?: string | null;
+  detail: string;
+  entry_id: string;
+  event_type: EvidenceTimelineEventType;
+  occurred_at: string;
+  published_at?: string | null;
+  related_id?: string | null;
+  retrieved_at?: string | null;
+  source: SourceResponse | null;
+  status?: string | null;
+  title: string;
+};
+
+export type EvidenceTimelineEventType =
+  | 'normalized_observation'
+  | 'coverage_status'
+  | 'warning_lifecycle'
+  | 'situation_report'
+  | 'imagery_acquisition'
+  | 'imagery_selection'
+  | 'watch_change'
+  | 'claim_reconciliation';
+
+export type FactStatus =
+  'confirmed' | 'preliminary' | 'estimated' | 'disputed' | 'unknown';
 
 export type FootprintRequest = {
   coordinates: Array<Array<[number, number]>>;
@@ -4211,6 +4720,22 @@ export type GroundImageryGridResponse = {
   pixel_size_m: number;
   resolution_label: string;
   width: number;
+};
+
+export type GroundImageryJobResponse = {
+  attempt: number;
+  claimed_at?: string | null;
+  diagnostic?: string | null;
+  error_code?: string | null;
+  fencing_token: number;
+  job_id: string;
+  lease_expires_at?: string | null;
+  max_attempts: number;
+  next_attempt_at: string;
+  request_version: number;
+  role: string;
+  sensor: Sensor;
+  status: string;
 };
 
 export type GroundImageryManifestResponse = {
@@ -4330,6 +4855,7 @@ export type GroundImageryRequestResponse = {
   artifacts?: Array<GroundImageryArtifactResponse>;
   disaster: string;
   incident_id: string;
+  jobs?: Array<GroundImageryJobResponse>;
   next_check_at?: string | null;
   reason_codes: Array<string>;
   reference_time: string;
@@ -4717,16 +5243,35 @@ export type PolygonGeometryResponse = {
   type: 'Polygon';
 };
 
+export type ProviderBudgetResponse = {
+  budget_window: string;
+  limit_units: number;
+  provider_id: string;
+  released_units: number;
+  remaining_units: number;
+  reserved_units: number;
+  reset_at: string;
+  settled_units: number;
+};
+
 export type ProviderFreshnessResponse = {
+  admission_failures?: number;
   age_seconds?: number | null;
   consecutive_failures: number;
   effective_at?: string | null;
   expected_freshness_seconds: number;
+  hazard?: string | null;
+  health_state?: 'healthy' | 'stale' | 'degraded' | 'unavailable' | 'misconfigured';
   last_attempt_at?: string | null;
   last_success_at?: string | null;
   latest_error_code?: string | null;
+  parse_failures?: number;
+  retrieval_lag_seconds?: number | null;
   source_id: string;
+  source_publication_age_seconds?: number | null;
+  stale_projection_age_seconds?: number | null;
   state: string;
+  truncated?: boolean;
 };
 
 export type ProviderTier = 'primary' | 'secondary';
@@ -4749,12 +5294,15 @@ export type SatelliteImageryCatalogResponse = {
 
 export type SatelliteImageryProductResponse = {
   access_mode: 'direct_gibs' | 'api';
+  access_model: 'public' | 'free_account' | 'self_hosted' | 'paid';
   attribution: string;
   available: boolean;
   display_name: string;
+  license_name: string;
   maximum_useful_zoom: number;
   provider_id: string;
   provider_name: string;
+  rights_id: string;
   source_id: string;
   temporal_mode: 'daily' | 'subdaily' | 'fixed';
   temporal_step_minutes?: number | null;
@@ -4809,6 +5357,7 @@ export type SourceAuthority =
   | 'secondary';
 
 export type SourceCatalogItemResponse = {
+  access_model?: 'public' | 'free_account' | 'self_hosted' | 'paid' | null;
   attribution: string;
   authority: string;
   country_codes?: Array<string> | null;
@@ -4817,10 +5366,13 @@ export type SourceCatalogItemResponse = {
   freshness_semantics: string;
   geographic_scopes?: Array<'country' | 'worldwide'>;
   information_roles?: Array<string>;
+  license_name?: string | null;
   limitations?: Array<string>;
   operational_state: SourceOperationalStateResponse;
   provider: string;
   publisher: string;
+  rights_id?: string | null;
+  rights_reviewed_at?: string | null;
   source_id: string;
   stale_threshold_seconds?: number | null;
   supported_disasters?: Array<Disaster>;
@@ -4875,11 +5427,13 @@ export type SourceOperationalStateResponse = {
 };
 
 export type SourceResponse = {
+  authority?: SourceAuthority;
   canonical_url: string;
   published_at?: string | null;
   publisher: string;
   retrieved_at: string;
   snapshot_id?: string | null;
+  source_age_seconds?: number | null;
   source_id: string;
   title: string;
   updated_at?: string | null;

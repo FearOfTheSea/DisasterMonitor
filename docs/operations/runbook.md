@@ -127,7 +127,12 @@ proof that an incident ended or did not occur.
 
 ## Freshness and degraded operation
 
-The operations panel and API show `fresh`, `stale`, `unavailable`, or `never_ingested`.
+The operations panel and API show the evidence state (`fresh`, `stale`,
+`unavailable`, or `never_ingested`) and the operational health state (`healthy`,
+`stale`, `degraded`, `unavailable`, or `misconfigured`). Health state is not a
+statement that a hazard is absent. Each record also exposes source publication age,
+retrieval lag, parse/admission failure counts, truncation, hazard, and durable
+projection age when available.
 
 Provider outage is not folded into API availability.
 
@@ -163,14 +168,31 @@ action authorization and does not store model chain-of-thought.
 
 ## Backup and restore
 
-Create a consistent database and blob backup:
+Create one checksummed database-and-blob archive from the repository defaults:
 
 ```powershell
 .\scripts\backup_operational.ps1
 ```
 
-The script pauses writers, creates both archives, copies them under ignored
-`data/backups/`, records SHA-256 checksums, and restarts services.
+The command stops the API, scheduler, and worker, then includes operational blobs,
+event-media blobs, Ground artifacts, and a PostgreSQL custom dump in one checksummed
+archive. It validates the archive before restarting the writers.
+
+On POSIX hosts the equivalent is:
+
+```sh
+./scripts/backup_operational.sh
+```
+
+For an explicitly development-only filesystem archive, pass
+`--filesystem-only` to `scripts/operational_backup.py backup`.
+
+Validate an archive without restoring it:
+
+```sh
+uv run --project apps/api python scripts/operational_backup.py validate \
+  --archive data/backups/operational-YYYYMMDD-HHMMSS.tar.gz
+```
 
 Copy the set to owner-approved encrypted storage.
 
@@ -178,9 +200,12 @@ Restore deliberately replaces operational state:
 
 ```powershell
 .\scripts\restore_operational.ps1 `
-  -BackupName 20260813-120000 `
+  -Archive data\backups\operational-20260914-120000.tar.gz `
   -ConfirmRestore REPLACE_OPERATIONAL_STATE
 ```
+
+On POSIX hosts, pass the archive and exact confirmation to
+`./scripts/restore_operational.sh`.
 
 Exercise restore in a disposable environment before relying on a release.
 

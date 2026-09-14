@@ -14,9 +14,31 @@ class IngestJobQueue(Protocol):
 
     async def enqueue(self, job: IngestJob) -> bool: ...
 
-    async def claim(self, worker_id: str, *, now: datetime) -> IngestJob | None: ...
+    async def claim(
+        self,
+        worker_id: str,
+        *,
+        now: datetime,
+        lease_seconds: int = 300,
+    ) -> IngestJob | None: ...
 
-    async def complete(self, job_id: str, *, completed_at: datetime) -> None: ...
+    async def renew(
+        self,
+        job_id: str,
+        *,
+        worker_id: str,
+        fencing_token: int,
+        now: datetime,
+        lease_seconds: int = 300,
+    ) -> bool: ...
+
+    async def complete(
+        self,
+        job_id: str,
+        *,
+        completed_at: datetime,
+        fencing_token: int | None = None,
+    ) -> None: ...
 
     async def fail(
         self,
@@ -25,6 +47,8 @@ class IngestJobQueue(Protocol):
         failed_at: datetime,
         error_code: str,
         retry_at: datetime | None,
+        fencing_token: int | None = None,
+        error_detail: str | None = None,
     ) -> IngestJobStatus: ...
 
 

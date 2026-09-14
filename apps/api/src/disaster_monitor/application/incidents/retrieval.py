@@ -358,6 +358,7 @@ class IncidentRetrieval:
                     attempted_at=now,
                     outcome=ProviderAttemptOutcome.FAILED,
                     reason_code="configuration_rejected",
+                    hazard=query.disaster.value,
                 ),
             )
         try:
@@ -392,6 +393,8 @@ class IncidentRetrieval:
                     http_status=(
                         int(http_status) if isinstance(http_status, int) else None
                     ),
+                    parse_failure=reason_code in {"invalid_payload", "schema_changed"},
+                    hazard=query.disaster.value,
                 ),
             )
 
@@ -400,6 +403,7 @@ class IncidentRetrieval:
         warnings: list[str] = []
         degraded = False
         retryable = False
+        admission_failure = False
         for record in batch.records:
             try:
                 event = validate_worldwide_event_evidence(
@@ -414,6 +418,7 @@ class IncidentRetrieval:
                     "excluded."
                 )
                 degraded = True
+                admission_failure = True
                 continue
             normalized = incident(event, registration.tier, self._country_resolver)
             if event.observation_kind is ObservationKind.ACQUISITION:
@@ -461,6 +466,25 @@ class IncidentRetrieval:
                 if batch.records_seen is not None
                 else len(batch.records)
             ),
+            published_at=max(
+                (
+                    source_time
+                    for record in batch.records
+                    for source_time in (
+                        record.source.updated_at,
+                        record.source.published_at,
+                    )
+                    if source_time is not None
+                ),
+                default=None,
+            ),
+            parse_failure=any(
+                issue.reason_code in {"invalid_payload", "schema_changed"}
+                for issue in material_issues
+            ),
+            admission_failure=admission_failure,
+            truncated=not scan_complete,
+            hazard=query.disaster.value,
         )
         return (
             tuple(accepted),

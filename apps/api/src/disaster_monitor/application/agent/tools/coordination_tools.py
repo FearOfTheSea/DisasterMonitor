@@ -244,6 +244,8 @@ def compose_report(
         warnings=tuple(dict.fromkeys((*packet.warnings, *gaps))),
         sections=tuple(sections),
         partial=packet.partial or bool(gaps),
+        claims=packet.claims,
+        timeline=packet.timeline,
     )
 
 

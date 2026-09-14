@@ -41,6 +41,8 @@ export type IncidentSource = {
   published_at: string | null;
   updated_at: string | null;
   retrieved_at: string;
+  authority?: IncidentSourceAuthority;
+  source_age_seconds?: number | null;
   snapshot_id: string | null;
 };
 

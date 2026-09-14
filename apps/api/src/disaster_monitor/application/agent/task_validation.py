@@ -36,6 +36,7 @@ from disaster_monitor.application.disaster import (
 from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
     has_explicit_date,
+    location_hint_from_text,
 )
 from disaster_monitor.application.investigation.disaster_query_policy import (
     default_disaster_query_policies,
@@ -155,6 +156,7 @@ def _validate_two_hazard_task(
             response_language_explicit=draft.response_language_explicit,
         )
     country = countries[0]
+    location_hint = location_hint_from_text(question, country_catalog)
     targets = tuple(
         InvestigationTarget(
             target_id=(
@@ -171,6 +173,7 @@ def _validate_two_hazard_task(
                 event_discriminators=default_disaster_query_policies()
                 .for_disaster(disaster)
                 .discriminators(question),
+                location_hint=location_hint,
             ),
             information_needs=needs,
             output_modalities=modalities,

@@ -12,11 +12,13 @@ from disaster_monitor.application.ground_imagery.models import (
 from disaster_monitor.application.ground_imagery.select_observations import (
     GroundImagerySelection,
 )
+from disaster_monitor.application.ports.ground_imagery.jobs import GroundImageryJob
 from disaster_monitor.domain.imagery.observations import Observation, Sensor
 from disaster_monitor.domain.imagery.regions import ImageryRegionVersion, RegionEvidence
 from disaster_monitor.presentation.http.ground_imagery_schemas import (
     GroundImageryArtifactResponse,
     GroundImageryGridResponse,
+    GroundImageryJobResponse,
     GroundImageryObservationPageResponse,
     GroundImageryObservationResponse,
     GroundImageryQualityResponse,
@@ -32,6 +34,7 @@ from disaster_monitor.presentation.http.ground_imagery_schemas import (
 
 def ground_imagery_request_response(
     request: GroundImageryRequest,
+    jobs: tuple[GroundImageryJob, ...] = (),
 ) -> GroundImageryRequestResponse:
     region_resolution = request.region_resolution
     region = region_resolution.region
@@ -117,6 +120,7 @@ def ground_imagery_request_response(
         watch_enabled=request.watch_enabled,
         watch_interval_seconds=request.watch_interval_seconds,
         artifacts=[_artifact_response(item) for item in request.artifacts],
+        jobs=[_job_response(item) for item in jobs],
     )
 
 
@@ -244,4 +248,22 @@ def _artifact_response(
             resolution_label=grid.resolution_label,
         ),
         created_at=artifact.created_at,
+    )
+
+
+def _job_response(job: GroundImageryJob) -> GroundImageryJobResponse:
+    return GroundImageryJobResponse(
+        job_id=job.job_id,
+        request_version=job.request_version,
+        sensor=job.sensor,
+        role=job.role.value,
+        status=job.status.value,
+        attempt=job.attempt,
+        max_attempts=job.max_attempts,
+        next_attempt_at=job.next_attempt_at,
+        claimed_at=job.claimed_at,
+        lease_expires_at=job.lease_expires_at,
+        fencing_token=job.fencing_token,
+        error_code=job.error_code,
+        diagnostic=job.diagnostic,
     )

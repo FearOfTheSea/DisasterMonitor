@@ -61,6 +61,9 @@ def _cyclone_map_layer_response(layer: CycloneMapLayer) -> CycloneMapLayerRespon
 
 
 def _source_response(source: SourceReference) -> SourceResponse:
+    source_age_seconds = max(
+        0.0, (source.retrieved_at - source.effective_at).total_seconds()
+    )
     return SourceResponse(
         source_id=source.source_id,
         publisher=source.publisher,
@@ -69,5 +72,7 @@ def _source_response(source: SourceReference) -> SourceResponse:
         published_at=source.published_at,
         updated_at=source.updated_at,
         retrieved_at=source.retrieved_at,
+        authority=source.authority,
+        source_age_seconds=source_age_seconds,
         snapshot_id=source.snapshot_id,
     )

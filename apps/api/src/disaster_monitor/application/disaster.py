@@ -1,9 +1,13 @@
 """Application workflow types for source-backed disaster reporting."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 
+from disaster_monitor.application.evidence.inspection import (
+    EvidenceClaimInspection,
+    EvidenceTimelineEntry,
+)
 from disaster_monitor.application.ports.provider_failures import ProviderFailureReason
 from disaster_monitor.domain.disaster import (
     Country,
@@ -91,6 +95,7 @@ class DisasterQuery:
     longitude: float | None = None
     event_discriminators: tuple[EventDiscriminator, ...] = ()
     selection_intent: WorldwideSelectionIntent = WorldwideSelectionIntent.LATEST
+    location_hint: str | None = None
 
     def discriminator(self, kind: str) -> str | None:
         for item in self.event_discriminators:
@@ -107,6 +112,31 @@ class DisasterQuery:
     def country_code(self) -> str:
         """Return the canonical ISO alpha-3 code."""
         return self.country.alpha3_code
+
+
+def retrieval_time_bounds(
+    query: DisasterQuery,
+    *,
+    now: datetime,
+    end_margin: timedelta = timedelta(),
+) -> tuple[datetime, datetime]:
+    """Return bounded provider/filter times, widening only named regional dates.
+
+    Country catalogs carry one deterministic default timezone, while a named place
+    can sit in another timezone.  A bounded tolerance prevents a valid event from
+    disappearing at a country-wide timezone boundary without changing the user's
+    explicit date fields or admitting an unbounded search.
+    """
+    start = query.date_from or now - timedelta(days=query.time_window_days)
+    end = (query.date_to or now) + end_margin
+    if (
+        query.location_hint
+        and query.date_from is not None
+        and query.date_to is not None
+    ):
+        tolerance = timedelta(hours=14)
+        return start - tolerance, end + tolerance
+    return start, end
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +214,8 @@ class EvidencePacket:
     partial: bool = True
     world_state: EvidenceWorldState | None = None
     supplemental_geometry: tuple[CycloneMapLayer, ...] = ()
+    claims: tuple[EvidenceClaimInspection, ...] = ()
+    timeline: tuple[EvidenceTimelineEntry, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,3 +258,5 @@ class DisasterReport:
     capability_gaps: tuple[str, ...] = ()
     investigation_actions: tuple[str, ...] = ()
     termination_reason: str | None = None
+    claims: tuple[EvidenceClaimInspection, ...] = ()
+    timeline: tuple[EvidenceTimelineEntry, ...] = ()

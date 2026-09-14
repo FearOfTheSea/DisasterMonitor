@@ -118,6 +118,9 @@ from disaster_monitor.infrastructure.ground_imagery.geometry import (
 from disaster_monitor.infrastructure.ground_imagery.memory_repository import (
     InMemoryGroundImageryRequestStore,
 )
+from disaster_monitor.infrastructure.ground_imagery.postgres_jobs import (
+    PostgresGroundImageryJobQueue,
+)
 from disaster_monitor.infrastructure.ground_imagery.postgres_repository import (
     PostgresGroundImageryRequestStore,
 )
@@ -126,7 +129,7 @@ from disaster_monitor.infrastructure.ground_imagery.raster_artifacts import (
     RasterioStoredArtifactTileRenderer,
 )
 from disaster_monitor.infrastructure.ground_imagery.sentinel_hub import (
-    SentinelHubProcessRenderer,
+    CopernicusDataSpaceProcessRenderer,
 )
 from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAdapter
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
@@ -158,16 +161,20 @@ from disaster_monitor.infrastructure.news.web_source_registry import (
 from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
     FilesystemBlobStore,
 )
+from disaster_monitor.infrastructure.operations.memory_provider_budget import (
+    InMemoryProviderBudgetLedger,
+)
 from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
+)
+from disaster_monitor.infrastructure.operations.postgres_provider_budget import (
+    PostgresProviderBudgetLedger,
 )
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
 )
 from disaster_monitor.infrastructure.satellite_imagery.providers import (
     NasaGibsImageryProvider,
-    PlanetImageryProvider,
-    SentinelHubImageryProvider,
 )
 from disaster_monitor.infrastructure.sources.static_source_catalog import (
     StaticSourceCatalog,
@@ -225,10 +232,18 @@ def build_operational_services(
         configured_repository,
         FilesystemBlobStore(settings.operational_blob_root),
     )
+    budget_ledger = (
+        PostgresProviderBudgetLedger(
+            settings.operational_database_url.get_secret_value()
+        )
+        if settings.operational_database_url is not None
+        else InMemoryProviderBudgetLedger()
+    )
     return OperationalServices(
         configured_repository,
         persistence,
         OperationalEvidenceRecorder(configured_repository),
+        budget_ledger,
     )
 
 
@@ -367,35 +382,15 @@ def build_visual_analyzer(settings: Settings) -> VisualAnalyzer:
 
 
 def build_satellite_imagery_service(settings: Settings) -> SatelliteImageryService:
-    """Construct the direct GIBS catalog and fixed protected tile adapters."""
-    sentinel_instance_id = (
-        settings.copernicus_sentinel_hub_instance_id.get_secret_value()
-        if settings.copernicus_sentinel_hub_instance_id is not None
-        else None
-    )
-    planet_api_key = (
-        settings.planet_api_key.get_secret_value()
-        if settings.planet_api_key is not None
-        else None
-    )
+    """Construct the public NASA GIBS map path.
 
-    return SatelliteImageryService(
-        (
-            NasaGibsImageryProvider(),
-            SentinelHubImageryProvider(
-                instance_id=sentinel_instance_id,
-                layer_id=settings.copernicus_sentinel_hub_layer_id,
-                timeout_seconds=settings.disaster_provider_timeout_seconds,
-                maximum_response_bytes=(settings.disaster_provider_max_response_bytes),
-            ),
-            PlanetImageryProvider(
-                api_key=planet_api_key,
-                mosaic_name=settings.planet_mosaic_name,
-                timeout_seconds=settings.disaster_provider_timeout_seconds,
-                maximum_response_bytes=(settings.disaster_provider_max_response_bytes),
-            ),
-        )
-    )
+    Event-scoped Copernicus Data Space products are deliberately handled by
+    Ground view, where the selected product, recipe, checksum, and retention
+    policy are persisted. The general map catalog has no commercial imagery
+    dependency or credential-bearing tile proxy.
+    """
+    del settings
+    return SatelliteImageryService((NasaGibsImageryProvider(),))
 
 
 def build_ground_imagery_service(
@@ -429,7 +424,7 @@ def build_ground_imagery_service(
         else None
     )
     renderer = (
-        SentinelHubProcessRenderer(
+        CopernicusDataSpaceProcessRenderer(
             client_id=client_id,
             client_secret=client_secret,
             process_url=settings.cdse_process_url,
@@ -440,6 +435,7 @@ def build_ground_imagery_service(
         if client_id and client_secret
         else None
     )
+    job_queue = PostgresGroundImageryJobQueue(dsn) if dsn else None
     return GroundImageryService(
         ActiveIncidentImageryContextReader(active_incidents),
         GroundImageryRegionResolver(
@@ -460,6 +456,7 @@ def build_ground_imagery_service(
         artifact_store=artifact_store,
         tile_renderer=RasterioStoredArtifactTileRenderer(artifact_store),
         enabled=settings.ground_imagery_enabled,
+        job_queue=job_queue,
     )
 
 

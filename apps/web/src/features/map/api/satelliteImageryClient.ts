@@ -1,11 +1,5 @@
-import type {
-  SatelliteImagerySource,
-  SatelliteSourceId,
-} from '@/features/map/model/satelliteImagery';
-import {
-  sourceById,
-  validObservationTime,
-} from '@/features/map/model/satelliteImagery';
+import type { SatelliteSourceId } from '@/features/map/model/satelliteImagery';
+import { sourceById } from '@/features/map/model/satelliteImagery';
 import { API_BASE_URL } from '@/shared/config/runtime';
 
 export type SatelliteSourceAvailability = {
@@ -34,26 +28,6 @@ export async function fetchSatelliteImageryCatalog(
     }
     return { sourceId: source.id, available: item.available };
   });
-}
-
-export function buildProtectedSatelliteTileUrl(
-  source: SatelliteImagerySource,
-  observationTime: string | undefined,
-  apiBaseUrl = API_BASE_URL,
-): string {
-  if (source.access.kind !== 'disaster-monitor-api') {
-    throw new Error('Public GIBS imagery does not use the protected tile API.');
-  }
-  if (!validObservationTime(source, observationTime)) {
-    throw new Error('The protected imagery observation time is invalid.');
-  }
-  const base = apiBaseUrl.replace(/\/$/, '');
-  const path =
-    `${base}/satellite-imagery/tiles/${encodeURIComponent(source.providerId)}/` +
-    `${encodeURIComponent(source.id)}/{z}/{x}/{y}`;
-  return observationTime
-    ? `${path}?${new URLSearchParams({ time: observationTime })}`
-    : path;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

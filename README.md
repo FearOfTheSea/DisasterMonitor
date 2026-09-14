@@ -25,22 +25,7 @@ cd apps/web && npm run dev
 ### Optional protected satellite imagery
 
 NASA VIIRS, MODIS, GOES, and Himawari imagery loads directly from the public NASA
-GIBS Web Mercator service. Copernicus and Planet tiles pass through the API.
-
-Sentinel-2: configure a Sentinel Hub WMS instance with the named true
-color layer:
-
-```dotenv
-COPERNICUS_SENTINEL_HUB_INSTANCE_ID=your-private-instance-id
-COPERNICUS_SENTINEL_HUB_LAYER_ID=TRUE_COLOR
-```
-
-Planet: configure one mosaic that the account can access:
-
-```dotenv
-PLANET_API_KEY=your-private-api-key
-PLANET_MOSAIC_NAME=your-accessible-mosaic-name
-```
+GIBS Web Mercator service. The API does not proxy commercial imagery tiles.
 
 The separate event-focused Ground view searches real Sentinel-1 and Sentinel-2
 acquisitions around a selected incident through the public CDSE STAC API. It can
@@ -53,9 +38,10 @@ CDSE_CLIENT_SECRET=your-cdse-client-secret
 ```
 
 Ground view stores validated artifacts under `GROUND_IMAGERY_STORAGE_ROOT` (20 GiB
-by default). It is regional observational context, not a building-level damage or
-passability assessment. See [docs/ground-imagery.md](docs/ground-imagery.md) for
-the implemented boundary and current release gaps.
+by default). CDSE OAuth is a documented free-account entitlement, not a paid
+imagery dependency. It is regional observational context, not a building-level
+damage or passability assessment. See [docs/ground-imagery.md](docs/ground-imagery.md)
+and [docs/provider-rights.md](docs/provider-rights.md) for the boundary and rights.
 
 ## Run with Compose
 

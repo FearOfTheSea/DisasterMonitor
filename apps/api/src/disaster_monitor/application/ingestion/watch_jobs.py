@@ -104,7 +104,9 @@ class IncidentWatchWorker:
                     self._repository, job, failed_at=now, error=error
                 )
             else:
-                await self._repository.complete(job.job_id, completed_at=now)
+                await self._repository.complete(
+                    job.job_id, completed_at=now, fencing_token=job.fencing_token
+                )
             return job
         news_refresher = self._news_refreshers.get(job.source_id)
         if news_refresher is not None:
@@ -115,7 +117,9 @@ class IncidentWatchWorker:
                     self._repository, job, failed_at=now, error=error
                 )
             else:
-                await self._repository.complete(job.job_id, completed_at=now)
+                await self._repository.complete(
+                    job.job_id, completed_at=now, fencing_token=job.fencing_token
+                )
             return job
         if job.source_id != IncidentWatchScheduler.source_id:
             await record_terminal_failure(
@@ -128,7 +132,9 @@ class IncidentWatchWorker:
         try:
             await self._refresher.execute(job.canonical_request_identity)
         except IncidentWatchRefreshNotFoundError:
-            await self._repository.complete(job.job_id, completed_at=now)
+            await self._repository.complete(
+                job.job_id, completed_at=now, fencing_token=job.fencing_token
+            )
         except IncidentWatchRefreshRetryableError as error:
             await record_execution_failure(
                 self._repository, job, failed_at=now, error=error
@@ -138,5 +144,7 @@ class IncidentWatchWorker:
                 self._repository, job, failed_at=now, error=error
             )
         else:
-            await self._repository.complete(job.job_id, completed_at=now)
+            await self._repository.complete(
+                job.job_id, completed_at=now, fencing_token=job.fencing_token
+            )
         return job

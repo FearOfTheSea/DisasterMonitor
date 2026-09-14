@@ -25,6 +25,7 @@ from disaster_monitor.application.disaster import (
 from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
     has_explicit_date,
+    location_hint_from_mentions,
 )
 from disaster_monitor.application.investigation.disaster_query_policy import (
     default_disaster_query_policies,
@@ -237,6 +238,11 @@ def _validate_canonical_task(
         )
 
     assert country is not None
+    location_hint = (
+        matched_query.location_hint
+        if matched_query is not None
+        else location_hint_from_mentions(draft.place_mentions, country_catalog)
+    )
     query = DisasterQuery(
         disaster=draft.disaster,
         country=country,
@@ -244,6 +250,7 @@ def _validate_canonical_task(
         focus=tuple(item.value for item in needs),
         date_from=date_from,
         date_to=date_to,
+        location_hint=location_hint,
         event_discriminators=(
             matched_query.event_discriminators if matched_query is not None else ()
         ),
@@ -351,10 +358,11 @@ def _resolve_canonical_country(
             country = matches[0]
     if country is None:
         return None
-    if (
-        draft.country_name
-        and draft.country_name.casefold() != country.canonical_name.casefold()
-    ):
+    accepted_names = {
+        country.canonical_name.casefold(),
+        *(alias.casefold() for alias in country.aliases),
+    }
+    if draft.country_name and draft.country_name.casefold() not in accepted_names:
         return None
     if draft.country_code and country.alpha3_code != draft.country_code.upper():
         return None

@@ -17,6 +17,15 @@ class InMemoryGroundImageryRequestStore:
     async def get_request(self, request_id: str) -> GroundImageryRequest | None:
         return self.requests.get(request_id)
 
+    async def list_requests(self) -> tuple[GroundImageryRequest, ...]:
+        return tuple(
+            sorted(
+                self.requests.values(),
+                key=lambda item: (item.updated_at, item.request_id),
+                reverse=True,
+            )
+        )
+
     async def get_request_for_selection(
         self, selection_id: str
     ) -> GroundImageryRequest | None:

@@ -139,6 +139,17 @@ export function SourceCatalog({ onClose }: SourceCatalogProps) {
                   <dd>{source.freshness_semantics}</dd>
                 </div>
                 <div>
+                  <dt>Access / rights</dt>
+                  <dd>
+                    {source.access_model ? label(source.access_model) : 'Not recorded'}
+                    {source.license_name ? ` · ${source.license_name}` : ''}
+                    {source.rights_id ? ` · ${source.rights_id}` : ''}
+                    {source.rights_reviewed_at
+                      ? ` · reviewed ${source.rights_reviewed_at}`
+                      : ''}
+                  </dd>
+                </div>
+                <div>
                   <dt>Stale threshold</dt>
                   <dd>
                     {source.stale_threshold_seconds === null

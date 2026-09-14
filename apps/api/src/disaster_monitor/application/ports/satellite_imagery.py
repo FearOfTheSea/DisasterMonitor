@@ -5,6 +5,7 @@ from typing import Literal, Protocol
 
 SatelliteTemporalMode = Literal["daily", "subdaily", "fixed"]
 SatelliteAccessMode = Literal["direct_gibs", "api"]
+SatelliteRightsAccessModel = Literal["public", "free_account", "self_hosted", "paid"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +22,9 @@ class SatelliteImageryProduct:
     access_mode: SatelliteAccessMode
     available: bool
     temporal_step_minutes: int | None = None
+    rights_id: str = "nasa-gibs"
+    access_model: SatelliteRightsAccessModel = "public"
+    license_name: str = ""
 
 
 @dataclass(frozen=True, slots=True)

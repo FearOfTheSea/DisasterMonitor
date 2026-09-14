@@ -24,10 +24,12 @@ import {
   type GroundImageryPanelRequest,
 } from '@/features/imagery/model/groundImagery';
 import type {
+  GroundImageryJobResponse,
   GroundImagerySelectionResponse,
   Sensor,
 } from '@/shared/api/generated/assistant';
 import { API_BASE_URL } from '@/shared/config/runtime';
+import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 
 type GroundImageryPanelProps = {
   incidentId: string;
@@ -292,6 +294,28 @@ export function GroundImageryPanel({
               ))}
             </section>
 
+            {request.jobs && request.jobs.length > 0 ? (
+              <section
+                className="ground-imagery-section"
+                aria-label="Ground preparation jobs"
+              >
+                <div className="ground-imagery-section-heading">
+                  <div>
+                    <h3>Preparation jobs</h3>
+                    <p>Leased work, retries, and diagnostics remain visible.</p>
+                  </div>
+                  <span className="ground-imagery-status is-neutral">
+                    {request.jobs.length} queued or retained
+                  </span>
+                </div>
+                <div className="ground-imagery-job-list">
+                  {request.jobs.map((job) => (
+                    <GroundPreparationJob key={job.job_id} job={job} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             <section className="ground-imagery-actions">
               <button type="button" onClick={handleRefresh} disabled={Boolean(action)}>
                 {action === 'refresh' ? 'Refreshing…' : 'Refresh catalog'}
@@ -405,6 +429,10 @@ function SelectionOutcome({
             Sensed {formatImageryTime(selection.observation.captured_start)} ·{' '}
             {selection.observation.product_id}
           </p>
+          <DataAgeBadge
+            kind="imagery_capture"
+            timestamp={selection.observation.captured_start}
+          />
           {selection.observation.quality ? (
             <p className="ground-imagery-quality">
               Core usable{' '}
@@ -448,5 +476,29 @@ function SelectionOutcome({
       ) : null}
       <p className="ground-imagery-explanation">{selection.explanation}</p>
     </div>
+  );
+}
+
+function GroundPreparationJob({ job }: { job: GroundImageryJobResponse }) {
+  return (
+    <article className="ground-imagery-job">
+      <div className="ground-imagery-outcome-heading">
+        <strong>
+          {job.sensor} · {labelImageryRole(job.role)}
+        </strong>
+        <span className={`ground-imagery-status ${statusClass(job.status)}`}>
+          {labelImageryState(job.status)}
+        </span>
+      </div>
+      <small>
+        Attempt {job.attempt}/{job.max_attempts} · version {job.request_version}
+      </small>
+      <small>Next attempt: {formatImageryTime(job.next_attempt_at)}</small>
+      {job.lease_expires_at ? (
+        <small>Lease expires: {formatImageryTime(job.lease_expires_at)}</small>
+      ) : null}
+      {job.error_code ? <small>Error: {job.error_code}</small> : null}
+      {job.diagnostic ? <p className="ground-imagery-note">{job.diagnostic}</p> : null}
+    </article>
   );
 }

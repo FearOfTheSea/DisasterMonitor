@@ -60,6 +60,21 @@ class PostgresGroundImageryRequestStore(GroundImageryRequestStore):
                 "Stored ground-imagery request metadata is invalid."
             ) from error
 
+    async def list_requests(self) -> tuple[GroundImageryRequest, ...]:
+        async with await self._connection() as connection:
+            async with connection.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    "SELECT payload FROM imagery_requests "
+                    "ORDER BY updated_at DESC, request_id DESC"
+                )
+                rows = await cursor.fetchall()
+        try:
+            return tuple(request_from_document(row["payload"]) for row in rows)
+        except (TypeError, ValueError, KeyError) as error:
+            raise GroundImageryPersistenceError(
+                "Stored ground-imagery request metadata is invalid."
+            ) from error
+
     async def get_request_for_selection(
         self, selection_id_value: str
     ) -> GroundImageryRequest | None:
@@ -120,17 +135,107 @@ class PostgresGroundImageryRequestStore(GroundImageryRequestStore):
                 )
                 if await cursor.fetchone() is None:
                     return
+                document = request_to_document(request)
+                region = request.region_resolution.region
+                if region is not None:
+                    region_document = document["region_resolution"]["region"]
+                    await cursor.execute(
+                        """
+                        INSERT INTO imagery_regions(
+                            request_id, region_version, region_id, geometry_hash,
+                            association, core_geometry, inspection_geometry, payload,
+                            created_at
+                        ) VALUES (%s,%s,%s,%s,%s,
+                                  ST_SetSRID(ST_GeomFromGeoJSON(%s),4326),
+                                  ST_SetSRID(ST_GeomFromGeoJSON(%s),4326),%s::jsonb,%s)
+                        ON CONFLICT (request_id, region_version) DO UPDATE SET
+                            region_id=EXCLUDED.region_id,
+                            geometry_hash=EXCLUDED.geometry_hash,
+                            association=EXCLUDED.association,
+                            core_geometry=EXCLUDED.core_geometry,
+                            inspection_geometry=EXCLUDED.inspection_geometry,
+                            payload=EXCLUDED.payload
+                        """,
+                        (
+                            request.request_id,
+                            region.version,
+                            region.region_id,
+                            region.geometry_hash,
+                            region.association.value,
+                            json.dumps(region_document["core"], separators=(",", ":")),
+                            json.dumps(
+                                region_document["inspection"], separators=(",", ":")
+                            ),
+                            json.dumps(region_document, separators=(",", ":")),
+                            request.created_at,
+                        ),
+                    )
+                await cursor.execute(
+                    """
+                    INSERT INTO imagery_time_plans(
+                        request_id, request_version, policy_version, payload, created_at
+                    ) VALUES (%s,%s,%s,%s::jsonb,%s)
+                    ON CONFLICT (request_id, request_version) DO UPDATE SET
+                        policy_version=EXCLUDED.policy_version,
+                        payload=EXCLUDED.payload
+                    """,
+                    (
+                        request.request_id,
+                        request.request_version,
+                        request.temporal_plan.policy_version,
+                        json.dumps(document["temporal_plan"], separators=(",", ":")),
+                        request.created_at,
+                    ),
+                )
+                for observation, observation_document in zip(
+                    request.candidates, document["candidates"], strict=True
+                ):
+                    await cursor.execute(
+                        """
+                        INSERT INTO imagery_observations(
+                            request_id, request_version, observation_id, sensor,
+                            provider, product_id, revision, capture_start, capture_end,
+                            footprint, payload, created_at
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                                  ST_SetSRID(ST_GeomFromGeoJSON(%s),4326),%s::jsonb,%s)
+                        ON CONFLICT (request_id, request_version, observation_id)
+                        DO UPDATE SET
+                            provider=EXCLUDED.provider,
+                            product_id=EXCLUDED.product_id,
+                            revision=EXCLUDED.revision,
+                            capture_start=EXCLUDED.capture_start,
+                            capture_end=EXCLUDED.capture_end,
+                            footprint=EXCLUDED.footprint,
+                            payload=EXCLUDED.payload
+                        """,
+                        (
+                            request.request_id,
+                            request.request_version,
+                            observation.observation_id,
+                            observation.sensor.value,
+                            observation.identity.provider,
+                            observation.identity.product_id,
+                            observation.identity.revision,
+                            observation.capture.start,
+                            observation.capture.end,
+                            json.dumps(
+                                observation_document["footprint"], separators=(",", ":")
+                            ),
+                            json.dumps(observation_document, separators=(",", ":")),
+                            request.created_at,
+                        ),
+                    )
                 if request.selection is not None:
                     for sensor in request.requested_sensors:
                         for outcome in request.selection.for_sensor(sensor).selections:
-                            observation = outcome.observation
-                            if observation is None:
+                            selected_observation = outcome.observation
+                            if selected_observation is None:
                                 continue
                             selection_key = stable_selection_id(
                                 request.request_id,
                                 sensor.value,
                                 outcome.role.value,
-                                observation.identity.stable_key,
+                                selected_observation.identity.stable_key,
                             )
                             await cursor.execute(
                                 """
@@ -155,7 +260,7 @@ class PostgresGroundImageryRequestStore(GroundImageryRequestStore):
                                     request.request_version,
                                     sensor.value,
                                     outcome.role.value,
-                                    observation.observation_id,
+                                    selected_observation.observation_id,
                                     False,
                                     json.dumps(
                                         {
@@ -165,7 +270,7 @@ class PostgresGroundImageryRequestStore(GroundImageryRequestStore):
                                             "sensor": sensor.value,
                                             "role": outcome.role.value,
                                             "observation_id": (
-                                                observation.observation_id
+                                                selected_observation.observation_id
                                             ),
                                             "reason": outcome.reason.value,
                                         },
@@ -173,9 +278,55 @@ class PostgresGroundImageryRequestStore(GroundImageryRequestStore):
                                     ),
                                 ),
                             )
+                for artifact in request.artifacts:
+                    await cursor.execute(
+                        """
+                        INSERT INTO imagery_artifacts(
+                            artifact_id, request_id, selection_id, storage_key,
+                            content_type, sha256, byte_count, grid, manifest,
+                            created_at
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s)
+                        ON CONFLICT (artifact_id) DO NOTHING
+                        """,
+                        (
+                            artifact.artifact_id,
+                            request.request_id,
+                            artifact.selection_id,
+                            artifact.storage_key,
+                            artifact.content_type,
+                            artifact.sha256,
+                            artifact.byte_count,
+                            json.dumps(_grid_document(artifact), separators=(",", ":")),
+                            json.dumps(
+                                {
+                                    "source_product_ids": list(
+                                        artifact.source_product_ids
+                                    ),
+                                    "request_version": request.request_version,
+                                },
+                                separators=(",", ":"),
+                            ),
+                            artifact.created_at,
+                        ),
+                    )
 
     async def aclose(self) -> None:
         return None
 
     async def _connection(self) -> psycopg.AsyncConnection[Any]:
         return await psycopg.AsyncConnection.connect(self._dsn)
+
+
+def _grid_document(artifact: Any) -> dict[str, Any]:
+    grid = artifact.grid
+    return {
+        "crs": grid.crs,
+        "min_x": grid.min_x,
+        "min_y": grid.min_y,
+        "max_x": grid.max_x,
+        "max_y": grid.max_y,
+        "pixel_size_m": grid.pixel_size_m,
+        "width": grid.width,
+        "height": grid.height,
+        "resolution_label": grid.resolution_label,
+    }

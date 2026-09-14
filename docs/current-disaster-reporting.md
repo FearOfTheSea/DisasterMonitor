@@ -21,6 +21,12 @@ This page describes the bounded current-disaster path. See
 6. Render a deterministic report with source metadata, sections, gaps, warnings,
    and retrieval time.
 
+Named regional place hints are retained separately from canonical country identity.
+For an explicit date paired with a named place, provider acquisition and event
+filtering use a bounded 14-hour timezone tolerance because one country catalog entry
+cannot represent every local timezone. The user's date remains explicit in the
+normalized task, and the selected source event must still match the named place.
+
 The default tool sequence is:
 
 ```text

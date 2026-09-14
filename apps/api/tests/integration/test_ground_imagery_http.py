@@ -8,6 +8,7 @@ import pytest
 from rasterio.io import MemoryFile
 from rasterio.transform import from_bounds
 
+from disaster_monitor.application.ground_imagery.models import GroundImageryRequestInput
 from disaster_monitor.application.ground_imagery.resolve_region import (
     GroundImageryRegionResolver,
 )
@@ -20,6 +21,7 @@ from disaster_monitor.application.ports.ground_imagery.catalog import (
 from disaster_monitor.application.ports.ground_imagery.incidents import (
     IncidentImageryContext,
 )
+from disaster_monitor.application.ports.ground_imagery.jobs import preparation_job
 from disaster_monitor.application.ports.ground_imagery.rendering import (
     RenderedRaster,
     RenderRequest,
@@ -47,6 +49,9 @@ from disaster_monitor.infrastructure.ground_imagery.artifact_store import (
 )
 from disaster_monitor.infrastructure.ground_imagery.geometry import (
     GeodesicGeometryEngine,
+)
+from disaster_monitor.infrastructure.ground_imagery.memory_jobs import (
+    InMemoryGroundImageryJobQueue,
 )
 from disaster_monitor.infrastructure.ground_imagery.memory_repository import (
     InMemoryGroundImageryRequestStore,
@@ -153,7 +158,11 @@ def _observation(sensor: Sensor, product_id: str) -> Observation:
     )
 
 
-def _service(artifact_root: Path | None = None) -> GroundImageryService:
+def _service(
+    artifact_root: Path | None = None,
+    *,
+    job_queue: InMemoryGroundImageryJobQueue | None = None,
+) -> GroundImageryService:
     source = RegionSource(
         source_id="fixture:impact",
         source_kind=RegionSourceKind.MAPPED_IMPACT,
@@ -200,7 +209,50 @@ def _service(artifact_root: Path | None = None) -> GroundImageryService:
             if artifact_store is None
             else RasterioStoredArtifactTileRenderer(artifact_store)
         ),
+        job_queue=job_queue,
     )
+
+
+@pytest.mark.asyncio
+async def test_ground_request_stays_queued_until_all_enqueued_artifacts_exist(
+    tmp_path: Path,
+) -> None:
+    queue = InMemoryGroundImageryJobQueue()
+    service = _service(tmp_path, job_queue=queue)
+    request = await service.create_request(
+        GroundImageryRequestInput(
+            incident_id="incident-1",
+            reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+        )
+    )
+    selected = [
+        (sensor, outcome.role)
+        for sensor in request.requested_sensors
+        for outcome in request.selection.for_sensor(sensor).selections
+        if outcome.observation is not None
+    ]
+    assert len(selected) >= 2
+    jobs = [
+        preparation_job(
+            request_id=request.request_id,
+            request_version=request.request_version,
+            sensor=sensor,
+            role=role,
+            overview=True,
+            output_kind=None,
+            now=request.updated_at,
+        )
+        for sensor, role in selected[:2]
+    ]
+    for job in jobs:
+        await queue.enqueue(job)
+
+    first = await queue.claim("worker", now=request.updated_at)
+    assert first is not None
+    updated = await service.execute_preparation_job(first)
+
+    assert updated.state.value == "queued"
+    assert len(updated.artifacts) == 1
 
 
 @pytest.mark.asyncio

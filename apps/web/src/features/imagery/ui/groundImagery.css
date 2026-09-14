@@ -264,6 +264,39 @@
   gap: 7px;
 }
 
+.ground-imagery-job-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ground-imagery-job {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+}
+
+.ground-imagery-job:has(.is-positive) {
+  border-left-color: var(--success);
+}
+
+.ground-imagery-job:has(.is-warning) {
+  border-left-color: var(--warning-icon);
+}
+
+.ground-imagery-job:has(.is-negative) {
+  border-left-color: var(--danger);
+}
+
+.ground-imagery-job small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
 .ground-imagery-outcome {
   background: var(--surface-soft);
   border-left: 3px solid var(--line-strong);

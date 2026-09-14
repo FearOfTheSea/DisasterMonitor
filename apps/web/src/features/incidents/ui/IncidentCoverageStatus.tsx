@@ -5,6 +5,7 @@ import type {
   DisasterType,
   IncidentCoverageState,
 } from '@/features/incidents/model/activeIncidents';
+import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 
 const DISASTERS: { value: DisasterType; label: string }[] = [
   { value: 'earthquake', label: 'Earthquake' },
@@ -105,6 +106,11 @@ export function IncidentCoverageStatus({
                 {formatTime(snapshot.retrieved_at)}
               </time>
             </p>
+            <DataAgeBadge
+              kind="projection"
+              timestamp={snapshot.retrieved_at}
+              label="Projection snapshot"
+            />
           </div>
           {partial ? <span className="incident-partial">Some gaps</span> : null}
         </div>
@@ -114,10 +120,16 @@ export function IncidentCoverageStatus({
             const sourceRecords = snapshot.incidents.filter(
               (incident) => incident.disaster === definition.value,
             );
-            const timestamps = new Map<string, { label: string; value: string }>();
+            const timestamps = new Map<
+              string,
+              { label: string; value: string; ageSeconds: number | null | undefined }
+            >();
             for (const incident of sourceRecords) {
               const timestamp = sourceTimestamp(incident);
-              timestamps.set(incident.source.source_id, timestamp);
+              timestamps.set(incident.source.source_id, {
+                ...timestamp,
+                ageSeconds: incident.source.source_age_seconds,
+              });
             }
             return (
               <article
@@ -140,9 +152,16 @@ export function IncidentCoverageStatus({
                     : 'No providers reported'}
                 </small>
                 {[...timestamps].map(([sourceId, timestamp]) => (
-                  <small key={sourceId}>
-                    {sourceId} · {timestamp.label}: {formatTime(timestamp.value)}
-                  </small>
+                  <div key={sourceId} className="coverage-source-age">
+                    <small>
+                      {sourceId} · {timestamp.label}: {formatTime(timestamp.value)}
+                    </small>
+                    <DataAgeBadge
+                      kind="source"
+                      timestamp={timestamp.value}
+                      ageSeconds={timestamp.ageSeconds}
+                    />
+                  </div>
                 ))}
               </article>
             );

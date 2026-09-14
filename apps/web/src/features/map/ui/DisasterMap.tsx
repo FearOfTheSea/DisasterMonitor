@@ -17,10 +17,7 @@ import {
   type MapLayerState,
 } from '@/features/map/model/mapLayerState';
 import { MapLayerControls } from '@/features/map/ui/MapLayerControls';
-import {
-  buildProtectedSatelliteTileUrl,
-  fetchSatelliteImageryCatalog,
-} from '@/features/map/api/satelliteImageryClient';
+import { fetchSatelliteImageryCatalog } from '@/features/map/api/satelliteImageryClient';
 import {
   SATELLITE_IMAGERY_SOURCES,
   buildNasaGibsTileUrl,
@@ -179,16 +176,10 @@ export function DisasterMap({
     ) {
       return undefined;
     }
-    const url =
-      selectedSatelliteSource.access.kind === 'direct-gibs'
-        ? buildNasaGibsTileUrl(
-            selectedSatelliteSource.id,
-            requestedObservationTime as string,
-          )
-        : buildProtectedSatelliteTileUrl(
-            selectedSatelliteSource,
-            requestedObservationTime,
-          );
+    const url = buildNasaGibsTileUrl(
+      selectedSatelliteSource.id,
+      requestedObservationTime as string,
+    );
     return {
       sourceId: selectedSatelliteSource.id,
       url,
@@ -308,7 +299,7 @@ export function DisasterMap({
             ? selectedSatelliteSource.provider
             : 'Provider unavailable',
           sourceDetail: `${selectedSatelliteSource.provider}. ${selectedSatelliteSource.attribution}`,
-          freshnessDetail: `Requested observation: ${requestedObservationTime ?? 'configured mosaic period'}. Available observation time is not reported by this client.`,
+          freshnessDetail: `Requested observation: ${requestedObservationTime ?? 'not selected'}. Available observation time is not reported by this client.`,
           attribution: selectedSatelliteSource.attribution,
         },
         'authoritative-weather-alerts': {

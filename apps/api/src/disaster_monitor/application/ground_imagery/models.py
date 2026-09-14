@@ -39,6 +39,13 @@ class GroundImageryRequestState(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class GroundImageryObservationPage:
+    observations: tuple[Observation, ...]
+    next_cursor: str | None
+    total: int
+
+
+@dataclass(frozen=True, slots=True)
 class GroundImageryRequestInput:
     incident_id: str
     reference_time: datetime

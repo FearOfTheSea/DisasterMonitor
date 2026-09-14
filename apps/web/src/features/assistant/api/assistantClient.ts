@@ -166,5 +166,7 @@ export function toAssistantReport(
     multimodal: response.multimodal ?? undefined,
     commonOperationalPicture: response.common_operational_picture ?? undefined,
     mediaGallery: response.media_gallery ?? undefined,
+    claims: response.claims ?? [],
+    timeline: response.timeline ?? [],
   };
 }

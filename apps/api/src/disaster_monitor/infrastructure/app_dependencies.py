@@ -34,6 +34,7 @@ from disaster_monitor.application.ports.operational_state import OperationalRepo
 from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
 )
+from disaster_monitor.application.ports.provider_budget import ProviderBudgetLedger
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
 from disaster_monitor.application.source_catalog import SourceCatalogService
 from disaster_monitor.application.weather_alerts import WeatherAlertsService
@@ -103,4 +104,5 @@ class AppDependencies:
     operator_identity: TrustedOperatorIdentityPolicy
     country_catalog_automation: CountryCatalogUpdateAutomation
     agent_diagnostics: AgentDiagnostics | None
+    provider_budget: ProviderBudgetLedger | None = None
     lifecycle: AppLifecycle = field(default_factory=AppLifecycle)

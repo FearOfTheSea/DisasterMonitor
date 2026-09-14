@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 
@@ -33,5 +34,12 @@ class ImageryArtifactStore(Protocol):
     async def read(self, artifact_id: str) -> tuple[StoredArtifact, bytes] | None: ...
 
     async def delete(self, artifact_id: str) -> None: ...
+
+    async def delete_unreferenced(
+        self,
+        *,
+        referenced_artifact_ids: frozenset[str],
+        older_than: datetime,
+    ) -> tuple[str, ...]: ...
 
     async def aclose(self) -> None: ...

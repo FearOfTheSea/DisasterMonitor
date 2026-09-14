@@ -1,4 +1,4 @@
-"""Authenticated CDSE Sentinel Hub Process adapter.
+"""Authenticated Copernicus Data Space Process adapter.
 
 The adapter is intentionally strict about source identity.  A successful HTTP
 response without a source-product identity is not published as a verified
@@ -50,7 +50,7 @@ class _Token:
     expires_at: float
 
 
-class SentinelHubProcessRenderer(GroundImageryRenderer):
+class CopernicusDataSpaceProcessRenderer(GroundImageryRenderer):
     """Render an already-selected product through the CDSE Process API."""
 
     def __init__(
@@ -82,7 +82,7 @@ class SentinelHubProcessRenderer(GroundImageryRenderer):
     async def render(self, request: RenderRequest) -> RenderedRaster:
         if not self.available:
             raise ProcessRenderingError(
-                "CDSE Sentinel Hub credentials are not configured.",
+                "Copernicus Data Space processing credentials are not configured.",
                 reason_code="credentials_required",
                 retryable=False,
             )
@@ -102,13 +102,13 @@ class SentinelHubProcessRenderer(GroundImageryRenderer):
                 )
             except httpx.TimeoutException as error:
                 raise ProcessRenderingError(
-                    "The Sentinel Hub processing request timed out.",
+                    "The Copernicus Data Space processing request timed out.",
                     reason_code="processing_timeout",
                     retryable=True,
                 ) from error
             except httpx.HTTPError as error:
                 raise ProcessRenderingError(
-                    "The Sentinel Hub processing request failed.",
+                    "The Copernicus Data Space processing request failed.",
                     reason_code="processing_network_error",
                     retryable=True,
                 ) from error
@@ -116,13 +116,13 @@ class SentinelHubProcessRenderer(GroundImageryRenderer):
                 continue
             if response.status_code == 429:
                 raise ProcessRenderingError(
-                    "The Sentinel Hub processing quota deferred this request.",
+                    "The Copernicus Data Space processing quota deferred this request.",
                     reason_code="quota_deferred",
                     retryable=True,
                 )
             if response.status_code in {401, 403}:
                 raise ProcessRenderingError(
-                    "Sentinel Hub credentials cannot access processing.",
+                    "Copernicus Data Space credentials cannot access processing.",
                     reason_code="permission_denied"
                     if response.status_code == 403
                     else "credentials_required",
@@ -130,13 +130,13 @@ class SentinelHubProcessRenderer(GroundImageryRenderer):
                 )
             if response.status_code >= 500:
                 raise ProcessRenderingError(
-                    "Sentinel Hub processing is temporarily unavailable.",
+                    "Copernicus Data Space processing is temporarily unavailable.",
                     reason_code="processing_unavailable",
                     retryable=True,
                 )
             if response.status_code >= 400:
                 raise ProcessRenderingError(
-                    "Sentinel Hub rejected the bounded processing request.",
+                    "Copernicus Data Space rejected the bounded processing request.",
                     reason_code="processing_request_invalid",
                     retryable=False,
                 )
@@ -148,7 +148,7 @@ class SentinelHubProcessRenderer(GroundImageryRenderer):
             )
             if media_type not in _RASTER_TYPES:
                 raise ProcessRenderingError(
-                    "Sentinel Hub returned a non-raster response.",
+                    "Copernicus Data Space returned a non-raster response.",
                     reason_code="unexpected_content_type",
                     retryable=False,
                 )
@@ -161,7 +161,8 @@ class SentinelHubProcessRenderer(GroundImageryRenderer):
             source_ids = _response_source_ids(response)
             if source_ids != (request.observation.identity.product_id,):
                 raise ProcessRenderingError(
-                    "Sentinel Hub did not prove the selected source-product identity.",
+                    "Copernicus Data Space did not prove the selected "
+                    "source-product identity.",
                     reason_code="source_identity_unverified",
                     retryable=False,
                 )
@@ -175,7 +176,7 @@ class SentinelHubProcessRenderer(GroundImageryRenderer):
                 ),
             )
         raise ProcessRenderingError(
-            "Sentinel Hub token renewal did not authorize processing.",
+            "Copernicus Data Space token renewal did not authorize processing.",
             reason_code="credentials_required",
             retryable=False,
         )

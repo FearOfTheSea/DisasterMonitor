@@ -3,6 +3,7 @@ import type {
   CountryCatalogStatus,
   EvidenceSnapshot,
   OperatorReviewResult,
+  ProviderBudget,
   ProviderFreshness,
 } from '@/shared/types/operations';
 import { readJsonResponse } from '@/shared/api/http';
@@ -10,6 +11,13 @@ import { readJsonResponse } from '@/shared/api/http';
 export async function fetchProviderFreshness(signal?: AbortSignal) {
   const response = await fetch(`${API_BASE_URL}/operations/providers`, { signal });
   return readJsonResponse<ProviderFreshness[]>(response);
+}
+
+export async function fetchProviderBudgets(signal?: AbortSignal) {
+  const response = await fetch(`${API_BASE_URL}/operations/provider-budgets`, {
+    signal,
+  });
+  return readJsonResponse<ProviderBudget[]>(response);
 }
 
 export async function fetchEvidenceHistory(signal?: AbortSignal) {

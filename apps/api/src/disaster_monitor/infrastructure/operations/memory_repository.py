@@ -25,6 +25,7 @@ from disaster_monitor.domain.operations import (
     ProviderFreshness,
     SourceSnapshotRecord,
     WorldStateVersionRecord,
+    current_attempt_diagnostics,
     freshness_for,
 )
 from disaster_monitor.domain.web_collection import WebFetchAudit, WebFetchState
@@ -110,12 +111,40 @@ class InMemoryOperationalRepository:
         self.jobs[job.job_id] = job
         return True
 
-    async def claim(self, worker_id: str, *, now: datetime) -> IngestJob | None:
+    async def claim(
+        self, worker_id: str, *, now: datetime, lease_seconds: int = 300
+    ) -> IngestJob | None:
+        if lease_seconds < 1:
+            raise ValueError("Ingest job leases must be positive.")
+        for item in tuple(self.jobs.values()):
+            if (
+                item.status is IngestJobStatus.RUNNING
+                and item.lease_expires_at is not None
+                and item.lease_expires_at <= now
+                and item.attempt_count >= item.max_attempts
+            ):
+                self.jobs[item.job_id] = replace(
+                    item,
+                    status=IngestJobStatus.DEAD_LETTER,
+                    claimed_by=None,
+                    claimed_at=None,
+                    lease_expires_at=None,
+                    last_error_code="lease_expired_max_attempts",
+                    last_failed_at=now,
+                    diagnostic="The worker lease expired after the maximum attempts.",
+                )
         eligible = sorted(
             (
                 item
                 for item in self.jobs.values()
-                if item.status in {IngestJobStatus.QUEUED, IngestJobStatus.RETRY}
+                if (
+                    item.status in {IngestJobStatus.QUEUED, IngestJobStatus.RETRY}
+                    or (
+                        item.status is IngestJobStatus.RUNNING
+                        and item.lease_expires_at is not None
+                        and item.lease_expires_at <= now
+                    )
+                )
                 and item.scheduled_for <= now
             ),
             key=lambda item: (item.scheduled_for, item.job_id),
@@ -128,14 +157,50 @@ class InMemoryOperationalRepository:
             status=IngestJobStatus.RUNNING,
             claimed_by=worker_id,
             claimed_at=now,
+            lease_expires_at=now + timedelta(seconds=lease_seconds),
+            fencing_token=job.fencing_token + 1,
             attempt_count=job.attempt_count + 1,
         )
         self.jobs[job.job_id] = claimed
         return claimed
 
-    async def complete(self, job_id: str, *, completed_at: datetime) -> None:
+    async def renew(
+        self,
+        job_id: str,
+        *,
+        worker_id: str,
+        fencing_token: int,
+        now: datetime,
+        lease_seconds: int = 300,
+    ) -> bool:
+        if lease_seconds < 1:
+            raise ValueError("Ingest job leases must be positive.")
+        job = self.jobs.get(job_id)
+        if job is None or not _owns_claim(job, worker_id, fencing_token, now):
+            return False
+        self.jobs[job_id] = replace(
+            job, lease_expires_at=now + timedelta(seconds=lease_seconds)
+        )
+        return True
+
+    async def complete(
+        self,
+        job_id: str,
+        *,
+        completed_at: datetime,
+        fencing_token: int | None = None,
+    ) -> None:
         del completed_at
-        self.jobs[job_id] = replace(self.jobs[job_id], status=IngestJobStatus.SUCCEEDED)
+        job = self.jobs[job_id]
+        if not _fence_matches(job, fencing_token):
+            raise RuntimeError("The ingest job fencing token is no longer current.")
+        self.jobs[job_id] = replace(
+            job,
+            status=IngestJobStatus.SUCCEEDED,
+            claimed_by=None,
+            claimed_at=None,
+            lease_expires_at=None,
+        )
 
     async def fail(
         self,
@@ -144,9 +209,12 @@ class InMemoryOperationalRepository:
         failed_at: datetime,
         error_code: str,
         retry_at: datetime | None,
+        fencing_token: int | None = None,
+        error_detail: str | None = None,
     ) -> IngestJobStatus:
-        del failed_at
         job = self.jobs[job_id]
+        if not _fence_matches(job, fencing_token):
+            raise RuntimeError("The ingest job fencing token is no longer current.")
         if retry_at is None or job.attempt_count >= job.max_attempts:
             status = IngestJobStatus.DEAD_LETTER
             next_scheduled_for = job.scheduled_for
@@ -159,7 +227,10 @@ class InMemoryOperationalRepository:
             scheduled_for=next_scheduled_for,
             claimed_by=None,
             claimed_at=None,
+            lease_expires_at=None,
             last_error_code=error_code,
+            last_failed_at=failed_at,
+            diagnostic=(error_detail or "")[:2_000] or None,
         )
         return status
 
@@ -376,6 +447,16 @@ class InMemoryOperationalRepository:
                     }:
                         break
                     consecutive += 1
+            published_at = (
+                snapshots[0].published_at
+                if snapshots and snapshots[0].published_at is not None
+                else last_attempt.published_at
+                if last_attempt is not None
+                else None
+            )
+            parse_failures, admission_failures, truncated, hazard = (
+                current_attempt_diagnostics(attempts)
+            )
             results.append(
                 freshness_for(
                     source_id=source_id,
@@ -404,6 +485,28 @@ class InMemoryOperationalRepository:
                         if last_job
                         else None
                     ),
+                    source_publication_age_seconds=(
+                        max(0, int((now - published_at).total_seconds()))
+                        if published_at is not None
+                        else None
+                    ),
+                    retrieval_lag_seconds=(
+                        max(
+                            0,
+                            int(
+                                (
+                                    snapshots[0].retrieved_at
+                                    - snapshots[0].published_at
+                                ).total_seconds()
+                            ),
+                        )
+                        if snapshots and snapshots[0].published_at is not None
+                        else None
+                    ),
+                    parse_failures=parse_failures,
+                    admission_failures=admission_failures,
+                    truncated=truncated,
+                    hazard=hazard,
                 )
             )
         return tuple(results)
@@ -576,3 +679,20 @@ class InMemoryOperationalRepository:
             unread_change_count=max(0, watch.unread_change_count - marked),
         )
         return marked
+
+
+def _fence_matches(job: IngestJob, fencing_token: int | None) -> bool:
+    return job.status is IngestJobStatus.RUNNING and (
+        fencing_token is None or job.fencing_token == fencing_token
+    )
+
+
+def _owns_claim(
+    job: IngestJob, worker_id: str, fencing_token: int, now: datetime
+) -> bool:
+    return (
+        _fence_matches(job, fencing_token)
+        and job.claimed_by == worker_id
+        and job.lease_expires_at is not None
+        and job.lease_expires_at > now
+    )

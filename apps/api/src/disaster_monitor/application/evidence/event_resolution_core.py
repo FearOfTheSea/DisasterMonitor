@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Protocol
 
-from disaster_monitor.application.disaster import DisasterQuery
+from disaster_monitor.application.disaster import (
+    DisasterQuery,
+    retrieval_time_bounds,
+)
 from disaster_monitor.application.evidence.event_identity import (
     distance_to_coordinates,
     event_observation_key,
@@ -125,8 +128,9 @@ class BaseEventPolicy:
         query: DisasterQuery,
         now: datetime,
     ) -> list[DisasterEvent]:
-        window_start = query.date_from or now - timedelta(days=query.time_window_days)
-        window_end = query.date_to or now + timedelta(minutes=5)
+        window_start, window_end = retrieval_time_bounds(
+            query, now=now, end_margin=timedelta(minutes=5)
+        )
         filtered = [
             event
             for event in candidates
@@ -145,6 +149,12 @@ class BaseEventPolicy:
         if query.city:
             filtered = [
                 event for event in filtered if location_matches(event, query.city)
+            ]
+        if query.location_hint:
+            filtered = [
+                event
+                for event in filtered
+                if location_matches(event, query.location_hint)
             ]
         if query.latitude is not None and query.longitude is not None:
             filtered = [

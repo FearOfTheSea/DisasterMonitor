@@ -57,6 +57,29 @@ class ProviderFreshnessResponse(BaseModel):
     expected_freshness_seconds: int
     consecutive_failures: int
     latest_error_code: str | None = None
+    health_state: Literal[
+        "healthy", "stale", "degraded", "unavailable", "misconfigured"
+    ] = "unavailable"
+    source_publication_age_seconds: int | None = None
+    retrieval_lag_seconds: int | None = None
+    parse_failures: int = 0
+    admission_failures: int = 0
+    truncated: bool = False
+    stale_projection_age_seconds: int | None = None
+    hazard: str | None = None
+
+
+class ProviderBudgetResponse(BaseModel):
+    """Observable bounded request budget for one provider window."""
+
+    provider_id: str
+    budget_window: str
+    limit_units: int
+    reserved_units: int
+    settled_units: int
+    released_units: int
+    remaining_units: int
+    reset_at: datetime
 
 
 class SatelliteImageryProductResponse(BaseModel):
@@ -72,6 +95,9 @@ class SatelliteImageryProductResponse(BaseModel):
     maximum_useful_zoom: int
     access_mode: Literal["direct_gibs", "api"]
     available: bool
+    rights_id: str
+    access_model: Literal["public", "free_account", "self_hosted", "paid"]
+    license_name: str
 
 
 class SatelliteImageryCatalogResponse(BaseModel):
@@ -109,6 +135,10 @@ class SourceCatalogItemResponse(BaseModel):
     attribution: str
     limitations: list[str] = Field(default_factory=list)
     operational_state: SourceOperationalStateResponse
+    rights_id: str | None = None
+    access_model: Literal["public", "free_account", "self_hosted", "paid"] | None = None
+    license_name: str | None = None
+    rights_reviewed_at: str | None = None
 
 
 class SourceCatalogResponse(BaseModel):

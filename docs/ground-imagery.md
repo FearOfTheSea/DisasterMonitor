@@ -24,7 +24,7 @@ The current vertical slice provides:
 - deterministic quality-aware selection with separate sensor outcomes, radar
   compatibility metadata, and reason codes for no acquisition, stale/obscured/
   partial coverage, incomplete scans, and missing comparison baselines;
-- authenticated CDSE Sentinel Hub Process requests constrained to the selected
+- authenticated Copernicus Data Space Process requests constrained to the selected
   product, metric region grid, fixed S1/S2 recipe identities, and bounded response
   sizes;
 - staged, checksummed, atomically published local artifacts; strict GeoTIFF/COG
@@ -34,8 +34,11 @@ The current vertical slice provides:
   with independent radar/optical status, capture dates, roles, quality explanations,
   readiness messaging, refresh/watch controls, artifact download, and manifest links;
 - PostgreSQL JSONB request persistence, stale-version protection, and durable
-  selection lookup when the operational database is configured. Local development
-  uses a deterministic in-process metadata store.
+  selection lookup when the operational database is configured;
+- PostgreSQL-backed leased preparation jobs with fencing tokens, bounded retry/backoff,
+  explicit Copernicus Data Space budget reservations, failure diagnostics, restart
+  recovery, and reference-aware artifact retention cleanup. Local development keeps
+  a deterministic synchronous fallback.
 
 ## Provider readiness
 
@@ -94,24 +97,24 @@ change.
 
 ## Current release boundary
 
-The plan is intentionally not fully complete. The following work remains before a
-full release claim:
+The following bounded capability remains outside a full imagery-analysis claim:
 
 - GFM mask-to-component extraction, CEMS delivered-impact ingestion, source-backed
   shaking regions, and complete place-boundary caching constrained by administrative
   context;
-- leased background imagery jobs, restart/fencing recovery, transactional quota
-  reservations and settlement, provider retry/backoff policy, and operational watch
-  scheduling;
 - complete numeric/display/quality artifact sets, raster chunk assembly and halos,
-  comparison manifests, exports, reference-aware cleanup, retention, and restore
-  validation;
+  comparison manifests, exports, and restore-drill evidence;
 - richer raster QA for masks, bounds, band order, zero/sub-noise radar values,
   comparison-grid alignment, and all antimeridian/polar/multi-zone partitions;
 - end-to-end desktop comparison, coverage overlays, keyboard acceptance, and system
   tests through export for both sensors;
-- two recent independently verified provider cases, resource/PU measurements on the
-  target machine, and the live acceptance gates specified in `plan.md`.
+- deployment-specific live acceptance evidence and resource measurements.
 
-Until those gates are closed, Ground view should be described as an implemented,
-bounded vertical slice with provider readiness and release evidence still pending.
+Ground view is an implemented, bounded observation-context path. It must not be
+described as damage assessment, impact prediction, or guaranteed global imagery
+coverage. Live acceptance evidence is maintained separately in
+`evaluation/ground_acceptance.v1.json` and is required for deployment-specific
+promotion. Run the fail-closed target-host gate with
+`uv run --directory apps/api python scripts/check_ground_acceptance.py --require-live`;
+ordinary CI validates the locked manifest without representing fixture replay as a
+live provider run.

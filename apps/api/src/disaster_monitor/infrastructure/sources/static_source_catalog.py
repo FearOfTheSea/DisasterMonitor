@@ -11,7 +11,11 @@ from disaster_monitor.application.agent.models import (
     SourceInformationRole,
 )
 from disaster_monitor.application.disaster import GeographicScope
+from disaster_monitor.application.ports.provider_rights import ProviderRightsManifest
 from disaster_monitor.domain.disaster import Disaster
+from disaster_monitor.infrastructure.sources.provider_rights_manifest import (
+    load_provider_rights_manifest,
+)
 
 
 class StaticSourceCatalog:
@@ -29,6 +33,7 @@ class StaticSourceCatalog:
             resources.joinpath("news_sources.v1.json").read_text(encoding="utf-8")
         )
         self._version = str(catalog["version"])
+        self._rights_manifest = load_provider_rights_manifest()
         supplemental_versions = (rapid_mapping, news)
         if any(
             str(supplement.get("catalog_version")) != self._version
@@ -50,8 +55,13 @@ class StaticSourceCatalog:
                 )
             )
         )
+        self._sources = tuple(
+            _with_rights(descriptor, self._rights_manifest)
+            for descriptor in self._sources
+        )
         if len({item.source_id for item in self._sources}) != len(self._sources):
             raise ValueError("The packaged source catalog has duplicate source IDs.")
+        self._rights_manifest.require_all([item.source_id for item in self._sources])
         self._by_id = {item.source_id: item for item in self._sources}
 
     @property
@@ -63,6 +73,10 @@ class StaticSourceCatalog:
 
     def get(self, source_id: str) -> SourceDescriptor | None:
         return self._by_id.get(source_id)
+
+    @property
+    def rights_manifest(self) -> ProviderRightsManifest:
+        return self._rights_manifest
 
 
 def _descriptor(item: dict[str, object]) -> SourceDescriptor:
@@ -104,4 +118,23 @@ def _descriptor(item: dict[str, object]) -> SourceDescriptor:
             if item.get("documentation_path") is not None
             else None
         ),
+        rights_id=str(item.get("rights_id", item["source_id"])),
+        access_model=str(item.get("access_model", "public")),
+    )
+
+
+def _with_rights(
+    descriptor: SourceDescriptor, manifest: ProviderRightsManifest
+) -> SourceDescriptor:
+    rights = manifest.get(descriptor.source_id)
+    if rights is None:
+        raise ValueError(
+            f"Provider-rights metadata is missing for {descriptor.source_id}."
+        )
+    return replace(
+        descriptor,
+        rights_id=descriptor.source_id,
+        access_model=rights.access_model.value,
+        license_name=rights.license_name,
+        rights_reviewed_at=rights.last_human_review.isoformat(),
     )

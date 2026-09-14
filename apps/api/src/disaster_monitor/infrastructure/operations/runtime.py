@@ -8,6 +8,7 @@ import os
 import socket
 from datetime import UTC, datetime
 
+from disaster_monitor.application.ground_imagery.jobs import GroundImageryWorker
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
@@ -32,6 +33,7 @@ from disaster_monitor.infrastructure.composition import (
     build_operational_services,
 )
 from disaster_monitor.infrastructure.composition_builders import (
+    build_ground_imagery_service,
     build_investigation_resources,
 )
 from disaster_monitor.infrastructure.configuration import Settings
@@ -112,15 +114,36 @@ async def _worker(settings: Settings, *, once: bool) -> None:
         projection_refresher=discovery,
         news_refreshers=news_refreshers,
     )
+    ground_imagery = build_ground_imagery_service(settings, discovery)
+    ground_worker = (
+        GroundImageryWorker(
+            ground_imagery.job_queue,
+            ground_imagery,
+            budget_ledger=operational.provider_budget,
+            budget_limit_units=settings.ground_imagery_budget_units_per_hour,
+            lease_seconds=settings.ground_imagery_job_lease_seconds,
+        )
+        if ground_imagery.job_queue is not None
+        else None
+    )
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
     try:
+        await ground_imagery.cleanup_artifacts(
+            retention_days=settings.ground_imagery_retention_days
+        )
         while True:
+            ground_job = (
+                await ground_worker.run_once(worker_id)
+                if ground_worker is not None
+                else None
+            )
             job = await worker.run_once(worker_id)
             if once:
                 return
-            if job is None:
+            if job is None and ground_job is None:
                 await asyncio.sleep(2)
     finally:
+        await ground_imagery.aclose()
         await investigation.lifecycle.shutdown()
 
 

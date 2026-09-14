@@ -85,8 +85,6 @@ describe('DisasterMap assistant focus', () => {
       { sourceId: 'nasa-goes-east-geocolor', available: true },
       { sourceId: 'nasa-goes-west-geocolor', available: true },
       { sourceId: 'nasa-himawari-9-visible', available: true },
-      { sourceId: 'copernicus-sentinel-2-true-color', available: false },
-      { sourceId: 'planet-configured-mosaic', available: false },
     ]);
   });
 
@@ -526,7 +524,7 @@ describe('DisasterMap assistant focus', () => {
     expect(adapterMocks.setSatelliteImagery).toHaveBeenLastCalledWith(undefined);
   });
 
-  it('disables unavailable credentialed provider options without failing the map', async () => {
+  it('keeps retired protected imagery out of the public map catalog', async () => {
     render(<DisasterMap onViewChange={vi.fn()} onSelectIncident={vi.fn()} />);
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Layers' }));
@@ -535,11 +533,11 @@ describe('DisasterMap assistant focus', () => {
       .click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
     await waitFor(() => expect(satelliteClientMocks.fetchCatalog).toHaveBeenCalled());
     expect(
-      screen.getByRole('option', { name: 'Copernicus Sentinel-2 True Color' }),
-    ).toBeDisabled();
+      screen.queryByRole('option', { name: 'Copernicus Sentinel-2 True Color' }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('option', { name: 'Planet configured mosaic' }),
-    ).toBeDisabled();
+      screen.queryByRole('option', { name: 'Planet configured mosaic' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText('Interactive map')).toBeInTheDocument();
   });
 

@@ -22,6 +22,10 @@ from disaster_monitor.presentation.http.common_response_serialization import (
     _event_geometry_response,
     _source_response,
 )
+from disaster_monitor.presentation.http.evidence_serialization import (
+    evidence_claim_response,
+    evidence_timeline_response,
+)
 from disaster_monitor.presentation.http.multimodal_serialization import (
     cop_response,
     multimodal_state_response,
@@ -49,7 +53,6 @@ from disaster_monitor.presentation.http.schemas import (
     SelectedEventResponse,
     SetTimeWindowOperatorActionResponse,
     ShowLayerOperatorActionResponse,
-    SourceResponse,
 )
 
 
@@ -198,32 +201,11 @@ def _assistant_response(
                     _cyclone_map_layer_response(layer)
                     for layer in selected_event.supplemental_geometry
                 ],
-                source=SourceResponse(
-                    source_id=selected_event.source.source_id,
-                    publisher=selected_event.source.publisher,
-                    title=selected_event.source.title,
-                    canonical_url=selected_event.source.canonical_url,
-                    published_at=selected_event.source.published_at,
-                    updated_at=selected_event.source.updated_at,
-                    retrieved_at=selected_event.source.retrieved_at,
-                    snapshot_id=selected_event.source.snapshot_id,
-                ),
+                source=_source_response(selected_event.source),
             )
         ),
         retrieval_time=result.retrieval_time,
-        sources=[
-            SourceResponse(
-                source_id=source.source_id,
-                publisher=source.publisher,
-                title=source.title,
-                canonical_url=source.canonical_url,
-                published_at=source.published_at,
-                updated_at=source.updated_at,
-                retrieved_at=source.retrieved_at,
-                snapshot_id=source.snapshot_id,
-            )
-            for source in result.sources
-        ],
+        sources=[_source_response(source) for source in result.sources],
         warnings=list(result.warnings),
         sections=[
             ReportSectionResponse(title=section.title, content=section.content)
@@ -236,6 +218,8 @@ def _assistant_response(
         common_operational_picture=cop_response(result.common_operational_picture),
         media_gallery=_media_gallery_response(result.media_gallery, http_request),
         investigation_case=_investigation_case_response(result.investigation_case),
+        claims=[evidence_claim_response(item) for item in result.claims],
+        timeline=[evidence_timeline_response(item) for item in result.timeline],
     )
 
 

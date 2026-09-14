@@ -8,7 +8,12 @@ from disaster_monitor.application.agent.task_normalization import (
     disaster_safety_gate,
     validate_disaster_task,
 )
-from disaster_monitor.application.disaster import QueryParseStatus, RequestType
+from disaster_monitor.application.disaster import (
+    QueryParseStatus,
+    RequestType,
+    WorldwideSelectionIntent,
+    retrieval_time_bounds,
+)
 from disaster_monitor.application.disaster_aliases import (
     DISASTER_ALIASES,
     _validate_alias_catalog,
@@ -17,6 +22,7 @@ from disaster_monitor.application.disaster_aliases import (
 )
 from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
+    location_hint_from_mentions,
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
@@ -76,6 +82,38 @@ def test_explicit_natural_date_uses_country_calendar_boundary() -> None:
     assert query.date_from == datetime(2026, 8, 4, 15, 0, tzinfo=UTC)
     assert query.date_to == datetime(2026, 8, 5, 15, 0, tzinfo=UTC)
     assert query.time_intent == "specified"
+
+
+def test_named_place_is_preserved_as_a_location_hint() -> None:
+    query = PARSER.parse("Latest earthquake in Tokyo, Japan").query
+
+    assert query is not None
+    assert query.location_hint == "Tokyo"
+
+
+def test_named_place_explicit_date_has_bounded_timezone_tolerance() -> None:
+    query = PARSER.parse("Latest earthquake in Tokyo, Japan on August 5, 2026").query
+
+    assert query is not None
+    start, end = retrieval_time_bounds(query, now=datetime(2026, 8, 6, tzinfo=UTC))
+    assert start == datetime(2026, 8, 4, 1, 0, tzinfo=UTC)
+    assert end == datetime(2026, 8, 6, 5, 0, tzinfo=UTC)
+    assert query.selection_intent is WorldwideSelectionIntent.STRONGEST
+
+
+def test_country_only_place_does_not_become_a_location_hint() -> None:
+    query = PARSER.parse("Latest earthquake in Japan").query
+
+    assert query is not None
+    assert query.location_hint is None
+
+
+def test_canonical_place_mentions_can_supply_a_location_hint() -> None:
+    catalog = StaticCountryCatalog()
+
+    assert location_hint_from_mentions(("Kamchatka", "Russia"), catalog) == (
+        "Kamchatka"
+    )
 
 
 def test_day_first_explicit_date_overrides_latest_intent() -> None:

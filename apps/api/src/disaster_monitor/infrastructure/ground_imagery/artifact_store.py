@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -151,6 +152,42 @@ class FilesystemImageryArtifactStore:
                 path.unlink()
             except FileNotFoundError:
                 pass
+
+    async def delete_unreferenced(
+        self,
+        *,
+        referenced_artifact_ids: frozenset[str],
+        older_than: datetime,
+    ) -> tuple[str, ...]:
+        """Delete only old artifacts that have no durable request reference."""
+        if older_than.tzinfo is None or older_than.utcoffset() is None:
+            raise ArtifactStorageError("Artifact cleanup requires an aware cutoff.")
+        if not self._root.exists():
+            return ()
+        deleted: list[str] = []
+        for metadata_path in sorted(self._root.glob("*.json")):
+            try:
+                document = json.loads(metadata_path.read_text(encoding="utf-8"))
+                artifact_id = str(document["artifact_id"])
+                _validate_id(artifact_id)
+                modified_at = datetime.fromtimestamp(
+                    metadata_path.stat().st_mtime, tz=older_than.tzinfo
+                )
+            except (
+                OSError,
+                KeyError,
+                TypeError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as error:
+                raise ArtifactStorageError(
+                    "The imagery artifact metadata is corrupt."
+                ) from error
+            if artifact_id in referenced_artifact_ids or modified_at >= older_than:
+                continue
+            await self.delete(artifact_id)
+            deleted.append(artifact_id)
+        return tuple(deleted)
 
     async def aclose(self) -> None:
         return None

@@ -43,6 +43,13 @@ const STATE_LABELS: Record<string, string> = {
   not_renderable_yet: 'Catalogued; rendering pending',
   no_comparable_baseline: 'No comparable baseline',
   onset_unknown: 'Onset unknown',
+  queued: 'Queued',
+  running: 'Running',
+  completed: 'Completed',
+  retryable: 'Retrying',
+  failed: 'Failed',
+  dead_lettered: 'Dead lettered',
+  lease_expired: 'Lease expired',
 };
 
 export function labelImageryRole(role: string): string {
@@ -89,16 +96,27 @@ export function artifactForSelection(
 }
 
 export function statusClass(state: string): string {
-  if (state === 'ready' || state === 'selected') return 'is-positive';
+  if (state === 'ready' || state === 'selected' || state === 'completed') {
+    return 'is-positive';
+  }
   if (
     state === 'partial' ||
     state === 'partial_coverage' ||
     state === 'needs_region' ||
-    state === 'credentials_required'
+    state === 'credentials_required' ||
+    state === 'queued' ||
+    state === 'running' ||
+    state === 'retryable'
   ) {
     return 'is-warning';
   }
-  if (state === 'disabled' || state === 'artifact_pipeline_unavailable') {
+  if (
+    state === 'disabled' ||
+    state === 'artifact_pipeline_unavailable' ||
+    state === 'failed' ||
+    state === 'dead_lettered' ||
+    state === 'lease_expired'
+  ) {
     return 'is-negative';
   }
   return 'is-neutral';

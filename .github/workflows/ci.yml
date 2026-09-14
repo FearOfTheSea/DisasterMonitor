@@ -18,6 +18,9 @@ jobs:
       - run: uv run --directory apps/api ruff check src tests scripts ../../scripts
       - run: uv run --directory apps/api mypy
       - run: uv run --directory apps/api mypy scripts ../../scripts
+      - run: uv run --directory apps/api python scripts/check_provider_rights.py
+      - run: uv run --directory apps/api python scripts/replay_provider_corpus.py
+      - run: uv run --directory apps/api python scripts/check_ground_acceptance.py
       - run: uv run --directory apps/api pytest -q
 
   postgres-persistence:

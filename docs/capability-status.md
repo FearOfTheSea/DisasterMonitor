@@ -27,7 +27,7 @@ complete global surveillance or impact evidence.
 | DS | Typed advisory options, lineage, constraints, reversible internal actions | DS-A/B/C passing | Pending blind expert review and held outcomes |
 | CO | Typed least-privilege handoffs and bounded deterministic merge | CO-A/B/C passing | Passed for bounded analytical coordination |
 | CL | Allowlisted reversible analytical ordering with rollback | CL-A/B/C passing | Pending real trajectories and reviewer corrections |
-| OP | Snapshots, history, workers, freshness, retention, backup tooling, persistent bounded Incident Watches, and deterministic situational-awareness views | Local operational and deterministic browser checks passing | Pending rights, recovery, identity, watch-utility, and supervised-pilot evidence |
+| OP | Rights-gated snapshots, history, leased workers, freshness telemetry, durable projections, backup/restore validation, persistent Incident Watches, and deterministic situational-awareness views | Local operational, replay, recovery, and deterministic browser checks passing | Deployment-specific external and supervised-pilot evidence remains separate |
 
 ## Evidence rules
 
@@ -121,12 +121,18 @@ Multimodal preparation and operator-study commands are documented in
 [multimodal-awareness.md](multimodal-awareness.md).
 
 The event-focused [Ground view](ground-imagery.md) is implemented as a bounded
-Sentinel-1/Sentinel-2 catalog, temporal-selection, provenance, validated-COG, and
-desktop-panel path. Public catalog discovery works without credentials; authenticated
-rendering remains readiness-gated. Automated domain, adapter, HTTP, artifact, and
-frontend tests pass. The worker lease/quota accounting, GFM/CEMS region-mask
-ingestion, export packages, retention cleanup, and live-provider acceptance gates
-from the plan are not complete, so this is not yet a full production imagery claim.
+Sentinel-1/Sentinel-2 catalog, temporal-selection, provenance, validated-COG, leased
+job, quota, retention, and desktop-panel path. Public catalog discovery works without
+credentials; authenticated rendering remains readiness-gated. Automated domain,
+adapter, HTTP, artifact, job-recovery, and frontend tests pass. The path remains
+observational context rather than a damage-assessment claim, and deployment-specific
+live acceptance evidence is tracked in the Ground acceptance manifest.
+
+Assistant reports expose a typed, time-ordered report evidence timeline for normalized
+observations, situation updates, claim reconciliation, and coverage state. A durable
+cross-subsystem incident stream that joins warning lifecycles, Ground selections, and
+Incident Watch changes remains implementation-pending; those records are not relabeled
+or implied by generic coverage warnings.
 
 ## Unsupported
 

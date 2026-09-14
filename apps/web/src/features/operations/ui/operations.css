@@ -327,7 +327,8 @@
 .provider-grid,
 .snapshot-list,
 .review-form,
-.catalog-status {
+.catalog-status,
+.provider-budget-grid {
   display: grid;
   gap: 0;
 }
@@ -365,7 +366,8 @@
 }
 
 .provider-status,
-.snapshot-card {
+.snapshot-card,
+.provider-budget {
   border-bottom: 1px solid #e8edf3;
   display: grid;
   gap: 4px;
@@ -386,10 +388,20 @@
 .provider-status small,
 .snapshot-card small,
 .snapshot-card code,
-.catalog-status small {
+.catalog-status small,
+.provider-budget span,
+.provider-budget small {
   color: var(--muted);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
+}
+
+.provider-budget {
+  gap: 5px;
+}
+
+.provider-budget span {
+  text-transform: capitalize;
 }
 
 .snapshot-card code {

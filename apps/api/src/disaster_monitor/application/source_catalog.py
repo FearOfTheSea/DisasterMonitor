@@ -50,6 +50,10 @@ class SourceCatalogItem:
     attribution: str
     limitations: tuple[str, ...]
     operational_state: SourceOperationalState
+    rights_id: str | None = None
+    access_model: str | None = None
+    license_name: str | None = None
+    rights_reviewed_at: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,4 +169,8 @@ class SourceCatalogService:
                 provider_tier=provider_tier,
                 execution_roles=execution_roles,
             ),
+            rights_id=descriptor.rights_id,
+            access_model=descriptor.access_model,
+            license_name=descriptor.license_name,
+            rights_reviewed_at=descriptor.rights_reviewed_at,
         )

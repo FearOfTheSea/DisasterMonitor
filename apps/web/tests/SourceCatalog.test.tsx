@@ -38,6 +38,10 @@ describe('SourceCatalog', () => {
             provider_tier: 'primary',
             execution_roles: ['weather_alerts'],
           },
+          rights_id: 'noaa-nws-public-domain',
+          access_model: 'public',
+          license_name: 'U.S. Government work / NWS terms',
+          rights_reviewed_at: '2026-09-13',
         },
       ],
     });
@@ -51,6 +55,7 @@ describe('SourceCatalog', () => {
     expect(screen.getByText(/official warning/i)).toBeVisible();
     expect(screen.getByText(/No physical disaster type/i)).toBeVisible();
     expect(screen.getByText(/Stale threshold: unspecified/i)).toBeVisible();
+    expect(screen.getByText(/public.*noaa-nws-public-domain/i)).toBeVisible();
     expect(screen.getByText(/Registered; health checked on request/i)).toBeVisible();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();

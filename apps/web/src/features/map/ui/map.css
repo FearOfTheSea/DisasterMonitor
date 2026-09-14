@@ -72,7 +72,6 @@
 }
 
 .satellite-controls output,
-.satellite-fixed-time,
 .satellite-source-details {
   color: var(--muted);
 }

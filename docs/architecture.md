@@ -152,7 +152,7 @@ investigation use case. Shared assistant text admission lives beside that port.
 
 Ground view consumes an `IncidentImageryContextReader` application port. Its resolver
 owns region priority, fallback radii, geometry roles, and temporal policy; CDSE STAC,
-Sentinel Hub Process, GeoBoundaries, raster validation, and artifact storage are
+Copernicus Data Space Process, GeoBoundaries, raster validation, and artifact storage are
 infrastructure adapters. The incident adapter projects already-admitted incident
 geometry into that port and does not expose provider implementations inward. The
 current deployment persists request metadata and selection mappings in PostgreSQL

@@ -6,6 +6,7 @@ import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
 import {
   fetchCountryCatalogStatus,
   fetchEvidenceHistory,
+  fetchProviderBudgets,
   fetchProviderFreshness,
   recordOperatorReview,
   requestCountryCatalogUpdate,
@@ -21,6 +22,7 @@ const findingsUi = vi.hoisted(() => ({
 vi.mock('@/features/operations/api/operationsClient', () => ({
   fetchProviderFreshness: vi.fn(),
   fetchEvidenceHistory: vi.fn(),
+  fetchProviderBudgets: vi.fn(),
   fetchCountryCatalogStatus: vi.fn(),
   requestCountryCatalogUpdate: vi.fn(),
   recordOperatorReview: vi.fn(),
@@ -96,6 +98,7 @@ describe('OperationsPanel', () => {
       ],
     };
     vi.mocked(fetchCountryCatalogStatus).mockResolvedValue(catalog);
+    vi.mocked(fetchProviderBudgets).mockResolvedValue([]);
     vi.mocked(requestCountryCatalogUpdate).mockResolvedValue({
       ...catalog,
       state: 'updated',

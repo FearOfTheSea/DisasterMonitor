@@ -116,11 +116,20 @@ services:
       - country-catalog-data:/var/lib/disaster-monitor/geography
 
   backup-tool:
-    image: alpine:3.22
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.backup
     profiles: ["tools"]
+    environment:
+      OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
-      - operational-blobs:/blobs
-      - operational-backups:/backups
+      - operational-blobs:/operational-blobs
+      - event-media-blobs:/event-media
+      - ground-imagery-data:/ground-imagery
+      - ./data/backups:/backups
 
   web:
     build:

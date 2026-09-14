@@ -202,6 +202,8 @@ class RunDisasterAgent:
             warnings=report.warnings,
             sections=report.sections,
             partial=report.partial,
+            claims=report.claims,
+            timeline=report.timeline,
             investigation=_summary(state),
             decision_support=state.workspace.decision_support,
             multimodal_state=state.workspace.multimodal_state,

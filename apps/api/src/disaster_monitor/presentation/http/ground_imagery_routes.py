@@ -76,7 +76,7 @@ async def create_ground_imagery_request(
         raise HTTPException(status_code=422, detail=str(error)) from error
     except GroundImageryError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
-    return ground_imagery_request_response(request)
+    return await _response(service, request)
 
 
 @router.get(
@@ -97,7 +97,7 @@ async def get_ground_imagery_request(
     request_id: str,
     service: Annotated[GroundImageryService, Depends(get_ground_imagery_service)],
 ) -> GroundImageryRequestResponse:
-    return ground_imagery_request_response(await _get(service, request_id))
+    return await _response(service, await _get(service, request_id))
 
 
 @router.get(
@@ -151,7 +151,7 @@ async def replace_ground_imagery_region(
         raise HTTPException(status_code=422, detail=str(error)) from error
     except GroundImageryError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
-    return ground_imagery_request_response(request)
+    return await _response(service, request)
 
 
 @router.post(
@@ -177,7 +177,7 @@ async def select_ground_imagery_observation(
         raise HTTPException(status_code=422, detail=str(error)) from error
     except GroundImageryError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
-    return ground_imagery_request_response(request)
+    return await _response(service, request)
 
 
 @router.post(
@@ -204,7 +204,7 @@ async def prepare_ground_imagery_selection(
         raise HTTPException(status_code=422, detail=str(error)) from error
     except GroundImageryError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
-    return ground_imagery_request_response(request)
+    return await _response(service, request)
 
 
 @router.post(
@@ -224,7 +224,7 @@ async def refresh_ground_imagery_request(
         raise HTTPException(status_code=422, detail=str(error)) from error
     except GroundImageryError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
-    return ground_imagery_request_response(request)
+    return await _response(service, request)
 
 
 @router.post(
@@ -239,7 +239,7 @@ async def cancel_ground_imagery_request(
         request = await service.cancel(request_id)
     except GroundImageryRequestNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    return ground_imagery_request_response(request)
+    return await _response(service, request)
 
 
 @router.put(
@@ -261,7 +261,7 @@ async def set_ground_imagery_watch(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    return ground_imagery_request_response(request)
+    return await _response(service, request)
 
 
 @router.get(
@@ -353,6 +353,14 @@ async def _get(service: GroundImageryService, request_id: str) -> GroundImageryR
         return await service.get_request(request_id)
     except GroundImageryRequestNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+async def _response(
+    service: GroundImageryService, request: GroundImageryRequest
+) -> GroundImageryRequestResponse:
+    return ground_imagery_request_response(
+        request, jobs=await service.jobs_for_request(request.request_id)
+    )
 
 
 def _region_from_json(value: dict[str, Any] | None) -> MultiPolygon | None:

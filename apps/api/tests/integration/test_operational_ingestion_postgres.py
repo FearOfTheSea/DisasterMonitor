@@ -1,13 +1,18 @@
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import psycopg
 import pytest
 
+from disaster_monitor.application.ports.ground_imagery.jobs import preparation_job
 from disaster_monitor.application.ports.incident_projection import (
     IncidentProjectionRecord,
 )
 from disaster_monitor.application.ports.ingest_jobs import IngestJobQueue
+from disaster_monitor.application.ports.provider_budget import ProviderBudgetExceeded
+from disaster_monitor.domain.imagery.observations import Sensor, TemporalRole
 from disaster_monitor.domain.operations import (
     AuditEventRecord,
     EventObservationLinkRecord,
@@ -22,8 +27,14 @@ from disaster_monitor.domain.operations import (
     SourceSnapshotRecord,
     WorldStateVersionRecord,
 )
+from disaster_monitor.infrastructure.ground_imagery.postgres_jobs import (
+    PostgresGroundImageryJobQueue,
+)
 from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
+)
+from disaster_monitor.infrastructure.operations.postgres_provider_budget import (
+    PostgresProviderBudgetLedger,
 )
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
@@ -229,11 +240,12 @@ async def test_postgres_ingestion_preserves_evidence_and_audit_semantics(
     assert await repository.append_audit_event(audit)
     assert not await repository.append_audit_event(audit)
 
+    projection_time = datetime.now(UTC)
     projection = IncidentProjectionRecord(
         projection_id=f"incident-projection:ingestion-contract:{identity}",
         snapshot_version=f"projection-version:ingestion-contract:{identity}",
-        retrieved_at=NOW,
-        created_at=NOW,
+        retrieved_at=projection_time,
+        created_at=projection_time,
         payload_json='{"incidents":[]}',
     )
     assert await repository.append_incident_projection(projection)
@@ -245,3 +257,93 @@ async def test_postgres_ingestion_preserves_evidence_and_audit_semantics(
     assert latest_projection.retrieved_at == projection.retrieved_at
     assert latest_projection.created_at == projection.created_at
     assert json.loads(latest_projection.payload_json) == {"incidents": []}
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgres
+async def test_postgres_provider_budget_counts_settled_calls(
+    postgres_dsn: str,
+) -> None:
+    repository = PostgresOperationalRepository(postgres_dsn)
+    await repository.migrate()
+    ledger = PostgresProviderBudgetLedger(postgres_dsn)
+    provider_id = f"budget-contract:{uuid4().hex}"
+
+    for _ in range(2):
+        reservation = await ledger.reserve(
+            provider_id,
+            worker_id="budget-worker",
+            estimated_units=1,
+            limit_units=2,
+            now=NOW,
+        )
+        await ledger.settle(reservation.reservation_id, actual_units=1, now=NOW)
+
+    with pytest.raises(ProviderBudgetExceeded, match="budget exhausted"):
+        await ledger.reserve(
+            provider_id,
+            worker_id="budget-worker",
+            estimated_units=1,
+            limit_units=2,
+            now=NOW,
+        )
+    status = await ledger.status(now=NOW)
+    matching = next(item for item in status if item.provider_id == provider_id)
+    assert matching.settled_units == 2
+    assert matching.remaining_units == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgres
+async def test_postgres_ground_jobs_serialize_per_request_and_fence_old_worker(
+    postgres_dsn: str,
+) -> None:
+    repository = PostgresOperationalRepository(postgres_dsn)
+    await repository.migrate()
+    queue = PostgresGroundImageryJobQueue(postgres_dsn)
+    request_id = f"ground-contract:{uuid4().hex}"
+    async with await psycopg.AsyncConnection.connect(postgres_dsn) as connection:
+        await connection.execute(
+            """
+            INSERT INTO imagery_requests(
+                request_id, incident_id, owner_scope, request_version,
+                reference_time, state, payload, created_at, updated_at
+            ) VALUES (%s,%s,'test',1,%s,'queued','{}'::jsonb,%s,%s)
+            """,
+            (request_id, request_id, NOW, NOW, NOW),
+        )
+    for role in (
+        TemporalRole.PRE_EVENT_REFERENCE,
+        TemporalRole.LATEST_USEFUL,
+    ):
+        assert await queue.enqueue(
+            preparation_job(
+                request_id=request_id,
+                request_version=1,
+                sensor=Sensor.SENTINEL_1,
+                role=role,
+                overview=True,
+                output_kind=None,
+                now=NOW,
+            )
+        )
+
+    concurrent = await asyncio.gather(
+        queue.claim("worker-one", now=NOW, lease_seconds=60),
+        queue.claim("worker-two", now=NOW, lease_seconds=60),
+    )
+    claimed = tuple(item for item in concurrent if item is not None)
+    assert len(claimed) == 1
+    first = claimed[0]
+    reclaimed = await queue.claim(
+        "worker-two", now=NOW + timedelta(seconds=61), lease_seconds=60
+    )
+    assert reclaimed is not None
+    assert reclaimed.job_id == first.job_id
+    assert reclaimed.fencing_token == first.fencing_token + 1
+    with pytest.raises(RuntimeError, match="fencing token"):
+        await queue.complete(
+            first.job_id,
+            completed_at=NOW + timedelta(seconds=62),
+            fencing_token=first.fencing_token,
+        )

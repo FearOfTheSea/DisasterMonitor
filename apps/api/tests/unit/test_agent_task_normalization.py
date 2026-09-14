@@ -263,6 +263,44 @@ def test_canonical_model_cannot_invent_dates_for_latest_request() -> None:
     assert task.query.date_to is None
 
 
+def test_canonical_country_alias_is_resolved_through_catalog_metadata() -> None:
+    catalog = StaticCountryCatalog()
+    catalog.activate_payload(
+        {
+            "metadata": {"version": "country-alias-test"},
+            "countries": [
+                {
+                    "alpha3": "RUS",
+                    "name": "Russian Federation",
+                    "aliases": ["Russia"],
+                    "timezone": "Asia/Kamchatka",
+                    "bounds": [41.2, 81.9, -180.0, 180.0],
+                    "polygons": [],
+                }
+            ],
+        }
+    )
+    question = "What is the current earthquake situation in Russia?"
+    task = validate_disaster_task(
+        question,
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.EARTHQUAKE,
+            country_code="RUS",
+            country_name="Russia",
+            canonical=True,
+        ),
+        country_catalog=catalog,
+        query_parser=DisasterQueryParser(catalog),
+    )
+
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.country is not None
+    assert task.country.alpha3_code == "RUS"
+
+
 def test_canonicalizes_supported_current_disaster_task_and_information_scope() -> None:
     task = validate(
         "How many fatalities were reported for the August 5, 2026 earthquake in Japan?"

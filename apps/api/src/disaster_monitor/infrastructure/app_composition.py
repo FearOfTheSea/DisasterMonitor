@@ -342,6 +342,11 @@ def build_app_dependencies(
                 for registration in retrieval.provider_registry.registrations
                 if registration.source_id is not None
             ),
+            unconfigured_source_ids=tuple(
+                registration.source_id
+                for registration in retrieval.provider_registry.registrations
+                if registration.source_id is not None and not registration.configured
+            ),
         ),
         record_operator_action=RecordOperatorAction(operational.repository),
         operator_identity=TrustedOperatorIdentityPolicy(
@@ -350,6 +355,7 @@ def build_app_dependencies(
         ),
         country_catalog_automation=catalog_automation,
         agent_diagnostics=configured.agent_diagnostics,
+        provider_budget=operational.provider_budget,
         lifecycle=AppLifecycle(
             startup_hooks=(migrate_operational_repository, catalog_automation.start),
             shutdown_hooks=(

@@ -15,6 +15,9 @@ import type {
   CycloneMapLayerResponse,
   DisasterMediaGalleryResponse,
   DisasterMediaItemResponse,
+  EvidenceClaimResponse,
+  EvidenceClaimVariantResponse,
+  EvidenceTimelineEntryResponse,
   EventCoordinateResponse,
   EventGeometryResponse,
   EventMeasurementResponse,
@@ -93,6 +96,9 @@ export type InvestigationCase = Omit<
   correlations: CompoundHazardCorrelation[];
 };
 export type AssistantSource = SourceResponse;
+export type EvidenceClaim = EvidenceClaimResponse;
+export type EvidenceClaimVariant = EvidenceClaimVariantResponse;
+export type EvidenceTimelineEntry = EvidenceTimelineEntryResponse;
 export type MeasurementKind = ApiMeasurementKind;
 export type EventMeasurement = EventMeasurementResponse;
 export type EventCoordinate = EventCoordinateResponse;
@@ -184,6 +190,8 @@ export type AssistantResponse = Omit<
   investigation_case?: InvestigationCase | null;
   multimodal?: MultimodalEvidenceState | null;
   media_gallery?: DisasterMediaGallery | null;
+  claims: EvidenceClaim[];
+  timeline: EvidenceTimelineEntry[];
 };
 
 export type OperatorAction = NonNullable<
@@ -224,6 +232,8 @@ export type AssistantReport = {
   multimodal?: MultimodalEvidenceState;
   commonOperationalPicture?: CommonOperationalPicture;
   mediaGallery?: DisasterMediaGallery;
+  claims: EvidenceClaim[];
+  timeline: EvidenceTimelineEntry[];
 };
 
 export type ConversationStatus = 'idle' | 'loading' | 'error';

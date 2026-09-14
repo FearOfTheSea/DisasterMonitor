@@ -13,6 +13,7 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
     WorldwideSelectionIntent,
+    retrieval_time_bounds,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.temporal_normalization import (
@@ -67,8 +68,12 @@ def build_usgs_params(
     query: DisasterQuery, *, now: datetime
 ) -> dict[str, str | int | float | bool | None]:
     """Build one bounded USGS query from normalized country geography."""
-    starttime = query.date_from or now - timedelta(days=query.time_window_days)
-    endtime = query.date_to or now
+    starttime, endtime = retrieval_time_bounds(query, now=now)
+    regional_event_query = bool(
+        query.location_hint
+        and query.date_from is not None
+        and query.date_to is not None
+    )
     generic_query = (
         not any(
             (
@@ -77,6 +82,7 @@ def build_usgs_params(
                 query.date_to,
                 query.prefecture,
                 query.city,
+                query.location_hint,
                 query.latitude is not None and query.longitude is not None,
                 query.discriminator("magnitude") is not None,
             )
@@ -102,7 +108,7 @@ def build_usgs_params(
         "maxlatitude": max_latitude,
         "minlongitude": min_longitude,
         "maxlongitude": max_longitude,
-        "orderby": "magnitude" if generic_query else "time",
+        "orderby": "magnitude" if generic_query or regional_event_query else "time",
         "limit": 50,
     }
     if generic_query:
@@ -376,10 +382,8 @@ class UsgsEarthquakeAdapter:
             source_id=self.source_id,
             parameters={
                 "country": query.country.alpha3_code,
-                "from": (
-                    query.date_from or now - timedelta(days=query.time_window_days)
-                ).isoformat(),
-                "to": (query.date_to or now).isoformat(),
+                "from": retrieval_time_bounds(query, now=now)[0].isoformat(),
+                "to": retrieval_time_bounds(query, now=now)[1].isoformat(),
                 "event": query.discriminator("event_id") or "",
             },
             rights_id="usgs-earthquake-api-terms-2026-08",

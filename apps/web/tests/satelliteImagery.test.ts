@@ -7,7 +7,6 @@ import {
   observationTimeForSource,
   sourceById,
 } from '@/features/map/model/satelliteImagery';
-import { buildProtectedSatelliteTileUrl } from '@/features/map/api/satelliteImageryClient';
 import { commonOperationalPicture } from './fixtures/multimodal';
 
 afterEach(() => {
@@ -24,8 +23,6 @@ describe('satellite imagery source model', () => {
       'nasa-goes-east-geocolor',
       'nasa-goes-west-geocolor',
       'nasa-himawari-9-visible',
-      'copernicus-sentinel-2-true-color',
-      'planet-configured-mosaic',
     ]);
     expect(SATELLITE_IMAGERY_SOURCES.slice(0, 3)).toMatchObject([
       { temporalMode: 'daily', maximumUsefulZoom: 9, available: true },
@@ -37,16 +34,6 @@ describe('satellite imagery source model', () => {
       { temporalMode: 'subdaily', temporalStepMinutes: 10, maximumUsefulZoom: 7 },
       { temporalMode: 'subdaily', temporalStepMinutes: 10, maximumUsefulZoom: 7 },
     ]);
-    expect(sourceById('copernicus-sentinel-2-true-color')).toMatchObject({
-      temporalMode: 'daily',
-      available: false,
-      access: { kind: 'disaster-monitor-api' },
-    });
-    expect(sourceById('planet-configured-mosaic')).toMatchObject({
-      temporalMode: 'fixed',
-      available: false,
-      access: { kind: 'disaster-monitor-api' },
-    });
   });
 
   it('constructs exact daily NASA GIBS Web Mercator tile URLs without network access', () => {
@@ -92,38 +79,9 @@ describe('satellite imagery source model', () => {
     expect(observationTimeForSource(sourceById('nasa-goes-west-geocolor'), now)).toBe(
       '2026-08-22T12:20:00Z',
     );
-    expect(observationTimeForSource(sourceById('planet-configured-mosaic'), now)).toBe(
-      undefined,
-    );
     expect(
       SATELLITE_IMAGERY_SOURCES.map((source) => source.displayName).join(' '),
     ).not.toMatch(/\blive\b/i);
-  });
-
-  it('returns only DisasterMonitor URLs for protected providers', () => {
-    const sentinel = buildProtectedSatelliteTileUrl(
-      sourceById('copernicus-sentinel-2-true-color'),
-      '2026-08-22',
-      'http://localhost:8001/api/v1',
-    );
-    const planet = buildProtectedSatelliteTileUrl(
-      sourceById('planet-configured-mosaic'),
-      undefined,
-      'http://localhost:8001/api/v1',
-    );
-
-    expect(sentinel).toBe(
-      'http://localhost:8001/api/v1/satellite-imagery/tiles/' +
-        'copernicus-sentinel-hub/copernicus-sentinel-2-true-color/' +
-        '{z}/{x}/{y}?time=2026-08-22',
-    );
-    expect(planet).toBe(
-      'http://localhost:8001/api/v1/satellite-imagery/tiles/planet/' +
-        'planet-configured-mosaic/{z}/{x}/{y}',
-    );
-    expect(`${sentinel} ${planet}`).not.toMatch(
-      /api[_-]?key|instance|sentinel-hub\.com|tiles\.planet\.com/i,
-    );
   });
 
   it('keeps exactly one satellite raster below incident and COP vectors', () => {

@@ -1,0 +1,125 @@
+{
+  "schema_version": "provider-reference-corpus.v1",
+  "version": "2026-09-13",
+  "retrieval_date": "2026-09-13",
+  "no_network_replay": true,
+  "attribution": "The source URLs are the public reference contracts. The payload snapshot is the exact replay input and is retained with a checksum.",
+  "thresholds": {
+    "defined": true,
+    "recall_min": 0.8,
+    "false_merge_rate_max": 0.1,
+    "false_split_rate_max": 0.1,
+    "latency_seconds_max": 3600
+  },
+  "scope_note": "This corpus is a release gate for the listed cases only; it is not a global coverage or timeliness claim.",
+  "cases": [
+    {
+      "case_id": "earthquake-kamchatka-20250729",
+      "hazard": "earthquake",
+      "source_url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000qw60",
+      "payload_path": "provider_payload_snapshots.v1.json",
+      "payload_sha256": "sha256:67336021769464c164f5975908b8218bf6563dcf1c1a2f6a751bfd40a15f49ab",
+      "expected_event_identity": "usgs:us6000qw60",
+      "time_bounds_utc": {"from": "2025-07-29T00:00:00Z", "to": "2025-07-30T00:00:00Z"},
+      "expected_observations": [
+        {"observation_id": "eq-kamchatka-2025-observation", "identity_key": "usgs:us6000qw60", "expected_behavior": "Preserve the offshore event identity and do not invent a country."}
+      ],
+      "coverage_gaps": ["The catalog and impact products do not provide complete ground-damage coverage."],
+      "independent_verification_urls": [
+        "https://earthquake.usgs.gov/earthquakes/eventpage/us6000qw60",
+        "https://earthquake.usgs.gov/earthquakes/eventpage/us6000qw60/impact"
+      ],
+      "adapter_replay": {"adapter":"gdacs-earthquake","payload_path":"apps/api/tests/fixtures/gdacs_earthquake_search.json","payload_sha256":"sha256:0d3d02a0b68c3cc7e47ae1c673a4c5f47c8a428b56908b966cb6b7df2e10af02","country_code":"IDN","now":"2026-08-24T12:00:00Z","expected_event_ids":["gdacs:eq:1558059"]}
+    },
+    {
+      "case_id": "flood-washington-202512",
+      "hazard": "flood",
+      "source_url": "https://governor.wa.gov/news/2025/governor-ferguson-declares-statewide-emergency-responding-major-flooding",
+      "payload_path": "provider_payload_snapshots.v1.json",
+      "payload_sha256": "sha256:67336021769464c164f5975908b8218bf6563dcf1c1a2f6a751bfd40a15f49ab",
+      "expected_event_identity": "wa:atmospheric-river-flooding:2025-12",
+      "time_bounds_utc": {"from": "2025-12-05T00:00:00Z", "to": "2025-12-22T23:59:59Z"},
+      "expected_observations": [
+        {"observation_id": "wa-flood-2025-observation", "identity_key": "wa:atmospheric-river-flooding:2025-12", "expected_behavior": "Retain the official flood episode and keep later recovery updates as separate evidence."}
+      ],
+      "coverage_gaps": ["A statewide emergency declaration does not define a complete inundation footprint."],
+      "independent_verification_urls": [
+        "https://governor.wa.gov/news/2025/governor-ferguson-declares-statewide-emergency-responding-major-flooding",
+        "https://wsdot.wa.gov/construction-planning/search-projects/us2-beckler-peak-drainage-vicinity-emergency"
+      ],
+      "adapter_replay": {"adapter":"gdacs-flood","payload_path":"apps/api/tests/fixtures/gdacs_flood_search.json","payload_sha256":"sha256:be9cbcd0e2286480a3fb3e49ea09b7a66dfdc0814ee3eab04fc63fb5d81f6f95","country_code":"CHN","now":"2026-08-24T12:00:00Z","expected_event_ids":["gdacs:fl:1104081"]}
+    },
+    {
+      "case_id": "wildfire-california-202501",
+      "hazard": "wildfire",
+      "source_url": "https://disasters.nasa.gov/what-we-do/disasters/disasters-activations/southern-california-wildfires-jan-2025",
+      "payload_path": "provider_payload_snapshots.v1.json",
+      "payload_sha256": "sha256:67336021769464c164f5975908b8218bf6563dcf1c1a2f6a751bfd40a15f49ab",
+      "expected_event_identity": "nasa:california-wildfires:2025-01",
+      "time_bounds_utc": {"from": "2025-01-07T00:00:00Z", "to": "2025-01-31T23:59:59Z"},
+      "expected_observations": [
+        {"observation_id": "ca-wildfire-2025-observation", "identity_key": "nasa:california-wildfires:2025-01", "expected_behavior": "Preserve the source event and distinguish Sentinel-2 imagery context from the physical incident."}
+      ],
+      "coverage_gaps": ["Burn-scar imagery and fire perimeters do not establish building-level damage or current fire status."],
+      "independent_verification_urls": [
+        "https://disasters.nasa.gov/what-we-do/disasters/disasters-activations/southern-california-wildfires-jan-2025",
+        "https://www.fema.gov/sites/default/files/documents/PDAReport_FEMA4856DRexpedited-CA.pdf"
+      ],
+      "adapter_replay": {"adapter":"nasa-eonet-wildfire","payload_path":"apps/api/tests/fixtures/nasa_eonet_wildfires.json","payload_sha256":"sha256:75526b2df857321ab65f0d6bf503ff1c43bef9c4970591499c92bde63dcf4ed7","country_code":"JPN","now":"2026-08-24T12:00:00Z","expected_event_ids":["eonet:EONET_FIXTURE_1"]}
+    },
+    {
+      "case_id": "landslide-los-angeles-202501",
+      "hazard": "landslide",
+      "source_url": "https://www.jpl.nasa.gov/news/nasa-radar-imagery-reveals-details-about-los-angeles-area-landslides/",
+      "payload_path": "provider_payload_snapshots.v1.json",
+      "payload_sha256": "sha256:67336021769464c164f5975908b8218bf6563dcf1c1a2f6a751bfd40a15f49ab",
+      "expected_event_identity": "nasa:jpl:los-angeles-landslides:2025",
+      "time_bounds_utc": {"from": "2025-01-01T00:00:00Z", "to": "2025-02-28T23:59:59Z"},
+      "expected_observations": [
+        {"observation_id": "la-landslide-2025-observation", "identity_key": "nasa:jpl:los-angeles-landslides:2025", "expected_behavior": "Retain radar-derived landslide context as observational evidence without promoting it to a complete landslide inventory."}
+      ],
+      "coverage_gaps": ["Radar analysis and postfire debris-flow context are not a complete field inventory of landslides."],
+      "independent_verification_urls": [
+        "https://www.jpl.nasa.gov/news/nasa-radar-imagery-reveals-details-about-los-angeles-area-landslides/",
+        "https://www.usgs.gov/media/before-after/debris-basin-los-angeles-county-california-and-after-a-postfire-debris-flow"
+      ],
+      "adapter_replay": {"adapter":"nasa-coolr-landslide","payload_path":"apps/api/tests/fixtures/nasa_coolr_landslides.json","payload_sha256":"sha256:e0aa97bb0505b8ca705fc5e95abb5ac53ec21f1c96ce1c85c6d4dd8f1ff8fcd6","country_code":"JPN","now":"2026-08-24T12:00:00Z","expected_event_ids":["coolr:COOLR_FIXTURE_1"]}
+    },
+    {
+      "case_id": "cyclone-helene-202409",
+      "hazard": "tropical_cyclone",
+      "source_url": "https://www.nhc.noaa.gov/archive/2024/HELENE.shtml",
+      "payload_path": "provider_payload_snapshots.v1.json",
+      "payload_sha256": "sha256:67336021769464c164f5975908b8218bf6563dcf1c1a2f6a751bfd40a15f49ab",
+      "expected_event_identity": "nhc:AL092024",
+      "time_bounds_utc": {"from": "2024-09-23T00:00:00Z", "to": "2024-09-29T00:00:00Z"},
+      "expected_observations": [
+        {"observation_id": "helene-2024-observation", "identity_key": "nhc:AL092024", "expected_behavior": "Keep the observed storm occurrence separate from forecast tracks and warning polygons."}
+      ],
+      "coverage_gaps": ["Forecast tracks are not observed footprints and do not establish impact outside reported evidence."],
+      "independent_verification_urls": [
+        "https://www.nhc.noaa.gov/archive/2024/HELENE.shtml",
+        "https://www.nhc.noaa.gov/data/tcr/AL092024_Helene.pdf"
+      ],
+      "adapter_replay": {"adapter":"gdacs-tropical-cyclone","payload_path":"apps/api/tests/fixtures/gdacs_tropical_cyclone_search.json","payload_sha256":"sha256:a01b1809d5fa5c11b52d2ba160c1cdf6d404543e7d3ad95532bd871aebc8787d","country_code":"USA","now":"2026-08-24T12:00:00Z","expected_event_ids":["gdacs:tc:1001303","gdacs:tc:1001304"]}
+    },
+    {
+      "case_id": "volcano-kilauea-202509",
+      "hazard": "volcanic_eruption",
+      "source_url": "https://volcano.si.edu/showreport.cfm?gvpvar=GVP.WVAR20250903-332010",
+      "payload_path": "provider_payload_snapshots.v1.json",
+      "payload_sha256": "sha256:67336021769464c164f5975908b8218bf6563dcf1c1a2f6a751bfd40a15f49ab",
+      "expected_event_identity": "gvp:332010:kilauea:2025",
+      "time_bounds_utc": {"from": "2025-09-03T00:00:00Z", "to": "2025-09-10T23:59:59Z"},
+      "expected_observations": [
+        {"observation_id": "kilauea-2025-observation", "identity_key": "gvp:332010:kilauea:2025", "expected_behavior": "Use the report interval for activity and preserve the source update time for freshness."}
+      ],
+      "coverage_gaps": ["An eruption activity report does not establish impact, evacuation status, or complete hazard extent."],
+      "independent_verification_urls": [
+        "https://volcano.si.edu/showreport.cfm?gvpvar=GVP.WVAR20250903-332010",
+        "https://volcano.si.edu/volcano.cfm?vn=332010"
+      ],
+      "adapter_replay": {"adapter":"gdacs-volcanic-eruption","payload_path":"apps/api/tests/fixtures/gdacs_volcano_search.json","payload_sha256":"sha256:8aa1037b86be825d2552481d0bda0602cc8ceb1842fdcfa142eea5ab38d1f867","country_code":"PHL","now":"2026-08-24T12:00:00Z","expected_event_ids":["gdacs:vo:1000144"]}
+    }
+  ]
+}

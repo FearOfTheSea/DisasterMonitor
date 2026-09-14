@@ -111,16 +111,10 @@ export function SatelliteImageryControls({
             }
           />
         </label>
-      ) : (
-        <span className="satellite-fixed-time">
-          Observation time: configured mosaic period
-        </span>
-      )}
+      ) : null}
       <div className="satellite-source-details" aria-live="polite">
         <span>Provider: {source.provider}</span>
-        <span>
-          Requested observation: {state.observationTime ?? 'configured mosaic period'}
-        </span>
+        <span>Requested observation: {state.observationTime ?? 'not selected'}</span>
         <span>
           Available observation time is not reported by this client; the requested time
           may be unavailable.

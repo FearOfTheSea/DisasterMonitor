@@ -1,0 +1,10 @@
+FROM postgres:17-bookworm
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tool
+COPY scripts/operational_backup.py ./operational_backup.py
+
+ENTRYPOINT ["python3", "/tool/operational_backup.py"]

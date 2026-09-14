@@ -159,6 +159,22 @@ class GroundImageryArtifactWorkflow:
         except ImageryArtifactStoreError as error:
             raise GroundImageryError(str(error)) from error
 
+    async def delete_unreferenced(
+        self,
+        *,
+        referenced_artifact_ids: frozenset[str],
+        older_than: datetime,
+    ) -> tuple[str, ...]:
+        if self._artifact_store is None:
+            return ()
+        try:
+            return await self._artifact_store.delete_unreferenced(
+                referenced_artifact_ids=referenced_artifact_ids,
+                older_than=older_than,
+            )
+        except ImageryArtifactStoreError as error:
+            raise GroundImageryError(str(error)) from error
+
     async def render_tile(self, artifact_id: str, zoom: int, x: int, y: int) -> bytes:
         _identifiers.validate_artifact_id(artifact_id)
         if self._tile_renderer is None:

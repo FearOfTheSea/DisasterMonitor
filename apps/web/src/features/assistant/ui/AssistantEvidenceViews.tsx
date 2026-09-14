@@ -7,8 +7,12 @@ import type {
   DecisionFactStatementType,
   DecisionSupportArtifact,
   DisasterMediaGallery,
+  EvidenceClaim,
+  EvidenceClaimVariant,
+  EvidenceTimelineEntry,
   MultimodalEvidenceState,
 } from '@/shared/types/assistant';
+import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 
 function formatTime(value: string | null | undefined) {
   if (!value) {
@@ -22,6 +26,167 @@ function formatConfidence(value: number | null | undefined) {
   return value === null || value === undefined
     ? 'Confidence not provided'
     : `${Math.round(value * 100)}% model confidence`;
+}
+
+function sourceLabel(source: EvidenceClaimVariant['source'] | null | undefined) {
+  return source ? `${source.publisher}: ${source.title}` : 'Source unavailable';
+}
+
+function ClaimVariantView({
+  variant,
+  contradiction,
+}: {
+  variant: EvidenceClaimVariant;
+  contradiction: boolean;
+}) {
+  return (
+    <article
+      className={`claim-variant${contradiction ? ' claim-variant-contradiction' : ''}`}
+    >
+      <div className="evidence-badges">
+        <span>{contradiction ? 'Contradicting claim' : 'Alternative claim'}</span>
+        <span>{variant.status.replaceAll('_', ' ')}</span>
+        <span>{variant.disposition}</span>
+      </div>
+      <p>{variant.value}</p>
+      <small>{sourceLabel(variant.source)}</small>
+      <DataAgeBadge
+        kind="source"
+        timestamp={variant.published_at ?? variant.observed_at ?? variant.retrieved_at}
+        ageSeconds={variant.source.source_age_seconds}
+        state={variant.disposition === 'conflicting' ? 'degraded' : undefined}
+      />
+      <small>Reconciliation rule: {variant.rule_id}</small>
+    </article>
+  );
+}
+
+function ClaimInspectionView({ claim }: { claim: EvidenceClaim }) {
+  const alternatives = claim.alternatives ?? [];
+  const contradictions = claim.contradictions ?? [];
+
+  return (
+    <article className="claim-inspection" data-testid="evidence-claim">
+      <div className="claim-inspection-heading">
+        <div>
+          <strong>{claim.label}</strong>
+          <small>{claim.claim_key}</small>
+        </div>
+        <div className="evidence-badges">
+          <span>{claim.status.replaceAll('_', ' ')}</span>
+          {claim.disposition ? <span>{claim.disposition}</span> : null}
+        </div>
+      </div>
+      <p>{claim.value ?? 'No current value was admitted.'}</p>
+      <p className="claim-inspection-why">Why: {claim.why}</p>
+      {claim.source ? (
+        <div className="claim-inspection-source">
+          <small>{sourceLabel(claim.source)}</small>
+          <DataAgeBadge
+            kind="source"
+            timestamp={claim.published_at ?? claim.observed_at ?? claim.retrieved_at}
+            ageSeconds={claim.source.source_age_seconds}
+            state={claim.disposition === 'conflicting' ? 'degraded' : undefined}
+          />
+        </div>
+      ) : null}
+      {claim.gap ? <p className="claim-inspection-gap">Gap: {claim.gap}</p> : null}
+      {alternatives.length > 0 || contradictions.length > 0 ? (
+        <details open={contradictions.length > 0}>
+          <summary>
+            {contradictions.length > 0
+              ? `${contradictions.length} contradiction(s) retained`
+              : `${alternatives.length} alternative(s) retained`}
+          </summary>
+          <div className="claim-variant-list">
+            {contradictions.map((variant) => (
+              <ClaimVariantView
+                key={`${variant.observation_id}:${variant.rule_id}`}
+                variant={variant}
+                contradiction
+              />
+            ))}
+            {alternatives.map((variant) => (
+              <ClaimVariantView
+                key={`${variant.observation_id}:${variant.rule_id}`}
+                variant={variant}
+                contradiction={false}
+              />
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </article>
+  );
+}
+
+function EvidenceInspectionView({
+  claims,
+  timeline,
+}: {
+  claims: EvidenceClaim[];
+  timeline: EvidenceTimelineEntry[];
+}) {
+  if (claims.length === 0 && timeline.length === 0) return null;
+  return (
+    <>
+      {claims.length > 0 ? (
+        <section
+          className="claim-inspection-section"
+          aria-label="Claim-level evidence inspection"
+        >
+          <div className="evidence-section-heading">
+            <h3>Claim-level inspection</h3>
+            <span>{claims.length}</span>
+          </div>
+          <p className="evidence-section-note">
+            Current values, source rationale, alternatives, and contradictions remain
+            visible as separate evidence.
+          </p>
+          <div className="claim-inspection-list">
+            {claims.map((claim) => (
+              <ClaimInspectionView key={claim.claim_id} claim={claim} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {timeline.length > 0 ? (
+        <section className="evidence-timeline" aria-label="Report evidence timeline">
+          <div className="evidence-section-heading">
+            <h3>Evidence timeline</h3>
+            <span>{timeline.length}</span>
+          </div>
+          <div className="evidence-timeline-list">
+            {timeline.map((entry) => (
+              <article key={entry.entry_id} className="evidence-timeline-entry">
+                <div className="evidence-timeline-entry-heading">
+                  <strong>{entry.title}</strong>
+                  <time dateTime={entry.occurred_at}>
+                    {formatTime(entry.occurred_at)}
+                  </time>
+                </div>
+                <div className="evidence-badges">
+                  <span>{entry.event_type.replaceAll('_', ' ')}</span>
+                  {entry.status ? (
+                    <span>{entry.status.replaceAll('_', ' ')}</span>
+                  ) : null}
+                </div>
+                <p>{entry.detail}</p>
+                {entry.source ? <small>{sourceLabel(entry.source)}</small> : null}
+                <DataAgeBadge
+                  kind="source"
+                  timestamp={
+                    entry.published_at ?? entry.retrieved_at ?? entry.occurred_at
+                  }
+                  ageSeconds={entry.source?.source_age_seconds}
+                />
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
 }
 
 const DECISION_FACT_LABELS: Record<DecisionFactStatementType, string> = {
@@ -284,6 +449,15 @@ export function DisasterReportView({
                   .join(', ')}`
               : ''}
           </span>
+          <DataAgeBadge
+            kind="source"
+            timestamp={
+              report.selectedEvent.source.updated_at ??
+              report.selectedEvent.source.published_at ??
+              report.selectedEvent.source.retrieved_at
+            }
+            ageSeconds={report.selectedEvent.source.source_age_seconds}
+          />
           {report.selectedEvent.geography_status === 'country_associated_offshore' && (
             <small>Country-associated offshore event</small>
           )}
@@ -297,6 +471,7 @@ export function DisasterReportView({
           </section>
         ))}
       </div>
+      <EvidenceInspectionView claims={report.claims} timeline={report.timeline} />
       {report.mediaGallery && <SourceMediaGallery gallery={report.mediaGallery} />}
       {report.decisionSupport && (
         <DecisionEvidenceView artifact={report.decisionSupport} />
@@ -323,6 +498,13 @@ export function DisasterReportView({
                 {formatTime(source.updated_at ?? source.published_at)}
                 {' · '}Retrieved: {formatTime(source.retrieved_at)}
               </small>
+              <DataAgeBadge
+                kind="source"
+                timestamp={
+                  source.updated_at ?? source.published_at ?? source.retrieved_at
+                }
+                ageSeconds={source.source_age_seconds}
+              />
               {source.snapshot_id && <small>Snapshot: {source.snapshot_id}</small>}
             </a>
           ))}

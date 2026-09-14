@@ -10,6 +10,25 @@ export type ProviderFreshness = {
   expected_freshness_seconds: number;
   consecutive_failures: number;
   latest_error_code: string | null;
+  health_state?: 'healthy' | 'stale' | 'degraded' | 'unavailable' | 'misconfigured';
+  source_publication_age_seconds?: number | null;
+  retrieval_lag_seconds?: number | null;
+  parse_failures?: number;
+  admission_failures?: number;
+  truncated?: boolean;
+  stale_projection_age_seconds?: number | null;
+  hazard?: string | null;
+};
+
+export type ProviderBudget = {
+  provider_id: string;
+  budget_window: string;
+  limit_units: number;
+  reserved_units: number;
+  settled_units: number;
+  released_units: number;
+  remaining_units: number;
+  reset_at: string;
 };
 
 export type CountryCatalogUpdateState =

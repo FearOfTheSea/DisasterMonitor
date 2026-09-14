@@ -1,0 +1,32 @@
+.data-age-badge {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 0.64rem;
+  gap: 5px;
+  line-height: 1.2;
+  padding: 4px 7px;
+}
+
+.data-age-badge strong {
+  color: var(--ink-soft);
+  font-weight: 720;
+}
+
+.data-age-badge time {
+  overflow-wrap: anywhere;
+}
+
+.data-age-badge-stale {
+  background: var(--warning-soft);
+  border-color: #efd99e;
+  color: var(--warning);
+}
+
+.data-age-badge-stale strong {
+  color: var(--warning);
+}

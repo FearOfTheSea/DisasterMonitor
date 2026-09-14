@@ -109,7 +109,7 @@ def _validate_observation_time(
     if product.temporal_mode == "fixed":
         if value is not None:
             raise SatelliteImageryInputError(
-                "The configured mosaic does not accept an observation time."
+                "This imagery source does not accept an observation time."
             )
         return
     if value is None:

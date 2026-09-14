@@ -19,6 +19,7 @@ from disaster_monitor.application.ingestion.failure_policy import (
     terminal_failure,
 )
 from disaster_monitor.application.ports.ingest_jobs import IngestJobQueue
+from disaster_monitor.application.ports.provider_budget import ProviderBudgetLedger
 from disaster_monitor.application.ports.source_payload import (
     SourcePayloadAcquirer,
 )
@@ -155,11 +156,15 @@ class IngestionWorker:
         acquirers: Mapping[str, SourcePayloadAcquirer],
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        budget_ledger: ProviderBudgetLedger | None = None,
+        provider_budget_limits: Mapping[str, int] | None = None,
     ) -> None:
         self._repository = repository
         self._persistence = persistence
         self._acquirers = dict(acquirers)
         self._clock = clock
+        self._budget_ledger = budget_ledger
+        self._provider_budget_limits = dict(provider_budget_limits or {})
 
     async def run_once(self, worker_id: str) -> IngestJob | None:
         now = self._clock()
@@ -177,10 +182,32 @@ class IngestionWorker:
             return job
 
         async def acquire_and_persist() -> None:
-            payload = await acquirer.acquire(job.canonical_request_identity)
-            if payload.source_id != job.source_id:
-                raise ValueError("Acquirer source identity escaped its registration.")
-            await self._persistence.persist(payload)
+            reservation = None
+            budget_ledger = self._budget_ledger
+            if budget_ledger is not None:
+                reservation = await budget_ledger.reserve(
+                    job.source_id,
+                    worker_id=worker_id,
+                    estimated_units=1,
+                    limit_units=self._provider_budget_limits.get(job.source_id, 100),
+                    now=now,
+                )
+            try:
+                payload = await acquirer.acquire(job.canonical_request_identity)
+                if payload.source_id != job.source_id:
+                    raise ValueError(
+                        "Acquirer source identity escaped its registration."
+                    )
+                await self._persistence.persist(payload)
+            except Exception:
+                if reservation is not None and budget_ledger is not None:
+                    await budget_ledger.release(reservation.reservation_id, now=now)
+                raise
+            else:
+                if reservation is not None and budget_ledger is not None:
+                    await budget_ledger.settle(
+                        reservation.reservation_id, actual_units=1, now=now
+                    )
 
         await execute_claimed_job(
             self._repository,
@@ -206,7 +233,9 @@ async def execute_claimed_job(
             repository, job, failed_at=failed_at, error=error
         )
     else:
-        await repository.complete(job.job_id, completed_at=failed_at)
+        await repository.complete(
+            job.job_id, completed_at=failed_at, fencing_token=job.fencing_token
+        )
 
 
 async def record_execution_failure(
@@ -226,6 +255,8 @@ async def record_execution_failure(
         failed_at=failed_at,
         error_code=decision.error_code,
         retry_at=decision.retry_at,
+        fencing_token=job.fencing_token,
+        error_detail=f"{type(error).__name__}: {error}",
     )
 
 
@@ -242,4 +273,6 @@ async def record_terminal_failure(
         failed_at=failed_at,
         error_code=decision.error_code,
         retry_at=decision.retry_at,
+        fencing_token=job.fencing_token,
+        error_detail="The scheduled identity is not registered by the worker.",
     )

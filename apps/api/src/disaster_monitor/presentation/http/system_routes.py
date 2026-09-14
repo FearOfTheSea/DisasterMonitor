@@ -1,5 +1,6 @@
 """FastAPI routes for the MVP."""
 
+from datetime import UTC, datetime
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -17,6 +18,7 @@ from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import (
     MonitoringReadinessReader,
 )
+from disaster_monitor.application.ports.provider_budget import ProviderBudgetLedger
 from disaster_monitor.presentation.http.metrics import OperationalMetrics
 from disaster_monitor.presentation.http.response_serialization import (
     _country_catalog_response,
@@ -25,6 +27,7 @@ from disaster_monitor.presentation.http.schemas import (
     CountryCatalogUpdateResponse,
     HealthResponse,
     MonitoringReadinessResponse,
+    ProviderBudgetResponse,
     ProviderFreshnessResponse,
     ReadinessResponse,
 )
@@ -51,6 +54,13 @@ def get_provider_freshness(request: Request) -> ProviderFreshnessService:
     return cast(
         ProviderFreshnessService, request.app.state.dependencies.provider_freshness
     )
+
+
+def get_provider_budget(request: Request) -> ProviderBudgetLedger:
+    ledger = request.app.state.dependencies.provider_budget
+    if ledger is None:
+        raise RuntimeError("Provider budget accounting was not configured.")
+    return cast(ProviderBudgetLedger, ledger)
 
 
 def get_country_catalog_automation(request: Request) -> CountryCatalogUpdateAutomation:
@@ -158,8 +168,40 @@ async def provider_freshness(
             expected_freshness_seconds=item.expected_freshness_seconds,
             consecutive_failures=item.consecutive_failures,
             latest_error_code=item.latest_error_code,
+            health_state=item.health_state.value,
+            source_publication_age_seconds=item.source_publication_age_seconds,
+            retrieval_lag_seconds=item.retrieval_lag_seconds,
+            parse_failures=item.parse_failures,
+            admission_failures=item.admission_failures,
+            truncated=item.truncated,
+            stale_projection_age_seconds=item.stale_projection_age_seconds,
+            hazard=item.hazard,
         )
         for item in values
+    ]
+
+
+@router.get(
+    "/operations/provider-budgets",
+    response_model=list[ProviderBudgetResponse],
+    tags=["operations"],
+)
+async def provider_budgets(request: Request) -> list[ProviderBudgetResponse]:
+    """Expose reserved/settled provider request units without credentials."""
+    ledger = get_provider_budget(request)
+    values = await ledger.status(now=datetime.now(UTC))
+    return [
+        ProviderBudgetResponse(
+            provider_id=value.provider_id,
+            budget_window=value.budget_window,
+            limit_units=value.limit_units,
+            reserved_units=value.reserved_units,
+            settled_units=value.settled_units,
+            released_units=value.released_units,
+            remaining_units=value.remaining_units,
+            reset_at=value.reset_at,
+        )
+        for value in values
     ]
 
 

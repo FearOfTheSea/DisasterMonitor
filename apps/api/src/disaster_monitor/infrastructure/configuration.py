@@ -32,12 +32,6 @@ class Settings(BaseSettings):
         default=3_000_000, ge=100_000, le=5_000_000
     )
     weather_alert_max_records: int = Field(default=500, ge=1, le=500)
-    copernicus_sentinel_hub_instance_id: SecretStr | None = Field(
-        default=None, repr=False
-    )
-    copernicus_sentinel_hub_layer_id: str = Field(
-        default="TRUE_COLOR", pattern=r"^[A-Za-z0-9_-]+$"
-    )
     cdse_stac_url: str = "https://stac.dataspace.copernicus.eu/v1/search"
     cdse_process_url: str = "https://sh.dataspace.copernicus.eu/process/v1"
     cdse_token_url: str = (
@@ -57,8 +51,9 @@ class Settings(BaseSettings):
     ground_imagery_storage_budget_bytes: int = Field(
         default=20 * 1024**3, ge=1_000_000, le=100 * 1024**3
     )
-    planet_api_key: SecretStr | None = Field(default=None, repr=False)
-    planet_mosaic_name: str | None = Field(default=None, max_length=200)
+    ground_imagery_job_lease_seconds: int = Field(default=300, ge=30, le=3_600)
+    ground_imagery_budget_units_per_hour: int = Field(default=100, ge=1, le=10_000)
+    ground_imagery_retention_days: int = Field(default=30, ge=1, le=3650)
     event_media_enabled: bool = True
     event_media_target_count: int = Field(default=3, ge=1, le=6)
     event_media_candidate_limit: int = Field(default=12, ge=3, le=30)

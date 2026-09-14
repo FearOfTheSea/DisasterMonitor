@@ -21,6 +21,8 @@ const baseReport: NonNullable<ConversationMessage['report']> = {
   warnings: [],
   sections: [],
   partial: false,
+  claims: [],
+  timeline: [],
 };
 
 const selectedEvent = {

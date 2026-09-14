@@ -12,6 +12,9 @@ from disaster_monitor.application.ingestion.provider_freshness import (
 from disaster_monitor.domain.operations import (
     FreshnessState,
     OperatorDecision,
+    ProviderAttempt,
+    ProviderAttemptOutcome,
+    ProviderHealthState,
     SourceSnapshotRecord,
     WorldStateVersionRecord,
 )
@@ -57,6 +60,57 @@ async def test_provider_freshness_service_owns_expectations_and_clock() -> None:
     assert by_source["usgs-earthquakes"].state is FreshnessState.STALE
     assert by_source["usgs-earthquakes"].age_seconds == 20 * 60
     assert by_source["gdacs-tropical-cyclones"].state is (FreshnessState.NEVER_INGESTED)
+
+
+@pytest.mark.asyncio
+async def test_provider_health_recovers_and_lag_uses_publication_time() -> None:
+    repository = InMemoryOperationalRepository()
+    await repository.append_snapshot(
+        SourceSnapshotRecord(
+            snapshot_id="snapshot:recovered",
+            idempotency_key="snapshot-key:recovered",
+            source_id="fixture-source",
+            canonical_request_identity="request:fixture",
+            provider_revision="revision-1",
+            retrieved_at=NOW - timedelta(minutes=5),
+            published_at=NOW - timedelta(minutes=10),
+            observed_at=NOW - timedelta(days=2),
+            response_status=200,
+            content_type="application/json",
+            payload_sha256="sha256:" + "d" * 64,
+            payload_size_bytes=10,
+            blob_uri="file:///bounded/recovered.json",
+            rights_id="fixture-rights",
+        )
+    )
+    await repository.record_provider_attempt(
+        ProviderAttempt(
+            source_id="fixture-source",
+            attempted_at=NOW - timedelta(minutes=6),
+            outcome=ProviderAttemptOutcome.FAILED,
+            reason_code="invalid_payload",
+            parse_failure=True,
+        )
+    )
+    await repository.record_provider_attempt(
+        ProviderAttempt(
+            source_id="fixture-source",
+            attempted_at=NOW - timedelta(minutes=5),
+            outcome=ProviderAttemptOutcome.SUCCESS,
+        )
+    )
+
+    value = (
+        await ProviderFreshnessService(
+            repository,
+            expectations={"fixture-source": timedelta(days=3)},
+            clock=lambda: NOW,
+        ).list()
+    )[0]
+
+    assert value.health_state is ProviderHealthState.HEALTHY
+    assert value.parse_failures == 0
+    assert value.retrieval_lag_seconds == 5 * 60
 
 
 @pytest.mark.asyncio

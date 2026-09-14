@@ -12,6 +12,7 @@ from disaster_monitor.domain.operations import (
     ProviderAttemptOutcome,
     ProviderFreshness,
     SourceSnapshotRecord,
+    current_attempt_diagnostics,
     freshness_for,
 )
 from disaster_monitor.infrastructure.operations.postgres_ingestion_evidence import (
@@ -32,8 +33,9 @@ class PostgresProviderStatusRepository(PostgresRepositoryBase):
                     """
                     INSERT INTO provider_attempt(
                         source_id, attempted_at, outcome, reason_code,
-                        retryable, http_status, records_seen
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                        retryable, http_status, records_seen, published_at,
+                        parse_failure, admission_failure, truncated, hazard
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """,
                     (
                         attempt.source_id,
@@ -43,6 +45,11 @@ class PostgresProviderStatusRepository(PostgresRepositoryBase):
                         attempt.retryable,
                         attempt.http_status,
                         attempt.records_seen,
+                        attempt.published_at,
+                        attempt.parse_failure,
+                        attempt.admission_failure,
+                        attempt.truncated,
+                        attempt.hazard,
                     ),
                 )
 
@@ -58,7 +65,8 @@ class PostgresProviderStatusRepository(PostgresRepositoryBase):
                 await cursor.execute(
                     """
                     SELECT source_id, attempted_at, outcome, reason_code,
-                           retryable, http_status, records_seen
+                           retryable, http_status, records_seen, published_at,
+                           parse_failure, admission_failure, truncated, hazard
                     FROM provider_attempt
                     WHERE source_id=%s
                     ORDER BY attempted_at DESC, attempt_id DESC
@@ -92,6 +100,16 @@ class PostgresProviderStatusRepository(PostgresRepositoryBase):
                 consecutive += 1
             if not attempts and failed:
                 consecutive = 1
+            published_at = (
+                snapshot.published_at
+                if snapshot is not None and snapshot.published_at is not None
+                else last_attempt.published_at
+                if last_attempt is not None
+                else None
+            )
+            parse_failures, admission_failures, truncated, hazard = (
+                current_attempt_diagnostics(attempts)
+            )
             results.append(
                 freshness_for(
                     source_id=source_id,
@@ -120,6 +138,27 @@ class PostgresProviderStatusRepository(PostgresRepositoryBase):
                         if job
                         else None
                     ),
+                    source_publication_age_seconds=(
+                        max(0, int((now - published_at).total_seconds()))
+                        if published_at is not None
+                        else None
+                    ),
+                    retrieval_lag_seconds=(
+                        max(
+                            0,
+                            int(
+                                (
+                                    snapshot.retrieved_at - snapshot.published_at
+                                ).total_seconds()
+                            ),
+                        )
+                        if snapshot is not None and snapshot.published_at is not None
+                        else None
+                    ),
+                    parse_failures=parse_failures,
+                    admission_failures=admission_failures,
+                    truncated=truncated,
+                    hazard=hazard,
                 )
             )
         return tuple(results)
@@ -167,4 +206,9 @@ def provider_attempt_from_row(row: dict[str, Any]) -> ProviderAttempt:
             int(row["http_status"]) if row["http_status"] is not None else None
         ),
         records_seen=int(row["records_seen"]),
+        published_at=cast(datetime | None, row.get("published_at")),
+        parse_failure=bool(row.get("parse_failure", False)),
+        admission_failure=bool(row.get("admission_failure", False)),
+        truncated=bool(row.get("truncated", False)),
+        hazard=cast(str | None, row.get("hazard")),
     )

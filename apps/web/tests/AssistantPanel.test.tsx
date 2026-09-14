@@ -24,6 +24,8 @@ describe('AssistantPanel', () => {
               warnings: [],
               sections: [],
               sources: [],
+              claims: [],
+              timeline: [],
               investigation: {
                 status: 'partial',
                 task_summary: 'Latest cyclone in Japan',
@@ -317,6 +319,8 @@ describe('AssistantPanel', () => {
                   retrieved_at: '2026-08-05T12:00:00Z',
                 },
               ],
+              claims: [],
+              timeline: [],
               investigation: {
                 status: 'partial',
                 task_summary: 'Latest earthquake in Japan',
@@ -428,6 +432,8 @@ describe('AssistantPanel', () => {
               sections: [],
               sources: [],
               partial: false,
+              claims: [],
+              timeline: [],
               multimodal: multimodalState,
               commonOperationalPicture,
             },
@@ -465,6 +471,8 @@ describe('AssistantPanel', () => {
               sections: [],
               sources: [],
               partial: false,
+              claims: [],
+              timeline: [],
               mediaGallery: {
                 event_id: 'us6000tjl2',
                 physical_event_id: 'physical-event:colombia',
@@ -547,6 +555,8 @@ describe('AssistantPanel', () => {
               sections: [],
               sources: [],
               partial: false,
+              claims: [],
+              timeline: [],
               mediaGallery: {
                 event_id: 'event-1',
                 physical_event_id: 'physical-event-1',
@@ -591,6 +601,8 @@ describe('AssistantPanel', () => {
               sections: [],
               sources: [],
               partial: false,
+              claims: [],
+              timeline: [],
               decisionSupport: {
                 artifact_id: 'decision-support:fixture',
                 evidence_state_version: 'evidence-state:fixture',

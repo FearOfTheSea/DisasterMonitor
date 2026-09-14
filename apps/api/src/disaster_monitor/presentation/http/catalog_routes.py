@@ -1,6 +1,6 @@
 """FastAPI routes for the MVP."""
 
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
@@ -72,6 +72,9 @@ async def satellite_imagery_catalog(
                 maximum_useful_zoom=product.maximum_useful_zoom,
                 access_mode=product.access_mode,
                 available=product.available,
+                rights_id=product.rights_id,
+                access_model=product.access_model,
+                license_name=product.license_name,
             )
             for product in service.catalog()
         ]
@@ -116,6 +119,13 @@ async def source_catalog(
                     provider_tier=item.operational_state.provider_tier,
                     execution_roles=list(item.operational_state.execution_roles),
                 ),
+                rights_id=item.rights_id,
+                access_model=cast(
+                    Literal["public", "free_account", "self_hosted", "paid"] | None,
+                    item.access_model,
+                ),
+                license_name=item.license_name,
+                rights_reviewed_at=item.rights_reviewed_at,
             )
             for item in snapshot.sources
         ],

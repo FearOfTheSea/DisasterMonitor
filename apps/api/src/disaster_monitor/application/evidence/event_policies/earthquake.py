@@ -205,6 +205,7 @@ class EarthquakeEventPolicy(BaseEventPolicy):
                 query.date_to,
                 query.prefecture,
                 query.city,
+                query.location_hint,
                 query.latitude is not None and query.longitude is not None,
                 query.discriminator("magnitude") is not None,
             )
