@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+from typing import Protocol
 from urllib.parse import urlsplit
 
 from disaster_monitor.application.agent.models import SourceInformationRole
@@ -10,6 +11,8 @@ from disaster_monitor.application.ports.candidate_source_store import (
 )
 from disaster_monitor.application.ports.source_catalog import SourceCatalog
 from disaster_monitor.application.source_intelligence import (
+    CandidateSourceInspection,
+    CandidateSourceProbeResult,
     CandidateSourceRecord,
     CandidateSourceStatus,
     CandidateSourceSubmission,
@@ -118,6 +121,49 @@ class SourceScout:
         ):
             risks.append("authority_claim_on_shared_host")
         return tuple(risks)
+
+
+class CandidateSourceProbe(Protocol):
+    async def inspect(
+        self, homepage_url: str, *, license_url: str | None
+    ) -> CandidateSourceProbeResult: ...
+
+
+class SourceCandidateWorkbench:
+    """Run bounded technical checks while keeping promotion a human decision."""
+
+    def __init__(self, scout: SourceScout, probe: CandidateSourceProbe) -> None:
+        self._scout = scout
+        self._probe = probe
+
+    async def inspect(
+        self, submission: CandidateSourceSubmission
+    ) -> CandidateSourceInspection:
+        record = self._scout.assess(submission)
+        if record.status is CandidateSourceStatus.REJECTED:
+            return CandidateSourceInspection(
+                record, None, False, False, False, record.risk_flags
+            )
+        probe = await self._probe.inspect(
+            submission.homepage_url, license_url=submission.license_url
+        )
+        expected = set(submission.expected_fields)
+        schema_matches = bool(expected) and expected <= set(probe.top_level_fields)
+        findings: list[str] = []
+        if not probe.reachable or probe.status_code != 200:
+            findings.append("endpoint_unreachable")
+        if not schema_matches:
+            findings.append("schema_shape_unconfirmed")
+        if not probe.license_reachable:
+            findings.append("license_terms_unavailable")
+        return CandidateSourceInspection(
+            record=record,
+            probe=probe,
+            schema_matches=schema_matches,
+            license_terms_available=probe.license_reachable,
+            ready_for_human_review=not findings,
+            findings=tuple(findings),
+        )
 
 
 def _roles_for(signals: tuple[str, ...]) -> tuple[SourceInformationRole, ...]:

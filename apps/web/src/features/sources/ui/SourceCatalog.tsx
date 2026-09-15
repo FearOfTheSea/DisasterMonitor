@@ -9,10 +9,25 @@ import {
   REFRESH_POLICIES,
   type RefreshController,
 } from '@/shared/model/refreshPolicy';
+import {
+  readOfflineSnapshot,
+  writeOfflineSnapshot,
+} from '@/shared/model/offlineSnapshot';
 
 type SourceCatalogProps = {
   onClose: () => void;
 };
+
+const SOURCE_CATALOG_CACHE_KEY = 'disaster-monitor:pwa:source-catalog:v1';
+
+function isSourceCatalogSnapshot(value: unknown): value is SourceCatalogSnapshot {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as SourceCatalogSnapshot).catalog_version === 'string' &&
+    Array.isArray((value as SourceCatalogSnapshot).sources)
+  );
+}
 
 function label(value: string): string {
   return value.replaceAll('_', ' ');
@@ -22,18 +37,31 @@ export function SourceCatalog({ onClose }: SourceCatalogProps) {
   const [snapshot, setSnapshot] = useState<SourceCatalogSnapshot>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [offlineCachedAt, setOfflineCachedAt] = useState<string>();
   const refreshController = useRef<RefreshController | undefined>(undefined);
   const load = useCallback(async (signal: AbortSignal) => {
     try {
       const next = await fetchSourceCatalog(signal);
       if (signal.aborted) return;
       setSnapshot(next);
+      writeOfflineSnapshot(SOURCE_CATALOG_CACHE_KEY, next);
+      setOfflineCachedAt(undefined);
       setError(undefined);
     } catch (caught) {
       if (signal.aborted) return;
-      setError(
-        caught instanceof Error ? caught.message : 'Source Catalog could not load.',
+      const cached = readOfflineSnapshot(
+        SOURCE_CATALOG_CACHE_KEY,
+        isSourceCatalogSnapshot,
       );
+      if (cached) {
+        setSnapshot(cached.value);
+        setOfflineCachedAt(cached.cachedAt);
+        setError(undefined);
+      } else {
+        setError(
+          caught instanceof Error ? caught.message : 'Source Catalog could not load.',
+        );
+      }
     } finally {
       if (!signal.aborted) setLoading(false);
     }
@@ -81,6 +109,12 @@ export function SourceCatalog({ onClose }: SourceCatalogProps) {
         </div>
         {loading && !snapshot ? <p role="status">Loading Source Catalog…</p> : null}
         {error ? <p role="alert">{error}</p> : null}
+        {offlineCachedAt ? (
+          <p role="status">
+            Offline · read-only · stale source catalog cached{' '}
+            {new Date(offlineCachedAt).toLocaleString()}.
+          </p>
+        ) : null}
         <p className="source-catalog-boundary">
           This catalog is informational. It cannot enable, disable, or reprioritize a
           provider.

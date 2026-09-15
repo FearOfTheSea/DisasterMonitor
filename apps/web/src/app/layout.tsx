@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { PwaRegistration } from './PwaRegistration';
 import './globals.css';
 import '../features/map/ui/map.css';
 import '../features/incidents/ui/activeIncidents.css';
@@ -26,7 +27,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <PwaRegistration />
+        {children}
+      </body>
     </html>
   );
 }

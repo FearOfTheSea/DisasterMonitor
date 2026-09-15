@@ -25,6 +25,7 @@ from disaster_monitor.application.agent.task_normalization import (
     validate_disaster_task,
 )
 from disaster_monitor.application.agent.tooling import ToolRegistry, execute_plan
+from disaster_monitor.application.agent.tools import MAX_TOOL_CALLS
 from disaster_monitor.application.agent.trace import ExecutionTrace, TraceEventKind
 from disaster_monitor.application.disaster import GeographicScope
 from disaster_monitor.application.investigation.disaster_query_parser import (
@@ -346,6 +347,7 @@ class DisasterAgentRuntime:
         conversation_id: str | None,
         initial_tool_call_count: int = 0,
         allow_model_backed_specialists: bool = True,
+        maximum_tool_calls: int = MAX_TOOL_CALLS,
     ) -> AgentExecutionState:
         """Run one prevalidated single-hazard task without model orchestration.
 
@@ -395,6 +397,7 @@ class DisasterAgentRuntime:
                 self._tools,
                 stop_before_composition=True,
                 trace_phase="investigation_branch",
+                maximum_tool_calls=maximum_tool_calls,
             )
         except Exception as error:
             state.final_status = AgentStatus.FAILED
@@ -418,6 +421,7 @@ class DisasterAgentRuntime:
                 self._tools,
                 step_ids=(composition_step.step_id,),
                 trace_phase="investigation_branch_composition",
+                maximum_tool_calls=maximum_tool_calls,
             )
             state.trace.record(
                 TraceEventKind.COMPOSITION, step_id=composition_step.step_id

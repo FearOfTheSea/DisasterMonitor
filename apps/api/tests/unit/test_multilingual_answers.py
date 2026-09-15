@@ -78,6 +78,11 @@ class EnglishLocalizerMustNotRun(LocalizerFailure):
         raise AssertionError("English deterministic reports need no localization.")
 
 
+class FixedLocalizer(LocalizerFailure):
+    async def localize_grounded_response(self, report, language):
+        return report.message.replace("Situation summary", "Tóm tắt tình hình")
+
+
 class UnusedGeneralModel:
     async def generate(self, request):
         raise AssertionError("general model is not used")
@@ -146,6 +151,18 @@ async def test_english_grounded_answer_skips_model_localization() -> None:
 
     assert "42 people were affected" in answer.message
     assert not any("localization" in item.casefold() for item in answer.warnings)
+
+
+@pytest.mark.asyncio
+async def test_localized_answer_retains_original_grounded_text() -> None:
+    answer = await RunDisasterAgent(
+        FixedRuntime(), UnusedGeneralModel(), agent_model=FixedLocalizer()
+    ).execute("Câu hỏi", conversation_id="test")
+
+    assert "Tóm tắt tình hình" in answer.message
+    assert answer.original_message is not None
+    assert "Situation summary" in answer.original_message
+    assert answer.response_language == "vi"
 
 
 @pytest.mark.asyncio

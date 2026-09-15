@@ -14,6 +14,9 @@ from disaster_monitor.domain.disaster import Disaster, IncidentActivityStatus
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
+from disaster_monitor.infrastructure.operations.memory_repository import (
+    InMemoryOperationalRepository,
+)
 
 from .active_incidents_support import (
     NOW,
@@ -87,6 +90,7 @@ async def test_lifecycle_views_keep_onset_and_update_time_separate() -> None:
     assert [item.event_id for item in recent_result.incidents] == ["recent"]
     assert [item.event_id for item in ongoing_result.incidents] == ["ongoing-old"]
     assert [item.event_id for item in updated_result.incidents] == [
+        "ongoing-old",
         "recent",
         "updated-old",
     ]
@@ -155,3 +159,89 @@ async def test_filters_search_complete_inventory_before_three_row_pages() -> Non
     )
     assert [item.event_id for item in matching.incidents] == ["quake-24"]
     assert matching.has_more is False
+
+
+@pytest.mark.asyncio
+async def test_historical_view_uses_explicit_utc_occurrence_interval() -> None:
+    event = _event(
+        "view-source",
+        Disaster.EARTHQUAKE,
+        "historical-quake",
+        NOW - timedelta(days=100),
+    )
+    provider = FakeWorldwideProvider("view-source", ProviderBatch((event,)))
+    service = _service(provider)
+    start = NOW - timedelta(days=101)
+    end = NOW - timedelta(days=99)
+
+    result = await service.execute(
+        ActiveIncidentsQuery(
+            view=IncidentView.HISTORICAL,
+            occurrence_start=start,
+            occurrence_end=end,
+        )
+    )
+
+    assert [item.event_id for item in result.incidents] == ["historical-quake"]
+    assert provider.queries[0][0].occurrence_start == start
+    assert provider.queries[0][0].occurrence_end == end
+    assert result.historical_limitations
+
+
+@pytest.mark.asyncio
+async def test_recently_changed_ignores_source_timestamp_only_updates() -> None:
+    incident = _event(
+        "view-source",
+        Disaster.EARTHQUAKE,
+        "stable-quake",
+        NOW - timedelta(days=20),
+    )
+    timestamp_only = replace(
+        incident,
+        source=replace(incident.source, updated_at=NOW),
+    )
+    repository = InMemoryOperationalRepository()
+    registry = ProviderRegistry(
+        (
+            _registration(
+                "View source",
+                FakeWorldwideProvider("view-source", ProviderBatch((timestamp_only,))),
+                Disaster.EARTHQUAKE,
+            ),
+        )
+    )
+    await ActiveIncidentsService(
+        registry,
+        country_catalog=StaticCountryCatalog(),
+        clock=lambda: NOW - timedelta(days=10),
+        projection_store=repository,
+    ).refresh(ActiveIncidentsQuery(time_window_days=30))
+    unchanged = await ActiveIncidentsService(
+        registry,
+        country_catalog=StaticCountryCatalog(),
+        clock=lambda: NOW,
+        projection_store=repository,
+    ).refresh(
+        ActiveIncidentsQuery(time_window_days=7, view=IncidentView.RECENTLY_UPDATED)
+    )
+
+    assert unchanged.incidents == ()
+
+
+def test_explicit_occurrence_interval_is_fail_closed() -> None:
+    with pytest.raises(ValueError, match="require both"):
+        ActiveIncidentsQuery(
+            view=IncidentView.HISTORICAL,
+            occurrence_start=NOW - timedelta(days=2),
+        )
+    with pytest.raises(ValueError, match="require historical"):
+        ActiveIncidentsQuery(
+            occurrence_start=NOW - timedelta(days=2),
+            occurrence_end=NOW,
+        )
+    with pytest.raises(ValueError, match="at most 366 days"):
+        ActiveIncidentsQuery(
+            view=IncidentView.HISTORICAL,
+            occurrence_start=NOW - timedelta(days=367),
+            occurrence_end=NOW,
+        )

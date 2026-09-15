@@ -1,8 +1,10 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from disaster_monitor.application.evidence.event_policies import (
     ASSOCIATION_LIMITATION,
     CompoundHazardCorrelationService,
+    CompoundHazardRuleRegistry,
 )
 from disaster_monitor.application.incidents.active_incidents import ActiveIncident
 from disaster_monitor.application.incidents.country_association import (
@@ -14,6 +16,7 @@ from disaster_monitor.domain.disaster import (
     EventCoordinate,
     EventGeometry,
     EventGeometryKind,
+    ObservationKind,
     ProviderTier,
     SourceAuthority,
     SourceReference,
@@ -320,3 +323,27 @@ def test_source_ids_summary_and_non_causation_limitation_are_retained() -> None:
     assert "flood" in result[0].summary
     assert result[0].limitation == ASSOCIATION_LIMITATION
     assert "causation" in result[0].limitation
+
+
+def test_rule_registry_exposes_rationale_gates_and_geometry_requirements() -> None:
+    rule = CompoundHazardRuleRegistry.default().for_pair(
+        Disaster.EARTHQUAKE, Disaster.LANDSLIDE
+    )
+
+    assert rule is not None
+    assert rule.rationale
+    assert rule.maximum_distance_km == 150
+    assert rule.maximum_time_seconds == 72 * 3600
+    assert rule.first_geometry_kinds == (EventGeometryKind.POINT,)
+    assert rule.second_geometry_kinds == (EventGeometryKind.POINT,)
+    assert rule.non_causality_statement == ASSOCIATION_LIMITATION
+
+
+def test_cyclone_flood_rule_excludes_forecast_acquisition_observations() -> None:
+    forecast = replace(
+        _incident(Disaster.TROPICAL_CYCLONE, "forecast"),
+        observation_kind=ObservationKind.ACQUISITION,
+    )
+    flood = _incident(Disaster.FLOOD, "flood")
+
+    assert _correlate(forecast, flood) == ()

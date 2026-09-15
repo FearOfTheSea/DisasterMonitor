@@ -33,6 +33,7 @@ from disaster_monitor.application.disaster import (
     GeographicScope,
     QueryParseStatus,
 )
+from disaster_monitor.application.disaster_aliases import aliases_for
 from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
     has_explicit_date,
@@ -42,6 +43,7 @@ from disaster_monitor.application.investigation.disaster_query_policy import (
     default_disaster_query_policies,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
+from disaster_monitor.domain.disaster import Country, Disaster
 
 
 def validate_disaster_task(
@@ -52,7 +54,7 @@ def validate_disaster_task(
     query_parser: DisasterQueryParser,
 ) -> ValidatedDisasterTask:
     """Canonicalize only through maintained deterministic application metadata."""
-    task = _validate_two_hazard_task(
+    task = _validate_multi_hazard_task(
         question,
         draft,
         country_catalog=country_catalog,
@@ -72,13 +74,13 @@ def validate_disaster_task(
     )
 
 
-def _validate_two_hazard_task(
+def _validate_multi_hazard_task(
     question: str,
     draft: DisasterTaskDraft,
     *,
     country_catalog: CountryCatalog,
 ) -> ValidatedDisasterTask | None:
-    """Admit only deterministic, current, country-scoped two-hazard requests.
+    """Admit deterministic current investigations with two to four branches.
 
     This runs before canonical model validation so the model cannot select one of the
     hazards or provide the identity of a second branch.
@@ -89,13 +91,13 @@ def _validate_two_hazard_task(
     needs = _information_needs(question)
     modalities = _output_modalities(question) or (OutputModality.TEXT,)
     response_language = _safe_response_language(draft.requested_response_language)
-    if len(disasters) != 2:
+    if len(disasters) > 4:
         return _limited_task(
             question,
             True,
             ValidationStatus.CLARIFICATION_REQUIRED,
-            "Investigation Agent v1 supports exactly two explicit disasters in one "
-            "country-scoped investigation.",
+            "A bounded investigation supports at most four explicit hazard-country "
+            "branches. Narrow the request.",
             information_needs=needs,
             output_modalities=modalities,
             response_language=response_language,
@@ -106,8 +108,8 @@ def _validate_two_hazard_task(
             question,
             True,
             ValidationStatus.CLARIFICATION_REQUIRED,
-            "Investigation Agent v1 supports exactly one maintained country, not "
-            "worldwide two-hazard coverage.",
+            "Bounded multi-hazard investigations require explicit maintained "
+            "countries, not worldwide scope.",
             information_needs=needs,
             output_modalities=modalities,
             response_language=response_language,
@@ -118,21 +120,21 @@ def _validate_two_hazard_task(
             question,
             True,
             ValidationStatus.CLARIFICATION_REQUIRED,
-            "Explicit historical calendar and date-range two-hazard investigations "
-            "are not supported in Investigation Agent v1.",
+            "Explicit historical calendar and date-range multi-hazard investigations "
+            "are not supported by the bounded investigation runtime.",
             information_needs=needs,
             output_modalities=modalities,
             response_language=response_language,
             response_language_explicit=draft.response_language_explicit,
         )
     countries = country_catalog.find_mentions(question)
-    if len(countries) > 1:
+    if len(countries) > 4:
         return _limited_task(
             question,
             True,
             ValidationStatus.CLARIFICATION_REQUIRED,
-            "Investigation Agent v1 can investigate exactly one country at a time. "
-            "Which country should I use?",
+            "A bounded investigation supports at most four maintained countries. "
+            "Narrow the request.",
             information_needs=needs,
             output_modalities=modalities,
             response_language=response_language,
@@ -155,8 +157,19 @@ def _validate_two_hazard_task(
             response_language=response_language,
             response_language_explicit=draft.response_language_explicit,
         )
-    country = countries[0]
-    location_hint = location_hint_from_text(question, country_catalog)
+    pairs = _investigation_pairs(question, disasters, countries)
+    if pairs is None or len(pairs) > 4:
+        return _limited_task(
+            question,
+            True,
+            ValidationStatus.CLARIFICATION_REQUIRED,
+            "The requested hazards and countries do not form an unambiguous bounded "
+            "set of at most four branches. Pair each hazard with one country.",
+            information_needs=needs,
+            output_modalities=modalities,
+            response_language=response_language,
+            response_language_explicit=draft.response_language_explicit,
+        )
     targets = tuple(
         InvestigationTarget(
             target_id=(
@@ -173,24 +186,48 @@ def _validate_two_hazard_task(
                 event_discriminators=default_disaster_query_policies()
                 .for_disaster(disaster)
                 .discriminators(question),
-                location_hint=location_hint,
+                location_hint=location_hint_from_text(question, country_catalog),
             ),
             information_needs=needs,
             output_modalities=modalities,
         )
-        for index, disaster in enumerate(disasters, start=1)
+        for index, (disaster, country) in enumerate(pairs, start=1)
     )
+    distinct_countries = tuple(dict.fromkeys(target.country for target in targets))
     return ValidatedDisasterTask(
         question=question,
         kind=TaskKind.INVESTIGATION,
         requires_evidence=True,
-        country=country,
+        country=distinct_countries[0] if len(distinct_countries) == 1 else None,
+        countries=distinct_countries,
         information_needs=needs,
         output_modalities=modalities,
         response_language=response_language,
         response_language_explicit=draft.response_language_explicit,
         investigation_targets=targets,
     )
+
+
+def _investigation_pairs(
+    question: str,
+    disasters: tuple[Disaster, ...],
+    countries: tuple[Country, ...],
+) -> tuple[tuple[Disaster, Country], ...] | None:
+    ordered_disasters = tuple(
+        sorted(
+            disasters,
+            key=lambda disaster: min(
+                position
+                for alias in aliases_for(disaster)
+                if (position := question.casefold().find(alias.casefold())) >= 0
+            ),
+        )
+    )
+    if len(countries) == 1:
+        return tuple((disaster, countries[0]) for disaster in ordered_disasters)
+    if len(countries) != len(disasters):
+        return None
+    return tuple(zip(ordered_disasters, countries, strict=True))
 
 
 def _safe_response_language(value: str | None) -> str | None:

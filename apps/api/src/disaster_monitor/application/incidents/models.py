@@ -1,7 +1,7 @@
 """Bounded provider-backed discovery for the Active Incidents surface."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from disaster_monitor.application.disaster import ObservationKind
@@ -49,6 +49,8 @@ class ActiveIncidentsQuery:
     search: str | None = None
     page_size: int | None = None
     cursor: str | None = None
+    occurrence_start: datetime | None = None
+    occurrence_end: datetime | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -85,6 +87,21 @@ class ActiveIncidentsQuery:
             raise ValueError("page_size must be between 1 and 100.")
         if self.cursor is not None and not self.cursor.strip():
             raise ValueError("cursor must not be empty.")
+        if (self.occurrence_start is None) != (self.occurrence_end is None):
+            raise ValueError("Historical occurrence intervals require both bounds.")
+        if self.occurrence_start is not None:
+            if self.view is not IncidentView.HISTORICAL:
+                raise ValueError(
+                    "Explicit occurrence intervals require historical view."
+                )
+            if self.occurrence_start.tzinfo is None or self.occurrence_end is None:
+                raise ValueError("Occurrence interval bounds must be timezone-aware.")
+            if self.occurrence_end.tzinfo is None:
+                raise ValueError("Occurrence interval bounds must be timezone-aware.")
+            if self.occurrence_start > self.occurrence_end:
+                raise ValueError("Occurrence interval bounds are out of order.")
+            if self.occurrence_end - self.occurrence_start > timedelta(days=366):
+                raise ValueError("Occurrence intervals may span at most 366 days.")
 
 
 class IncidentCoverageState(StrEnum):
@@ -118,6 +135,7 @@ class ActiveIncident:
     activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
     verification_status: IncidentCandidateStatus = IncidentCandidateStatus.SOURCE_BACKED
     detection: IncidentDetectionTimeline = IncidentDetectionTimeline()
+    last_meaningful_change_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +166,7 @@ class ActiveIncidentsSnapshot:
     next_cursor: str | None = None
     has_more: bool = False
     total_incident_count: int | None = None
+    historical_limitations: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

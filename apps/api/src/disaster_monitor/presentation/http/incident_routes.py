@@ -1,5 +1,6 @@
 """FastAPI routes for the MVP."""
 
+from datetime import datetime
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -103,6 +104,8 @@ async def active_incidents(
     search: Annotated[str | None, Query(max_length=200)] = None,
     page_size: Annotated[int | None, Query(ge=1, le=100)] = None,
     cursor: Annotated[str | None, Query(max_length=2_000)] = None,
+    occurrence_start: Annotated[datetime | None, Query()] = None,
+    occurrence_end: Annotated[datetime | None, Query()] = None,
 ) -> ActiveIncidentsSnapshotResponse:
     """Return bounded, source-backed worldwide events without model inference."""
     try:
@@ -118,6 +121,8 @@ async def active_incidents(
                 search=search,
                 page_size=page_size,
                 cursor=cursor,
+                occurrence_start=occurrence_start,
+                occurrence_end=occurrence_end,
             )
         )
     except (ValueError, KeyError) as error:
@@ -170,6 +175,7 @@ async def active_incidents(
                 monitor_visible_at=incident.detection.monitor_visible_at,
                 assistant_ready_at=incident.detection.assistant_ready_at,
             ),
+            last_meaningful_change_at=incident.last_meaningful_change_at,
         )
 
     return ActiveIncidentsSnapshotResponse(
@@ -196,6 +202,7 @@ async def active_incidents(
         next_cursor=snapshot.next_cursor,
         has_more=snapshot.has_more,
         total_incident_count=snapshot.total_incident_count,
+        historical_limitations=list(snapshot.historical_limitations),
         correlations=[
             CompoundHazardCorrelationResponse(
                 correlation_id=item.correlation_id,

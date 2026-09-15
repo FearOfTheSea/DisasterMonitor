@@ -19,7 +19,10 @@ function snapshot(retrievedAt: string): ActiveIncidentsSnapshot {
 }
 
 describe('useActiveIncidents', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+  });
 
   it('loads on first render and exposes an explicit manual refresh', async () => {
     let resolveInitial: ((value: ActiveIncidentsSnapshot) => void) | undefined;
@@ -59,5 +62,19 @@ describe('useActiveIncidents', () => {
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current.error).toBe('Provider request failed.');
     expect(result.current.snapshot).toBeUndefined();
+  });
+
+  it('falls back to an explicitly stale read-only snapshot', async () => {
+    window.localStorage.setItem(
+      'disaster-monitor:last-snapshot:v1:recent:all:',
+      JSON.stringify(snapshot('2026-08-20T06:00:00Z')),
+    );
+    vi.mocked(fetchActiveIncidents).mockRejectedValue(new TypeError('offline'));
+
+    const { result } = renderHook(() => useActiveIncidents());
+
+    await waitFor(() => expect(result.current.status).toBe('offline'));
+    expect(result.current.snapshot?.availability).toBe('offline-cache');
+    expect(result.current.error).toContain('stale');
   });
 });

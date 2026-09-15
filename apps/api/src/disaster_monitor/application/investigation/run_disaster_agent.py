@@ -184,6 +184,8 @@ class RunDisasterAgent:
         )
         return AssistantAnswer(
             message=report.message,
+            original_message=report.original_message,
+            response_language=report.response_language,
             conversation_id=_conversation_id(conversation),
             model="source-backed-agent",
             map_action=(
@@ -288,7 +290,12 @@ class RunDisasterAgent:
                 and localized.strip()
                 and _preserves_grounded_tokens(report.message, localized)
             ):
-                return replace(report, message=localized.strip())
+                return replace(
+                    report,
+                    message=localized.strip(),
+                    original_message=report.message,
+                    response_language=response_language,
+                )
         self._record_capability_failure(
             AgentCapability.RESPONSE_LOCALIZATION,
             (

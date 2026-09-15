@@ -6,6 +6,12 @@ from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENV_FILE_LOCATIONS = (".env", "apps/api/.env")
+_DEFAULT_APPROVED_WEB_SOURCES = (
+    Path(__file__).resolve().parent
+    / "news"
+    / "resources"
+    / "approved_publishers.v1.json"
+)
 
 
 class Settings(BaseSettings):
@@ -70,7 +76,7 @@ class Settings(BaseSettings):
     news_sensing_enabled: bool = True
     gdelt_news_enabled: bool = True
     news_feed_timeout_seconds: float = Field(default=15.0, gt=0, le=60)
-    approved_web_source_registry_path: Path | None = None
+    approved_web_source_registry_path: Path | None = _DEFAULT_APPROVED_WEB_SOURCES
     nasa_firms_map_key: SecretStr | None = Field(default=None, repr=False)
     operational_database_url: SecretStr | None = Field(default=None, repr=False)
     operational_blob_root: Path = Path("data/operational/blobs")

@@ -178,3 +178,44 @@ async def test_reports_for_same_hazard_place_and_day_form_one_candidate() -> Non
         "approved-web-test-feed-b",
     }
     assert candidates[0].news_break_at == NOW - timedelta(hours=2)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_story_cluster_retains_every_original_feed_item() -> None:
+    class AggregatedFeed:
+        source_id = "gdelt-news"
+
+        async def fetch_since(self, *, since: datetime, now: datetime):
+            return (
+                NewsFeedItem(
+                    external_id="ap-1",
+                    publisher="Associated Press",
+                    title="Wildfire forces evacuations near Antalya, Turkey",
+                    canonical_url="https://apnews.com/article/antalya-one",
+                    published_at=NOW - timedelta(hours=2),
+                    updated_at=None,
+                ),
+                NewsFeedItem(
+                    external_id="reuters-1",
+                    publisher="Reuters",
+                    title="Major wildfire forces evacuations near Antalya, Turkey",
+                    canonical_url="https://www.reuters.com/world/antalya-two",
+                    published_at=NOW - timedelta(hours=1),
+                    updated_at=None,
+                ),
+            )
+
+    repository = InMemoryOperationalRepository()
+    await NewsCandidateIngestion(
+        AggregatedFeed(), repository, clock=lambda: NOW
+    ).refresh()
+
+    candidates = await repository.latest_incident_candidates(
+        since=NOW - timedelta(days=1)
+    )
+    assert len(candidates) == 1
+    assert {source.publisher for source in candidates[0].sources} == {
+        "Associated Press",
+        "Reuters",
+    }
+    assert len(candidates[0].sources) == 2

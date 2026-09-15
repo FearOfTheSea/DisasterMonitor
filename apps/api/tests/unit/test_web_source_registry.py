@@ -90,3 +90,15 @@ def test_composition_adds_only_admitted_controlled_sources(tmp_path: Path) -> No
     )
 
     assert [feed.source_id for feed in feeds] == ["approved-test-news"]
+
+
+def test_default_registry_admits_one_rights_reviewed_publisher_feed() -> None:
+    feeds = build_breaking_news_feeds(
+        Settings(_env_file=None, gdelt_news_enabled=False),
+        InMemoryOperationalRepository(),
+        now=NOW + timedelta(days=6),
+    )
+
+    assert [feed.source_id for feed in feeds] == [
+        "nasa-earth-observatory-natural-events"
+    ]

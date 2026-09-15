@@ -14,10 +14,19 @@ enabled by default. Set `NEWS_SENSING_ENABLED=false` to disable the lane or
 `GDELT_NEWS_ENABLED=false` to disable GDELT discovery. There are no licensed news
 gateway endpoints or credentials in this design.
 
-Direct public-web collection is disabled by default. Its controlled rollout and source
-admission requirements are defined in `docs/news-web-scraping-rollout.md`. The bounded
-RSS/sitemap foundation is available behind `APPROVED_WEB_SOURCE_REGISTRY_PATH`, but no
-publisher is packaged or enabled and no live-source admission has been granted.
+One direct publisher feed is admitted by default: NASA Earth Observatory Natural
+Events, fetched from `science.nasa.gov` every 15 minutes with one request per run, a
+1 MB body limit, conditional requests, strict redirect/host/path enforcement, and an
+automatic review expiry on 2027-03-15. The 2026-09-15 rights review found NASA content
+generally available for factual informational use with source acknowledgement; NASA
+logos are not imported and third-party-marked content is not republished. The source
+can be disabled immediately through the registry kill switch or by setting
+`APPROVED_WEB_SOURCE_REGISTRY_PATH` to an empty approved registry.
+
+GDELT remains enabled as the broad discovery index. Direct-feed and GDELT observations
+are compared by publication-to-first-observation latency with a minimum of 30 samples
+per path. Insufficient samples explicitly retain the existing defaults; admitting the
+NASA feed does not claim that it is globally representative or replace GDELT.
 
 The worker records all received news metadata. Promotion to a provisional candidate
 requires exactly one recognized hazard, major-impact language, and a publisher in

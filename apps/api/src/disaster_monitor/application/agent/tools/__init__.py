@@ -68,6 +68,7 @@ async def execute_plan(
     step_ids: tuple[str, ...] | None = None,
     stop_before_composition: bool = False,
     trace_phase: str = "direct",
+    maximum_tool_calls: int = MAX_TOOL_CALLS,
 ) -> None:
     """Execute a validated plan with strict sequencing and call budgets.
 
@@ -88,7 +89,7 @@ async def execute_plan(
             continue
         if stop_before_composition and step.tool_name == "compose_disaster_answer":
             break
-        if state.tool_call_count >= MAX_TOOL_CALLS:
+        if state.tool_call_count >= maximum_tool_calls:
             state.trace.record(
                 TraceEventKind.BUDGET_VIOLATION,
                 budget="tool_call",

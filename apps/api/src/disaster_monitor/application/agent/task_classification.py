@@ -27,7 +27,8 @@ _CURRENT_EVENT_MARKERS = re.compile(
     re.I,
 )
 _EVIDENCE_MARKERS = re.compile(
-    r"(?:\b(?:fatalit(?:y|ies)|death toll|killed|dead|injur(?:y|ies|ed)|hurt|"
+    r"(?:\b(?:investigat\w*|fatalit(?:y|ies)|death toll|killed|dead|"
+    r"injur(?:y|ies|ed)|hurt|"
     r"wounded|missing|unaccounted|evacuat\w*|displaced|shelter\w*|damage\w*|"
     r"destroyed|collapsed|infrastructure|outage\w*|utilities|road\w*|bridge\w*|"
     r"warning\w*|alert\w*|advisory|watch|response|responders?|relief|rescue|aid|"

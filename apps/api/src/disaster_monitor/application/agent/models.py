@@ -172,7 +172,7 @@ class DisasterTaskDraft:
 
 @dataclass(frozen=True, slots=True)
 class InvestigationTarget:
-    """One application-owned branch of a bounded two-hazard investigation."""
+    """One application-owned branch of a bounded multi-hazard investigation."""
 
     target_id: str
     disaster: Disaster
@@ -201,6 +201,7 @@ class ValidatedDisasterTask:
     requires_evidence: bool
     disaster: Disaster | None = None
     country: Country | None = None
+    countries: tuple[Country, ...] = ()
     geographic_scope: GeographicScope = GeographicScope.COUNTRY
     unresolved_place: str | None = None
     date_from: datetime | None = None
@@ -220,21 +221,30 @@ class ValidatedDisasterTask:
     def __post_init__(self) -> None:
         if not self.investigation_targets:
             return
-        if len(self.investigation_targets) != 2:
-            raise ValueError("Investigation Agent v1 requires exactly two targets.")
+        if not 2 <= len(self.investigation_targets) <= 4:
+            raise ValueError("Investigations require between two and four targets.")
         if self.disaster is not None or self.query is not None:
             raise ValueError("Multi-hazard parent tasks cannot select one disaster.")
-        if self.country is None or self.geographic_scope is not GeographicScope.COUNTRY:
-            raise ValueError("Multi-hazard targets require one canonical country.")
-        if len({item.target_id for item in self.investigation_targets}) != 2:
-            raise ValueError("Investigation target IDs must be distinct.")
-        if len({item.disaster for item in self.investigation_targets}) != 2:
-            raise ValueError("Investigation target disasters must be distinct.")
-        if any(
-            item.country.alpha3_code != self.country.alpha3_code
-            for item in self.investigation_targets
+        if self.geographic_scope is not GeographicScope.COUNTRY:
+            raise ValueError("Multi-hazard targets require country scope.")
+        if len({item.target_id for item in self.investigation_targets}) != len(
+            self.investigation_targets
         ):
-            raise ValueError("Investigation targets must share one country.")
+            raise ValueError("Investigation target IDs must be distinct.")
+        target_countries = tuple(
+            dict.fromkeys(
+                item.country.alpha3_code for item in self.investigation_targets
+            )
+        )
+        declared_countries = self.countries or (
+            () if self.country is None else (self.country,)
+        )
+        if tuple(item.alpha3_code for item in declared_countries) != target_countries:
+            raise ValueError("Investigation countries must match target countries.")
+        if self.country is not None and len(declared_countries) != 1:
+            raise ValueError(
+                "The singular country projection is only valid for one country."
+            )
         if len({item.query.time_intent for item in self.investigation_targets}) != 1:
             raise ValueError("Investigation targets must share one time intent.")
 

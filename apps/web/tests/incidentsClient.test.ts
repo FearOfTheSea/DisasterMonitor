@@ -76,6 +76,32 @@ describe('incidentsClient', () => {
     );
   });
 
+  it('sends explicit historical UTC occurrence bounds', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          retrieved_at: '2026-09-15T08:00:00Z',
+          incidents: [],
+          coverage: [],
+          warnings: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchActiveIncidents({
+      view: 'historical',
+      occurrenceStart: '2026-09-01T00:00:00.000Z',
+      occurrenceEnd: '2026-09-02T00:00:00.000Z',
+    });
+
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('view=historical');
+    expect(url).toContain('occurrence_start=2026-09-01T00%3A00%3A00.000Z');
+    expect(url).toContain('occurrence_end=2026-09-02T00%3A00%3A00.000Z');
+  });
+
   it('preserves all six hazard records and per-hazard coverage at the frontend boundary', async () => {
     const geometries: Record<DisasterType, IncidentGeometry> = {
       earthquake: {

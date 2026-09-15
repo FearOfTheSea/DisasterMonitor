@@ -16,6 +16,7 @@ from disaster_monitor.application.disaster import (
     ProviderIssue,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
+    worldwide_retrieval_time_bounds,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.temporal_normalization import (
@@ -135,7 +136,12 @@ def build_gfm_search_payload(
     country_geometry: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Build one deterministic, bounded EODC STAC search body."""
-    start, end = _time_window(query.time_window_days, now=now)
+    start, end = (
+        worldwide_retrieval_time_bounds(query, now=now)
+        if isinstance(query, WorldwideDisasterQuery)
+        and query.occurrence_start is not None
+        else _time_window(query.time_window_days, now=now)
+    )
     body: dict[str, object] = {
         "collections": [_GFM_COLLECTION],
         "datetime": f"{start.isoformat().replace('+00:00', 'Z')}"
@@ -265,7 +271,12 @@ class CemsGfmAdapter:
             else _MAX_STAC_ITEMS
         )
 
-        start, end = _time_window(query.time_window_days, now=now)
+        start, end = (
+            worldwide_retrieval_time_bounds(query, now=now)
+            if isinstance(query, WorldwideDisasterQuery)
+            and query.occurrence_start is not None
+            else _time_window(query.time_window_days, now=now)
+        )
         records: dict[str, DisasterEvent | WorldwideDisasterEvent] = {}
         representative_item_ids: dict[str, str] = {}
         issues: list[ProviderIssue] = []

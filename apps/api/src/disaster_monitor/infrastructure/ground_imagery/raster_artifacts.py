@@ -20,6 +20,10 @@ from disaster_monitor.application.ports.ground_imagery.rendering import (
     ImageryGrid,
     RenderedRaster,
 )
+from disaster_monitor.infrastructure.ground_imagery.raster_quality import (
+    RasterQualityRequirements,
+    assess_raster_quality,
+)
 
 _MAX_BYTES = 128 * 1024 * 1024
 _TILE_SIZE = 256
@@ -49,7 +53,7 @@ class RasterioCogValidator(GroundImageryRasterValidator):
         with MemoryFile(raster.content) as source_memory:
             try:
                 with source_memory.open() as source:
-                    self._validate_dataset(source, grid)
+                    self._validate_dataset(source, grid, raster.provider_metadata)
                     converted = _write_cog(source)
             except (rasterio.errors.RasterioIOError, ValueError) as error:
                 if isinstance(error, RasterValidationError):
@@ -69,7 +73,11 @@ class RasterioCogValidator(GroundImageryRasterValidator):
         )
 
     @staticmethod
-    def _validate_dataset(dataset: Any, grid: ImageryGrid) -> None:
+    def _validate_dataset(
+        dataset: Any,
+        grid: ImageryGrid,
+        provider_metadata: tuple[tuple[str, str], ...] = (),
+    ) -> None:
         if dataset.driver not in {"GTiff", "COG"}:
             raise RasterValidationError("The raster driver is not GeoTIFF-compatible.")
         if not 1 <= dataset.count <= 16:
@@ -111,6 +119,41 @@ class RasterioCogValidator(GroundImageryRasterValidator):
         )
         if np.ma.count(sample) == 0:
             raise RasterValidationError("The raster contains no usable sample data.")
+        try:
+            _validate_sensor_semantics(dataset, provider_metadata)
+        except ValueError as error:
+            raise RasterValidationError(str(error)) from error
+
+
+def _validate_sensor_semantics(
+    dataset: Any, provider_metadata: tuple[tuple[str, str], ...]
+) -> None:
+    metadata = dict(provider_metadata)
+    sensor = metadata.get("sensor")
+    declared_order = tuple(
+        value for value in metadata.get("band_order", "").split(",") if value
+    )
+    if sensor == "sentinel-1":
+        assess_raster_quality(
+            dataset,
+            RasterQualityRequirements(
+                expected_band_order=declared_order or ("VV", "VH", "dataMask"),
+                data_mask_band=3,
+                radar_bands=(1, 2),
+                radar_noise_floor=1e-6,
+                maximum_sub_noise_fraction=0.98,
+            ),
+        )
+    elif sensor == "sentinel-2":
+        assess_raster_quality(
+            dataset,
+            RasterQualityRequirements(
+                expected_band_order=declared_order
+                or ("B04", "B03", "B02", "SCL", "dataMask"),
+                scl_band=4,
+                data_mask_band=5,
+            ),
+        )
 
 
 def _write_cog(source: Any) -> bytes:

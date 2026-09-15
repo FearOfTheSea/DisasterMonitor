@@ -14,6 +14,9 @@ from disaster_monitor.application.evidence.event_policies import (
 from disaster_monitor.application.evidence.event_resolution import (
     EventPolicyRegistry,
 )
+from disaster_monitor.application.incidents.meaningful_change import (
+    mark_meaningful_changes,
+)
 from disaster_monitor.application.incidents.models import (
     ActiveIncident,
     ActiveIncidentsQuery,
@@ -134,16 +137,23 @@ class ActiveIncidentsService:
         )
         candidates = (
             await self._candidate_store.latest_incident_candidates(
-                since=now - timedelta(days=bounded_query.time_window_days)
+                since=(
+                    bounded_query.occurrence_start
+                    or now - timedelta(days=bounded_query.time_window_days)
+                )
             )
             if self._candidate_store is not None
             else ()
         )
-        incidents = merge_news_candidates(
-            provider_incidents,
-            candidates,
-            visible_at=now,
-            previous_incidents=previous_incidents,
+        incidents = mark_meaningful_changes(
+            merge_news_candidates(
+                provider_incidents,
+                candidates,
+                visible_at=now,
+                previous_incidents=previous_incidents,
+            ),
+            previous_incidents,
+            observed_at=now,
         )
         observations = tuple(
             sorted(
@@ -185,6 +195,15 @@ class ActiveIncidentsService:
             correlations=self._correlation_service.correlate(incidents),
             snapshot_version=_snapshot_version(now, incidents, observations),
             total_incident_count=len(incidents),
+            historical_limitations=(
+                (
+                    "Historical results are bounded by each selected provider's "
+                    "published retention, pagination, and availability; an empty "
+                    "result is not proof that no event occurred.",
+                )
+                if bounded_query.occurrence_start is not None
+                else ()
+            ),
         )
         if self._projection_store is not None:
             await self._projection_store.append_incident_projection(
@@ -285,6 +304,16 @@ def _cursor_query_key(query: ActiveIncidentsQuery) -> str:
             "country_code": query.country_code,
             "search": query.search,
             "page_size": query.page_size,
+            "occurrence_start": (
+                query.occurrence_start.isoformat()
+                if query.occurrence_start is not None
+                else None
+            ),
+            "occurrence_end": (
+                query.occurrence_end.isoformat()
+                if query.occurrence_end is not None
+                else None
+            ),
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -339,6 +368,16 @@ def _page_snapshot(
         for incident in snapshot.incidents
         if _matches_query(incident, query, reference=snapshot.retrieved_at)
     )
+    if query.view is IncidentView.RECENTLY_UPDATED:
+        filtered = tuple(
+            sorted(
+                filtered,
+                key=lambda item: (
+                    -(item.last_meaningful_change_at or item.event_time).timestamp(),
+                    item.event_id,
+                ),
+            )
+        )
     page_size = query.page_size
     if page_size is None:
         page = filtered[offset:]
@@ -374,6 +413,7 @@ def _page_snapshot(
         next_cursor=next_cursor,
         has_more=has_more,
         total_incident_count=len(filtered),
+        historical_limitations=snapshot.historical_limitations,
     )
 
 
@@ -435,14 +475,12 @@ def _matches_query(
     if query.view is IncidentView.ONGOING:
         return incident.activity_status.value == "ongoing"
     if query.view is IncidentView.RECENTLY_UPDATED:
-        effective = (
-            incident.source.updated_at
-            or incident.source.published_at
-            or incident.event_time
-        )
+        effective = incident.last_meaningful_change_at or incident.event_time
         return start <= effective <= reference
     if query.view is IncidentView.HISTORICAL:
-        return start <= incident.event_time <= reference
+        historical_start = query.occurrence_start or start
+        historical_end = query.occurrence_end or reference
+        return historical_start <= incident.event_time <= historical_end
     return start <= incident.event_time <= reference
 
 

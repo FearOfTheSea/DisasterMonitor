@@ -151,3 +151,5 @@ class AssistantAnswer:
     investigation_case: InvestigationCaseArtifact | None = None
     claims: tuple[EvidenceClaimInspection, ...] = ()
     timeline: tuple[EvidenceTimelineEntry, ...] = ()
+    original_message: str | None = None
+    response_language: str | None = None

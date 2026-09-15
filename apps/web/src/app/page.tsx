@@ -312,6 +312,10 @@ export default function Home() {
           onViewChange={activeIncidents.setView}
           hazard={activeIncidents.hazard}
           onHazardChange={activeIncidents.setHazard}
+          occurrenceStart={activeIncidents.occurrenceStart}
+          occurrenceEnd={activeIncidents.occurrenceEnd}
+          onOccurrenceStartChange={activeIncidents.setOccurrenceStart}
+          onOccurrenceEndChange={activeIncidents.setOccurrenceEnd}
           onLoadMore={activeIncidents.loadMore}
           loadingMore={activeIncidents.loadingMore}
           onSelectIncident={handleSelectActiveIncident}

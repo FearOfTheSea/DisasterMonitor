@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+from dataclasses import replace
+
+from disaster_monitor.application.earthquake_context import EarthquakeContextService
+from disaster_monitor.application.ground_imagery.impact_regions import (
+    shakemap_source_regions,
+)
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsQuery,
     ActiveIncidentsService,
@@ -21,6 +28,8 @@ from disaster_monitor.domain.imagery.regions import (
     RegionSourceKind,
     polygon_from_geojson,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
@@ -120,4 +129,37 @@ class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
         )
 
 
-__all__ = ["ActiveIncidentImageryContextReader"]
+class EarthquakeProductImageryContextReader(IncidentImageryContextReader):
+    """Enrich earthquake contexts with bounded authoritative ShakeMap coverage."""
+
+    def __init__(
+        self,
+        base: IncidentImageryContextReader,
+        earthquake_context: EarthquakeContextService,
+    ) -> None:
+        self._base = base
+        self._earthquake_context = earthquake_context
+
+    async def get_imagery_context(
+        self, incident_id: str
+    ) -> IncidentImageryContext | None:
+        context = await self._base.get_imagery_context(incident_id)
+        if context is None or context.disaster is not Disaster.EARTHQUAKE:
+            return context
+        try:
+            products = await self._earthquake_context.execute(incident_id)
+        except Exception:
+            logger.exception(
+                "USGS earthquake products were unavailable for Ground region planning"
+            )
+            return context
+        shaking_regions = shakemap_source_regions(products.shakemap_layers)
+        if not shaking_regions:
+            return context
+        return replace(context, evidence=(*shaking_regions, *context.evidence))
+
+
+__all__ = [
+    "ActiveIncidentImageryContextReader",
+    "EarthquakeProductImageryContextReader",
+]

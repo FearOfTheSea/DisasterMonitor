@@ -154,6 +154,8 @@ export function toAssistantReport(
   }
   return {
     responseType: response.response_type,
+    originalMessage: response.original_message ?? undefined,
+    responseLanguage: response.response_language ?? undefined,
     selectedEvent: response.selected_event ?? undefined,
     retrievalTime: response.retrieval_time ?? undefined,
     sources: response.sources ?? [],

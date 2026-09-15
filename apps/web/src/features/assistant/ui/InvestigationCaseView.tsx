@@ -20,12 +20,14 @@ export function InvestigationCaseView({
   investigationCase,
 }: InvestigationCaseViewProps) {
   return (
-    <section className="investigation-case" aria-label="Two-hazard investigation">
+    <section className="investigation-case" aria-label="Bounded investigation">
       <header>
-        <h3>Two-hazard investigation</h3>
+        <h3>Bounded investigation</h3>
         <p>
-          {investigationCase.country.country_name} (
-          {investigationCase.country.country_code}){' · '}
+          {investigationCase.countries
+            .map((country) => `${country.country_name} (${country.country_code})`)
+            .join(', ')}
+          {' · '}
           <strong>
             {investigationCase.partial
               ? 'Partial investigation'
@@ -40,7 +42,9 @@ export function InvestigationCaseView({
             key={target.target_id}
             aria-label={`${hazardLabel(target.disaster)} branch`}
           >
-            <h4>{hazardLabel(target.disaster)}</h4>
+            <h4>
+              {hazardLabel(target.disaster)} · {target.country_name}
+            </h4>
             <p>
               Status: <strong>{target.status.replaceAll('_', ' ')}</strong>
               {target.partial ? ' · Partial/degraded evidence' : ''}

@@ -38,6 +38,7 @@ from disaster_monitor.application.incidents.active_incidents import (
 )
 from disaster_monitor.application.incidents.imagery_context import (
     ActiveIncidentImageryContextReader,
+    EarthquakeProductImageryContextReader,
 )
 from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
@@ -60,6 +61,9 @@ from disaster_monitor.application.ports.conversation_deletion import (
     ConversationDeletionStore,
 )
 from disaster_monitor.application.ports.conversation_store import ConversationStore
+from disaster_monitor.application.ports.ground_imagery.incidents import (
+    IncidentImageryContextReader,
+)
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.memory_store import MemoryStore
 from disaster_monitor.application.ports.news import BreakingNewsFeed
@@ -119,6 +123,10 @@ from disaster_monitor.infrastructure.ground_imagery.geoboundaries import (
 )
 from disaster_monitor.infrastructure.ground_imagery.geometry import (
     GeodesicGeometryEngine,
+)
+from disaster_monitor.infrastructure.ground_imagery.local_products import (
+    FallbackGroundImageryRenderer,
+    PublicCogRenderer,
 )
 from disaster_monitor.infrastructure.ground_imagery.memory_repository import (
     InMemoryGroundImageryRequestStore,
@@ -408,6 +416,7 @@ def build_satellite_imagery_service(settings: Settings) -> SatelliteImageryServi
 def build_ground_imagery_service(
     settings: Settings,
     active_incidents: ActiveIncidentsService,
+    earthquake_context: EarthquakeContextService | None = None,
 ) -> GroundImageryService:
     """Construct the event-focused catalog, processing, and artifact workflow."""
     geometry = GeodesicGeometryEngine()
@@ -435,7 +444,7 @@ def build_ground_imagery_service(
         if settings.cdse_client_secret is not None
         else None
     )
-    renderer = (
+    remote_renderer = (
         CopernicusDataSpaceProcessRenderer(
             client_id=client_id,
             client_secret=client_secret,
@@ -447,9 +456,34 @@ def build_ground_imagery_service(
         if client_id and client_secret
         else None
     )
+    local_renderer = PublicCogRenderer(
+        allowed_hosts=frozenset(
+            {
+                "catalogue.dataspace.copernicus.eu",
+                "download.dataspace.copernicus.eu",
+                "eodata.dataspace.copernicus.eu",
+                "stac.eodc.eu",
+                "data.openaerialmap.org",
+            }
+        ),
+        timeout_seconds=settings.gdacs_provider_timeout_seconds,
+        maximum_response_bytes=settings.ground_imagery_process_max_response_bytes,
+    )
+    renderer = (
+        FallbackGroundImageryRenderer(remote_renderer, local_renderer)
+        if remote_renderer is not None
+        else local_renderer
+    )
+    incident_context: IncidentImageryContextReader = ActiveIncidentImageryContextReader(
+        active_incidents
+    )
+    if earthquake_context is not None:
+        incident_context = EarthquakeProductImageryContextReader(
+            incident_context, earthquake_context
+        )
     job_queue = PostgresGroundImageryJobQueue(dsn) if dsn else None
     return GroundImageryService(
-        ActiveIncidentImageryContextReader(active_incidents),
+        incident_context,
         GroundImageryRegionResolver(
             geometry,
             place_lookup=GeoBoundariesPlaceLookup(

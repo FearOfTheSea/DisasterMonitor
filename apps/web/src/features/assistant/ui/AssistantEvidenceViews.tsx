@@ -623,6 +623,17 @@ export function DisasterReportView({
         <summary>Text report</summary>
         <p>{message}</p>
       </details>
+      {report.originalMessage && report.originalMessage !== message ? (
+        <details className="report-original-text">
+          <summary>Original source-backed report text</summary>
+          <p>{report.originalMessage}</p>
+          <small>
+            The displayed report was localized to{' '}
+            {report.responseLanguage ?? 'the requested language'}; identifiers and
+            authority names remain unchanged.
+          </small>
+        </details>
+      ) : null}
     </div>
   );
 }

@@ -173,6 +173,13 @@ class CopernicusDataSpaceProcessRenderer(GroundImageryRenderer):
                 provider_metadata=(
                     ("source_identity", source_ids[0]),
                     ("process_endpoint", self._process_url),
+                    ("sensor", request.observation.sensor.value),
+                    (
+                        "band_order",
+                        "VV,VH,dataMask"
+                        if request.observation.sensor is Sensor.SENTINEL_1
+                        else "B04,B03,B02,SCL,dataMask",
+                    ),
                 ),
             )
         raise ProcessRenderingError(

@@ -155,7 +155,7 @@ describe('ActiveIncidentsPanel', () => {
     expect(
       screen.getByText('Fixture provider returned a partial response.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Fixture Fire Authority')).not.toBeVisible();
+    expect(screen.getAllByText('Fixture Fire Authority')[0]).not.toBeVisible();
     expect(screen.getByText('Primary tier')).not.toBeVisible();
     expect(screen.getByText('Scientific authority')).not.toBeVisible();
     expect(screen.getByText('Selected')).toBeInTheDocument();
@@ -169,7 +169,7 @@ describe('ActiveIncidentsPanel', () => {
     ).toHaveAttribute('href', 'https://wildfires.example/incidents/fire-1');
 
     await user.click(screen.getByText('Source details'));
-    expect(screen.getByText('Fixture Fire Authority')).toBeVisible();
+    expect(screen.getAllByText('Fixture Fire Authority')[0]).toBeVisible();
     expect(screen.getByText('Primary tier')).toBeVisible();
     expect(screen.getByText('Scientific authority')).toBeVisible();
 

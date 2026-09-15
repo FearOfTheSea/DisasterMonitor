@@ -1,7 +1,9 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from disaster_monitor.application.warnings.association import (
     WarningAssociationBasis,
+    associate_earthquake_tsunami_warning,
     associate_warning,
 )
 from disaster_monitor.application.warnings.lifecycle import reconcile_cap_messages
@@ -167,3 +169,41 @@ def test_warning_association_prefers_explicit_ids_and_labels_geometry_gate() -> 
     assert gated.basis is WarningAssociationBasis.TIME_AND_GEOMETRY
     assert gated.confirmed is False
     assert incompatible is None
+
+
+def test_tsunami_warning_association_requires_authority_and_hazard_identity() -> None:
+    explicit_alert = replace(
+        _alert(
+            "tsunami-explicit",
+            CapMessageType.ALERT,
+            sent=NOW,
+            event="Tsunami Warning",
+        ),
+        incidents=("usgs:quake-1",),
+    )
+    explicit = associate_earthquake_tsunami_warning(
+        explicit_alert,
+        earthquake_event_id="usgs:quake-1",
+        earthquake_time=NOW,
+        earthquake_latitude=35.0,
+        earthquake_longitude=140.0,
+        authoritative_source_ids=("fixture-cap",),
+    )
+    unrelated = associate_earthquake_tsunami_warning(
+        _alert(
+            "flood-alert",
+            CapMessageType.ALERT,
+            sent=NOW,
+            event="Flood Warning",
+        ),
+        earthquake_event_id="usgs:quake-1",
+        earthquake_time=NOW,
+        earthquake_latitude=35.0,
+        earthquake_longitude=140.0,
+        authoritative_source_ids=("fixture-cap",),
+    )
+
+    assert explicit is not None
+    assert explicit.confirmed is True
+    assert explicit.basis is WarningAssociationBasis.EXPLICIT_INCIDENT_ID
+    assert unrelated is None

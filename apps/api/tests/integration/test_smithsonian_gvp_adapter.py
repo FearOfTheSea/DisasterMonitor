@@ -15,6 +15,9 @@ from disaster_monitor.domain.disaster import (
 from disaster_monitor.infrastructure.disaster.smithsonian_gvp_adapter import (
     SmithsonianGvpAdapter,
 )
+from disaster_monitor.infrastructure.disaster.smithsonian_gvp_parsing import (
+    _WvarSummaryParser,
+)
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -115,6 +118,33 @@ def current_rss() -> str:
     </item>
   </channel>
 </rss>"""
+
+
+def test_wvar_real_drift_is_supported_and_unknown_headers_fail_closed() -> None:
+    drift = FIXTURES / "schema_drift"
+    rows = []
+    for name in (
+        "smithsonian_wvar_before_row_report_link.html",
+        "smithsonian_wvar_after_row_report_link.html",
+    ):
+        parser = _WvarSummaryParser()
+        parser.feed((drift / name).read_text(encoding="utf-8"))
+        parser.close()
+        rows.append(parser.rows())
+
+    assert [variant[0].volcano_number for variant in rows] == [282030, 282030]
+    assert rows[0][0].report_id is None
+    assert rows[1][0].report_id == "GVP.WVAR20260716-282030"
+
+    unknown = (
+        (drift / "smithsonian_wvar_after_row_report_link.html")
+        .read_text(encoding="utf-8")
+        .replace("Eruption Start Date", "Unknown Activity Timestamp")
+    )
+    parser = _WvarSummaryParser()
+    parser.feed(unknown)
+    parser.close()
+    assert parser.rows() == ()
 
 
 @pytest.mark.asyncio

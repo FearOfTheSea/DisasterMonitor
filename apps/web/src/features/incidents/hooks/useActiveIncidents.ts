@@ -14,7 +14,60 @@ import {
   type RefreshController,
 } from '@/shared/model/refreshPolicy';
 
-export type ActiveIncidentsStatus = 'loading' | 'success' | 'error';
+export type ActiveIncidentsStatus = 'loading' | 'success' | 'offline' | 'error';
+
+const SNAPSHOT_CACHE_PREFIX = 'disaster-monitor:last-snapshot:v1:';
+
+function cacheKey(
+  view: IncidentView,
+  hazard?: DisasterType,
+  search = '',
+  occurrenceStart = '',
+  occurrenceEnd = '',
+): string {
+  const base = `${SNAPSHOT_CACHE_PREFIX}${view}:${hazard ?? 'all'}:${search}`;
+  return occurrenceStart || occurrenceEnd
+    ? `${base}:${occurrenceStart}:${occurrenceEnd}`
+    : base;
+}
+
+function utcInput(value: string): string | undefined {
+  return value ? new Date(`${value}:00Z`).toISOString() : undefined;
+}
+
+function readCachedSnapshot(key: string): ActiveIncidentsSnapshot | undefined {
+  try {
+    const value = window.localStorage.getItem(key);
+    if (!value || value.length > 2_000_000) return undefined;
+    const parsed = JSON.parse(value) as ActiveIncidentsSnapshot;
+    if (
+      typeof parsed.retrieved_at !== 'string' ||
+      !Array.isArray(parsed.incidents) ||
+      !Array.isArray(parsed.coverage) ||
+      !Array.isArray(parsed.warnings)
+    ) {
+      return undefined;
+    }
+    return { ...parsed, availability: 'offline-cache' };
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedSnapshot(key: string, snapshot: ActiveIncidentsSnapshot): void {
+  try {
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...snapshot,
+        availability: 'live',
+        cached_at: new Date().toISOString(),
+      }),
+    );
+  } catch {
+    // Storage can be unavailable or full; live operation remains usable.
+  }
+}
 
 function errorMessage(caught: unknown): string {
   return caught instanceof Error
@@ -30,6 +83,8 @@ export function useActiveIncidents() {
   const [appliedSearch, setAppliedSearch] = useState('');
   const [view, setView] = useState<IncidentView>('recent');
   const [hazard, setHazard] = useState<DisasterType | undefined>();
+  const [occurrenceStart, setOccurrenceStart] = useState('');
+  const [occurrenceEnd, setOccurrenceEnd] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
   const refreshController = useRef<RefreshController | undefined>(undefined);
 
@@ -43,23 +98,46 @@ export function useActiveIncidents() {
       setStatus('loading');
       setError(undefined);
       try {
+        const key = cacheKey(
+          view,
+          hazard,
+          appliedSearch,
+          occurrenceStart,
+          occurrenceEnd,
+        );
         const nextSnapshot = await fetchActiveIncidents({
           pageSize: 20,
           view: view === 'recent' ? undefined : view,
           hazard,
           search: appliedSearch || undefined,
+          occurrenceStart:
+            view === 'historical' ? utcInput(occurrenceStart) : undefined,
+          occurrenceEnd: view === 'historical' ? utcInput(occurrenceEnd) : undefined,
           signal,
         });
         if (signal.aborted) return;
-        setSnapshot(nextSnapshot);
+        const liveSnapshot = { ...nextSnapshot, availability: 'live' as const };
+        setSnapshot(liveSnapshot);
+        writeCachedSnapshot(key, liveSnapshot);
         setStatus('success');
       } catch (caught) {
         if (signal.aborted) return;
+        const cached = readCachedSnapshot(
+          cacheKey(view, hazard, appliedSearch, occurrenceStart, occurrenceEnd),
+        );
+        if (cached) {
+          setSnapshot(cached);
+          setError(
+            'Network unavailable. Showing the last successful snapshot; data is stale.',
+          );
+          setStatus('offline');
+          return;
+        }
         setError(errorMessage(caught));
         setStatus('error');
       }
     },
-    [appliedSearch, hazard, view],
+    [appliedSearch, hazard, occurrenceEnd, occurrenceStart, view],
   );
 
   useEffect(() => {
@@ -91,6 +169,8 @@ export function useActiveIncidents() {
         view: view === 'recent' ? undefined : view,
         hazard,
         search: appliedSearch || undefined,
+        occurrenceStart: view === 'historical' ? utcInput(occurrenceStart) : undefined,
+        occurrenceEnd: view === 'historical' ? utcInput(occurrenceEnd) : undefined,
         cursor,
       });
       setSnapshot((current) => {
@@ -130,7 +210,15 @@ export function useActiveIncidents() {
     } finally {
       setLoadingMore(false);
     }
-  }, [appliedSearch, hazard, loadingMore, snapshot?.next_cursor, view]);
+  }, [
+    appliedSearch,
+    hazard,
+    loadingMore,
+    occurrenceEnd,
+    occurrenceStart,
+    snapshot?.next_cursor,
+    view,
+  ]);
 
   return {
     snapshot,
@@ -143,6 +231,10 @@ export function useActiveIncidents() {
     setView,
     hazard,
     setHazard,
+    occurrenceStart,
+    setOccurrenceStart,
+    occurrenceEnd,
+    setOccurrenceEnd,
     loadMore,
     loadingMore,
   };

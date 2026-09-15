@@ -145,6 +145,8 @@ class AssistantResponse(BaseModel):
     """Stable assistant response returned to the frontend."""
 
     message: str
+    original_message: str | None = None
+    response_language: str | None = None
     conversation_id: str
     model: str
     map_action: MapNavigationActionResponse | None = None

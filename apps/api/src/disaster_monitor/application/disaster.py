@@ -76,6 +76,32 @@ class WorldwideDisasterQuery:
     selection_intent: WorldwideSelectionIntent = WorldwideSelectionIntent.LATEST
     time_window_days: int = 30
     limit: int = 50
+    occurrence_start: datetime | None = None
+    occurrence_end: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if (self.occurrence_start is None) != (self.occurrence_end is None):
+            raise ValueError("Worldwide occurrence intervals require both bounds.")
+        if self.occurrence_start is not None:
+            if self.occurrence_start.tzinfo is None or self.occurrence_end is None:
+                raise ValueError("Worldwide occurrence bounds must be timezone-aware.")
+            if self.occurrence_end.tzinfo is None:
+                raise ValueError("Worldwide occurrence bounds must be timezone-aware.")
+            if self.occurrence_start > self.occurrence_end:
+                raise ValueError("Worldwide occurrence bounds are out of order.")
+            if self.occurrence_end - self.occurrence_start > timedelta(days=366):
+                raise ValueError(
+                    "Worldwide occurrence intervals may span at most 366 days."
+                )
+
+
+def worldwide_retrieval_time_bounds(
+    query: WorldwideDisasterQuery, *, now: datetime
+) -> tuple[datetime, datetime]:
+    """Return the explicit UTC occurrence interval or the bounded rolling window."""
+    if query.occurrence_start is not None and query.occurrence_end is not None:
+        return query.occurrence_start, query.occurrence_end
+    return now - timedelta(days=query.time_window_days), now
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,3 +286,5 @@ class DisasterReport:
     termination_reason: str | None = None
     claims: tuple[EvidenceClaimInspection, ...] = ()
     timeline: tuple[EvidenceTimelineEntry, ...] = ()
+    original_message: str | None = None
+    response_language: str | None = None

@@ -22,6 +22,10 @@ from disaster_monitor.application.ground_imagery.models import (
 from disaster_monitor.application.ground_imagery.service import (
     GroundImageryService,
 )
+from disaster_monitor.application.interoperability.exports import (
+    StacArtifactRecord,
+    export_stac_catalog,
+)
 from disaster_monitor.domain.imagery.observations import ImpactOnset, Sensor
 from disaster_monitor.domain.imagery.regions import MultiPolygon, polygon_from_geojson
 from disaster_monitor.presentation.http.ground_imagery_schemas import (
@@ -152,6 +156,48 @@ async def replace_ground_imagery_region(
     except GroundImageryError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return await _response(service, request)
+
+
+@router.get("/requests/{request_id}/stac", tags=["interoperability"])
+async def ground_imagery_stac(
+    request_id: str,
+    service: Annotated[GroundImageryService, Depends(get_ground_imagery_service)],
+) -> dict[str, Any]:
+    try:
+        imagery_request = await service.get_request(request_id)
+    except GroundImageryRequestNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    region = imagery_request.region_resolution.region
+    if region is None:
+        raise HTTPException(
+            status_code=409,
+            detail="A resolved region is required before exporting STAC metadata.",
+        )
+    return export_stac_catalog(
+        tuple(
+            StacArtifactRecord(
+                artifact_id=artifact.artifact_id,
+                incident_id=imagery_request.incident_id,
+                datetime=artifact.created_at,
+                geometry=region.core.as_geojson(),
+                bbox=region.core.bounds,
+                asset_href=(
+                    f"/api/v1/ground-imagery/artifacts/{artifact.artifact_id}/download"
+                ),
+                media_type=artifact.content_type,
+                roles=(
+                    artifact.sensor.value,
+                    artifact.role.value,
+                    artifact.output_kind,
+                ),
+                source_product_ids=artifact.source_product_ids,
+                algorithm_version=(
+                    artifact.output_kind if "analysis" in artifact.output_kind else None
+                ),
+            )
+            for artifact in imagery_request.artifacts
+        )
+    )
 
 
 @router.post(

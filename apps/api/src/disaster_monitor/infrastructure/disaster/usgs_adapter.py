@@ -1,7 +1,7 @@
 """Country-neutral USGS GeoJSON earthquake catalog adapter."""
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import cast
 
 import httpx
@@ -14,6 +14,7 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterQuery,
     WorldwideSelectionIntent,
     retrieval_time_bounds,
+    worldwide_retrieval_time_bounds,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.temporal_normalization import (
@@ -123,11 +124,12 @@ def build_worldwide_usgs_params(
     query: WorldwideDisasterQuery, *, now: datetime
 ) -> dict[str, str | int | float]:
     """Build a bounded worldwide query using provider-local defaults."""
+    start, end = worldwide_retrieval_time_bounds(query, now=now)
     return {
         "format": "geojson",
         "eventtype": "earthquake",
-        "starttime": (now - timedelta(days=query.time_window_days)).isoformat(),
-        "endtime": now.isoformat(),
+        "starttime": start.isoformat(),
+        "endtime": end.isoformat(),
         "minmagnitude": 4.5,
         "orderby": (
             "magnitude"
@@ -466,13 +468,14 @@ class UsgsEarthquakeAdapter:
         self, query: WorldwideDisasterQuery, *, now: datetime
     ) -> ProviderBatch[WorldwideDisasterEvent]:
         """Find bounded worldwide events without assigning a synthetic country."""
+        start, end = worldwide_retrieval_time_bounds(query, now=now)
         capture = build_snapshot_capture(
             self._snapshot_recorder,
             source_id=self.source_id,
             parameters={
                 "scope": "worldwide",
-                "from": (now - timedelta(days=query.time_window_days)).isoformat(),
-                "to": now.isoformat(),
+                "from": start.isoformat(),
+                "to": end.isoformat(),
             },
             rights_id="usgs-earthquake-api-terms-2026-08",
             retrieved_at=now,

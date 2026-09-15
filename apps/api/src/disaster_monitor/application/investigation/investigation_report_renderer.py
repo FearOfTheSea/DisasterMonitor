@@ -17,8 +17,9 @@ class InvestigationReportRenderer:
         sections: list[ReportSection] = [
             ReportSection(
                 "Investigation scope",
-                "Current two-hazard investigation for "
-                f"{case.country.country_name}: "
+                "Current bounded investigation for "
+                + ", ".join(country.country_name for country in case.countries)
+                + ": "
                 + " and ".join(
                     item.target.disaster.value.replace("_", " ")
                     for item in case.targets
@@ -43,7 +44,10 @@ class InvestigationReportRenderer:
                     "Coverage and capability gaps: " + " ".join(branch.capability_gaps)
                 )
             sections.append(
-                ReportSection(f"{label} investigation", "\n\n".join(branch_content))
+                ReportSection(
+                    f"{label} — {branch.target.country.canonical_name}",
+                    "\n\n".join(branch_content),
+                )
             )
         assessment = case.cross_hazard_assessment
         correlation_text = "\n".join(

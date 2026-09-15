@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "sources": [
+    {
+      "source_id": "nasa-earth-observatory-natural-events",
+      "publisher_name": "NASA Earth Observatory",
+      "feed_url": "https://science.nasa.gov/feed/?science_org=22414%2C19791",
+      "allowed_hosts": ["science.nasa.gov"],
+      "allowed_path_prefixes": ["/feed/"],
+      "acquisition_mode": "rss_atom",
+      "user_agent": "DisasterMonitor/1.0 (+mailto:disaster-monitor-local@example.invalid)",
+      "contact_email": "disaster-monitor-local@example.invalid",
+      "robots_policy_url": "https://science.nasa.gov/robots.txt",
+      "terms_url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+      "reviewed_at": "2026-09-15T00:00:00Z",
+      "review_expires_at": "2027-03-15T00:00:00Z",
+      "crawl_delay_seconds": 900,
+      "request_limit_per_run": 1,
+      "maximum_response_bytes": 1000000,
+      "enabled": true
+    }
+  ]
+}

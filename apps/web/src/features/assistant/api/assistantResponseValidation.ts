@@ -306,9 +306,12 @@ function normalizeAssistantResponse(value: ApiAssistantResponse): AssistantRespo
 
 function investigationCaseIsConsistent(value: InvestigationCase): boolean {
   if (
-    value.targets.length !== 2 ||
-    new Set(value.targets.map((target) => target.target_id)).size !== 2 ||
-    new Set(value.targets.map((target) => target.disaster)).size !== 2
+    value.targets.length < 2 ||
+    value.targets.length > 4 ||
+    new Set(value.targets.map((target) => target.target_id)).size !==
+      value.targets.length ||
+    value.countries.length < 1 ||
+    value.countries.length > 4
   ) {
     return false;
   }
@@ -365,6 +368,7 @@ function normalizeInvestigationCase(
 ): InvestigationCase {
   return {
     ...value,
+    countries: value.countries ?? (value.country ? [value.country] : []),
     targets: (value.targets ?? []).map((target) =>
       normalizeInvestigationTarget(target),
     ),

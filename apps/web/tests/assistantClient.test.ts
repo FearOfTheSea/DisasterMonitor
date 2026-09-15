@@ -108,12 +108,15 @@ describe('AssistantClient', () => {
           investigation_case: {
             case_id: 'investigation-case:v1:test',
             country: { country_code: 'JPN', country_name: 'Japan' },
+            countries: [{ country_code: 'JPN', country_name: 'Japan' }],
             status: 'partial',
             partial: true,
             targets: [
               {
                 target_id: 'target-quake',
                 disaster: 'earthquake',
+                country_code: 'JPN',
+                country_name: 'Japan',
                 status: 'completed',
                 sources: [],
                 warnings: [],
@@ -124,6 +127,8 @@ describe('AssistantClient', () => {
               {
                 target_id: 'target-slide',
                 disaster: 'landslide',
+                country_code: 'JPN',
+                country_name: 'Japan',
                 status: 'coverage_unavailable',
                 sources: [],
                 warnings: ['No matching event.'],

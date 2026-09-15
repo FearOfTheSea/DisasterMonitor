@@ -373,8 +373,28 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      original_message: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       partial: {
         type: 'boolean',
+      },
+      response_language: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       response_type: {
         type: 'string',
@@ -2364,8 +2384,23 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      countries: {
+        items: {
+          $ref: '#/components/schemas/InvestigationCaseCountryResponse',
+        },
+        maxItems: 4,
+        minItems: 1,
+        type: 'array',
+      },
       country: {
-        $ref: '#/components/schemas/InvestigationCaseCountryResponse',
+        anyOf: [
+          {
+            $ref: '#/components/schemas/InvestigationCaseCountryResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       cross_hazard_assessment: {
         $ref: '#/components/schemas/CrossHazardAssessmentResponse',
@@ -2381,14 +2416,14 @@ const apiSchemas = {
         items: {
           $ref: '#/components/schemas/InvestigationTargetResponse',
         },
-        maxItems: 2,
+        maxItems: 4,
         minItems: 2,
         type: 'array',
       },
     },
     required: [
       'case_id',
-      'country',
+      'countries',
       'status',
       'partial',
       'targets',
@@ -2757,6 +2792,12 @@ const apiSchemas = {
   },
   InvestigationTargetResponse: {
     properties: {
+      country_code: {
+        type: 'string',
+      },
+      country_name: {
+        type: 'string',
+      },
       disaster: {
         $ref: '#/components/schemas/Disaster',
       },
@@ -2802,7 +2843,15 @@ const apiSchemas = {
         type: 'array',
       },
     },
-    required: ['target_id', 'disaster', 'status', 'partial', 'termination_reason'],
+    required: [
+      'target_id',
+      'disaster',
+      'country_code',
+      'country_name',
+      'status',
+      'partial',
+      'termination_reason',
+    ],
     type: 'object',
   },
   LineStringGeometryResponse: {
@@ -4331,6 +4380,7 @@ export type ActiveIncidentResponse = {
   event_time: string;
   evidence_sources?: Array<SourceResponse>;
   geometry?: EventGeometryResponse | null;
+  last_meaningful_change_at?: string | null;
   lineage_ids?: Array<string>;
   location: string;
   measurements?: Array<EventMeasurementResponse>;
@@ -4347,6 +4397,7 @@ export type ActiveIncidentsSnapshotResponse = {
   correlations?: Array<CompoundHazardCorrelationResponse>;
   coverage?: Array<DisasterIncidentCoverageResponse>;
   has_more?: boolean;
+  historical_limitations?: Array<string>;
   incidents?: Array<ActiveIncidentResponse>;
   next_cursor?: string | null;
   observations?: Array<ActiveIncidentResponse>;
@@ -4431,7 +4482,9 @@ export type AssistantResponse = {
     | ShowLayerOperatorActionResponse
     | CreateIncidentWatchOperatorActionResponse
   >;
+  original_message?: string | null;
   partial?: boolean;
+  response_language?: string | null;
   response_type?: string;
   retrieval_time?: string | null;
   sections?: Array<ReportSectionResponse>;
@@ -5102,7 +5155,8 @@ export type InvestigationCaseCountryResponse = {
 export type InvestigationCaseResponse = {
   case_id: string;
   correlations?: Array<CompoundHazardCorrelationResponse>;
-  country: InvestigationCaseCountryResponse;
+  countries: Array<InvestigationCaseCountryResponse>;
+  country?: InvestigationCaseCountryResponse | null;
   cross_hazard_assessment: CrossHazardAssessmentResponse;
   partial: boolean;
   status: 'completed' | 'partial';
@@ -5160,6 +5214,8 @@ export type InvestigationResponse = {
 };
 
 export type InvestigationTargetResponse = {
+  country_code: string;
+  country_name: string;
   disaster: Disaster;
   partial: boolean;
   sections?: Array<ReportSectionResponse>;

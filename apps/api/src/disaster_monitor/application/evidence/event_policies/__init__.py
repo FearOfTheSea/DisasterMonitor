@@ -21,6 +21,8 @@ from .compound_hazard_correlation import (
     CompoundHazardCorrelation,
     CompoundHazardCorrelationService,
     CompoundHazardRelationship,
+    CompoundHazardRule,
+    CompoundHazardRuleRegistry,
     CorrelatableIncident,
 )
 
@@ -54,6 +56,8 @@ __all__ = [
     "ASSOCIATION_LIMITATION",
     "CompoundHazardCorrelation",
     "CompoundHazardCorrelationService",
+    "CompoundHazardRule",
+    "CompoundHazardRuleRegistry",
     "CompoundHazardRelationship",
     "CorrelatableIncident",
     "DefaultEventPolicy",

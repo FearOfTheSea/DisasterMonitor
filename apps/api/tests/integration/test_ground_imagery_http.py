@@ -383,6 +383,9 @@ async def test_ground_imagery_http_publishes_validated_artifacts(
         selection_manifest = await client.get(
             f"/api/v1/ground-imagery/selections/{selected['selection_id']}/manifest"
         )
+        stac = await client.get(
+            f"/api/v1/ground-imagery/requests/{body['request_id']}/stac"
+        )
         readiness = await client.get("/api/v1/ground-imagery/readiness")
 
     assert created.status_code == 202
@@ -393,4 +396,8 @@ async def test_ground_imagery_http_publishes_validated_artifacts(
     assert tile.status_code == 200
     assert tile.content.startswith(b"\x89PNG\r\n\x1a\n")
     assert selection_manifest.status_code == 200
+    assert stac.status_code == 200
+    assert stac.json()["items"][0]["assets"]["data"]["href"].endswith(
+        f"/{artifact_id}/download"
+    )
     assert readiness.json()["state"] == "ready"

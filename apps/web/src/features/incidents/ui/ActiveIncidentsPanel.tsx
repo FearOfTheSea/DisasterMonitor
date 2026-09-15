@@ -31,6 +31,10 @@ type ActiveIncidentsPanelProps = {
   onViewChange?: (value: IncidentView) => void;
   hazard?: DisasterType;
   onHazardChange?: (value: DisasterType | undefined) => void;
+  occurrenceStart?: string;
+  occurrenceEnd?: string;
+  onOccurrenceStartChange?: (value: string) => void;
+  onOccurrenceEndChange?: (value: string) => void;
   onLoadMore?: () => void | Promise<void>;
   loadingMore?: boolean;
   onSelectIncident: (eventId: string) => void;
@@ -139,6 +143,10 @@ export function ActiveIncidentsPanel({
   onViewChange,
   hazard,
   onHazardChange,
+  occurrenceStart = '',
+  occurrenceEnd = '',
+  onOccurrenceStartChange,
+  onOccurrenceEndChange,
   onLoadMore,
   loadingMore = false,
   onSelectIncident,
@@ -194,6 +202,15 @@ export function ActiveIncidentsPanel({
           </button>
         </div>
       </header>
+      {status === 'offline' ? (
+        <p role="status" className="active-incidents-offline">
+          Offline · read-only · showing a stale cached snapshot from{' '}
+          {snapshot
+            ? new Date(snapshot.retrieved_at).toLocaleString()
+            : 'an unknown time'}
+          .
+        </p>
+      ) : null}
       <div className="incident-search">
         <svg
           viewBox="0 0 24 24"
@@ -247,6 +264,28 @@ export function ActiveIncidentsPanel({
             ))}
           </select>
         </label>
+        {view === 'historical' ? (
+          <>
+            <label>
+              <span>Occurrence start (UTC)</span>
+              <input
+                type="datetime-local"
+                aria-label="Historical occurrence start UTC"
+                value={occurrenceStart}
+                onChange={(event) => onOccurrenceStartChange?.(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Occurrence end (UTC)</span>
+              <input
+                type="datetime-local"
+                aria-label="Historical occurrence end UTC"
+                value={occurrenceEnd}
+                onChange={(event) => onOccurrenceEndChange?.(event.target.value)}
+              />
+            </label>
+          </>
+        ) : null}
       </div>
       <div className="active-incidents-scroll">
         {status === 'loading' && !snapshot && (
@@ -462,6 +501,37 @@ export function ActiveIncidentsPanel({
                             }
                             ageSeconds={incident.source.source_age_seconds}
                           />
+                          <details className="incident-provenance-graph">
+                            <summary>Provenance graph</summary>
+                            <ol aria-label={`Provenance for ${incident.event_id}`}>
+                              {(incident.evidence_sources?.length
+                                ? incident.evidence_sources
+                                : [incident.source]
+                              ).map((source) => (
+                                <li key={`${incident.event_id}:${source.source_id}`}>
+                                  <strong>Source observation</strong>{' '}
+                                  <a
+                                    href={source.canonical_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    {source.publisher}
+                                  </a>
+                                </li>
+                              ))}
+                              <li>
+                                <strong>Derived into</strong> normalized evidence
+                              </li>
+                              <li>
+                                <strong>Supports</strong> physical event{' '}
+                                {incident.physical_event_id ?? incident.event_id}
+                              </li>
+                            </ol>
+                            <small>
+                              This trace shows provenance, not proof of causation or
+                              completeness.
+                            </small>
+                          </details>
                           {incident.detection?.news_break_at ? (
                             <small>
                               News first published:{' '}

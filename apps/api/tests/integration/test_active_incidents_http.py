@@ -263,6 +263,7 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
         "observation_kind": "physical_event",
         "activity_status": "unknown",
         "verification_status": "source_backed",
+        "last_meaningful_change_at": None,
         "detection": {
             "news_break_at": None,
             "first_observed_at": None,
@@ -400,3 +401,40 @@ async def test_active_incidents_http_query_bounds_are_validated() -> None:
     assert default_response.status_code == 200
     assert service.queries == [ActiveIncidentsQuery()]
     assert [response.status_code for response in invalid_responses] == [422] * 4
+
+
+@pytest.mark.asyncio
+async def test_incident_interoperability_routes_are_model_free_and_bounded() -> None:
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            current_disaster_report=_current_service(),
+            active_incidents_service=RecordingActiveIncidentsService(),  # type: ignore[arg-type]
+        ),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        geojson = await client.get("/api/v1/incidents.geojson")
+        csv_export = await client.get("/api/v1/incidents.csv")
+        brief = await client.get("/api/v1/incidents/fire-1/brief.html")
+        provenance = await client.get("/api/v1/incidents/fire-1/provenance")
+        why = await client.get("/api/v1/incidents/fire-1/why")
+        ogc = await client.get(
+            "/api/v1/ogc/collections/incidents/items?bbox=19,9,23,12&limit=1"
+        )
+        invalid_bbox = await client.get(
+            "/api/v1/ogc/collections/incidents/items?bbox=23,12,19,9"
+        )
+
+    assert geojson.status_code == 200
+    assert geojson.json()["features"][0]["properties"]["recordType"] == "incident"
+    assert csv_export.headers["content-type"].startswith("text/csv")
+    assert "fire-1" in csv_export.text
+    assert brief.headers["content-type"].startswith("text/html")
+    assert "no language model was used" in brief.text
+    assert provenance.json()["nodes"][0]["kind"] == "physical_event"
+    assert why.json()["event_id"] == "fire-1"
+    assert ogc.json()["numberReturned"] == 1
+    assert invalid_bbox.status_code == 400

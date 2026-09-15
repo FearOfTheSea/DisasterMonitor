@@ -151,6 +151,7 @@ class ActiveIncidentResponse(BaseModel):
     detection: IncidentDetectionTimelineResponse = Field(
         default_factory=IncidentDetectionTimelineResponse
     )
+    last_meaningful_change_at: datetime | None = None
 
 
 class CompoundHazardCorrelationResponse(BaseModel):
@@ -193,6 +194,8 @@ class InvestigationTargetResponse(BaseModel):
 
     target_id: str
     disaster: Disaster
+    country_code: str
+    country_name: str
     status: Literal["completed", "partial", "coverage_unavailable", "failed"]
     selected_event: "SelectedEventResponse | None" = None
     sources: list["SourceResponse"] = Field(default_factory=list)
@@ -203,13 +206,16 @@ class InvestigationTargetResponse(BaseModel):
 
 
 class InvestigationCaseResponse(BaseModel):
-    """User-safe result of one bounded two-hazard investigation."""
+    """User-safe result of one bounded multi-hazard investigation."""
 
     case_id: str
-    country: InvestigationCaseCountryResponse
+    country: InvestigationCaseCountryResponse | None = None
+    countries: list[InvestigationCaseCountryResponse] = Field(
+        min_length=1, max_length=4
+    )
     status: Literal["completed", "partial"]
     partial: bool
-    targets: list[InvestigationTargetResponse] = Field(min_length=2, max_length=2)
+    targets: list[InvestigationTargetResponse] = Field(min_length=2, max_length=4)
     cross_hazard_assessment: CrossHazardAssessmentResponse
     correlations: list[CompoundHazardCorrelationResponse] = Field(default_factory=list)
 
@@ -240,6 +246,7 @@ class ActiveIncidentsSnapshotResponse(BaseModel):
     next_cursor: str | None = None
     has_more: bool = False
     total_incident_count: int | None = None
+    historical_limitations: list[str] = Field(default_factory=list)
 
 
 class CountryIncidentWatchScopeRequest(BaseModel):

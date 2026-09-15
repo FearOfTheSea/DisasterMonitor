@@ -59,6 +59,7 @@ def snapshot_to_projection(
         "correlations": [_correlation_document(item) for item in snapshot.correlations],
         "snapshot_version": version,
         "total_incident_count": snapshot.total_incident_count,
+        "historical_limitations": list(snapshot.historical_limitations),
     }
     return IncidentProjectionRecord(
         projection_id=version,
@@ -99,6 +100,9 @@ def projection_to_snapshot(
             correlations=correlations,
             snapshot_version=version,
             total_incident_count=(int(total) if total is not None else None),
+            historical_limitations=tuple(
+                str(item) for item in payload.get("historical_limitations", [])
+            ),
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise ValueError("The durable incident projection is invalid.") from error
@@ -131,6 +135,7 @@ def _incident_document(value: ActiveIncident) -> dict[str, object]:
         "evidence_sources": [source_document(item) for item in value.evidence_sources],
         "observation_kind": value.observation_kind.value,
         "activity_status": value.activity_status.value,
+        "last_meaningful_change_at": _optional_time(value.last_meaningful_change_at),
         "verification_status": value.verification_status.value,
         "detection": {
             "news_break_at": _optional_time(value.detection.news_break_at),
@@ -191,6 +196,9 @@ def _incident_from_document(value: object) -> ActiveIncident:
         evidence_sources=evidence_sources,
         observation_kind=ObservationKind(str(item["observation_kind"])),
         activity_status=IncidentActivityStatus(str(item["activity_status"])),
+        last_meaningful_change_at=_optional_datetime(
+            item.get("last_meaningful_change_at")
+        ),
         verification_status=IncidentCandidateStatus(
             str(item.get("verification_status", IncidentCandidateStatus.SOURCE_BACKED))
         ),

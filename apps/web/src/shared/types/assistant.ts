@@ -220,6 +220,8 @@ export type ConversationMessage = {
 
 export type AssistantReport = {
   responseType: string;
+  originalMessage?: string;
+  responseLanguage?: string;
   selectedEvent?: SelectedEvent;
   retrievalTime?: string;
   sources: AssistantSource[];

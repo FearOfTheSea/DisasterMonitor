@@ -10,12 +10,15 @@ describe('InvestigationCaseView', () => {
         investigationCase={{
           case_id: 'case-1',
           country: { country_code: 'JPN', country_name: 'Japan' },
+          countries: [{ country_code: 'JPN', country_name: 'Japan' }],
           status: 'partial',
           partial: true,
           targets: [
             {
               target_id: 'target-quake',
               disaster: 'earthquake',
+              country_code: 'JPN',
+              country_name: 'Japan',
               status: 'completed',
               selected_event: null,
               sources: [],
@@ -27,6 +30,8 @@ describe('InvestigationCaseView', () => {
             {
               target_id: 'target-slide',
               disaster: 'landslide',
+              country_code: 'JPN',
+              country_name: 'Japan',
               status: 'coverage_unavailable',
               selected_event: null,
               sources: [],
@@ -64,8 +69,8 @@ describe('InvestigationCaseView', () => {
       />,
     );
 
-    expect(screen.getByText('Earthquake')).toBeVisible();
-    expect(screen.getByText('Landslide')).toBeVisible();
+    expect(screen.getByText(/Earthquake/)).toBeVisible();
+    expect(screen.getByText(/Landslide/)).toBeVisible();
     expect(screen.getByText('Partial investigation')).toBeVisible();
     expect(screen.getByText('Spatiotemporal association')).toBeVisible();
     expect(screen.getAllByText(/does not establish causation/i)).not.toHaveLength(0);

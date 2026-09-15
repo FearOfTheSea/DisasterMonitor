@@ -1,7 +1,7 @@
 """EMSC SeismicPortal FDSN earthquake event discovery adapter."""
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from math import isfinite
 from urllib.parse import urlencode
 
@@ -15,6 +15,7 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterQuery,
     WorldwideSelectionIntent,
     retrieval_time_bounds,
+    worldwide_retrieval_time_bounds,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.temporal_normalization import (
@@ -146,9 +147,10 @@ def build_worldwide_emsc_params(
     query: WorldwideDisasterQuery, *, now: datetime
 ) -> dict[str, str | int | float]:
     """Build a bounded worldwide EMSC request without synthetic geography."""
+    start, end = worldwide_retrieval_time_bounds(query, now=now)
     return _base_params(
-        starttime=now - timedelta(days=query.time_window_days),
-        endtime=now,
+        starttime=start,
+        endtime=end,
         limit=query.limit,
         orderby=(
             "magnitude"

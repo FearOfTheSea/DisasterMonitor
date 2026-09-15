@@ -171,6 +171,8 @@ def _assistant_response(
     selected_event = result.selected_event
     return AssistantResponse(
         message=result.message,
+        original_message=result.original_message,
+        response_language=result.response_language,
         conversation_id=result.conversation_id,
         model=result.model,
         map_action=_map_action_response(result.map_action),
@@ -230,16 +232,29 @@ def _investigation_case_response(
         return None
     return InvestigationCaseResponse(
         case_id=case.case_id,
-        country=InvestigationCaseCountryResponse(
-            country_code=case.country.country_code,
-            country_name=case.country.country_name,
+        country=(
+            InvestigationCaseCountryResponse(
+                country_code=case.country.country_code,
+                country_name=case.country.country_name,
+            )
+            if case.country is not None
+            else None
         ),
+        countries=[
+            InvestigationCaseCountryResponse(
+                country_code=country.country_code,
+                country_name=country.country_name,
+            )
+            for country in case.countries
+        ],
         status=case.status.value,
         partial=case.partial,
         targets=[
             InvestigationTargetResponse(
                 target_id=branch.target.target_id,
                 disaster=branch.target.disaster,
+                country_code=branch.target.country.alpha3_code,
+                country_name=branch.target.country.canonical_name,
                 status=cast(
                     Literal["completed", "partial", "coverage_unavailable", "failed"],
                     branch.status.value,

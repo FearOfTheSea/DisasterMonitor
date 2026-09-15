@@ -1,4 +1,4 @@
-"""Typed, user-safe artifacts for bounded two-hazard investigations."""
+"""Typed, user-safe artifacts for bounded multi-hazard investigations."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from itertools import combinations
 from uuid import NAMESPACE_URL, uuid5
 
 from disaster_monitor.application.agent.models import AgentStatus, InvestigationTarget
@@ -79,33 +80,35 @@ class InvestigationCaseArtifact:
     """The sole persisted projection of a multi-hazard request."""
 
     case_id: str
-    country: InvestigationCaseCountry
-    targets: tuple[InvestigationTargetResult, InvestigationTargetResult]
+    country: InvestigationCaseCountry | None
+    targets: tuple[InvestigationTargetResult, ...]
     cross_hazard_assessment: CrossHazardAssessment
     correlations: tuple[CompoundHazardCorrelation, ...]
     status: InvestigationCaseStatus
     partial: bool
+    countries: tuple[InvestigationCaseCountry, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.countries and self.country is not None:
+            object.__setattr__(self, "countries", (self.country,))
 
     @property
-    def branch_statuses(self) -> tuple[str, str]:
-        return self.targets[0].status.value, self.targets[1].status.value
+    def branch_statuses(self) -> tuple[str, ...]:
+        return tuple(item.status.value for item in self.targets)
 
     @property
     def selected_events(
         self,
-    ) -> tuple[SelectedEventSummary | None, SelectedEventSummary | None]:
-        return self.targets[0].selected_event, self.targets[1].selected_event
+    ) -> tuple[SelectedEventSummary | None, ...]:
+        return tuple(item.selected_event for item in self.targets)
 
     @property
-    def physical_event_ids(self) -> tuple[str | None, str | None]:
-        return self.targets[0].physical_event_id, self.targets[1].physical_event_id
+    def physical_event_ids(self) -> tuple[str | None, ...]:
+        return tuple(item.physical_event_id for item in self.targets)
 
     @property
-    def evidence_state_versions(self) -> tuple[str | None, str | None]:
-        return (
-            self.targets[0].evidence_state_version,
-            self.targets[1].evidence_state_version,
-        )
+    def evidence_state_versions(self) -> tuple[str | None, ...]:
+        return tuple(item.evidence_state_version for item in self.targets)
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,10 +160,12 @@ def causation_requested(question: str) -> bool:
     return bool(_CAUSATION_TERMS.search(question))
 
 
-def stable_case_id(country: Country, targets: tuple[InvestigationTarget, ...]) -> str:
+def stable_case_id(
+    countries: tuple[Country, ...], targets: tuple[InvestigationTarget, ...]
+) -> str:
     material = "|".join(
         (
-            country.alpha3_code,
+            *(country.alpha3_code for country in countries),
             *(f"{item.target_id}:{item.disaster.value}" for item in targets),
         )
     )
@@ -241,6 +246,59 @@ def assess_cross_hazard_pair(
     )
 
 
+def assess_cross_hazard_set(
+    incidents: tuple[InvestigationIncident | None, ...],
+    *,
+    causation_requested: bool,
+) -> tuple[CrossHazardAssessment, tuple[CompoundHazardCorrelation, ...]]:
+    """Assess every non-recursive pair in a bounded set and summarize conservatively."""
+    assessments: list[CrossHazardAssessment] = []
+    correlations: list[CompoundHazardCorrelation] = []
+    for first, second in combinations(incidents, 2):
+        if (
+            first is not None
+            and second is not None
+            and first.disaster is second.disaster
+        ):
+            continue
+        assessment, pair_correlations = assess_cross_hazard_pair(
+            first,
+            second,
+            causation_requested=causation_requested,
+        )
+        assessments.append(assessment)
+        correlations.extend(pair_correlations)
+    if correlations:
+        summary = (
+            f"Maintained rules found {len(correlations)} spatiotemporal "
+            "association(s) among the selected events."
+        )
+        if causation_requested:
+            summary += " These associations do not establish causation."
+        return (
+            CrossHazardAssessment(
+                CrossHazardAssessmentStatus.ASSOCIATED,
+                summary,
+                ASSOCIATION_LIMITATION,
+            ),
+            tuple(correlations),
+        )
+    statuses = {item.status for item in assessments}
+    if not assessments or CrossHazardAssessmentStatus.INSUFFICIENT_EVIDENCE in statuses:
+        status = CrossHazardAssessmentStatus.INSUFFICIENT_EVIDENCE
+        summary = (
+            "At least one requested comparison lacked distinct, source-backed events "
+            "with the geometry required by a maintained rule."
+        )
+    elif statuses == {CrossHazardAssessmentStatus.UNSUPPORTED_PAIR}:
+        status = CrossHazardAssessmentStatus.UNSUPPORTED_PAIR
+        summary = "No maintained rule covers any selected cross-hazard pair."
+    else:
+        status = CrossHazardAssessmentStatus.NOT_ESTABLISHED
+        summary = "No association was established under the maintained rules."
+    return CrossHazardAssessment(status, summary, ASSOCIATION_LIMITATION), ()
+
+
 def _usable_point_geometry(incident: CorrelatableIncident) -> bool:
     geometry = incident.geometry
     return (
@@ -270,6 +328,7 @@ __all__ = [
     "InvestigationIncident",
     "InvestigationTargetResult",
     "assess_cross_hazard_pair",
+    "assess_cross_hazard_set",
     "causation_requested",
     "stable_case_id",
 ]

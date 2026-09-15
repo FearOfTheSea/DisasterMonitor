@@ -56,6 +56,8 @@ MAJOR_NEWS_PUBLISHERS_V1 = frozenset(
         "dw.com",
         "france24.com",
         "theguardian.com",
+        "earthobservatory.nasa.gov",
+        "science.nasa.gov",
     }
 )
 
@@ -129,16 +131,17 @@ class NewsCandidateIngestion:
             retrieved_at=observation.observed_at,
             authority=SourceAuthority.SECONDARY,
         )
+        candidates = (*existing.sources, source) if existing is not None else (source,)
         sources = tuple(
             sorted(
                 {
-                    entry.source_id: entry for entry in (*existing.sources, source)
-                }.values()
-                if existing is not None
-                else (source,),
+                    (entry.source_id, entry.canonical_url): entry
+                    for entry in candidates
+                }.values(),
                 key=lambda entry: (
                     entry.published_at or entry.retrieved_at,
                     entry.source_id,
+                    entry.canonical_url,
                 ),
             )
         )

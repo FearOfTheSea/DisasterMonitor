@@ -12,6 +12,7 @@ from disaster_monitor.application.disaster import (
     ProviderIssue,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
+    worldwide_retrieval_time_bounds,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.provider_failures import ProviderFailureReason
@@ -109,16 +110,11 @@ def build_gdacs_params(
     page_number: int = 1,
 ) -> dict[str, str | int]:
     """Build the official bounded GDACS event-list query."""
-    start = (
-        query.date_from
-        if isinstance(query, DisasterQuery) and query.date_from is not None
-        else now - timedelta(days=query.time_window_days)
-    )
-    end = (
-        query.date_to
-        if isinstance(query, DisasterQuery) and query.date_to is not None
-        else now
-    )
+    if isinstance(query, WorldwideDisasterQuery):
+        start, end = worldwide_retrieval_time_bounds(query, now=now)
+    else:
+        start = query.date_from or now - timedelta(days=query.time_window_days)
+        end = query.date_to or now
     return {
         "eventlist": event_type,
         "alertlevel": "Green;Orange;Red",

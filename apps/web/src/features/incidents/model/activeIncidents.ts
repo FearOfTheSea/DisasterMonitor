@@ -103,6 +103,7 @@ export type ActiveIncident = {
   activity_status?: IncidentActivityStatus;
   verification_status?: IncidentVerificationStatus;
   detection?: IncidentDetectionTimeline;
+  last_meaningful_change_at?: string | null;
 };
 
 export type IncidentMapRecord = Omit<ActiveIncident, 'country'> & {
@@ -172,5 +173,8 @@ export type ActiveIncidentsSnapshot = {
   next_cursor?: string | null;
   has_more?: boolean;
   total_incident_count?: number | null;
+  historical_limitations?: string[];
+  availability?: 'live' | 'offline-cache';
+  cached_at?: string;
 };
 import type { CompoundHazardCorrelationResponse } from '@/shared/api/generated/assistant';

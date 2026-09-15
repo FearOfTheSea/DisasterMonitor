@@ -8,6 +8,7 @@ from disaster_monitor.application.disaster import (
     ObservationKind,
     ProviderBatch,
     WorldwideDisasterQuery,
+    worldwide_retrieval_time_bounds,
 )
 from disaster_monitor.application.evidence.event_resolution import (
     EventPolicyRegistry,
@@ -210,6 +211,8 @@ class IncidentRetrieval:
                 else query.time_window_days
             ),
             limit=query.acquisition_limit_per_disaster,
+            occurrence_start=query.occurrence_start,
+            occurrence_end=query.occurrence_end,
         )
         selection = self._provider_registry.select(
             provider_query, ProviderRole.EVENT_DISCOVERY
@@ -404,6 +407,7 @@ class IncidentRetrieval:
         degraded = False
         retryable = False
         admission_failure = False
+        interval_start, interval_end = worldwide_retrieval_time_bounds(query, now=now)
         for record in batch.records:
             try:
                 event = validate_worldwide_event_evidence(
@@ -421,6 +425,8 @@ class IncidentRetrieval:
                 admission_failure = True
                 continue
             normalized = incident(event, registration.tier, self._country_resolver)
+            if not interval_start <= normalized.event_time <= interval_end:
+                continue
             if event.observation_kind is ObservationKind.ACQUISITION:
                 observations.append(normalized)
             else:

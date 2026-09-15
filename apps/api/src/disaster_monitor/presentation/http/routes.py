@@ -18,6 +18,9 @@ from disaster_monitor.presentation.http.ground_imagery_routes import (
 from disaster_monitor.presentation.http.incident_routes import (
     router as incident_router,
 )
+from disaster_monitor.presentation.http.interoperability_routes import (
+    router as interoperability_router,
+)
 from disaster_monitor.presentation.http.system_routes import (
     get_operational_metrics,
 )
@@ -31,6 +34,7 @@ router.include_router(catalog_router)
 router.include_router(earthquake_context_router)
 router.include_router(ground_imagery_router)
 router.include_router(incident_router)
+router.include_router(interoperability_router)
 router.include_router(assistant_router)
 
 __all__ = ["get_conversation_turn", "get_operational_metrics", "router"]

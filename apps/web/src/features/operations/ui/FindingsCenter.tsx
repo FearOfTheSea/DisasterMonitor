@@ -20,6 +20,10 @@ import {
   buildOperationalFindings,
   type OperationalFindingKind,
 } from '@/features/operations/model/operationalFinding';
+import {
+  readOfflineSnapshot,
+  writeOfflineSnapshot,
+} from '@/shared/model/offlineSnapshot';
 
 type FindingsCenterProps = {
   activeSnapshot?: ActiveIncidentsSnapshot;
@@ -37,6 +41,19 @@ const KIND_LABELS: Record<OperationalFindingKind, string> = {
   active_warning: 'Retrieval warning',
   compound_correlation: 'Descriptive correlation',
 };
+
+const FINDINGS_CACHE_KEY = 'disaster-monitor:pwa:watch-findings:v1';
+
+type WatchFindingData = Awaited<ReturnType<typeof fetchWatchFindingData>>;
+
+function isWatchFindingData(value: unknown): value is WatchFindingData {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as WatchFindingData).watches) &&
+    Array.isArray((value as WatchFindingData).changes)
+  );
+}
 
 function formatTime(value: string): string {
   const parsed = new Date(value);
@@ -85,6 +102,7 @@ export function FindingsCenter({
   const [watchChanges, setWatchChanges] = useState<IncidentWatchChange[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [offlineCachedAt, setOfflineCachedAt] = useState<string>();
   const [markingChangeId, setMarkingChangeId] = useState<string>();
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -95,6 +113,8 @@ export function FindingsCenter({
       if (signal?.aborted) return;
       setWatches(result.watches);
       setWatchChanges(result.changes);
+      writeOfflineSnapshot(FINDINGS_CACHE_KEY, result);
+      setOfflineCachedAt(undefined);
       setError(
         result.timelineError
           ? `Some watch findings are unavailable: ${result.timelineError}`
@@ -102,7 +122,17 @@ export function FindingsCenter({
       );
     } catch (caught) {
       if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-        setError(caught instanceof Error ? caught.message : 'Findings failed to load.');
+        const cached = readOfflineSnapshot(FINDINGS_CACHE_KEY, isWatchFindingData);
+        if (cached) {
+          setWatches(cached.value.watches);
+          setWatchChanges(cached.value.changes);
+          setOfflineCachedAt(cached.cachedAt);
+          setError(undefined);
+        } else {
+          setError(
+            caught instanceof Error ? caught.message : 'Findings failed to load.',
+          );
+        }
       }
     } finally {
       if (!signal?.aborted) setLoading(false);
@@ -116,6 +146,8 @@ export function FindingsCenter({
         if (controller.signal.aborted) return;
         setWatches(result.watches);
         setWatchChanges(result.changes);
+        writeOfflineSnapshot(FINDINGS_CACHE_KEY, result);
+        setOfflineCachedAt(undefined);
         setError(
           result.timelineError
             ? `Some watch findings are unavailable: ${result.timelineError}`
@@ -124,9 +156,17 @@ export function FindingsCenter({
       })
       .catch((caught: unknown) => {
         if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-          setError(
-            caught instanceof Error ? caught.message : 'Findings failed to load.',
-          );
+          const cached = readOfflineSnapshot(FINDINGS_CACHE_KEY, isWatchFindingData);
+          if (cached) {
+            setWatches(cached.value.watches);
+            setWatchChanges(cached.value.changes);
+            setOfflineCachedAt(cached.cachedAt);
+            setError(undefined);
+          } else {
+            setError(
+              caught instanceof Error ? caught.message : 'Findings failed to load.',
+            );
+          }
         }
       })
       .finally(() => {
@@ -192,6 +232,11 @@ export function FindingsCenter({
           {error}
         </div>
       ) : null}
+      {offlineCachedAt ? (
+        <p role="status">
+          Offline · read-only · stale findings cached {formatTime(offlineCachedAt)}.
+        </p>
+      ) : null}
       {!loading && findings.length === 0 ? (
         <p className="findings-empty">No current findings match this view.</p>
       ) : null}
@@ -231,7 +276,10 @@ export function FindingsCenter({
               finding.changeId ? (
                 <button
                   type="button"
-                  disabled={markingChangeId === finding.changeId}
+                  disabled={
+                    offlineCachedAt !== undefined ||
+                    markingChangeId === finding.changeId
+                  }
                   onClick={() =>
                     void markRead(finding.watchId as string, finding.changeId as string)
                   }

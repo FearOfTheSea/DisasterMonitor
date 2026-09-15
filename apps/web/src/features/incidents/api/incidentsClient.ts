@@ -12,6 +12,8 @@ type ActiveIncidentsRequest = {
   search?: string;
   pageSize?: number;
   cursor?: string;
+  occurrenceStart?: string;
+  occurrenceEnd?: string;
   signal?: AbortSignal;
 };
 
@@ -24,6 +26,8 @@ export async function fetchActiveIncidents({
   search,
   pageSize,
   cursor,
+  occurrenceStart,
+  occurrenceEnd,
   signal,
 }: ActiveIncidentsRequest = {}): Promise<ActiveIncidentsSnapshot> {
   const parameters = new URLSearchParams({
@@ -36,6 +40,8 @@ export async function fetchActiveIncidents({
   if (search?.trim()) parameters.set('search', search.trim());
   if (pageSize !== undefined) parameters.set('page_size', String(pageSize));
   if (cursor) parameters.set('cursor', cursor);
+  if (occurrenceStart) parameters.set('occurrence_start', occurrenceStart);
+  if (occurrenceEnd) parameters.set('occurrence_end', occurrenceEnd);
   const response = await fetch(`${API_BASE_URL}/incidents?${parameters}`, { signal });
   const body = await readJsonResponse<ActiveIncidentsSnapshot>(
     response,

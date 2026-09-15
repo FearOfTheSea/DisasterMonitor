@@ -1,4 +1,4 @@
-"""Sequential runtime for the deliberately bounded Investigation Agent v1."""
+"""Sequential runtime for deliberately bounded multi-hazard investigations."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from disaster_monitor.application.agent.investigation_cases import (
     InvestigationCaseStatus,
     InvestigationIncident,
     InvestigationTargetResult,
-    assess_cross_hazard_pair,
+    assess_cross_hazard_set,
     causation_requested,
     stable_case_id,
 )
@@ -24,7 +24,6 @@ from disaster_monitor.application.agent.models import (
     ValidatedDisasterTask,
 )
 from disaster_monitor.application.agent.planning import DEFAULT_TOOL_ORDER
-from disaster_monitor.application.agent.tools import MAX_TOOL_CALLS
 from disaster_monitor.application.agent.trace import ExecutionTrace, TraceEventKind
 from disaster_monitor.application.investigation.investigation_report_renderer import (
     InvestigationReportRenderer,
@@ -35,7 +34,10 @@ if TYPE_CHECKING:
 
 
 class InvestigationRuntime:
-    """Run exactly two application-built branches under one tool-call budget."""
+    """Run two to four application-built branches under one request budget."""
+
+    MAXIMUM_BRANCHES = 4
+    MAXIMUM_TOOL_CALLS = len(DEFAULT_TOOL_ORDER) * MAXIMUM_BRANCHES
 
     def __init__(self, runtime: DisasterAgentRuntime) -> None:
         self._runtime = runtime
@@ -49,10 +51,8 @@ class InvestigationRuntime:
         model_call_count: int,
         model_events: list[tuple[TraceEventKind, str, bool]],
     ) -> AgentExecutionState:
-        if len(task.investigation_targets) != 2 or task.country is None:
-            raise ValueError(
-                "Investigation Agent v1 requires two country-scoped targets."
-            )
+        if not 2 <= len(task.investigation_targets) <= self.MAXIMUM_BRANCHES:
+            raise ValueError("A bounded investigation requires two to four targets.")
         parent = AgentExecutionState(
             task,
             InvestigationPlan(
@@ -67,10 +67,10 @@ class InvestigationRuntime:
         )
         self._runtime._record_task_and_models(parent, model_events)
         estimated_tool_calls = len(DEFAULT_TOOL_ORDER) * len(task.investigation_targets)
-        if estimated_tool_calls > MAX_TOOL_CALLS:
+        if estimated_tool_calls > self.MAXIMUM_TOOL_CALLS:
             parent.final_status = AgentStatus.FAILED
             parent.capability_gaps.append(
-                "The bounded two-hazard plan exceeds the request-wide tool-call budget."
+                "The bounded investigation exceeds the request-wide tool-call budget."
             )
             self._terminate(parent, "tool_call_budget_exhausted")
             return parent
@@ -83,21 +83,28 @@ class InvestigationRuntime:
                 conversation_id=conversation_id,
                 initial_tool_call_count=used_tool_calls,
                 allow_model_backed_specialists=False,
+                maximum_tool_calls=self.MAXIMUM_TOOL_CALLS,
             )
             used_tool_calls = branch.tool_call_count
             results.append(_target_result(target, branch))
         parent.tool_call_count = used_tool_calls
-        first, second = results
-        assessment, correlations = assess_cross_hazard_pair(
-            InvestigationIncident.from_target_result(first),
-            InvestigationIncident.from_target_result(second),
+        assessment, correlations = assess_cross_hazard_set(
+            tuple(InvestigationIncident.from_target_result(item) for item in results),
             causation_requested=causation_requested(task.question),
         )
         partial = any(item.partial for item in results)
         case = InvestigationCaseArtifact(
-            case_id=stable_case_id(task.country, task.investigation_targets),
-            country=InvestigationCaseCountry.from_country(task.country),
-            targets=(first, second),
+            case_id=stable_case_id(task.countries, task.investigation_targets),
+            country=(
+                InvestigationCaseCountry.from_country(task.country)
+                if task.country is not None
+                else None
+            ),
+            countries=tuple(
+                InvestigationCaseCountry.from_country(country)
+                for country in task.countries
+            ),
+            targets=tuple(results),
             cross_hazard_assessment=assessment,
             correlations=correlations,
             status=(

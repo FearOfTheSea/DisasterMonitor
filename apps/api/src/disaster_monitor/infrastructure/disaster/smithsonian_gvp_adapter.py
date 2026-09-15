@@ -10,6 +10,7 @@ from disaster_monitor.application.disaster import (
     ProviderIssue,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
+    worldwide_retrieval_time_bounds,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.domain.disaster import (
@@ -83,6 +84,11 @@ class SmithsonianGvpAdapter:
     def _interval(
         self, query: DisasterQuery | WorldwideDisasterQuery, now: datetime
     ) -> tuple[datetime, datetime]:
+        if isinstance(query, WorldwideDisasterQuery) and query.occurrence_start:
+            start, end = worldwide_retrieval_time_bounds(query, now=now)
+            if end - start > timedelta(days=_MAX_SEARCH_DAYS):
+                start = end - timedelta(days=_MAX_SEARCH_DAYS)
+            return start, end
         requested_days = min(
             _MAX_SEARCH_DAYS,
             max(0, query.time_window_days),

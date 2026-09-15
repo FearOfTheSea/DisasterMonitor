@@ -12,6 +12,7 @@ from disaster_monitor.domain.disaster import (
     EventCoordinate,
     EventGeometry,
     EventGeometryKind,
+    ObservationKind,
     SourceReference,
     geographic_distance_km,
 )
@@ -69,37 +70,87 @@ class CompoundHazardCorrelation:
 
 
 @dataclass(frozen=True, slots=True)
-class _CorrelationRule:
+class CompoundHazardRule:
+    """Auditable eligibility policy for one descriptive hazard association."""
+
     rule_id: str
     first_disaster: Disaster
     second_disaster: Disaster
     maximum_distance_km: float
     maximum_time_seconds: int
     require_second_at_or_after_first: bool
+    rationale: str
+    first_geometry_kinds: tuple[EventGeometryKind, ...]
+    second_geometry_kinds: tuple[EventGeometryKind, ...]
+    first_observation_kinds: tuple[ObservationKind, ...]
+    second_observation_kinds: tuple[ObservationKind, ...]
+    non_causality_statement: str = ASSOCIATION_LIMITATION
 
 
 _V1_RULES = (
-    _CorrelationRule(
+    CompoundHazardRule(
         "compound-hazard:earthquake-landslide:v1",
         Disaster.EARTHQUAKE,
         Disaster.LANDSLIDE,
         150.0,
         72 * 3600,
         True,
+        "Strong ground motion can be a plausible landslide trigger, so proximity "
+        "and post-earthquake ordering are useful for review.",
+        (EventGeometryKind.POINT,),
+        (EventGeometryKind.POINT,),
+        (ObservationKind.PHYSICAL_EVENT,),
+        (ObservationKind.PHYSICAL_EVENT,),
     ),
-    _CorrelationRule(
+    CompoundHazardRule(
         "compound-hazard:tropical-cyclone-flood:v1",
         Disaster.TROPICAL_CYCLONE,
         Disaster.FLOOD,
         300.0,
         72 * 3600,
         False,
+        "Observed cyclone and flood events may share a storm context; forecast "
+        "tracks are deliberately excluded from event-to-event association.",
+        (EventGeometryKind.POINT,),
+        (EventGeometryKind.POINT,),
+        (ObservationKind.PHYSICAL_EVENT,),
+        (ObservationKind.PHYSICAL_EVENT,),
     ),
 )
 
 
+class CompoundHazardRuleRegistry:
+    """Read-only registry that keeps correlation policy inspectable and injectable."""
+
+    def __init__(self, rules: tuple[CompoundHazardRule, ...]) -> None:
+        if len({rule.rule_id for rule in rules}) != len(rules):
+            raise ValueError("Compound-hazard rule IDs must be unique.")
+        self._rules = rules
+
+    @classmethod
+    def default(cls) -> "CompoundHazardRuleRegistry":
+        return cls(_V1_RULES)
+
+    @property
+    def rules(self) -> tuple[CompoundHazardRule, ...]:
+        return self._rules
+
+    def for_pair(self, first: Disaster, second: Disaster) -> CompoundHazardRule | None:
+        return next(
+            (
+                rule
+                for rule in self._rules
+                if {first, second} == {rule.first_disaster, rule.second_disaster}
+            ),
+            None,
+        )
+
+
 class CompoundHazardCorrelationService:
     """Apply the explicit v1 allowlist without changing event identity or evidence."""
+
+    def __init__(self, registry: CompoundHazardRuleRegistry | None = None) -> None:
+        self._registry = registry or CompoundHazardRuleRegistry.default()
 
     def correlate(
         self, incidents: Sequence[CorrelatableIncident]
@@ -107,7 +158,9 @@ class CompoundHazardCorrelationService:
         correlations: dict[str, CompoundHazardCorrelation] = {}
         for index, first_candidate in enumerate(incidents):
             for second_candidate in incidents[index + 1 :]:
-                correlation = _correlate_pair(first_candidate, second_candidate)
+                correlation = _correlate_pair(
+                    first_candidate, second_candidate, registry=self._registry
+                )
                 if correlation is not None:
                     correlations[correlation.correlation_id] = correlation
         return tuple(
@@ -126,25 +179,19 @@ class CompoundHazardCorrelationService:
         """Expose the maintained allowlist without evaluating an event pair."""
         return any(
             {first, second} == {rule.first_disaster, rule.second_disaster}
-            for rule in _V1_RULES
+            for rule in self._registry.rules
         )
 
 
 def _correlate_pair(
     first_candidate: CorrelatableIncident,
     second_candidate: CorrelatableIncident,
+    *,
+    registry: CompoundHazardRuleRegistry,
 ) -> CompoundHazardCorrelation | None:
     if first_candidate.disaster is second_candidate.disaster:
         return None
-    rule = next(
-        (
-            item
-            for item in _V1_RULES
-            if {first_candidate.disaster, second_candidate.disaster}
-            == {item.first_disaster, item.second_disaster}
-        ),
-        None,
-    )
+    rule = registry.for_pair(first_candidate.disaster, second_candidate.disaster)
     if rule is None:
         return None
     first, second = (
@@ -156,8 +203,12 @@ def _correlate_pair(
     second_identity = _identity(second)
     if first_identity == second_identity:
         return None
-    first_point = _point(first)
-    second_point = _point(second)
+    if _observation_kind(first) not in rule.first_observation_kinds:
+        return None
+    if _observation_kind(second) not in rule.second_observation_kinds:
+        return None
+    first_point = _point(first, rule.first_geometry_kinds)
+    second_point = _point(second, rule.second_geometry_kinds)
     if first_point is None or second_point is None:
         return None
     signed_time_delta = (second.event_time - first.event_time).total_seconds()
@@ -208,11 +259,21 @@ def _identity(incident: CorrelatableIncident) -> str:
     )
 
 
-def _point(incident: CorrelatableIncident) -> EventCoordinate | None:
+def _point(
+    incident: CorrelatableIncident,
+    allowed_geometry_kinds: tuple[EventGeometryKind, ...],
+) -> EventCoordinate | None:
     geometry = incident.geometry
-    if geometry is None or geometry.kind is not EventGeometryKind.POINT:
+    if geometry is None or geometry.kind not in allowed_geometry_kinds:
+        return None
+    if geometry.kind is not EventGeometryKind.POINT:
         return None
     return geometry.coordinates[0]
+
+
+def _observation_kind(incident: CorrelatableIncident) -> ObservationKind:
+    value = getattr(incident, "observation_kind", ObservationKind.PHYSICAL_EVENT)
+    return value if isinstance(value, ObservationKind) else ObservationKind(value)
 
 
 def _elapsed_text(seconds: int) -> str:

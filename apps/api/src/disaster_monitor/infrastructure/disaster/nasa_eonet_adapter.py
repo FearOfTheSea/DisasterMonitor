@@ -14,6 +14,7 @@ from disaster_monitor.application.disaster import (
     ProviderIssue,
     WorldwideDisasterEvent,
     WorldwideDisasterQuery,
+    worldwide_retrieval_time_bounds,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.domain.disaster import (
@@ -97,10 +98,11 @@ def _time_window(
 ) -> tuple[datetime, datetime]:
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("The provider clock must be timezone-aware")
-    end = (query.date_to if isinstance(query, DisasterQuery) else None) or now
-    start = (
-        query.date_from if isinstance(query, DisasterQuery) else None
-    ) or now - timedelta(days=max(1, query.time_window_days))
+    if isinstance(query, WorldwideDisasterQuery):
+        start, end = worldwide_retrieval_time_bounds(query, now=now)
+    else:
+        end = query.date_to or now
+        start = query.date_from or now - timedelta(days=max(1, query.time_window_days))
     start = start.astimezone(UTC)
     end = end.astimezone(UTC)
     if end < start:

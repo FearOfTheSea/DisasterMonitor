@@ -262,7 +262,11 @@ def build_app_dependencies(
     )
     configured_ground_imagery = (
         configured.ground_imagery_service
-        or build_ground_imagery_service(settings, configured_active_incidents)
+        or build_ground_imagery_service(
+            settings,
+            configured_active_incidents,
+            configured_earthquake_context,
+        )
     )
 
     def clock() -> datetime:

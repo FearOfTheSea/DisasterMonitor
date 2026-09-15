@@ -65,15 +65,12 @@ def test_current_two_hazard_country_request_has_application_owned_targets() -> N
     assert CrossHazardAssessmentStatus.ASSOCIATED.value == "associated"
 
 
-def test_two_hazard_requests_fail_closed_for_worldwide_dates_and_extra_hazards() -> (
-    None
-):
+def test_multi_hazard_requests_fail_closed_for_worldwide_and_dates() -> None:
     catalog = StaticCountryCatalog()
     parser = DisasterQueryParser(catalog)
     for question in (
         "Latest earthquake and flood worldwide.",
         "Investigate the earthquake and landslide in Japan on 2026-08-05.",
-        "Latest earthquake, flood, and landslide in Japan.",
     ):
         task = validate_disaster_task(
             question,
@@ -83,6 +80,39 @@ def test_two_hazard_requests_fail_closed_for_worldwide_dates_and_extra_hazards()
         )
         assert task.investigation_targets == ()
         assert task.validation_status.value == "clarification_required"
+
+
+def test_investigation_supports_three_hazards_and_multiple_explicit_countries() -> None:
+    catalog = StaticCountryCatalog()
+    parser = DisasterQueryParser(catalog)
+    three_hazards = "Latest earthquake, flood, and landslide in Japan."
+    task = validate_disaster_task(
+        three_hazards,
+        deterministic_task_draft(three_hazards),
+        country_catalog=catalog,
+        query_parser=parser,
+    )
+    assert [target.disaster for target in task.investigation_targets] == [
+        Disaster.EARTHQUAKE,
+        Disaster.FLOOD,
+        Disaster.LANDSLIDE,
+    ]
+    assert {target.country.alpha3_code for target in task.investigation_targets} == {
+        "JPN"
+    }
+
+    multi_country = "Investigate earthquakes in Japan and floods in Vietnam."
+    task = validate_disaster_task(
+        multi_country,
+        deterministic_task_draft(multi_country),
+        country_catalog=catalog,
+        query_parser=parser,
+    )
+    assert [
+        (target.disaster, target.country.alpha3_code)
+        for target in task.investigation_targets
+    ] == [(Disaster.EARTHQUAKE, "JPN"), (Disaster.FLOOD, "VNM")]
+    assert tuple(country.alpha3_code for country in task.countries) == ("JPN", "VNM")
 
 
 NOW = datetime(2026, 8, 5, 12, tzinfo=UTC)
