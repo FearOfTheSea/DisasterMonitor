@@ -32,9 +32,15 @@ class StaticSourceCatalog:
         news = json.loads(
             resources.joinpath("news_sources.v1.json").read_text(encoding="utf-8")
         )
+        warnings = json.loads(
+            resources.joinpath("warning_sources.v1.json").read_text(encoding="utf-8")
+        )
+        context = json.loads(
+            resources.joinpath("context_sources.v1.json").read_text(encoding="utf-8")
+        )
         self._version = str(catalog["version"])
         self._rights_manifest = load_provider_rights_manifest()
-        supplemental_versions = (rapid_mapping, news)
+        supplemental_versions = (rapid_mapping, news, warnings, context)
         if any(
             str(supplement.get("catalog_version")) != self._version
             for supplement in supplemental_versions
@@ -51,7 +57,11 @@ class StaticSourceCatalog:
             for descriptor in (
                 _descriptor(item)
                 for item in chain(
-                    catalog["sources"], rapid_mapping["sources"], news["sources"]
+                    catalog["sources"],
+                    rapid_mapping["sources"],
+                    news["sources"],
+                    warnings["sources"],
+                    context["sources"],
                 )
             )
         )

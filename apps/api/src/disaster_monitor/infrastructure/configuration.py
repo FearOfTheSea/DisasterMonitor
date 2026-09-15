@@ -32,6 +32,8 @@ class Settings(BaseSettings):
         default=3_000_000, ge=100_000, le=5_000_000
     )
     weather_alert_max_records: int = Field(default=500, ge=1, le=500)
+    noaa_tsunami_warnings_enabled: bool = True
+    meteoalarm_country_feeds: str = ""
     cdse_stac_url: str = "https://stac.dataspace.copernicus.eu/v1/search"
     cdse_process_url: str = "https://sh.dataspace.copernicus.eu/process/v1"
     cdse_token_url: str = (
@@ -100,3 +102,14 @@ class Settings(BaseSettings):
             for origin in self.allowed_origins.split(",")
             if origin.strip()
         ]
+
+    @property
+    def meteoalarm_countries(self) -> tuple[str, ...]:
+        """Return explicitly configured public MeteoAlarm country feed names."""
+        return tuple(
+            dict.fromkeys(
+                country.strip().casefold()
+                for country in self.meteoalarm_country_feeds.split(",")
+                if country.strip()
+            )
+        )

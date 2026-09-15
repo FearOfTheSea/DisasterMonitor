@@ -20,6 +20,7 @@ class Disaster(StrEnum):
     LANDSLIDE = "landslide"
     TROPICAL_CYCLONE = "tropical_cyclone"
     VOLCANIC_ERUPTION = "volcanic_eruption"
+    DROUGHT = "drought"
 
 
 class ObservationKind(StrEnum):

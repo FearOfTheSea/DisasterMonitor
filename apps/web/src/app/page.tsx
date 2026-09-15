@@ -364,6 +364,7 @@ export default function Home() {
             incident={selectedIncident}
             onAsk={() => togglePanel('assistant')}
             onGroundView={openGroundImagery}
+            warnings={weatherAlerts.snapshot}
           />
         </div>
         {activePanel ? (

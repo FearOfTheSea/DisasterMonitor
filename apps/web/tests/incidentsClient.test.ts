@@ -111,6 +111,17 @@ describe('incidentsClient', () => {
         source_id: 'six-hazard-fixture',
         estimated: false,
       },
+      drought: {
+        kind: 'area',
+        coordinates: [
+          { latitude: 10, longitude: 106 },
+          { latitude: 11, longitude: 107 },
+          { latitude: 10, longitude: 108 },
+        ],
+        description: 'Fixture drought indicator region',
+        source_id: 'copernicus-global-drought-observatory',
+        estimated: false,
+      },
       tropical_cyclone: {
         kind: 'track',
         coordinates: [

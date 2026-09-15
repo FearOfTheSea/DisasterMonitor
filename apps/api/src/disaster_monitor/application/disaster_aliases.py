@@ -66,6 +66,15 @@ DISASTER_ALIASES: dict[Disaster, tuple[str, ...]] = {
         "phun trào núi lửa",
         "火山噴火",
     ),
+    Disaster.DROUGHT: (
+        "drought",
+        "droughts",
+        "dry spell",
+        "sequía",
+        "khô hạn",
+        "hạn hán",
+        "干ばつ",
+    ),
 }
 
 

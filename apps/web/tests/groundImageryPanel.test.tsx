@@ -93,6 +93,121 @@ const readiness: GroundImageryReadinessResponse = {
   detail: 'Catalog discovery is available.',
 };
 
+const observation = (productId: string, capturedStart: string) => ({
+  observation_id: `observation:${productId}`,
+  sensor: 'sentinel-1' as const,
+  product_id: productId,
+  acquisition_id: productId,
+  revision: null,
+  platform: 'Sentinel-1A',
+  captured_start: capturedStart,
+  captured_end: capturedStart,
+  readiness: 'downloaded',
+  footprint: { type: 'MultiPolygon', coordinates: [] },
+  mode: 'IW',
+  relative_orbit: 12,
+  orbit_direction: 'ascending',
+  polarizations: ['VV'],
+  cloud_cover_fraction: null,
+  quality: null,
+  source_url: 'https://catalogue.dataspace.copernicus.eu/product',
+});
+
+const grid = {
+  crs: 'EPSG:4326',
+  min_x: 105,
+  min_y: 20,
+  max_x: 106,
+  max_y: 21,
+  pixel_size_m: 10,
+  width: 512,
+  height: 512,
+  resolution_label: '10 m',
+};
+
+const comparisonRequest: GroundImageryRequestResponse = {
+  ...request,
+  region: {
+    ...request.region,
+    region: {
+      ...request.region.region!,
+      inspection: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [
+            [
+              [105, 20],
+              [106, 20],
+              [106, 21],
+              [105, 20],
+            ],
+          ],
+        ],
+      },
+    },
+  },
+  sensors: [
+    {
+      ...request.sensors[0],
+      selections: [
+        {
+          selection_id: 'selection:before',
+          sensor: 'sentinel-1',
+          role: 'pre_event_reference',
+          label: 'Pre-event reference',
+          observation: observation('S1-before', '2024-05-10T00:00:00Z'),
+          reason: 'selected',
+          explanation: 'Selected before capture.',
+          age_class: 'recent',
+          alternative_observation_ids: [],
+        },
+        {
+          selection_id: 'selection:after',
+          sensor: 'sentinel-1',
+          role: 'first_useful_after_onset',
+          label: 'First useful after onset',
+          observation: observation('S1-after', '2024-05-21T00:00:00Z'),
+          reason: 'selected',
+          explanation: 'Selected after capture.',
+          age_class: 'recent',
+          alternative_observation_ids: [],
+        },
+      ],
+    },
+    request.sensors[1],
+  ],
+  artifacts: [
+    {
+      artifact_id: 'artifact:before',
+      selection_id: 'selection:before',
+      sensor: 'sentinel-1',
+      role: 'pre_event_reference',
+      output_kind: 'overview',
+      content_type: 'image/tiff; application=geotiff',
+      storage_key: 'before.tif',
+      byte_count: 100,
+      sha256: 'a'.repeat(64),
+      source_product_ids: ['S1-before'],
+      grid,
+      created_at: '2024-05-21T01:00:00Z',
+    },
+    {
+      artifact_id: 'artifact:after',
+      selection_id: 'selection:after',
+      sensor: 'sentinel-1',
+      role: 'first_useful_after_onset',
+      output_kind: 'overview',
+      content_type: 'image/tiff; application=geotiff',
+      storage_key: 'after.tif',
+      byte_count: 100,
+      sha256: 'b'.repeat(64),
+      source_product_ids: ['S1-after'],
+      grid,
+      created_at: '2024-05-21T01:00:00Z',
+    },
+  ],
+};
+
 describe('GroundImageryPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -143,5 +258,23 @@ describe('GroundImageryPanel', () => {
 
     expect(api.refreshGroundImageryRequest).toHaveBeenCalledWith('ground-imagery:1');
     expect(api.setGroundImageryWatch).toHaveBeenCalledWith('ground-imagery:1', true);
+  });
+
+  it('shows matched-grid side-by-side and swipe comparison controls', async () => {
+    const user = userEvent.setup();
+    api.createGroundImageryRequest.mockResolvedValue(comparisonRequest);
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Matched before / after')).toBeVisible();
+    expect(screen.getByAltText('Sentinel-1 radar before capture')).toBeVisible();
+    expect(screen.getByText(/S1-before → S1-after/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Swipe' }));
+    expect(screen.getByRole('slider', { name: 'Reveal position' })).toBeVisible();
   });
 });

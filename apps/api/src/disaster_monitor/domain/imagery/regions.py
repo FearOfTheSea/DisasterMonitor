@@ -355,7 +355,7 @@ def approximate_area_km2(geometry: MultiPolygon) -> float:
             return abs(
                 sum(
                     first[0] * second[1] - second[0] * first[1]
-                    for first, second in zip(projected, projected[1:], strict=True)
+                    for first, second in zip(projected, projected[1:], strict=False)
                 )
                 / 2
             )
@@ -374,4 +374,140 @@ def point_geometry(coordinate: Coordinate) -> MultiPolygon:
     """
     raise TypeError(
         "A point is not an imagery region; use the metric geometry port to buffer it."
+    )
+
+
+def geometries_intersect(first: MultiPolygon, second: MultiPolygon) -> bool:
+    """Return deterministic polygon intersection without changing source geometry."""
+    if not _bounds_intersect(first.bounds, second.bounds):
+        return False
+    for first_polygon in first.polygons:
+        for second_polygon in second.polygons:
+            if _polygons_intersect(first_polygon, second_polygon):
+                return True
+    return False
+
+
+def contains_coordinate(geometry: MultiPolygon, coordinate: Coordinate) -> bool:
+    """Return topology-aware point membership, excluding polygon holes."""
+    return any(
+        _ring_contains(polygon.exterior, coordinate)
+        and not any(_ring_contains(hole, coordinate) for hole in polygon.holes)
+        for polygon in geometry.polygons
+    )
+
+
+def _bounds_intersect(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+) -> bool:
+    return not (
+        first[2] < second[0]
+        or second[2] < first[0]
+        or first[3] < second[1]
+        or second[3] < first[1]
+    )
+
+
+def _polygons_intersect(first: Polygon, second: Polygon) -> bool:
+    first_edges = tuple(
+        zip(first.exterior.coordinates, first.exterior.coordinates[1:], strict=False)
+    )
+    second_edges = tuple(
+        zip(
+            second.exterior.coordinates,
+            second.exterior.coordinates[1:],
+            strict=False,
+        )
+    )
+    if any(
+        _segments_intersect(*first_edge, *second_edge)
+        for first_edge in first_edges
+        for second_edge in second_edges
+    ):
+        return True
+    return contains_coordinate(
+        MultiPolygon((first,)), second.exterior.coordinates[0]
+    ) or (contains_coordinate(MultiPolygon((second,)), first.exterior.coordinates[0]))
+
+
+def _ring_contains(ring: LinearRing, point: Coordinate) -> bool:
+    inside = False
+    for first, second in zip(ring.coordinates, ring.coordinates[1:], strict=False):
+        if _point_on_segment(point, first, second):
+            return True
+        crosses = (first.latitude > point.latitude) != (
+            second.latitude > point.latitude
+        )
+        if crosses:
+            boundary_longitude = (second.longitude - first.longitude) * (
+                point.latitude - first.latitude
+            ) / (second.latitude - first.latitude) + first.longitude
+            if point.longitude < boundary_longitude:
+                inside = not inside
+    return inside
+
+
+def _point_on_segment(point: Coordinate, start: Coordinate, end: Coordinate) -> bool:
+    cross = (point.latitude - start.latitude) * (end.longitude - start.longitude) - (
+        point.longitude - start.longitude
+    ) * (end.latitude - start.latitude)
+    if abs(cross) > 1e-10:
+        return False
+    return (
+        min(start.latitude, end.latitude) - 1e-10
+        <= point.latitude
+        <= max(start.latitude, end.latitude) + 1e-10
+        and min(start.longitude, end.longitude) - 1e-10
+        <= point.longitude
+        <= max(start.longitude, end.longitude) + 1e-10
+    )
+
+
+def _segments_intersect(
+    first_start: Coordinate,
+    first_end: Coordinate,
+    second_start: Coordinate,
+    second_end: Coordinate,
+) -> bool:
+    def orientation(a: Coordinate, b: Coordinate, c: Coordinate) -> float:
+        return (b.longitude - a.longitude) * (c.latitude - a.latitude) - (
+            b.latitude - a.latitude
+        ) * (c.longitude - a.longitude)
+
+    values = (
+        orientation(first_start, first_end, second_start),
+        orientation(first_start, first_end, second_end),
+        orientation(second_start, second_end, first_start),
+        orientation(second_start, second_end, first_end),
+    )
+    if values[0] * values[1] < 0 and values[2] * values[3] < 0:
+        return True
+    return any(
+        abs(value) <= 1e-10 and _point_on_segment(point, start, end)
+        for value, point, start, end in (
+            (values[0], second_start, first_start, first_end),
+            (values[1], second_end, first_start, first_end),
+            (values[2], first_start, second_start, second_end),
+            (values[3], first_end, second_start, second_end),
+        )
+    )
+
+
+def path_intersects_geometry(
+    path: tuple[Coordinate, ...], geometry: MultiPolygon
+) -> bool:
+    """Return whether a source path touches or crosses a source polygon."""
+    if len(path) < 2:
+        raise ValueError("A path requires at least two coordinates.")
+    if any(contains_coordinate(geometry, point) for point in path):
+        return True
+    return any(
+        _segments_intersect(start, end, boundary_start, boundary_end)
+        for start, end in zip(path, path[1:], strict=False)
+        for polygon in geometry.polygons
+        for ring in (polygon.exterior, *polygon.holes)
+        for boundary_start, boundary_end in zip(
+            ring.coordinates, ring.coordinates[1:], strict=False
+        )
     )

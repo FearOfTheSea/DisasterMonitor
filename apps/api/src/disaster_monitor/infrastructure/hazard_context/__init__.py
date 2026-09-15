@@ -1,0 +1,1 @@
+"""External hazard-context adapters."""

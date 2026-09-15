@@ -1,0 +1,19 @@
+"""Persistence boundary for operator-private AOIs and local assets."""
+
+from typing import Protocol
+
+from disaster_monitor.domain.spatial_watches import AreaOfInterestScope, LocalAsset
+
+
+class SpatialWatchStore(Protocol):
+    async def save_scope(self, scope: AreaOfInterestScope) -> None: ...
+
+    async def list_scopes(self) -> tuple[AreaOfInterestScope, ...]: ...
+
+    async def delete_scope(self, scope_id: str) -> bool: ...
+
+    async def save_asset(self, asset: LocalAsset) -> None: ...
+
+    async def list_assets(self) -> tuple[LocalAsset, ...]: ...
+
+    async def delete_asset(self, asset_id: str) -> bool: ...

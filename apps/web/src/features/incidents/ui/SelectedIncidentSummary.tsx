@@ -1,17 +1,19 @@
+import { EventBrief } from '@/features/event-brief/public';
 import {
-  countryAssociationLabel,
   DisasterType,
   displayActiveIncidentCountry,
   displayActiveIncidentContext,
   IncidentMapRecord,
 } from '@/features/incidents/model/activeIncidents';
 import { DisasterIcon } from '@/features/incidents/ui/DisasterIcon';
+import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 
 const DISASTER_LABELS: Record<DisasterType, string> = {
   earthquake: 'Earthquake',
   flood: 'Flood',
   wildfire: 'Wildfire',
   landslide: 'Landslide',
+  drought: 'Drought',
   tropical_cyclone: 'Tropical cyclone',
   volcanic_eruption: 'Volcanic eruption',
 };
@@ -30,10 +32,12 @@ export function SelectedIncidentSummary({
   incident,
   onAsk,
   onGroundView,
+  warnings,
 }: {
   incident?: IncidentMapRecord;
   onAsk: () => void;
   onGroundView?: () => void;
+  warnings?: WeatherAlertsSnapshot;
 }) {
   if (!incident) return null;
   const sourceCount = Math.max(1, incident.provider_ids.length);
@@ -70,28 +74,12 @@ export function SelectedIncidentSummary({
         </div>
       </div>
       <details>
-        <summary>Technical details</summary>
-        <dl>
-          <div>
-            <dt>Event ID</dt>
-            <dd>{incident.event_id}</dd>
-          </div>
-          <div>
-            <dt>Country association</dt>
-            <dd>{countryAssociationLabel(incident)}</dd>
-          </div>
-          <div>
-            <dt>Source location</dt>
-            <dd>{incident.location}</dd>
-          </div>
-          <div>
-            <dt>Publisher</dt>
-            <dd>{incident.source.publisher}</dd>
-          </div>
-        </dl>
-        <a href={incident.source.canonical_url} target="_blank" rel="noreferrer">
-          Open original source
-        </a>
+        <summary>Open Event Brief</summary>
+        <EventBrief
+          incident={incident}
+          warnings={warnings}
+          onGroundView={onGroundView ?? (() => undefined)}
+        />
       </details>
     </article>
   );

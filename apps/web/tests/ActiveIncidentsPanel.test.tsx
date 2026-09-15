@@ -15,6 +15,7 @@ const DISASTERS: DisasterType[] = [
   'flood',
   'wildfire',
   'landslide',
+  'drought',
   'tropical_cyclone',
   'volcanic_eruption',
 ];
@@ -131,10 +132,10 @@ describe('ActiveIncidentsPanel', () => {
       screen.getByRole('heading', { name: "What's happening" }),
     ).toBeInTheDocument();
     expect(screen.getByText('Recent events reported by trusted sources')).toBeVisible();
-    expect(screen.getAllByTestId('incident-coverage')).toHaveLength(6);
+    expect(screen.getAllByTestId('incident-coverage')).toHaveLength(7);
     expect(screen.getByText('Degraded')).toBeInTheDocument();
     expect(screen.getByText('Unavailable')).toBeInTheDocument();
-    expect(screen.getAllByText('No matching records')).toHaveLength(4);
+    expect(screen.getAllByText('No matching records')).toHaveLength(5);
     const coverageItems = screen.getAllByTestId('incident-coverage');
     expect(within(coverageItems[0]).getByText('Earthquake')).toBeInTheDocument();
     expect(
@@ -188,7 +189,7 @@ describe('ActiveIncidentsPanel', () => {
       />,
     );
 
-    expect(screen.getByText('5 source networks checked')).toBeVisible();
+    expect(screen.getByText('6 source networks checked')).toBeVisible();
     expect(screen.getByText('View coverage')).toBeVisible();
     expect(screen.getAllByTestId('incident-coverage')[0]).not.toBeVisible();
 

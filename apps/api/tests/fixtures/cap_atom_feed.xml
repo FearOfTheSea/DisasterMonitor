@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>tag:fixture.example,2026:warnings</id>
+  <title>Fixture warning feed</title>
+  <updated>2026-09-14T05:00:00Z</updated>
+  <entry>
+    <id>urn:uuid:fixture</id>
+    <title>Fixture CAP warning</title>
+    <updated>2026-09-14T05:00:00Z</updated>
+    <link rel="related" title="CapXML document" href="https://warnings.example/cap/fixture.xml" type="application/cap+xml" />
+  </entry>
+</feed>

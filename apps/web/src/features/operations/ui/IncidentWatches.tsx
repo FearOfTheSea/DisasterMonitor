@@ -34,6 +34,7 @@ const DISASTERS: { value: DisasterType; label: string }[] = [
   { value: 'flood', label: 'Flood' },
   { value: 'wildfire', label: 'Wildfire' },
   { value: 'landslide', label: 'Landslide' },
+  { value: 'drought', label: 'Drought' },
   { value: 'tropical_cyclone', label: 'Tropical cyclone' },
   { value: 'volcanic_eruption', label: 'Volcanic eruption' },
 ];

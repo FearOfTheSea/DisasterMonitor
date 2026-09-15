@@ -42,6 +42,7 @@ VENEZUELA = CATALOG.get_by_alpha3("VEN")
 assert JAPAN is not None and VENEZUELA is not None
 
 EXPECTED_EVENT_DISCOVERY_AUTHORITIES = {
+    Disaster.DROUGHT: (),
     Disaster.EARTHQUAKE: (
         ("EMSC SeismicPortal", "emsc-earthquakes", ProviderTier.SECONDARY),
         ("GDACS earthquakes", "gdacs-earthquakes", ProviderTier.SECONDARY),
@@ -232,7 +233,9 @@ async def test_capabilities_include_japan_providers_and_exclude_them_abroad() ->
 
 
 @pytest.mark.asyncio
-async def test_configured_registry_routes_all_recognized_disasters() -> None:
+async def test_configured_registry_routes_only_physical_event_discovery_sources() -> (
+    None
+):
     service = build_current_disaster_report(Settings(), country_catalog=CATALOG)
     try:
         registry = service.provider_registry
@@ -368,13 +371,15 @@ async def test_firms_is_optional_wildfire_observation_evidence_not_discovery() -
 
 
 @pytest.mark.asyncio
-async def test_copernicus_rapid_mapping_is_map_evidence_for_every_disaster() -> None:
+async def test_copernicus_rapid_mapping_is_map_evidence_for_supported_disasters() -> (
+    None
+):
     service = build_current_disaster_report(
         Settings(_env_file=None), country_catalog=CATALOG
     )
     try:
         registry = service.provider_registry
-        for disaster in Disaster:
+        for disaster in set(Disaster) - {Disaster.DROUGHT}:
             source_id = {
                 Disaster.EARTHQUAKE: "copernicus-rapid-mapping-earthquakes",
                 Disaster.FLOOD: "copernicus-rapid-mapping-floods",
@@ -401,6 +406,13 @@ async def test_copernicus_rapid_mapping_is_map_evidence_for_every_disaster() -> 
                     _query(disaster), ProviderRole.EVENT_DISCOVERY
                 ).registrations
             )
+        drought = registry.select(
+            _query(Disaster.DROUGHT), ProviderRole.SITUATION_EVIDENCE
+        )
+        assert all(
+            not item.source_id.startswith("copernicus-rapid-mapping-")
+            for item in drought.registrations
+        )
     finally:
         await service.aclose()
 

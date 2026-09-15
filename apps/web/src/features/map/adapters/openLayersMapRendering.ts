@@ -170,9 +170,11 @@ export function styleForActiveIncident(value: unknown, selected = false): Style 
           ? '#c2410c'
           : disaster === 'landslide'
             ? '#854d0e'
-            : disaster === 'tropical_cyclone'
-              ? '#6d28d9'
-              : '#7f1d1d';
+            : disaster === 'drought'
+              ? '#a16207'
+              : disaster === 'tropical_cyclone'
+                ? '#6d28d9'
+                : '#7f1d1d';
   return new Style({
     stroke: new Stroke({ color, width: selected ? 5 : 3 }),
     fill: new Fill({ color: `${color}26` }),

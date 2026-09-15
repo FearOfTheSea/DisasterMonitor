@@ -15,7 +15,10 @@ from disaster_monitor.infrastructure.disaster.registrations.common import (
 
 
 def build(context: RegistrationContext) -> tuple[ProviderRegistration, ...]:
-    return tuple(_registration(context, disaster) for disaster in Disaster)
+    supported = tuple(
+        disaster for disaster in Disaster if disaster is not Disaster.DROUGHT
+    )
+    return tuple(_registration(context, disaster) for disaster in supported)
 
 
 def _registration(

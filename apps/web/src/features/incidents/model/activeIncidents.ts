@@ -3,6 +3,7 @@ export type DisasterType =
   | 'flood'
   | 'wildfire'
   | 'landslide'
+  | 'drought'
   | 'tropical_cyclone'
   | 'volcanic_eruption';
 

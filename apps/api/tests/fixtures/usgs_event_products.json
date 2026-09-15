@@ -1,0 +1,64 @@
+{
+  "type": "Feature",
+  "id": "us7000fixture",
+  "properties": {
+    "products": {
+      "shakemap": [{
+        "id": "urn:usgs-product:us:shakemap:us7000fixture:4",
+        "type": "shakemap",
+        "code": "us7000fixture",
+        "source": "us",
+        "updateTime": 1789358400000,
+        "status": "UPDATE",
+        "properties": {
+          "eventsource": "us", "eventsourcecode": "7000fixture", "version": "4",
+          "map-status": "reviewed", "review-status": "reviewed",
+          "minimum-latitude": "10", "minimum-longitude": "106",
+          "maximum-latitude": "12", "maximum-longitude": "108",
+          "maxmmi": "7.2", "maxpga": "0.41", "maxpgv": "33.5"
+        },
+        "contents": {
+          "download/coverage_mmi_high_res.covjson": {"url": "https://earthquake.usgs.gov/products/mmi.covjson", "sha256": "mmi-sha"},
+          "download/coverage_pga_high_res.covjson": {"url": "https://earthquake.usgs.gov/products/pga.covjson", "sha256": "pga-sha"},
+          "download/coverage_pgv_high_res.covjson": {"url": "https://earthquake.usgs.gov/products/pgv.covjson", "sha256": "pgv-sha"},
+          "download/intensity_overlay.png": {"url": "https://earthquake.usgs.gov/products/intensity.png", "sha256": "image-sha"},
+          "download/mmi_legend.png": {"url": "https://earthquake.usgs.gov/products/mmi-legend.png", "sha256": "legend-sha"}
+        }
+      }],
+      "losspager": [{
+        "id": "urn:usgs-product:us:losspager:us7000fixture:2",
+        "type": "losspager", "code": "us7000fixture", "source": "us",
+        "updateTime": 1789358460000, "status": "UPDATE",
+        "properties": {"eventsource": "us", "eventsourcecode": "7000fixture", "alertlevel": "orange", "release": "false", "review-status": "reviewed"},
+        "contents": {
+          "json/exposures.json": {"url": "https://earthquake.usgs.gov/products/exposures.json", "sha256": "exposure-sha"},
+          "json/alerts.json": {"url": "https://earthquake.usgs.gov/products/alerts.json", "sha256": "alerts-sha"}
+        }
+      }],
+      "ground-failure": [{
+        "id": "urn:usgs-product:us:ground-failure:us7000fixture:1",
+        "type": "ground-failure", "code": "us7000fixture", "source": "us",
+        "updateTime": 1789358520000, "status": "UPDATE",
+        "properties": {
+          "eventsource": "us", "eventsourcecode": "7000fixture", "version": "1", "shakemap-version": "4",
+          "landslide-alert": "yellow", "landslide-hazard-alert-value": "0.18", "landslide-population-alert-value": "2200",
+          "landslide-minimum-latitude": "10", "landslide-minimum-longitude": "106", "landslide-maximum-latitude": "12", "landslide-maximum-longitude": "108",
+          "liquefaction-alert": "green", "liquefaction-hazard-alert-value": "0.04", "liquefaction-population-alert-value": "500",
+          "liquefaction-minimum-latitude": "10", "liquefaction-minimum-longitude": "106", "liquefaction-maximum-latitude": "12", "liquefaction-maximum-longitude": "108"
+        },
+        "contents": {
+          "jessee_2018_model.tif": {"url": "https://earthquake.usgs.gov/products/landslide.tif", "sha256": "landslide-sha"},
+          "zhu_2017_general_model.tif": {"url": "https://earthquake.usgs.gov/products/liquefaction.tif", "sha256": "liquefaction-sha"}
+        }
+      }],
+      "oaf": [{
+        "id": "urn:usgs-product:us:oaf:us7000fixture:3",
+        "type": "oaf", "code": "us7000fixture", "source": "us",
+        "updateTime": 1789358580000, "status": "UPDATE",
+        "properties": {"eventsource": "us", "eventsourcecode": "7000fixture"},
+        "contents": {"forecast.json": {"url": "https://earthquake.usgs.gov/products/forecast.json", "sha256": "forecast-sha"}}
+      }]
+    }
+  },
+  "geometry": {"type": "Point", "coordinates": [107, 11, 10]}
+}

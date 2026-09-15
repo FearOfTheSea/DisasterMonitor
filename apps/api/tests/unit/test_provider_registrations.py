@@ -275,6 +275,7 @@ def test_aggregate_provider_registration_order_and_identities_are_stable() -> No
             "secondary",
             ("situation_evidence",),
             (
+                "drought",
                 "earthquake",
                 "flood",
                 "landslide",

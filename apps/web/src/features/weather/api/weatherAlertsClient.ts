@@ -73,13 +73,20 @@ function parseGeometry(value: unknown): WeatherAlertGeometry | null {
 function validCanonicalUrl(value: string): boolean {
   try {
     const target = new URL(value);
+    const approvedHosts = new Set([
+      'api.weather.gov',
+      'feeds.meteoalarm.org',
+      'meteoalarm.org',
+      'www.meteoalarm.org',
+      'tsunami.gov',
+      'www.tsunami.gov',
+    ]);
     return (
       target.protocol === 'https:' &&
-      target.hostname === 'api.weather.gov' &&
+      approvedHosts.has(target.hostname) &&
       target.username === '' &&
       target.password === '' &&
-      target.port === '' &&
-      target.pathname.startsWith('/alerts/')
+      target.port === ''
     );
   } catch {
     return false;

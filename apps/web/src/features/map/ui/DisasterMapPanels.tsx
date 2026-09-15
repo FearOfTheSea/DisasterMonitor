@@ -10,7 +10,10 @@ import {
   type SatelliteMapState,
   type SatelliteSourceId,
 } from '@/features/map/model/satelliteImagery';
-import type { WeatherAlertsSnapshot } from '@/features/weather/public';
+import {
+  AuthorityWarningList,
+  type WeatherAlertsSnapshot,
+} from '@/features/weather/public';
 import type {
   CommonOperationalPicture,
   CycloneMapLayer,
@@ -152,38 +155,7 @@ export function WeatherAlertCoverage({
         footprints. Alerts without source geometry remain listed but are not drawn.
       </p>
       {snapshot.alerts.length > 0 ? (
-        <ul>
-          {snapshot.alerts.slice(0, 8).map((alert) => (
-            <li key={alert.provider_alert_id}>
-              <strong>{alert.event}</strong>
-              <span>{alert.affected_area}</span>
-              <small>
-                {alert.severity} severity · {alert.urgency} urgency · {alert.certainty}{' '}
-                certainty
-              </small>
-              <small>
-                Effective {alert.effective ?? 'not reported'} · expires{' '}
-                {alert.expires ?? 'not reported'}
-              </small>
-              <small>
-                {alert.geometry
-                  ? 'Source polygon displayed'
-                  : 'No source polygon supplied'}
-              </small>
-              {alert.canonical_url ? (
-                <a href={alert.canonical_url} target="_blank" rel="noreferrer">
-                  Open source alert
-                </a>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {snapshot.alerts.length > 8 ? (
-        <small>
-          {snapshot.alerts.length - 8} additional active alerts omitted from this
-          compact list.
-        </small>
+        <AuthorityWarningList alerts={snapshot.alerts} />
       ) : null}
       {snapshot.warnings.map((warning) => (
         <p key={`${warning.reason_code}:${warning.detail}`}>{warning.detail}</p>

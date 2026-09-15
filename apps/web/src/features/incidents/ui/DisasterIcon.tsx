@@ -31,6 +31,12 @@ export function DisasterIcon({ disaster }: { disaster: DisasterType }) {
           <path d="m12.2 8.2 1.8-3M15.4 8.4l2.5-1M16.6 11.2l2.8.2" />
         </>
       ) : null}
+      {disaster === 'drought' ? (
+        <>
+          <path d="M4 18.5h16M6 15l3-2 3 2 3-3 3 2" />
+          <path d="M12 3v6M9.5 5.5 12 3l2.5 2.5" />
+        </>
+      ) : null}
       {disaster === 'tropical_cyclone' ? (
         <>
           <path d="M19.8 7.5A8.3 8.3 0 0 0 5 8c1.7-1 4.3-1.2 6.2.3 1 .8 1.5 2.2 1.2 3.5" />

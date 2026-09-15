@@ -14,6 +14,7 @@ from disaster_monitor.application.conversations.run_conversation_turn import (
 from disaster_monitor.application.decision.record_operator_action import (
     RecordOperatorAction,
 )
+from disaster_monitor.application.earthquake_context import EarthquakeContextService
 from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
 from disaster_monitor.application.ground_imagery.service import GroundImageryService
 from disaster_monitor.application.incidents.active_incidents import (
@@ -94,6 +95,7 @@ class AppDependencies:
     active_incidents: ActiveIncidentsService
     source_catalog: SourceCatalogService
     weather_alerts: WeatherAlertsService
+    earthquake_context: EarthquakeContextService
     incident_watches: ManageIncidentWatches
     satellite_imagery: SatelliteImageryService
     ground_imagery: GroundImageryService

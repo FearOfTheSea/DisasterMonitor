@@ -95,6 +95,48 @@ export function artifactForSelection(
   return artifacts?.find((artifact) => artifact.selection_id === selectionId);
 }
 
+export type GroundComparisonPair = {
+  before: GroundImageryArtifactResponse;
+  after: GroundImageryArtifactResponse;
+  beforeSelection: GroundImagerySelectionResponse;
+  afterSelection: GroundImagerySelectionResponse;
+};
+
+export function comparisonForSensor(
+  request: GroundImageryPanelRequest,
+  sensor: Sensor,
+): GroundComparisonPair | undefined {
+  const selections = sensorStatus(request, sensor)?.selections ?? [];
+  const beforeSelection = selections.find(
+    (selection) =>
+      selection.role === 'pre_event_reference' ||
+      selection.role === 'earlier_reference',
+  );
+  const afterSelection =
+    selections.find((selection) => selection.role === 'first_useful_after_onset') ??
+    selections.find((selection) => selection.role === 'latest_useful');
+  if (!beforeSelection?.observation || !afterSelection?.observation) return undefined;
+  const before = artifactForSelection(request.artifacts, beforeSelection.selection_id);
+  const after = artifactForSelection(request.artifacts, afterSelection.selection_id);
+  if (!before || !after || !matchingGrid(before, after)) return undefined;
+  return { before, after, beforeSelection, afterSelection };
+}
+
+function matchingGrid(
+  before: GroundImageryArtifactResponse,
+  after: GroundImageryArtifactResponse,
+): boolean {
+  return (
+    before.grid.crs === after.grid.crs &&
+    before.grid.min_x === after.grid.min_x &&
+    before.grid.min_y === after.grid.min_y &&
+    before.grid.max_x === after.grid.max_x &&
+    before.grid.max_y === after.grid.max_y &&
+    before.grid.width === after.grid.width &&
+    before.grid.height === after.grid.height
+  );
+}
+
 export function statusClass(state: string): string {
   if (state === 'ready' || state === 'selected' || state === 'completed') {
     return 'is-positive';

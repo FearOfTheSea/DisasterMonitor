@@ -44,33 +44,37 @@ async def test_adapter_preserves_cap_semantics_and_only_source_geometry() -> Non
     assert requests[0].url.path == "/alerts/active"
     assert dict(requests[0].url.params) == {
         "status": "actual",
-        "message_type": "alert,update",
+        "message_type": "alert,update,cancel",
         "region_type": "land",
     }
     assert requests[0].headers["accept"] == "application/geo+json"
     assert "DisasterMonitor" in requests[0].headers["user-agent"]
     assert batch.issue is None
-    assert [alert.provider_alert_id for alert in batch.alerts] == [
+    assert [alert.identifier for alert in batch.alerts] == [
+        "urn:oid:fixture-cancelled",
         "urn:oid:fixture-severe-update",
         "urn:oid:fixture-unknown-no-geometry",
+        "urn:oid:fixture-expired",
     ]
-    severe, unknown = batch.alerts
+    _, severe, unknown, _ = batch.alerts
     assert severe.publisher == "NWS Salt Lake City UT"
-    assert severe.event == "Flash Flood Warning"
-    assert severe.severity.value == "severe"
-    assert severe.urgency.value == "immediate"
-    assert severe.certainty.value == "likely"
-    assert severe.effective == datetime(2026, 9, 1, 1, 18, tzinfo=UTC)
-    assert severe.geometry is not None
-    assert severe.geometry.rings[0][0].longitude == -112.93
-    assert severe.geometry.rings[0][0].latitude == 37.0
+    assert severe.infos[0].event == "Flash Flood Warning"
+    assert severe.infos[0].severity.value == "severe"
+    assert severe.infos[0].urgency.value == "immediate"
+    assert severe.infos[0].certainty.value == "likely"
+    assert severe.infos[0].effective == datetime(2026, 9, 1, 1, 18, tzinfo=UTC)
+    first_coordinate = (
+        severe.infos[0].areas[0].polygons[0].polygons[0].exterior.coordinates[0]
+    )
+    assert first_coordinate.longitude == -112.93
+    assert first_coordinate.latitude == 37.0
     assert severe.canonical_url.endswith("urn:oid:fixture-severe-update")
     assert severe.retrieved_at == NOW
-    assert unknown.severity.value == "unknown"
-    assert unknown.urgency.value == "unknown"
-    assert unknown.certainty.value == "unknown"
-    assert unknown.geometry is None
-    assert unknown.headline is None
+    assert unknown.infos[0].severity.value == "unknown"
+    assert unknown.infos[0].urgency.value == "unknown"
+    assert unknown.infos[0].certainty.value == "unknown"
+    assert unknown.infos[0].areas[0].polygons == ()
+    assert unknown.infos[0].headline is None
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,8 @@
-"""Bounded NOAA/NWS active CAP alert adapter."""
+"""Bounded NOAA/NWS GeoJSON adapter projected into generic CAP 1.2 records."""
 
 import math
 from datetime import datetime
+from enum import StrEnum
 from urllib.parse import urlsplit
 
 import httpx
@@ -13,15 +14,19 @@ from disaster_monitor.application.ports.weather_alerts import (
     WeatherAlertBatch,
     WeatherAlertProviderIssue,
 )
-from disaster_monitor.application.weather_alerts import (
-    NWS_LIMITATIONS,
-    NWS_SOURCE_ID,
-    WeatherAlert,
-    WeatherAlertCertainty,
-    WeatherAlertCoordinate,
-    WeatherAlertGeometry,
-    WeatherAlertSeverity,
-    WeatherAlertUrgency,
+from disaster_monitor.application.weather_alerts import NWS_LIMITATIONS, NWS_SOURCE_ID
+from disaster_monitor.domain.imagery.regions import MultiPolygon, polygon_from_geojson
+from disaster_monitor.domain.warnings import (
+    CapAlert,
+    CapArea,
+    CapInfo,
+    CapMessageReference,
+    CapMessageType,
+    CapScope,
+    CapStatus,
+    WarningCertainty,
+    WarningSeverity,
+    WarningUrgency,
 )
 from disaster_monitor.infrastructure.disaster.errors import DisasterProviderError
 from disaster_monitor.infrastructure.disaster.http import (
@@ -35,7 +40,7 @@ NWS_ATTRIBUTION = "NOAA/National Weather Service"
 NWS_RIGHTS_ID = "noaa-nws-public-domain"
 NWS_ACTIVE_PARAMETERS = {
     "status": "actual",
-    "message_type": "alert,update",
+    "message_type": "alert,update,cancel",
     "region_type": "land",
 }
 _MAX_RING_COUNT = 20
@@ -47,22 +52,24 @@ def _text(value: object) -> str:
 
 
 def _optional_text(value: object) -> str | None:
-    text = _text(value)
-    return text or None
+    value_text = _text(value)
+    return value_text or None
 
 
-def _enum_value[
-    WeatherAlertEnum: (
-        WeatherAlertSeverity,
-        WeatherAlertUrgency,
-        WeatherAlertCertainty,
-    )
-](enum_type: type[WeatherAlertEnum], value: object) -> WeatherAlertEnum:
-    text = _text(value).casefold()
+def _enum[EnumValue: StrEnum](enum_type: type[EnumValue], value: object) -> EnumValue:
     try:
-        return enum_type(text)
+        return enum_type(_text(value).casefold())
     except ValueError:
         return enum_type("unknown")
+
+
+def _required_enum[EnumValue: StrEnum](
+    enum_type: type[EnumValue], value: object
+) -> EnumValue:
+    try:
+        return enum_type(_text(value).casefold())
+    except ValueError as error:
+        raise ValueError(f"Unsupported CAP value {_text(value)!r}.") from error
 
 
 def _canonical_alert_url(value: object) -> str | None:
@@ -83,7 +90,7 @@ def _canonical_alert_url(value: object) -> str | None:
     return None
 
 
-def _polygon_geometry(raw: object) -> WeatherAlertGeometry | None:
+def _polygon_geometry(raw: object) -> MultiPolygon | None:
     if raw is None:
         return None
     if not isinstance(raw, dict) or raw.get("type") != "Polygon":
@@ -95,7 +102,6 @@ def _polygon_geometry(raw: object) -> WeatherAlertGeometry | None:
         or len(raw_rings) > _MAX_RING_COUNT
     ):
         raise ValueError("The alert polygon rings are invalid or exceed the limit.")
-    rings: list[tuple[WeatherAlertCoordinate, ...]] = []
     total_coordinates = 0
     for raw_ring in raw_rings:
         if not isinstance(raw_ring, list) or len(raw_ring) < 4:
@@ -103,8 +109,6 @@ def _polygon_geometry(raw: object) -> WeatherAlertGeometry | None:
         total_coordinates += len(raw_ring)
         if total_coordinates > _MAX_RING_COORDINATES:
             raise ValueError("The alert polygon exceeds the coordinate limit.")
-        ring: list[WeatherAlertCoordinate] = []
-        raw_pairs: list[tuple[float, float]] = []
         for raw_coordinate in raw_ring:
             if (
                 not isinstance(raw_coordinate, list)
@@ -124,15 +128,39 @@ def _polygon_geometry(raw: object) -> WeatherAlertGeometry | None:
                 or not -90 <= latitude <= 90
             ):
                 raise ValueError("An alert polygon coordinate is outside WGS84.")
-            raw_pairs.append((longitude, latitude))
-            ring.append(WeatherAlertCoordinate(latitude, longitude))
-        if raw_pairs[0] != raw_pairs[-1]:
+        if raw_ring[0][:2] != raw_ring[-1][:2]:
             raise ValueError("An alert polygon ring is not closed.")
-        rings.append(tuple(ring))
-    return WeatherAlertGeometry(tuple(rings))
+    return polygon_from_geojson(raw)
 
 
-def _parse_alert(raw: object, *, now: datetime) -> WeatherAlert | None:
+def _pairs(value: object) -> tuple[tuple[str, str], ...]:
+    if not isinstance(value, dict):
+        return ()
+    return tuple(
+        (str(key), str(item))
+        for key, raw in sorted(value.items())
+        for item in (raw if isinstance(raw, list) else [raw])
+        if str(key).strip() and str(item).strip()
+    )
+
+
+def _references(value: object) -> tuple[CapMessageReference, ...]:
+    if not isinstance(value, list):
+        return ()
+    result: list[CapMessageReference] = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError("An NWS CAP reference is malformed.")
+        sent = normalize_timestamp(raw.get("sent"))
+        sender = _text(raw.get("sender"))
+        identifier = _text(raw.get("identifier"))
+        if sent is None or not sender or not identifier:
+            raise ValueError("An NWS CAP reference is malformed.")
+        result.append(CapMessageReference(sender, identifier, sent))
+    return tuple(result)
+
+
+def _parse_alert(raw: object, *, now: datetime) -> CapAlert | None:
     if not isinstance(raw, dict):
         raise ValueError("An alert feature is not an object.")
     properties = raw.get("properties")
@@ -140,57 +168,89 @@ def _parse_alert(raw: object, *, now: datetime) -> WeatherAlert | None:
         raise ValueError("An alert feature has no properties object.")
     if _text(properties.get("status")) != "Actual":
         return None
-    if _text(properties.get("messageType")) not in {"Alert", "Update"}:
+    message_type = _required_enum(CapMessageType, properties.get("messageType"))
+    if message_type not in {
+        CapMessageType.ALERT,
+        CapMessageType.UPDATE,
+        CapMessageType.CANCEL,
+    }:
         return None
     if _text(properties.get("category")) != "Met":
         return None
-    provider_alert_id = _text(properties.get("id"))
+    identifier = _text(properties.get("id"))
     event = _text(properties.get("event"))
     publisher = _text(properties.get("senderName"))
     affected_area = _text(properties.get("areaDesc"))
+    sent = normalize_timestamp(properties.get("sent"))
     expires = normalize_timestamp(properties.get("expires"))
-    if not provider_alert_id or not event or not publisher or not affected_area:
+    if (
+        not identifier
+        or not event
+        or not publisher
+        or not affected_area
+        or sent is None
+    ):
         raise ValueError(
             "An alert is missing required source identity or label fields."
         )
-    if expires is not None and expires <= now:
-        return None
-    sent = normalize_timestamp(properties.get("sent"))
     effective = normalize_timestamp(properties.get("effective"))
     onset = normalize_timestamp(properties.get("onset"))
     for raw_value, parsed in (
-        (properties.get("sent"), sent),
         (properties.get("effective"), effective),
         (properties.get("onset"), onset),
         (properties.get("expires"), expires),
     ):
         if raw_value is not None and parsed is None:
             raise ValueError("An alert timestamp is malformed.")
-    return WeatherAlert(
-        provider_alert_id=provider_alert_id,
-        source_id=NWS_SOURCE_ID,
-        publisher=publisher,
+    geometry = _polygon_geometry(raw.get("geometry"))
+    info = CapInfo(
+        language=_text(properties.get("language")) or "en-US",
+        categories=("Met",),
         event=event,
-        headline=_optional_text(properties.get("headline")),
-        severity=_enum_value(WeatherAlertSeverity, properties.get("severity")),
-        urgency=_enum_value(WeatherAlertUrgency, properties.get("urgency")),
-        certainty=_enum_value(WeatherAlertCertainty, properties.get("certainty")),
-        sent=sent,
+        event_codes=_pairs(properties.get("eventCode")),
+        urgency=_enum(WarningUrgency, properties.get("urgency")),
+        severity=_enum(WarningSeverity, properties.get("severity")),
+        certainty=_enum(WarningCertainty, properties.get("certainty")),
         effective=effective,
         onset=onset,
         expires=expires,
-        affected_area=affected_area,
-        geometry=_polygon_geometry(raw.get("geometry")),
+        sender_name=publisher,
+        headline=_optional_text(properties.get("headline")),
+        description=_optional_text(properties.get("description")),
+        instruction=_optional_text(properties.get("instruction")),
+        areas=(
+            CapArea(
+                affected_area,
+                polygons=(geometry,) if geometry is not None else (),
+                geocodes=_pairs(properties.get("geocode")),
+            ),
+        ),
+        parameters=_pairs(properties.get("parameters")),
+    )
+    return CapAlert(
+        identifier=identifier,
+        sender=_text(properties.get("sender")) or "nws-alerts@noaa.gov",
+        sent=sent,
+        status=CapStatus.ACTUAL,
+        message_type=message_type,
+        scope=_required_enum(CapScope, properties.get("scope") or "Public"),
+        source_id=NWS_SOURCE_ID,
+        publisher=publisher,
+        infos=(info,),
+        references=_references(properties.get("references")),
+        incidents=tuple(
+            item for item in _text(properties.get("incidents")).split() if item
+        ),
         canonical_url=_canonical_alert_url(raw.get("id")),
+        source=_optional_text(properties.get("source")),
         retrieved_at=now,
         attribution=NWS_ATTRIBUTION,
         limitations=NWS_LIMITATIONS,
+        profile="CAP-1.2/NWS",
     )
 
 
 class NwsWeatherAlertsAdapter:
-    """Retrieve active NWS meteorological alerts without event inference."""
-
     source_id = NWS_SOURCE_ID
     allowed_hosts = frozenset({"api.weather.gov"})
 
@@ -225,8 +285,7 @@ class NwsWeatherAlertsAdapter:
                 headers={
                     "Accept": "application/geo+json",
                     "User-Agent": (
-                        "DisasterMonitor/0.1 "
-                        "(local operational-awareness client; "
+                        "DisasterMonitor/0.1 (local warning reader; "
                         "no public warning delivery)"
                     ),
                 },
@@ -261,7 +320,7 @@ class NwsWeatherAlertsAdapter:
             )
         reached_limit = len(features) > self._maximum_records
         malformed = 0
-        alerts: list[WeatherAlert] = []
+        alerts: list[CapAlert] = []
         for raw in features[: self._maximum_records]:
             try:
                 parsed = _parse_alert(raw, now=now)
@@ -270,19 +329,13 @@ class NwsWeatherAlertsAdapter:
                 continue
             if parsed is not None:
                 alerts.append(parsed)
-        alerts.sort(
-            key=lambda item: (
-                item.sent or item.effective or now,
-                item.provider_alert_id,
-            ),
-            reverse=True,
-        )
+        alerts.sort(key=lambda item: (item.sent, item.identifier), reverse=True)
         issue: WeatherAlertProviderIssue | None = None
         if reached_limit:
             issue = WeatherAlertProviderIssue(
                 "record_limit_reached",
-                "The alert response exceeded the "
-                f"{self._maximum_records}-record ceiling.",
+                f"The alert response exceeded the {self._maximum_records}-record "
+                "ceiling.",
                 partial=True,
             )
         elif malformed:

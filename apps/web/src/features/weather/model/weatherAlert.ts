@@ -19,6 +19,7 @@ export type WeatherAlert = {
   provider_alert_id: string;
   source_id: string;
   publisher: string;
+  sender?: string;
   event: string;
   headline: string | null;
   severity: WeatherAlertSeverity;
@@ -34,6 +35,16 @@ export type WeatherAlert = {
   retrieved_at: string;
   attribution: string;
   limitations: string[];
+  status?: string;
+  message_type?: string;
+  scope?: string;
+  lifecycle_state?: 'active' | 'expired' | 'cancelled';
+  languages?: string[];
+  event_codes?: [string, string][];
+  superseded_identifiers?: string[];
+  profile?: string | null;
+  signature_present?: boolean;
+  signature_verified?: boolean | null;
 };
 
 export type WeatherAlertCoverageState =

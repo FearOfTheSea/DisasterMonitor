@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+  <identifier>2.49.0.1.250.0.fixture</identifier>
+  <sender>meteo@example.eu</sender>
+  <sent>2026-09-14T05:00:00+00:00</sent>
+  <status>Actual</status>
+  <msgType>Update</msgType>
+  <source>Fixture NMS</source>
+  <scope>Public</scope>
+  <references>meteo@example.eu,2.49.0.1.250.0.previous,2026-09-14T04:00:00+00:00</references>
+  <incidents>storm-fixture</incidents>
+  <info>
+    <language>en-GB</language>
+    <category>Met</category>
+    <event>Flood Warning</event>
+    <urgency>Expected</urgency>
+    <severity>Severe</severity>
+    <certainty>Likely</certainty>
+    <effective>2026-09-14T05:00:00+00:00</effective>
+    <expires>2026-09-14T11:00:00+00:00</expires>
+    <senderName>Fixture National Weather Service</senderName>
+    <headline>Severe flood warning</headline>
+    <eventCode><valueName>profile:event</valueName><value>FL</value></eventCode>
+    <area>
+      <areaDesc>Fixture basin</areaDesc>
+      <polygon>10.0,106.0 10.0,107.0 11.0,107.0 10.0,106.0</polygon>
+      <geocode><valueName>EMMA_ID</valueName><value>VI001</value></geocode>
+    </area>
+  </info>
+  <info>
+    <language>vi</language>
+    <category>Met</category>
+    <event>Cảnh báo lũ</event>
+    <urgency>Expected</urgency>
+    <severity>Severe</severity>
+    <certainty>Likely</certainty>
+    <expires>2026-09-14T11:00:00+00:00</expires>
+    <headline>Cảnh báo lũ nghiêm trọng</headline>
+    <area><areaDesc>Lưu vực thử nghiệm</areaDesc></area>
+  </info>
+  <Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo /></Signature>
+</alert>

@@ -478,7 +478,8 @@
         "wildfire",
         "landslide",
         "tropical_cyclone",
-        "volcanic_eruption"
+        "volcanic_eruption",
+        "drought"
       ],
       "country_codes": null,
       "geographic_scopes": [

@@ -1,0 +1,1 @@
+{"fatality":{"units":"fatalities","level":"orange","bins":[{"min":"0","max":"1","probability":0.35},{"min":"1","max":"10","probability":0.45}]},"economic":{"units":"USD","level":"orange","bins":[{"min":"1000000","max":"10000000","probability":0.4},{"min":"10000000","max":"100000000","probability":0.3}]}}

@@ -8,12 +8,18 @@ from disaster_monitor.application.ports.weather_alerts import (
     WeatherAlertProviderIssue,
 )
 from disaster_monitor.application.weather_alerts import (
-    WeatherAlert,
-    WeatherAlertCertainty,
     WeatherAlertCoverageState,
-    WeatherAlertSeverity,
     WeatherAlertsService,
-    WeatherAlertUrgency,
+)
+from disaster_monitor.domain.warnings import (
+    CapAlert,
+    CapInfo,
+    CapMessageType,
+    CapScope,
+    CapStatus,
+    WarningCertainty,
+    WarningSeverity,
+    WarningUrgency,
 )
 from disaster_monitor.infrastructure.composition import build_current_disaster_report
 from disaster_monitor.infrastructure.configuration import Settings
@@ -28,21 +34,34 @@ class FakeWeatherProvider:
     async def fetch_active_alerts(self, *, now: datetime) -> WeatherAlertBatch:
         return WeatherAlertBatch(
             alerts=(
-                WeatherAlert(
-                    provider_alert_id="fixture-alert",
+                CapAlert(
+                    identifier="fixture-alert",
+                    sender="fixture.example",
+                    sent=now - timedelta(minutes=5),
+                    status=CapStatus.ACTUAL,
+                    message_type=CapMessageType.ALERT,
+                    scope=CapScope.PUBLIC,
                     source_id="fixture-weather",
                     publisher="Fixture Weather Authority",
-                    event="Severe Thunderstorm Warning",
-                    headline="Source-backed warning",
-                    severity=WeatherAlertSeverity.SEVERE,
-                    urgency=WeatherAlertUrgency.IMMEDIATE,
-                    certainty=WeatherAlertCertainty.OBSERVED,
-                    sent=now - timedelta(minutes=5),
-                    effective=now - timedelta(minutes=5),
-                    onset=None,
-                    expires=now + timedelta(minutes=30),
-                    affected_area="Fixture County",
-                    geometry=None,
+                    infos=(
+                        CapInfo(
+                            language="en-US",
+                            categories=("Met",),
+                            event="Severe Thunderstorm Warning",
+                            event_codes=(),
+                            urgency=WarningUrgency.IMMEDIATE,
+                            severity=WarningSeverity.SEVERE,
+                            certainty=WarningCertainty.OBSERVED,
+                            effective=now - timedelta(minutes=5),
+                            onset=None,
+                            expires=now + timedelta(minutes=30),
+                            sender_name="Fixture Weather Authority",
+                            headline="Source-backed warning",
+                            description=None,
+                            instruction=None,
+                            areas=(),
+                        ),
+                    ),
                     canonical_url="https://weather.example/alerts/fixture-alert",
                     retrieved_at=now,
                     attribution="Fixture attribution",
@@ -87,6 +106,7 @@ async def test_weather_alerts_are_a_distinct_artifact_not_an_active_incident() -
         ).provider_registry.registrations
     }
     assert snapshot.alerts[0].source_id not in disaster_registration_ids
+    assert snapshot.alerts[0].message_type == "alert"
 
 
 @pytest.mark.asyncio

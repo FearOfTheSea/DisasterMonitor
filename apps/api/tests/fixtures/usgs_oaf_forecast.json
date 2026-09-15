@@ -1,0 +1,1 @@
+{"creationTime":1789358580000,"expireTime":1789963380000,"advisoryTimeFrame":"1 Week","model":{"name":"Reasenberg-Jones","parameters":{"regionType":"circle","regionCenterLat":11,"regionCenterLon":107,"regionRadius":25}},"forecast":[{"label":"1 Day","timeStart":1789358580000,"timeEnd":1789444980000,"bins":[{"magnitude":5,"probability":0.12,"p95minimum":0,"p95maximum":1}]}]}

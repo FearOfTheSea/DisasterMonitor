@@ -388,6 +388,10 @@
   --incident-color: var(--landslide);
 }
 
+.incident-card-drought {
+  --incident-color: var(--drought);
+}
+
 .incident-card-tropical_cyclone {
   --incident-color: var(--cyclone);
 }
@@ -485,6 +489,10 @@
 
 .disaster-icon-landslide {
   color: var(--landslide);
+}
+
+.disaster-icon-drought {
+  color: var(--drought);
 }
 
 .disaster-icon-tropical_cyclone {

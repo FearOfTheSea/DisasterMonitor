@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+from disaster_monitor.application.agent.models import SourceInformationRole
 from disaster_monitor.application.source_catalog import SourceCatalogService
 from disaster_monitor.application.sources.provider_registry import ProviderRegistry
 from disaster_monitor.infrastructure.composition import (
@@ -10,6 +11,64 @@ from disaster_monitor.infrastructure.configuration import Settings
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
+from disaster_monitor.infrastructure.sources.static_source_catalog import (
+    StaticSourceCatalog,
+)
+
+
+def test_packaged_source_catalog_has_only_implemented_sources() -> None:
+    catalog = StaticSourceCatalog()
+
+    assert {item.source_id for item in catalog.sources()} == {
+        "cems-gfm-floods",
+        "copernicus-effis-gwis",
+        "copernicus-glofas-forecast",
+        "copernicus-global-drought-observatory",
+        "copernicus-rapid-mapping-earthquakes",
+        "copernicus-rapid-mapping-floods",
+        "copernicus-rapid-mapping-landslides",
+        "copernicus-rapid-mapping-tropical-cyclones",
+        "copernicus-rapid-mapping-volcanic-eruptions",
+        "copernicus-rapid-mapping-wildfires",
+        "emsc-earthquakes",
+        "gdacs-earthquakes",
+        "gdacs-floods",
+        "gdacs-situation-reports",
+        "gdacs-tropical-cyclones",
+        "gdacs-volcanic-eruptions",
+        "gdacs-wildfires",
+        "gdelt-news",
+        "ghsl-population",
+        "inform-risk",
+        "meteoalarm-warnings",
+        "nasa-coolr-landslides",
+        "nasa-eonet-wildfires",
+        "nasa-firms-observations",
+        "noaa-ibtracs-tracks",
+        "noaa-nhc-cyclone-forecast",
+        "noaa-tsunami-warnings",
+        "nws-weather-alerts",
+        "openaerialmap-imagery",
+        "openstreetmap-geofabrik",
+        "reliefweb-situation-reports",
+        "smithsonian-usgs-volcanic-activity",
+        "usgs-aftershock-forecast",
+        "usgs-earthquakes",
+        "usgs-ground-failure",
+        "usgs-pager",
+        "usgs-shakemap",
+        "worldpop-population",
+    }
+    assert all(
+        source.implementation_status.startswith("implemented")
+        for source in catalog.sources()
+    )
+    imagery_sources = {
+        source.source_id
+        for source in catalog.sources()
+        if SourceInformationRole.IMAGERY in source.information_roles
+    }
+    assert imagery_sources == {"openaerialmap-imagery"}
 
 
 def test_catalog_projection_keeps_maintained_metadata_and_runtime_state_separate() -> (

@@ -42,6 +42,7 @@ const DISASTER_LABELS: Record<DisasterType, string> = {
   flood: 'Flood',
   wildfire: 'Wildfire',
   landslide: 'Landslide',
+  drought: 'Drought',
   tropical_cyclone: 'Tropical cyclone',
   volcanic_eruption: 'Volcanic eruption',
 };

@@ -191,3 +191,39 @@
   color: #0b58ad;
   font-weight: 680;
 }
+
+.warning-filters {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 8px;
+}
+
+.warning-filters legend {
+  color: var(--ink-soft);
+  font-weight: 700;
+  padding: 0 4px;
+}
+
+.warning-filters label {
+  display: grid;
+  gap: 2px;
+}
+
+.warning-filters input,
+.warning-filters select {
+  background: white;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 0.65rem;
+  min-width: 0;
+  padding: 5px 6px;
+}
+
+.authority-warning-list {
+  display: grid;
+  gap: 8px;
+}

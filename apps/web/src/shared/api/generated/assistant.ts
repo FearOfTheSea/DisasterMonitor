@@ -949,6 +949,7 @@ const apiSchemas = {
       'landslide',
       'tropical_cyclone',
       'volcanic_eruption',
+      'drought',
     ],
     type: 'string',
   },
@@ -4102,6 +4103,15 @@ const apiSchemas = {
       event: {
         type: 'string',
       },
+      event_codes: {
+        items: {
+          items: {
+            type: 'string',
+          },
+          type: 'array',
+        },
+        type: 'array',
+      },
       expires: {
         anyOf: [
           {
@@ -4133,16 +4143,39 @@ const apiSchemas = {
           },
         ],
       },
+      languages: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      lifecycle_state: {
+        enum: ['active', 'expired', 'cancelled'],
+        type: 'string',
+      },
       limitations: {
         items: {
           type: 'string',
         },
         type: 'array',
       },
+      message_type: {
+        type: 'string',
+      },
       onset: {
         anyOf: [
           {
             format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      profile: {
+        anyOf: [
+          {
             type: 'string',
           },
           {
@@ -4160,6 +4193,12 @@ const apiSchemas = {
         format: 'date-time',
         type: 'string',
       },
+      scope: {
+        type: 'string',
+      },
+      sender: {
+        type: 'string',
+      },
       sent: {
         anyOf: [
           {
@@ -4175,8 +4214,30 @@ const apiSchemas = {
         enum: ['extreme', 'severe', 'moderate', 'minor', 'unknown'],
         type: 'string',
       },
+      signature_present: {
+        type: 'boolean',
+      },
+      signature_verified: {
+        anyOf: [
+          {
+            type: 'boolean',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       source_id: {
         type: 'string',
+      },
+      status: {
+        type: 'string',
+      },
+      superseded_identifiers: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
       },
       urgency: {
         enum: ['immediate', 'expected', 'future', 'past', 'unknown'],
@@ -4187,6 +4248,7 @@ const apiSchemas = {
       'provider_alert_id',
       'source_id',
       'publisher',
+      'sender',
       'event',
       'severity',
       'urgency',
@@ -4194,6 +4256,10 @@ const apiSchemas = {
       'affected_area',
       'retrieved_at',
       'attribution',
+      'status',
+      'message_type',
+      'scope',
+      'lifecycle_state',
     ],
     type: 'object',
   },
@@ -4529,7 +4595,8 @@ export type Disaster =
   | 'wildfire'
   | 'landslide'
   | 'tropical_cyclone'
-  | 'volcanic_eruption';
+  | 'volcanic_eruption'
+  | 'drought';
 
 export type DisasterIncidentCoverageResponse = {
   detail: string;
@@ -5506,17 +5573,28 @@ export type WeatherAlertResponse = {
   certainty: 'observed' | 'likely' | 'possible' | 'unlikely' | 'unknown';
   effective?: string | null;
   event: string;
+  event_codes?: Array<Array<string>>;
   expires?: string | null;
   geometry?: WeatherAlertGeometryResponse | null;
   headline?: string | null;
+  languages?: Array<string>;
+  lifecycle_state: 'active' | 'expired' | 'cancelled';
   limitations?: Array<string>;
+  message_type: string;
   onset?: string | null;
+  profile?: string | null;
   provider_alert_id: string;
   publisher: string;
   retrieved_at: string;
+  scope: string;
+  sender: string;
   sent?: string | null;
   severity: 'extreme' | 'severe' | 'moderate' | 'minor' | 'unknown';
+  signature_present?: boolean;
+  signature_verified?: boolean | null;
   source_id: string;
+  status: string;
+  superseded_identifiers?: Array<string>;
   urgency: 'immediate' | 'expected' | 'future' | 'past' | 'unknown';
 };
 

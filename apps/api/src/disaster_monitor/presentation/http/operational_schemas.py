@@ -160,6 +160,7 @@ class WeatherAlertResponse(BaseModel):
     provider_alert_id: str
     source_id: str
     publisher: str
+    sender: str
     event: str
     headline: str | None = None
     severity: Literal["extreme", "severe", "moderate", "minor", "unknown"]
@@ -175,6 +176,16 @@ class WeatherAlertResponse(BaseModel):
     retrieved_at: datetime
     attribution: str
     limitations: list[str] = Field(default_factory=list)
+    status: str
+    message_type: str
+    scope: str
+    lifecycle_state: Literal["active", "expired", "cancelled"]
+    languages: list[str] = Field(default_factory=list)
+    event_codes: list[list[str]] = Field(default_factory=list)
+    superseded_identifiers: list[str] = Field(default_factory=list)
+    profile: str | None = None
+    signature_present: bool = False
+    signature_verified: bool | None = None
 
 
 class WeatherAlertCoverageResponse(BaseModel):

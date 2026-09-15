@@ -619,46 +619,6 @@ async def test_runtime_uses_deterministic_plan_when_agent_model_is_unavailable()
     )
 
 
-def test_packaged_source_catalog_has_only_implemented_non_visual_sources() -> None:
-    catalog = StaticSourceCatalog()
-
-    assert {item.source_id for item in catalog.sources()} == {
-        "cems-gfm-floods",
-        "copernicus-rapid-mapping-earthquakes",
-        "copernicus-rapid-mapping-floods",
-        "copernicus-rapid-mapping-landslides",
-        "copernicus-rapid-mapping-tropical-cyclones",
-        "copernicus-rapid-mapping-volcanic-eruptions",
-        "copernicus-rapid-mapping-wildfires",
-        "emsc-earthquakes",
-        "gdelt-news",
-        "gdacs-earthquakes",
-        "gdacs-floods",
-        "gdacs-situation-reports",
-        "gdacs-tropical-cyclones",
-        "gdacs-volcanic-eruptions",
-        "gdacs-wildfires",
-        "nasa-coolr-landslides",
-        "nasa-eonet-wildfires",
-        "nasa-firms-observations",
-        "noaa-ibtracs-tracks",
-        "noaa-nhc-cyclone-forecast",
-        "nws-weather-alerts",
-        "reliefweb-situation-reports",
-        "smithsonian-usgs-volcanic-activity",
-        "usgs-earthquakes",
-    }
-    assert {item.implementation_status for item in catalog.sources()} == {
-        "implemented",
-        "implemented_news_sensing",
-        "implemented_weather_alerts",
-    }
-    assert all(
-        SourceInformationRole.IMAGERY not in item.information_roles
-        for item in catalog.sources()
-    )
-
-
 def test_provider_source_consistency_detects_missing_metadata() -> None:
     country = Country("TST", "Testland", (), GeographicArea(0, 1, 0, 1), "UTC")
     event = DisasterEvent(

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from disaster_monitor.application.agent.diagnostics import AgentDiagnostics
 from disaster_monitor.application.agent.tooling import DisasterToolDependencies
+from disaster_monitor.application.earthquake_context import EarthquakeContextService
 from disaster_monitor.application.evidence.operational_evidence import (
     OperationalEvidenceRecorder,
 )
@@ -84,6 +85,7 @@ class AppDependencyOverrides:
     ground_imagery_service: GroundImageryService | None = None
     source_catalog_service: SourceCatalogService | None = None
     weather_alerts_service: WeatherAlertsService | None = None
+    earthquake_context_service: EarthquakeContextService | None = None
     specialist_model: SpecialistModel | None = None
     memory_repository: MemoryStore | None = None
     conversation_deletion_store: ConversationDeletionStore | None = None

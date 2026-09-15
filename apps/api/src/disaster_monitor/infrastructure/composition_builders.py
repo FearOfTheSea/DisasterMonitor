@@ -9,6 +9,7 @@ from disaster_monitor.application.agent.tooling import (
     build_disaster_tool_registry,
 )
 from disaster_monitor.application.conversations.memory_recall import MemoryRecallService
+from disaster_monitor.application.earthquake_context import EarthquakeContextService
 from disaster_monitor.application.evidence.event_resolution import (
     default_event_policy_registry,
 )
@@ -65,6 +66,7 @@ from disaster_monitor.application.ports.news import BreakingNewsFeed
 from disaster_monitor.application.ports.operational_state import OperationalRepository
 from disaster_monitor.application.ports.specialist_model import SpecialistModel
 from disaster_monitor.application.ports.visual_analysis import VisualAnalyzer
+from disaster_monitor.application.ports.weather_alerts import WeatherAlertProvider
 from disaster_monitor.application.ports.web_collection import WebCollectionStore
 from disaster_monitor.application.satellite_imagery import SatelliteImageryService
 from disaster_monitor.application.sources.provider_registry import (
@@ -95,6 +97,9 @@ from disaster_monitor.infrastructure.disaster.composite import (
 from disaster_monitor.infrastructure.disaster.http import SourcePayloadRecorder
 from disaster_monitor.infrastructure.disaster.registrations import (
     build_provider_registrations,
+)
+from disaster_monitor.infrastructure.earthquake.usgs_products import (
+    UsgsEarthquakeProductsAdapter,
 )
 from disaster_monitor.infrastructure.geography.country_catalog_updates import (
     AutonomousCountryCatalogUpdater,
@@ -181,6 +186,13 @@ from disaster_monitor.infrastructure.sources.static_source_catalog import (
 )
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
     OllamaVisionAdapter,
+)
+from disaster_monitor.infrastructure.weather.composite import (
+    CompositeCapWarningProvider,
+)
+from disaster_monitor.infrastructure.weather.meteoalarm import MeteoAlarmWarningAdapter
+from disaster_monitor.infrastructure.weather.noaa_tsunami import (
+    NoaaTsunamiWarningAdapter,
 )
 from disaster_monitor.infrastructure.weather.nws_alerts import NwsWeatherAlertsAdapter
 
@@ -466,12 +478,46 @@ def build_weather_alerts_service(
     snapshot_recorder: SourcePayloadRecorder | None = None,
 ) -> WeatherAlertsService:
     """Construct the separately registered authoritative warning provider."""
-    return WeatherAlertsService(
+    providers: list[WeatherAlertProvider] = [
         NwsWeatherAlertsAdapter(
             snapshot_recorder=snapshot_recorder,
             timeout_seconds=settings.disaster_provider_timeout_seconds,
             maximum_response_bytes=settings.weather_alert_max_response_bytes,
             maximum_records=settings.weather_alert_max_records,
+        )
+    ]
+    if settings.noaa_tsunami_warnings_enabled:
+        providers.append(
+            NoaaTsunamiWarningAdapter(
+                snapshot_recorder=snapshot_recorder,
+                timeout_seconds=settings.disaster_provider_timeout_seconds,
+                maximum_response_bytes=settings.weather_alert_max_response_bytes,
+                maximum_records=settings.weather_alert_max_records,
+            )
+        )
+    if settings.meteoalarm_countries:
+        providers.append(
+            MeteoAlarmWarningAdapter(
+                countries=settings.meteoalarm_countries,
+                snapshot_recorder=snapshot_recorder,
+                timeout_seconds=settings.disaster_provider_timeout_seconds,
+                maximum_response_bytes=settings.weather_alert_max_response_bytes,
+                maximum_records=settings.weather_alert_max_records,
+            )
+        )
+    provider = (
+        providers[0]
+        if len(providers) == 1
+        else CompositeCapWarningProvider(tuple(providers))
+    )
+    return WeatherAlertsService(provider)
+
+
+def build_earthquake_context_service(settings: Settings) -> EarthquakeContextService:
+    return EarthquakeContextService(
+        UsgsEarthquakeProductsAdapter(
+            timeout_seconds=settings.disaster_provider_timeout_seconds,
+            max_response_bytes=settings.weather_alert_max_response_bytes,
         )
     )
 
@@ -499,6 +545,8 @@ def build_source_catalog(settings: Settings | None = None) -> StaticSourceCatalo
         {
             "reliefweb-situation-reports": configured,
             "nasa-firms-observations": firms_configured,
+            "noaa-tsunami-warnings": settings.noaa_tsunami_warnings_enabled,
+            "meteoalarm-warnings": bool(settings.meteoalarm_countries),
         }
     )
 

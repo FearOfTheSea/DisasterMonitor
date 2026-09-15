@@ -9,6 +9,9 @@ from disaster_monitor.presentation.http.assistant_routes import (
     router as assistant_router,
 )
 from disaster_monitor.presentation.http.catalog_routes import router as catalog_router
+from disaster_monitor.presentation.http.earthquake_context_routes import (
+    router as earthquake_context_router,
+)
 from disaster_monitor.presentation.http.ground_imagery_routes import (
     router as ground_imagery_router,
 )
@@ -25,6 +28,7 @@ from disaster_monitor.presentation.http.system_routes import (
 router = APIRouter()
 router.include_router(system_router)
 router.include_router(catalog_router)
+router.include_router(earthquake_context_router)
 router.include_router(ground_imagery_router)
 router.include_router(incident_router)
 router.include_router(assistant_router)

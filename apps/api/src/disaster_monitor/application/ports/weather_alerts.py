@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from disaster_monitor.application.weather_alerts import WeatherAlert
+from disaster_monitor.domain.warnings import CapAlert
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,7 +21,7 @@ class WeatherAlertProviderIssue:
 class WeatherAlertBatch:
     """Provider result that keeps successful-empty distinct from failure."""
 
-    alerts: tuple[WeatherAlert, ...] = ()
+    alerts: tuple[CapAlert, ...] = ()
     issue: WeatherAlertProviderIssue | None = None
 
 

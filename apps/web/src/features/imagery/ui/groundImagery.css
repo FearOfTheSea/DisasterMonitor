@@ -229,6 +229,113 @@
   gap: 14px;
 }
 
+.ground-comparison-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+}
+
+.ground-comparison-card > header,
+.ground-comparison-card > header > div:first-child {
+  display: flex;
+  gap: 4px;
+}
+
+.ground-comparison-card > header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.ground-comparison-card > header > div:first-child {
+  flex-direction: column;
+}
+
+.ground-comparison-card small,
+.ground-comparison-card > p,
+.ground-comparison-slider {
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.ground-comparison-modes {
+  display: flex;
+}
+
+.ground-comparison-modes button {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  color: var(--ink-soft);
+  font-size: 0.64rem;
+  min-height: 28px;
+  padding: 4px 7px;
+}
+
+.ground-comparison-modes button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.ground-comparison-modes button:last-child {
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+}
+
+.ground-comparison-modes button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.ground-comparison-images {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.ground-comparison-images figure {
+  background: #111827;
+  border-radius: 7px;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.ground-comparison-images img {
+  aspect-ratio: 1;
+  display: block;
+  image-rendering: auto;
+  object-fit: cover;
+  width: 100%;
+}
+
+.ground-comparison-images figcaption {
+  background: rgb(17 24 39 / 80%);
+  bottom: 0;
+  color: white;
+  font-size: 0.58rem;
+  left: 0;
+  padding: 4px 6px;
+  position: absolute;
+  right: 0;
+}
+
+.ground-comparison-images.is-swipe {
+  display: block;
+  position: relative;
+}
+
+.ground-comparison-images.is-swipe figure:last-child {
+  inset: 0;
+  position: absolute;
+}
+
+.ground-comparison-slider {
+  display: grid;
+  gap: 4px;
+}
+
 .ground-imagery-sensor-card {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);

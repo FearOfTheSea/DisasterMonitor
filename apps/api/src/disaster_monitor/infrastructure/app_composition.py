@@ -75,6 +75,7 @@ from disaster_monitor.infrastructure.composition_builders import (
     build_country_catalog,
     build_country_catalog_automation,
     build_disaster_query_parser,
+    build_earthquake_context_service,
     build_event_media_services,
     build_ground_imagery_service,
     build_investigation_resources,
@@ -203,6 +204,10 @@ def build_app_dependencies(
             snapshot_recorder=operational.snapshots.persist,
         )
     )
+    configured_earthquake_context = (
+        configured.earthquake_context_service
+        or build_earthquake_context_service(settings)
+    )
     configured_source_catalog = (
         configured.source_catalog_service
         or SourceCatalogService(
@@ -212,6 +217,18 @@ def build_app_dependencies(
                 "nws-weather-alerts": {
                     "registered": True,
                     "configured": True,
+                    "provider_tier": "primary",
+                    "execution_roles": ("weather_alerts",),
+                },
+                "noaa-tsunami-warnings": {
+                    "registered": True,
+                    "configured": settings.noaa_tsunami_warnings_enabled,
+                    "provider_tier": "primary",
+                    "execution_roles": ("weather_alerts",),
+                },
+                "meteoalarm-warnings": {
+                    "registered": True,
+                    "configured": bool(settings.meteoalarm_countries),
                     "provider_tier": "primary",
                     "execution_roles": ("weather_alerts",),
                 },
@@ -327,6 +344,7 @@ def build_app_dependencies(
         active_incidents=configured_active_incidents,
         source_catalog=configured_source_catalog,
         weather_alerts=configured_weather_alerts,
+        earthquake_context=configured_earthquake_context,
         incident_watches=ManageIncidentWatches(
             cast(IncidentWatchStore, operational.repository),
             country_catalog,
@@ -368,6 +386,7 @@ def build_app_dependencies(
                 configured_satellite_imagery.aclose,
                 configured_ground_imagery.aclose,
                 lambda: close_resource(configured_weather_alerts),
+                configured_earthquake_context.aclose,
             ),
         ),
     )

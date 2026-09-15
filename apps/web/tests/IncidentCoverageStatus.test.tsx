@@ -15,6 +15,7 @@ const DISASTERS: DisasterType[] = [
   'flood',
   'wildfire',
   'landslide',
+  'drought',
   'tropical_cyclone',
   'volcanic_eruption',
 ];
@@ -50,6 +51,7 @@ function snapshot(): ActiveIncidentsSnapshot {
     'unavailable',
     'no_matching_records',
     'no_matching_records',
+    'no_matching_records',
   ] as const;
   return {
     retrieved_at: '2026-09-01T10:10:00Z',
@@ -71,14 +73,14 @@ describe('IncidentCoverageStatus', () => {
     const user = userEvent.setup();
     render(<IncidentCoverageStatus snapshot={snapshot()} />);
 
-    expect(screen.getByText('5 source networks checked')).toBeVisible();
+    expect(screen.getByText('6 source networks checked')).toBeVisible();
     expect(screen.getAllByTestId('incident-coverage')[0]).not.toBeVisible();
     await user.click(screen.getByText('View coverage'));
     expect(screen.getByText(/Last checked:/)).toHaveTextContent(
       new Date('2026-09-01T10:10:00Z').toLocaleString(),
     );
     const items = screen.getAllByTestId('incident-coverage');
-    expect(items).toHaveLength(6);
+    expect(items).toHaveLength(7);
     expect(within(items[0]).getByText('Events found')).toBeInTheDocument();
     expect(within(items[1]).getByText('No matching records')).toBeInTheDocument();
     expect(within(items[2]).getByText('Degraded')).toBeInTheDocument();

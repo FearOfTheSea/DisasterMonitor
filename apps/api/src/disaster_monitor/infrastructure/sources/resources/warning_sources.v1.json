@@ -1,0 +1,60 @@
+{
+  "schema_version": "warning-source-catalog.v1",
+  "catalog_version": "3.0.0",
+  "sources": [
+    {
+      "source_id": "meteoalarm-warnings",
+      "organization_name": "EUMETNET MeteoAlarm and participating national services",
+      "display_name": "MeteoAlarm official warnings",
+      "jurisdiction": "Participating European national meteorological services",
+      "authority_level": "national_authority",
+      "information_roles": ["official_warning"],
+      "supported_disasters": [],
+      "country_codes": null,
+      "geographic_scopes": ["country"],
+      "supported_languages": ["multilingual"],
+      "endpoint_kind": "official_atom_cap_feed",
+      "requires_configuration": true,
+      "configured": false,
+      "expected_freshness": "Public Atom syndication of active national warnings; CAP issue, effective, onset and expiry times remain distinct.",
+      "attribution_guidance": "Attribute each warning to MeteoAlarm and the issuing national meteorological service.",
+      "limitations": [
+        "Only explicitly configured participating-country feeds are queried.",
+        "Language and warning coverage vary by issuing national service.",
+        "Warnings are separate authority artifacts and do not establish a physical incident or impact."
+      ],
+      "registered_tool_names": [],
+      "provider_registration_name": "MeteoAlarm CAP warnings",
+      "implementation_status": "implemented_weather_alerts",
+      "documentation_path": "docs/sources/meteoalarm-warnings.md",
+      "allowed_hosts": ["feeds.meteoalarm.org"]
+    },
+    {
+      "source_id": "noaa-tsunami-warnings",
+      "organization_name": "NOAA U.S. Tsunami Warning System",
+      "display_name": "NOAA CAP-TSU tsunami warnings",
+      "jurisdiction": "NOAA tsunami warning centers' areas of responsibility",
+      "authority_level": "national_authority",
+      "information_roles": ["official_warning"],
+      "supported_disasters": [],
+      "country_codes": null,
+      "geographic_scopes": ["country", "worldwide"],
+      "supported_languages": ["en"],
+      "endpoint_kind": "official_cap_tsu_atom_feed",
+      "requires_configuration": false,
+      "configured": true,
+      "expected_freshness": "Official warning-center Atom feeds; each CAP-TSU message retains source lifecycle and validity times.",
+      "attribution_guidance": "Attribute warning messages to the named NOAA tsunami warning center and preserve CAP-TSU profile metadata.",
+      "limitations": [
+        "Feed scope follows NOAA warning-center responsibilities and is not evidence of global tsunami occurrence.",
+        "A CAP XML signature is shown as present but not verified unless cryptographic verification succeeds.",
+        "Warnings are not physical tsunami observations."
+      ],
+      "registered_tool_names": [],
+      "provider_registration_name": "NOAA U.S. Tsunami Warning System CAP-TSU",
+      "implementation_status": "implemented_weather_alerts",
+      "documentation_path": "docs/sources/noaa-tsunami-warnings.md",
+      "allowed_hosts": ["www.tsunami.gov", "tsunami.gov"]
+    }
+  ]
+}
