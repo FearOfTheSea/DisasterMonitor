@@ -12,6 +12,7 @@ from disaster_monitor.domain.exposure import (
     ExposureGeometry,
     ExposureGeometryRole,
     InfrastructureCategory,
+    OsmCompletenessQuality,
 )
 from disaster_monitor.domain.imagery.regions import polygon_from_geojson
 from disaster_monitor.infrastructure.exposure.local_osm import LocalOsmAssetExposure
@@ -129,3 +130,60 @@ async def test_local_osm_extract_filters_supported_assets_and_intersects_geometr
     assert [(item.asset_id, item.category) for item in assets] == [
         ("node/1", InfrastructureCategory.HOSPITAL)
     ]
+
+
+@pytest.mark.asyncio
+async def test_local_osm_exposes_source_age_and_mapping_density_proxies(
+    tmp_path,
+) -> None:
+    extract = tmp_path / "assets.geojson"
+    extract.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "metadata": {"source_updated_at": "2026-09-01T00:00:00Z"},
+                "features": [
+                    {
+                        "type": "Feature",
+                        "id": "node/1",
+                        "geometry": {"type": "Point", "coordinates": [0.5, 0.5]},
+                        "properties": {"amenity": "hospital", "name": "Hospital"},
+                    },
+                    {
+                        "type": "Feature",
+                        "id": "way/2",
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[0, 0.5], [1, 0.5]],
+                        },
+                        "properties": {"highway": "primary", "name": "Main Road"},
+                    },
+                ],
+            }
+        )
+    )
+    geometry = ExposureGeometry(
+        polygon_from_geojson(
+            {
+                "type": "Polygon",
+                "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+            }
+        ),
+        ExposureGeometryRole.MAPPED_HAZARD,
+        "source",
+        "v1",
+        NOW,
+    )
+
+    result = await LocalOsmAssetExposure(
+        extract,
+        extract_version="geofabrik-2026-09-01",
+        clock=lambda: NOW,
+    ).completeness(geometry)
+
+    assert result.source_updated_at == datetime(2026, 9, 1, tzinfo=UTC)
+    assert result.mapped_feature_count == 2
+    assert result.named_feature_fraction == 1
+    assert result.road_density_km_per_sq_km is not None
+    assert result.quality is OsmCompletenessQuality.LIMITED
+    assert "proxies" in result.limitation

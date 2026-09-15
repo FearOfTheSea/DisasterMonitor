@@ -43,6 +43,11 @@ imagery dependency. It is regional observational context, not a building-level
 damage or passability assessment. See [docs/ground-imagery.md](docs/ground-imagery.md)
 and [docs/provider-rights.md](docs/provider-rights.md) for the boundary and rights.
 
+Humanitarian context, durable unverified field reports, reviewed Kobo/ODK and
+Ushahidi interchange, operator notes/checklists, evidence packages, and bounded local
+OSM access context are described in
+[docs/humanitarian-field-operations.md](docs/humanitarian-field-operations.md).
+
 ## Run with Compose
 
 ```powershell

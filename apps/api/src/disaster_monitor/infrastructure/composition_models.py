@@ -11,7 +11,12 @@ from disaster_monitor.application.evidence.operational_evidence import (
 from disaster_monitor.application.evidence.snapshot_persistence import (
     SnapshotPersistenceService,
 )
+from disaster_monitor.application.exposure.access_context import (
+    RouteAccessContextService,
+)
+from disaster_monitor.application.field_reports.service import FieldReportService
 from disaster_monitor.application.ground_imagery.service import GroundImageryService
+from disaster_monitor.application.humanitarian.context import HumanitarianContextService
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
@@ -27,6 +32,9 @@ from disaster_monitor.application.investigation.workflow import (
 from disaster_monitor.application.investigation.worldwide_disaster import (
     WorldwideDisasterReportService,
 )
+from disaster_monitor.application.operator_workspace.service import (
+    OperatorWorkspaceService,
+)
 from disaster_monitor.application.ports.agent_model import AgentModel
 from disaster_monitor.application.ports.conversation_deletion import (
     ConversationDeletionStore,
@@ -36,6 +44,7 @@ from disaster_monitor.application.ports.event_media import (
     EventMediaDiscovery,
     MediaAssetStore,
 )
+from disaster_monitor.application.ports.field_reports import FieldMediaStore
 from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.memory_store import MemoryStore
@@ -86,10 +95,15 @@ class AppDependencyOverrides:
     source_catalog_service: SourceCatalogService | None = None
     weather_alerts_service: WeatherAlertsService | None = None
     earthquake_context_service: EarthquakeContextService | None = None
+    humanitarian_context_service: HumanitarianContextService | None = None
+    field_report_service: FieldReportService | None = None
+    field_media_store: FieldMediaStore | None = None
+    operator_workspace_service: OperatorWorkspaceService | None = None
     specialist_model: SpecialistModel | None = None
     memory_repository: MemoryStore | None = None
     conversation_deletion_store: ConversationDeletionStore | None = None
     agent_diagnostics: AgentDiagnostics | None = None
+    route_access_service: RouteAccessContextService | None = None
 
 
 @dataclass(frozen=True, slots=True)

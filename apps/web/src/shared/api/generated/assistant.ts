@@ -4407,6 +4407,12 @@ export type ActiveIncidentsSnapshotResponse = {
   warnings?: Array<string>;
 };
 
+export type AnalystNoteRequest = {
+  incident_id?: string | null;
+  tags?: Array<string>;
+  text: string;
+};
+
 export type AnalyticalMapFeatureResponse = {
   attribution: string;
   authority: 'analytical_generated';
@@ -4492,6 +4498,13 @@ export type AssistantResponse = {
   sources?: Array<SourceResponse>;
   timeline?: Array<EvidenceTimelineEntryResponse>;
   warnings?: Array<string>;
+};
+
+export type BookmarkRequest = {
+  incident_id?: string | null;
+  label: string;
+  target_id: string;
+  target_type: string;
 };
 
 export type CaptureRole = 'pre_event' | 'post_event' | 'single_capture' | 'unknown';
@@ -4750,6 +4763,29 @@ export type EvidenceClaimVariantResponse = {
 export type EvidenceDisposition =
   'current' | 'superseded' | 'conflicting' | 'duplicate' | 'unusable';
 
+export type EvidencePackageCreateRequest = {
+  findings?: Array<{
+    [key: string]: unknown;
+  }>;
+  imagery_manifests?: Array<{
+    [key: string]: unknown;
+  }>;
+  incident_id: string;
+  incident_snapshot: {
+    [key: string]: unknown;
+  };
+  normalized_data: {
+    [key: string]: unknown;
+  };
+  policy_versions?: Array<string>;
+  software_version: string;
+  source_links?: Array<string>;
+};
+
+export type EvidencePackageVerifyRequest = {
+  content_base64: string;
+};
+
 export type EvidenceSnapshotResponse = {
   content_available: boolean;
   content_deleted_at?: string | null;
@@ -4791,8 +4827,73 @@ export type EvidenceTimelineEventType =
   | 'watch_change'
   | 'claim_reconciliation';
 
+export type ExternalFieldMappingRequest = {
+  captured_at: string;
+  external_id: string;
+  external_verification?: string | null;
+  latitude: string;
+  longitude: string;
+  report_type: string;
+  source_created_at: string;
+  text: string;
+};
+
 export type FactStatus =
   'confirmed' | 'preliminary' | 'estimated' | 'disputed' | 'unknown';
+
+export type FieldAttachmentRequest = {
+  content_base64: string;
+  filename: string;
+  media_type: 'image/jpeg' | 'image/png';
+};
+
+export type FieldGeometryRequest = {
+  coordinates: Array<unknown>;
+  type: 'Point' | 'Polygon';
+};
+
+export type FieldReportCreateRequest = {
+  attachments?: Array<FieldAttachmentRequest>;
+  captured_at: string;
+  geometry: FieldGeometryRequest;
+  location_precision: LocationPrecision;
+  location_uncertainty_m?: number | null;
+  report_type: string;
+  source_created_at: string;
+  submitter_channel: string;
+  text: string;
+};
+
+export type FieldReportImportRequest = {
+  content:
+    | string
+    | {
+        [key: string]: unknown;
+      };
+  format: 'csv' | 'geojson' | 'ushahidi';
+  mapping?: ExternalFieldMappingRequest | null;
+  media_packages?: Array<ImportedFieldMediaRequest>;
+  reviewed_by: string;
+  source_system: 'kobotoolbox' | 'odk' | 'ushahidi';
+};
+
+export type FieldReportReviewDecision =
+  'reject' | 'retain_unverified' | 'associate_to_event' | 'admit_operator_observation';
+
+export type FieldReportReviewRequest = {
+  authority_policy_id?: string | null;
+  decision: FieldReportReviewDecision;
+  event_id?: string | null;
+  rationale: string;
+  reviewer_id: string;
+};
+
+export type FieldReportReviewState =
+  | 'pending_review'
+  | 'retained_unverified'
+  | 'rejected'
+  | 'associated'
+  | 'admitted_operator_observation';
 
 export type FootprintRequest = {
   coordinates: Array<Array<[number, number]>>;
@@ -5051,6 +5152,13 @@ export type HTTPValidationError = {
   detail?: Array<ValidationError>;
 };
 
+export type ImportedFieldMediaRequest = {
+  content_base64: string;
+  external_id: string;
+  filename: string;
+  media_type: 'image/jpeg' | 'image/png';
+};
+
 export type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
 
 export type IncidentDetectionTimelineResponse = {
@@ -5233,11 +5341,20 @@ export type LineStringGeometryResponse = {
   type: 'LineString';
 };
 
+export type LocationPrecision = 'exact' | 'approximate' | 'unknown';
+
 export type MapNavigationActionResponse = {
   bounds: [number, number, number, number];
   label: string;
   max_zoom?: number;
   type?: 'fit_bounds';
+};
+
+export type MappingWorkflowRequest = {
+  aoi: {
+    [key: string]: unknown;
+  };
+  incident_id: string;
 };
 
 export type MapViewRequest = {
@@ -5409,6 +5526,24 @@ export type ReadinessResponse = {
 export type ReportSectionResponse = {
   content: string;
   title: string;
+};
+
+export type RouteAccessRequest = {
+  destination: RouteCoordinateRequest;
+  origin: RouteCoordinateRequest;
+  profile?: RouteProfile;
+};
+
+export type RouteCoordinateRequest = {
+  latitude: number;
+  longitude: number;
+};
+
+export type RouteProfile = 'driving' | 'cycling' | 'walking';
+
+export type RunbookTemplateRequest = {
+  name: string;
+  steps: Array<string>;
 };
 
 export type SatelliteImageryCatalogResponse = {

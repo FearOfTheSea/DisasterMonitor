@@ -14,15 +14,27 @@ RUN uv sync --frozen --no-dev --no-editable
 FROM python:3.12.11-slim-bookworm AS runtime
 
 ENV PATH=/app/.venv/bin:$PATH \
+    COUNTRY_CATALOG_ROOT=/var/lib/disaster-monitor/geography \
+    EVENT_MEDIA_BLOB_ROOT=/var/lib/disaster-monitor/event-media \
+    FIELD_MEDIA_ROOT=/var/lib/disaster-monitor/field-reports/media \
+    FIELD_REPORT_STORE_PATH=/var/lib/disaster-monitor/field-reports/reports.json \
+    GROUND_IMAGERY_STORAGE_ROOT=/var/lib/disaster-monitor/ground-imagery \
+    OPERATIONAL_BLOB_ROOT=/var/lib/disaster-monitor/blobs \
+    OPERATOR_WORKSPACE_STORE_PATH=/var/lib/disaster-monitor/operator-workspace/workspace.json \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
-RUN groupadd --gid 10001 disastermonitor \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends libexpat1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 disastermonitor \
     && useradd --uid 10001 --gid disastermonitor --create-home disastermonitor \
     && mkdir -p /var/lib/disaster-monitor/blobs \
         /var/lib/disaster-monitor/event-media \
+        /var/lib/disaster-monitor/field-reports/media \
         /var/lib/disaster-monitor/ground-imagery \
         /var/lib/disaster-monitor/geography \
+        /var/lib/disaster-monitor/operator-workspace \
     && chown -R disastermonitor:disastermonitor /var/lib/disaster-monitor
 COPY --from=builder --chown=disastermonitor:disastermonitor /app/.venv /app/.venv
 USER disastermonitor

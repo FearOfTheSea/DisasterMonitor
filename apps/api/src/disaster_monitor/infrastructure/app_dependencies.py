@@ -16,7 +16,14 @@ from disaster_monitor.application.decision.record_operator_action import (
 )
 from disaster_monitor.application.earthquake_context import EarthquakeContextService
 from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
+from disaster_monitor.application.exposure.access_context import (
+    RouteAccessContextService,
+)
+from disaster_monitor.application.field_reports.service import FieldReportService
 from disaster_monitor.application.ground_imagery.service import GroundImageryService
+from disaster_monitor.application.humanitarian.context import (
+    HumanitarianContextService,
+)
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
@@ -27,8 +34,12 @@ from disaster_monitor.application.ingestion.provider_freshness import (
     ProviderFreshnessService,
 )
 from disaster_monitor.application.ingestion.queries import QueueStatusQuery
+from disaster_monitor.application.operator_workspace.service import (
+    OperatorWorkspaceService,
+)
 from disaster_monitor.application.ports.conversation_store import ConversationStore
 from disaster_monitor.application.ports.event_media import MediaAssetStore
+from disaster_monitor.application.ports.field_reports import FieldMediaStore
 from disaster_monitor.application.ports.geography import CountryCatalogUpdateAutomation
 from disaster_monitor.application.ports.language_model import LanguageModel
 from disaster_monitor.application.ports.operational_state import OperationalRepository
@@ -96,6 +107,10 @@ class AppDependencies:
     source_catalog: SourceCatalogService
     weather_alerts: WeatherAlertsService
     earthquake_context: EarthquakeContextService
+    humanitarian_context: HumanitarianContextService
+    field_reports: FieldReportService
+    field_media: FieldMediaStore
+    operator_workspace: OperatorWorkspaceService
     incident_watches: ManageIncidentWatches
     satellite_imagery: SatelliteImageryService
     ground_imagery: GroundImageryService
@@ -107,4 +122,5 @@ class AppDependencies:
     country_catalog_automation: CountryCatalogUpdateAutomation
     agent_diagnostics: AgentDiagnostics | None
     provider_budget: ProviderBudgetLedger | None = None
+    route_access: RouteAccessContextService | None = None
     lifecycle: AppLifecycle = field(default_factory=AppLifecycle)

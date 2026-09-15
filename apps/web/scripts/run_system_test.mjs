@@ -25,21 +25,43 @@ async function applicationIsReady(url) {
   }
 }
 
-function stopStack() {
-  if (stackProcess.exitCode !== null) {
+function waitForProcessExit(process, timeoutMs) {
+  if (process.exitCode !== null || process.signalCode !== null) {
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    const onExit = () => {
+      clearTimeout(timeout);
+      resolve(true);
+    };
+    const timeout = setTimeout(() => {
+      process.off('exit', onExit);
+      resolve(false);
+    }, timeoutMs);
+    process.once('exit', onExit);
+  });
+}
+
+async function stopStack() {
+  if (stackProcess.exitCode !== null || stackProcess.signalCode !== null) {
     return;
   }
   if (process.platform === 'win32') {
-    spawn(
+    const taskkillProcess = spawn(
       'C:\\Windows\\System32\\taskkill.exe',
       ['/pid', String(stackProcess.pid), '/t', '/f'],
       {
         stdio: 'ignore',
         windowsHide: true,
       },
-    ).unref();
+    );
+    await waitForProcessExit(taskkillProcess, 10_000);
   } else {
-    stackProcess.kill('SIGTERM');
+    stackProcess.kill('SIGINT');
+  }
+  if (!(await waitForProcessExit(stackProcess, 10_000))) {
+    stackProcess.kill('SIGKILL');
+    await waitForProcessExit(stackProcess, 5_000);
   }
 }
 
@@ -392,5 +414,5 @@ try {
   );
 } finally {
   await browser?.close();
-  stopStack();
+  await stopStack();
 }

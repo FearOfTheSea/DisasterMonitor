@@ -3,6 +3,7 @@
 import html
 import re
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 
 import httpx
 
@@ -99,6 +100,7 @@ def build_reliefweb_params(
         "disaster_type",
         "format",
         "source",
+        "theme",
     )
     start = query.date_from or now - timedelta(days=query.time_window_days)
     end = query.date_to or now + timedelta(minutes=5)
@@ -133,6 +135,23 @@ def _nested_text(value: object) -> str:
             if result:
                 return result
     return ""
+
+
+def _names(value: object) -> tuple[str, ...]:
+    values = value if isinstance(value, list) else [value]
+    names: list[str] = []
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        name = (
+            _text(item.get("longname"))
+            or _text(item.get("name"))
+            or _text(item.get("shortname"))
+            or _text(item.get("title"))
+        )
+        if name:
+            names.append(name)
+    return tuple(dict.fromkeys(names))
 
 
 def _metadata(
@@ -366,6 +385,18 @@ class ReliefWebSituationAdapter:
                 provider_event_ids,
                 magnitude,
             ) = _metadata(fields, narrative)
+            provider_report_id = _text(item.get("id")) or _text(fields.get("id"))
+            report_id = (
+                f"reliefweb:{provider_report_id}" if provider_report_id else None
+            )
+            revision_identity = sha256(
+                f"{report_id or url}|{updated_at or published_at or now}".encode()
+            ).hexdigest()[:24]
+            chronology = tuple(
+                dict.fromkeys(
+                    value for value in (published_at, updated_at) if value is not None
+                )
+            )
             report = SituationReport(
                 source=source,
                 narrative=narrative,
@@ -386,6 +417,12 @@ class ReliefWebSituationAdapter:
                     else ()
                 ),
                 provider_event_ids=provider_event_ids,
+                report_id=report_id,
+                revision_id=f"reliefweb-revision:{revision_identity}",
+                themes=_names(fields.get("theme")),
+                organizations=_names(fields.get("source")),
+                publication_chronology=chronology,
+                stale=now - source.effective_at > timedelta(days=14),
             )
             reports.append(report)
         issues: tuple[ProviderIssue, ...] = ()
@@ -401,7 +438,8 @@ class ReliefWebSituationAdapter:
             issues = (
                 ProviderIssue(
                     self.provider_name,
-                    f"{self.provider_name}: The provider returned no matching records.",
+                    f"{self.provider_name}: No report matched the bounded window; "
+                    "this is not evidence of no impact.",
                     reason_code="empty_result",
                 ),
             )

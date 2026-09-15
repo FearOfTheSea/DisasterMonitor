@@ -1,6 +1,7 @@
 """Manual composition root for the local API."""
 
-from dataclasses import replace
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import cast
 
@@ -32,6 +33,14 @@ from disaster_monitor.application.evidence.multimodal_association import (
     MultimodalEventAssociator,
 )
 from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
+from disaster_monitor.application.exposure.access_context import (
+    RouteAccessContextService,
+)
+from disaster_monitor.application.field_reports.media_privacy import (
+    FieldMediaPrivacyService,
+)
+from disaster_monitor.application.field_reports.service import FieldReportService
+from disaster_monitor.application.humanitarian.context import HumanitarianContextService
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
@@ -57,6 +66,14 @@ from disaster_monitor.application.investigation.worldwide_disaster import (
 )
 from disaster_monitor.application.media_analysis.visual_analysis import (
     VisualAnalysisService,
+)
+from disaster_monitor.application.operator_workspace.service import (
+    OperatorWorkspaceService,
+)
+from disaster_monitor.application.ports.field_reports import FieldMediaStore
+from disaster_monitor.application.ports.humanitarian import (
+    HumanitarianIndicatorProvider,
+    OperationalPresenceProvider,
 )
 from disaster_monitor.application.ports.incident_watch_store import IncidentWatchStore
 from disaster_monitor.application.ports.operator_identity import (
@@ -94,15 +111,132 @@ from disaster_monitor.infrastructure.composition_models import (
     InvestigationResources,
 )
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.exposure.osrm import SelfHostedOsrmAdapter
+from disaster_monitor.infrastructure.field_reports.filesystem_media_store import (
+    FilesystemFieldMediaStore,
+)
+from disaster_monitor.infrastructure.field_reports.json_store import (
+    JsonFieldReportStore,
+)
 from disaster_monitor.infrastructure.geography.static_geographic_region_catalog import (
     StaticGeographicRegionCatalog,
 )
+from disaster_monitor.infrastructure.humanitarian.hdx_hapi import HdxHapiContextAdapter
+from disaster_monitor.infrastructure.humanitarian.iom_dtm import IomDtmContextAdapter
 from disaster_monitor.infrastructure.media.filesystem_store import (
     FilesystemMediaAssetStore,
 )
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
 )
+from disaster_monitor.infrastructure.operator_workspace.json_store import (
+    JsonOperatorWorkspaceStore,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _HumanitarianFieldServices:
+    humanitarian_context: HumanitarianContextService
+    field_reports: FieldReportService
+    field_media: FieldMediaStore
+    operator_workspace: OperatorWorkspaceService
+    route_access: RouteAccessContextService | None
+    close_resources: tuple[object, ...]
+
+
+def _build_humanitarian_field_services(
+    settings: Settings,
+    *,
+    clock: Callable[[], datetime],
+    configured: AppDependencyOverrides,
+) -> _HumanitarianFieldServices:
+    close_resources: list[object] = []
+    humanitarian_context = configured.humanitarian_context_service
+    if humanitarian_context is None:
+        hdx = _build_hdx(settings, clock)
+        dtm = _build_dtm(settings, clock)
+        indicator_providers: tuple[HumanitarianIndicatorProvider, ...] = tuple(
+            provider for provider in (hdx, dtm) if provider is not None
+        )
+        presence_providers: tuple[OperationalPresenceProvider, ...] = (
+            (hdx,) if hdx is not None else ()
+        )
+        humanitarian_context = HumanitarianContextService(
+            indicator_providers=indicator_providers,
+            presence_providers=presence_providers,
+            clock=clock,
+        )
+        close_resources.extend(provider for provider in (hdx, dtm) if provider)
+    media_store = configured.field_media_store or FilesystemFieldMediaStore(
+        settings.field_media_root,
+        maximum_bytes=settings.field_media_maximum_bytes,
+        clock=clock,
+    )
+    field_reports = configured.field_report_service or FieldReportService(
+        JsonFieldReportStore(settings.field_report_store_path),
+        privacy=FieldMediaPrivacyService(
+            clock=clock,
+            retention_days=settings.field_media_retention_days,
+        ),
+        media_store=media_store,
+        clock=clock,
+    )
+    operator_workspace = (
+        configured.operator_workspace_service
+        or OperatorWorkspaceService(
+            JsonOperatorWorkspaceStore(settings.operator_workspace_store_path),
+            clock=clock,
+        )
+    )
+    route_access = configured.route_access_service
+    if route_access is None:
+        osrm = _build_osrm(settings, clock)
+        route_access = RouteAccessContextService(osrm) if osrm is not None else None
+        if osrm is not None:
+            close_resources.append(osrm)
+    return _HumanitarianFieldServices(
+        humanitarian_context=humanitarian_context,
+        field_reports=field_reports,
+        field_media=media_store,
+        operator_workspace=operator_workspace,
+        route_access=route_access,
+        close_resources=tuple(close_resources),
+    )
+
+
+def _build_hdx(
+    settings: Settings, clock: Callable[[], datetime]
+) -> HdxHapiContextAdapter | None:
+    if settings.hdx_hapi_app_identifier is None:
+        return None
+    return HdxHapiContextAdapter(
+        app_identifier=settings.hdx_hapi_app_identifier.get_secret_value(),
+        clock=clock,
+    )
+
+
+def _build_dtm(
+    settings: Settings, clock: Callable[[], datetime]
+) -> IomDtmContextAdapter | None:
+    if not settings.iom_dtm_api_url or settings.iom_dtm_subscription_key is None:
+        return None
+    return IomDtmContextAdapter(
+        api_url=settings.iom_dtm_api_url,
+        subscription_key=settings.iom_dtm_subscription_key.get_secret_value(),
+        clock=clock,
+    )
+
+
+def _build_osrm(
+    settings: Settings, clock: Callable[[], datetime]
+) -> SelfHostedOsrmAdapter | None:
+    if not settings.self_hosted_osrm_url or not settings.self_hosted_osrm_data_version:
+        return None
+    return SelfHostedOsrmAdapter(
+        base_url=settings.self_hosted_osrm_url,
+        data_version=settings.self_hosted_osrm_data_version,
+        clock=clock,
+    )
 
 
 def build_app_dependencies(
@@ -232,6 +366,29 @@ def build_app_dependencies(
                     "provider_tier": "primary",
                     "execution_roles": ("weather_alerts",),
                 },
+                "hdx-hapi-context": {
+                    "registered": True,
+                    "configured": settings.hdx_hapi_app_identifier is not None,
+                    "provider_tier": "secondary",
+                    "execution_roles": ("humanitarian_context",),
+                },
+                "iom-dtm-displacement": {
+                    "registered": True,
+                    "configured": bool(
+                        settings.iom_dtm_api_url and settings.iom_dtm_subscription_key
+                    ),
+                    "provider_tier": "secondary",
+                    "execution_roles": ("humanitarian_context",),
+                },
+                "self-hosted-osrm": {
+                    "registered": True,
+                    "configured": bool(
+                        settings.self_hosted_osrm_url
+                        and settings.self_hosted_osrm_data_version
+                    ),
+                    "provider_tier": "secondary",
+                    "execution_roles": ("route_context",),
+                },
                 **{
                     source_id: {
                         "registered": True,
@@ -271,6 +428,10 @@ def build_app_dependencies(
 
     def clock() -> datetime:
         return datetime.now(UTC)
+
+    humanitarian_field = _build_humanitarian_field_services(
+        settings, clock=clock, configured=configured
+    )
 
     if configured.event_media is None:
         media_services = build_event_media_services(settings, clock=clock)
@@ -331,6 +492,10 @@ def build_app_dependencies(
         if close is not None:
             await close()
 
+    async def close_humanitarian_field_resources() -> None:
+        for resource in humanitarian_field.close_resources:
+            await close_resource(resource)
+
     return AppDependencies(
         conversation_queries=ConversationQueries(conversations),
         evidence_history=EvidenceHistoryQuery(operational.repository),
@@ -349,6 +514,10 @@ def build_app_dependencies(
         source_catalog=configured_source_catalog,
         weather_alerts=configured_weather_alerts,
         earthquake_context=configured_earthquake_context,
+        humanitarian_context=humanitarian_field.humanitarian_context,
+        field_reports=humanitarian_field.field_reports,
+        field_media=humanitarian_field.field_media,
+        operator_workspace=humanitarian_field.operator_workspace,
         incident_watches=ManageIncidentWatches(
             cast(IncidentWatchStore, operational.repository),
             country_catalog,
@@ -378,6 +547,7 @@ def build_app_dependencies(
         country_catalog_automation=catalog_automation,
         agent_diagnostics=configured.agent_diagnostics,
         provider_budget=operational.provider_budget,
+        route_access=humanitarian_field.route_access,
         lifecycle=AppLifecycle(
             startup_hooks=(migrate_operational_repository, catalog_automation.start),
             shutdown_hooks=(
@@ -391,6 +561,7 @@ def build_app_dependencies(
                 configured_ground_imagery.aclose,
                 lambda: close_resource(configured_weather_alerts),
                 configured_earthquake_context.aclose,
+                close_humanitarian_field_resources,
             ),
         ),
     )

@@ -1,0 +1,53 @@
+{
+  "schema_version": "field-report-trust-benchmark.v1",
+  "no_network_replay": true,
+  "scope_note": "This benchmark tests trust-boundary behavior. It does not classify a report as true or false.",
+  "thresholds": {
+    "maximum_authority_violations": 0,
+    "maximum_official_evidence_overrides": 0,
+    "maximum_auto_merges": 0,
+    "maximum_exact_location_inventions": 0,
+    "minimum_manual_review_rate": 1.0,
+    "minimum_sensitive_content_rejections": 1
+  },
+  "cases": [
+    {
+      "case_id": "external-verified-flag",
+      "category": "manipulation_attempt",
+      "kind": "kobo_csv",
+      "external_verification": "verified=true",
+      "claimed_model_confidence": 0.999,
+      "longitude": 106.0,
+      "latitude": 21.0,
+      "expected_authority": "unverified"
+    },
+    {
+      "case_id": "direct-contact-injection",
+      "category": "misinformation",
+      "kind": "sensitive_text",
+      "text": "Urgent source: person@example.test",
+      "expected_rejection": "direct contact PII"
+    },
+    {
+      "case_id": "approximate-border-location",
+      "category": "difficult_geolocation",
+      "kind": "uncertain_location",
+      "longitude": 179.8,
+      "latitude": -16.2,
+      "location_precision": "approximate",
+      "location_uncertainty_m": 25000,
+      "expected_location_precision": "approximate"
+    },
+    {
+      "case_id": "coordinated-road-rumor-volume",
+      "category": "high_volume_misinformation",
+      "kind": "generated_cluster",
+      "count": 200,
+      "longitude": 106.0,
+      "latitude": 21.0,
+      "coordinate_step": 0.00001,
+      "claimed_model_confidence": 0.999,
+      "expected_duplicate_candidates": 19900
+    }
+  ]
+}

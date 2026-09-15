@@ -73,6 +73,18 @@ class Settings(BaseSettings):
     )
     event_media_blob_root: Path = Path("data/event-media/blobs")
     reliefweb_app_name: str | None = None
+    hdx_hapi_app_identifier: SecretStr | None = Field(default=None, repr=False)
+    iom_dtm_api_url: str | None = None
+    iom_dtm_subscription_key: SecretStr | None = Field(default=None, repr=False)
+    field_media_root: Path = Path("data/field-reports/media")
+    field_report_store_path: Path = Path("data/field-reports/reports.json")
+    operator_workspace_store_path: Path = Path("data/operator-workspace/workspace.json")
+    field_media_retention_days: int = Field(default=30, ge=1, le=365)
+    field_media_maximum_bytes: int = Field(
+        default=100_000_000, ge=1_000_000, le=2_000_000_000
+    )
+    self_hosted_osrm_url: str | None = None
+    self_hosted_osrm_data_version: str | None = None
     news_sensing_enabled: bool = True
     gdelt_news_enabled: bool = True
     news_feed_timeout_seconds: float = Field(default=15.0, gt=0, le=60)

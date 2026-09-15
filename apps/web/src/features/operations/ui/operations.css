@@ -40,6 +40,186 @@
   padding: 20px 24px;
 }
 
+.field-report-workbench details {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+.field-report-workbench summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 720;
+}
+
+.field-report-form,
+.field-report-review {
+  display: grid;
+  gap: 8px;
+}
+
+.field-report-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 10px;
+}
+
+.field-report-form label,
+.field-report-review label {
+  display: grid;
+  gap: 4px;
+}
+
+.field-report-form label > span,
+.field-report-review label > span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.field-report-form input,
+.field-report-form select,
+.field-report-form textarea,
+.field-report-review select,
+.field-report-review textarea {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+  min-width: 0;
+  padding: 7px 8px;
+  width: 100%;
+}
+
+.field-report-wide,
+.field-report-boundary,
+.field-report-form > button {
+  grid-column: 1 / -1;
+}
+
+.field-report-boundary {
+  border-left: 3px solid var(--warning-icon);
+  padding-left: 8px;
+}
+
+.field-report-queue {
+  display: grid;
+  gap: 8px;
+}
+
+.field-report-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.field-report-card-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.field-report-card-heading strong,
+.field-report-card-heading span,
+.field-report-card small,
+.duplicate-candidate {
+  font-size: 0.7rem;
+}
+
+.field-report-card-heading span {
+  background: var(--warning-soft);
+  border-radius: 999px;
+  color: var(--warning);
+  font-weight: 750;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.field-report-card small {
+  color: var(--muted);
+}
+
+.duplicate-candidate {
+  color: var(--warning);
+}
+
+.operator-workspace details {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+.operator-workspace summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 720;
+}
+
+.non-evidence-badge {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 720;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+.operator-workspace-forms,
+.operator-workspace-forms form,
+.operator-workspace-list,
+.operator-workspace-list article {
+  display: grid;
+  gap: 7px;
+}
+
+.operator-workspace-forms {
+  padding-top: 10px;
+}
+
+.operator-workspace-forms form {
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.operator-workspace-forms form:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.operator-workspace-forms strong,
+.operator-workspace-list strong,
+.operator-workspace-list small {
+  font-size: 0.7rem;
+}
+
+.operator-workspace-forms input,
+.operator-workspace-forms textarea {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 7px 8px;
+  width: 100%;
+}
+
+.operator-workspace-list article {
+  border-bottom: 1px solid var(--line);
+  padding: 7px 0;
+}
+
+.operator-workspace-list small {
+  color: var(--muted);
+}
+
 .findings-center {
   border-bottom: 1px solid var(--line);
   display: grid;

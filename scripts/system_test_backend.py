@@ -2,9 +2,9 @@
 
 import json
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import uvicorn
+from system_test_country_catalog import build_system_country_catalog
 
 from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.disaster import (
@@ -51,9 +51,6 @@ from disaster_monitor.domain.disaster import (
     point_event_geometry,
 )
 from disaster_monitor.infrastructure.composition import AppDependencyOverrides
-from disaster_monitor.infrastructure.geography.static_country_catalog import (
-    StaticCountryCatalog,
-)
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
     StructuredAgentModel,
 )
@@ -64,9 +61,7 @@ TARGET_TIME = datetime(2026, 8, 5, 14, 30, tzinfo=UTC)
 FOREIGN_SENTINEL = "VENEZUELA-FOREIGN-EVIDENCE-SENTINEL"
 UNRELATED_SENTINEL = "TOKYO-UNRELATED-EVIDENCE-SENTINEL"
 MODEL_SENTINEL = "GENERAL-MODEL-SENTINEL"
-CATALOG = StaticCountryCatalog(
-    Path(__file__).resolve().parents[1] / "data" / "geography"
-)
+CATALOG = build_system_country_catalog()
 
 
 def _required_country(alpha3_code: str) -> Country:

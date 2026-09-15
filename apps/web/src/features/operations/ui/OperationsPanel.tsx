@@ -23,10 +23,13 @@ import type {
   IncidentMapRecord,
 } from '@/features/incidents/public';
 import { FindingsCenter } from '@/features/operations/ui/FindingsCenter';
+import { FieldReportWorkbench } from '@/features/operations/ui/FieldReportWorkbench';
 import { IncidentWatches } from '@/features/operations/ui/IncidentWatches';
+import { OperatorWorkspace } from '@/features/operations/ui/OperatorWorkspace';
 
 type OperationsPanelProps = {
   evidenceStateVersion?: string;
+  selectedIncidentId?: string;
   onClose: () => void;
   onSelectWatchIncident: (incident: IncidentMapRecord) => void;
   activeIncidentsSnapshot?: ActiveIncidentsSnapshot;
@@ -52,6 +55,7 @@ function formatDuration(seconds: number | null) {
 
 export function OperationsPanel({
   evidenceStateVersion,
+  selectedIncidentId,
   onClose,
   onSelectWatchIncident,
   activeIncidentsSnapshot,
@@ -174,6 +178,8 @@ export function OperationsPanel({
           onDataChange={handleWatchDataChange}
           refreshToken={watchRefreshToken}
         />
+        <FieldReportWorkbench selectedIncidentId={selectedIncidentId} />
+        <OperatorWorkspace selectedIncidentId={selectedIncidentId} />
         {loading && (
           <div className="operations-loading" role="status">
             <span className="loading-indicator" aria-hidden="true" />

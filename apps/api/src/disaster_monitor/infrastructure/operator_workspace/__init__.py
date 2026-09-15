@@ -1,0 +1,1 @@
+"""Operator workspace persistence adapters."""

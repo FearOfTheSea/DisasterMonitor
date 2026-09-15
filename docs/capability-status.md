@@ -28,6 +28,7 @@ complete global surveillance or impact evidence.
 | CO | Typed least-privilege handoffs and bounded deterministic merge | CO-A/B/C passing | Passed for bounded analytical coordination |
 | CL | Allowlisted reversible analytical ordering with rollback | CL-A/B/C passing | Pending real trajectories and reviewer corrections |
 | OP | Rights-gated snapshots, history, leased workers, freshness telemetry, durable projections, backup/restore validation, persistent Incident Watches, and deterministic situational-awareness views | Local operational, replay, recovery, and deterministic browser checks passing | Deployment-specific external and supervised-pilot evidence remains separate |
+| HF | Licensed humanitarian context, isolated unverified field reports, human review, privacy filtering, reviewed imports, bounded handoffs, and local access context | Deterministic domain, adapter, HTTP, persistence, UI, and trust-boundary benchmark checks passing | Provider completeness, field truth, and operational suitability remain unproven |
 
 ## Evidence rules
 
@@ -77,6 +78,13 @@ compound-hazard correlations. They do not create facts, rankings, alerts,
 provider-health guarantees, causal claims, or consequential recommendations.
 
 These presentation changes do not strengthen the OP promotion claim.
+
+P3 humanitarian/field operations are documented in
+[humanitarian-field-operations.md](humanitarian-field-operations.md). The automated
+benchmark demonstrates authority isolation under duplication, volume, claimed
+confidence, and uncertain location. It does not establish that crowd reports are true,
+that PII detection is complete, that public humanitarian datasets are complete, or
+that route estimates are safe for operational use.
 
 P1 operational awareness adds an informational Source Catalog, dataset-specific
 hidden-tab-aware polling, bounded shareable presentation URL state, and deterministic

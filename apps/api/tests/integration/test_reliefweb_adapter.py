@@ -107,6 +107,52 @@ async def test_reliefweb_extracts_preliminary_facts_and_sanitizes_text() -> None
     await client.aclose()
 
 
+@pytest.mark.asyncio
+async def test_reliefweb_retains_revision_theme_organization_and_chronology() -> None:
+    payload = {
+        "data": [
+            {
+                "id": "rw-report-1",
+                "fields": {
+                    "title": "Situation update",
+                    "url": "https://reliefweb.int/report/japan/fixture",
+                    "body": "A source update with no normalized total.",
+                    "date": {
+                        "created": "2026-08-05T07:00:00Z",
+                        "changed": "2026-08-05T11:30:00Z",
+                    },
+                    "theme": [
+                        {"name": "Coordination"},
+                        {"name": "Shelter"},
+                    ],
+                    "source": [
+                        {"name": "UN OCHA"},
+                        {"longname": "Example Relief Organization"},
+                    ],
+                },
+            }
+        ]
+    }
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload))
+    )
+    result = await ReliefWebSituationAdapter(
+        app_name="approved-test", client=client
+    ).get_situation_reports(_event(), QUERY, now=NOW)
+
+    report = result.records[0]
+    assert report.report_id == "reliefweb:rw-report-1"
+    assert report.revision_id.startswith("reliefweb-revision:")
+    assert report.themes == ("Coordination", "Shelter")
+    assert report.organizations == ("UN OCHA", "Example Relief Organization")
+    assert report.publication_chronology == (
+        datetime(2026, 8, 5, 7, tzinfo=UTC),
+        datetime(2026, 8, 5, 11, 30, tzinfo=UTC),
+    )
+    assert report.stale is False
+    await client.aclose()
+
+
 def test_reliefweb_params_use_normalized_country_and_disaster() -> None:
     params = build_reliefweb_params(_event(), QUERY, now=NOW, app_name="approved-test")
 

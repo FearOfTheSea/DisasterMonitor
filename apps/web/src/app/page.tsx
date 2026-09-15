@@ -398,6 +398,7 @@ export default function Home() {
         {operationsOpen && (
           <OperationsPanel
             evidenceStateVersion={evidenceStateVersion}
+            selectedIncidentId={selectedIncident?.event_id}
             activeIncidentsSnapshot={activeIncidents.snapshot}
             displayedIncidents={displayedIncidents}
             displayedCorrelations={displayedCorrelations}

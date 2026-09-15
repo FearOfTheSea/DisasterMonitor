@@ -52,6 +52,12 @@ class SituationReport:
     measurements: tuple[EventMeasurement, ...] = ()
     provider_event_ids: tuple[str, ...] = ()
     supplemental_geometry: tuple[CycloneMapLayer, ...] = ()
+    report_id: str | None = None
+    revision_id: str | None = None
+    themes: tuple[str, ...] = ()
+    organizations: tuple[str, ...] = ()
+    publication_chronology: tuple[datetime, ...] = ()
+    stale: bool = False
 
 
 @dataclass(frozen=True, slots=True)

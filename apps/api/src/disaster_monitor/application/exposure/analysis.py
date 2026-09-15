@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from disaster_monitor.application.ports.exposure import (
     AssetExposureProvider,
+    OsmCompletenessProvider,
     PopulationExposureProvider,
 )
 from disaster_monitor.domain.exposure import (
@@ -35,10 +36,12 @@ class ExposureAnalysisService:
         *,
         population_providers: tuple[PopulationExposureProvider, ...] = (),
         asset_provider: AssetExposureProvider | None = None,
+        completeness_provider: OsmCompletenessProvider | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._population_providers = population_providers
         self._asset_provider = asset_provider
+        self._completeness_provider = completeness_provider
         self._clock = clock
 
     async def execute(self, geometry: ExposureGeometry) -> ExposureAnalysis:
@@ -65,6 +68,11 @@ class ExposureAnalysisService:
             if self._asset_provider is not None
             else ()
         )
+        completeness = (
+            await self._completeness_provider.completeness(geometry)
+            if self._completeness_provider is not None
+            else None
+        )
         return ExposureAnalysis(
             geometry=geometry,
             population_estimates=ordered,
@@ -81,6 +89,7 @@ class ExposureAnalysisService:
                 "OpenStreetMap completeness varies; missing assets are not evidence "
                 "of absence.",
             ),
+            osm_completeness=completeness,
         )
 
 

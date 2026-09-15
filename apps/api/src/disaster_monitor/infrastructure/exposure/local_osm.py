@@ -1,12 +1,18 @@
 """Reproducible critical-infrastructure queries over a local OSM GeoJSON extract."""
 
 import json
+from collections.abc import Callable
+from datetime import UTC, datetime
+from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
+from typing import cast
 
 from disaster_monitor.domain.exposure import (
     ExposureGeometry,
     InfrastructureAsset,
     InfrastructureCategory,
+    OsmCompletenessIndicator,
+    OsmCompletenessQuality,
 )
 from disaster_monitor.domain.imagery.regions import (
     Coordinate,
@@ -28,15 +34,90 @@ _MAJOR_ROADS = {"motorway", "trunk", "primary", "secondary"}
 
 
 class LocalOsmAssetExposure:
-    def __init__(self, extract_path: Path, *, extract_version: str) -> None:
+    def __init__(
+        self,
+        extract_path: Path,
+        *,
+        extract_version: str,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
         if not extract_path.is_file() or not extract_version.strip():
             raise ValueError("A local OSM extract and version are required.")
         self._path = extract_path
         self._version = extract_version
+        self._clock = clock
 
     async def intersecting_assets(
         self, geometry: ExposureGeometry
     ) -> tuple[InfrastructureAsset, ...]:
+        document = self._document()
+        features = cast(list[object], document["features"])
+        results = []
+        for raw in features:
+            asset = _asset(raw, self._version)
+            if asset is not None and _intersects(asset, geometry):
+                results.append(asset)
+        return tuple(sorted(results, key=lambda item: item.asset_id))
+
+    async def completeness(
+        self, geometry: ExposureGeometry
+    ) -> OsmCompletenessIndicator:
+        document = self._document()
+        metadata = document.get("metadata")
+        if not isinstance(metadata, dict) or not metadata.get("source_updated_at"):
+            raise ValueError(
+                "OSM completeness requires explicit source_updated_at metadata."
+            )
+        source_updated_at = _timestamp(str(metadata["source_updated_at"]))
+        assets: list[tuple[InfrastructureAsset, bool]] = []
+        for raw in cast(list[object], document["features"]):
+            asset = _asset(raw, self._version)
+            if asset is None or not _intersects(asset, geometry):
+                continue
+            properties = raw.get("properties") if isinstance(raw, dict) else None
+            named = (
+                bool(properties.get("name")) if isinstance(properties, dict) else False
+            )
+            assets.append((asset, named))
+        area = _bbox_area_km2(geometry)
+        road_length = sum(
+            _path_length_km(asset.path)
+            for asset, _ in assets
+            if asset.category is InfrastructureCategory.MAJOR_ROAD
+        )
+        facility_count = sum(
+            asset.category
+            not in {InfrastructureCategory.MAJOR_ROAD, InfrastructureCategory.BRIDGE}
+            for asset, _ in assets
+        )
+        count = len(assets)
+        named_fraction = sum(named for _, named in assets) / count if count else None
+        quality = (
+            OsmCompletenessQuality.GOOD
+            if count >= 100 and (named_fraction or 0) >= 0.7
+            else OsmCompletenessQuality.LIMITED
+            if count
+            else OsmCompletenessQuality.POOR
+        )
+        return OsmCompletenessIndicator(
+            dataset_id="openstreetmap-local",
+            dataset_version=self._version,
+            source_updated_at=source_updated_at,
+            calculated_at=self._clock(),
+            mapped_feature_count=count,
+            named_feature_fraction=named_fraction,
+            road_density_km_per_sq_km=road_length / area if area else None,
+            critical_facility_density_per_sq_km=(
+                facility_count / area if area else None
+            ),
+            quality=quality,
+            limitation=(
+                "Mapping density, named-feature fraction, and source age are proxies, "
+                "not proof of OpenStreetMap completeness or real-world absence."
+            ),
+        )
+
+    def _document(self) -> dict[str, object]:
         document = json.loads(self._path.read_text(encoding="utf-8"))
         if (
             not isinstance(document, dict)
@@ -50,12 +131,7 @@ class LocalOsmAssetExposure:
             raise ValueError(
                 "The local OSM extract feature list is invalid or unbounded."
             )
-        results = []
-        for raw in features:
-            asset = _asset(raw, self._version)
-            if asset is not None and _intersects(asset, geometry):
-                results.append(asset)
-        return tuple(sorted(results, key=lambda item: item.asset_id))
+        return document
 
 
 def _asset(raw: object, version: str) -> InfrastructureAsset | None:
@@ -136,3 +212,38 @@ def _intersects(asset: InfrastructureAsset, geometry: ExposureGeometry) -> bool:
     if asset.geometry is not None:
         return geometries_intersect(geometry.geometry, asset.geometry)
     return path_intersects_geometry(asset.path, geometry.geometry)
+
+
+def _timestamp(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("OSM source update time must include a timezone.")
+    return parsed
+
+
+def _bbox_area_km2(geometry: ExposureGeometry) -> float:
+    west, south, east, north = geometry.geometry.bounds
+    latitude_km = max(0.001, (north - south) * 111.195)
+    longitude_km = max(
+        0.001,
+        (east - west) * 111.195 * cos(radians((south + north) / 2)),
+    )
+    return latitude_km * longitude_km
+
+
+def _path_length_km(path: tuple[Coordinate, ...]) -> float:
+    return sum(
+        _distance_km(left, right) for left, right in zip(path, path[1:], strict=False)
+    )
+
+
+def _distance_km(left: Coordinate, right: Coordinate) -> float:
+    latitude_delta = radians(right.latitude - left.latitude)
+    longitude_delta = radians(right.longitude - left.longitude)
+    value = (
+        sin(latitude_delta / 2) ** 2
+        + cos(radians(left.latitude))
+        * cos(radians(right.latitude))
+        * sin(longitude_delta / 2) ** 2
+    )
+    return 2 * 6_371.0088 * asin(sqrt(value))

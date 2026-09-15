@@ -189,8 +189,8 @@ from disaster_monitor.infrastructure.operations.postgres_repository import (
 from disaster_monitor.infrastructure.satellite_imagery.providers import (
     NasaGibsImageryProvider,
 )
-from disaster_monitor.infrastructure.sources.static_source_catalog import (
-    StaticSourceCatalog,
+from disaster_monitor.infrastructure.source_catalog_composition import (
+    build_source_catalog as build_source_catalog,
 )
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
     OllamaVisionAdapter,
@@ -553,35 +553,6 @@ def build_earthquake_context_service(settings: Settings) -> EarthquakeContextSer
             timeout_seconds=settings.disaster_provider_timeout_seconds,
             max_response_bytes=settings.weather_alert_max_response_bytes,
         )
-    )
-
-
-def build_source_catalog(settings: Settings | None = None) -> StaticSourceCatalog:
-    """Construct the packaged maintained global disaster-source catalog."""
-    if settings is None:
-        return StaticSourceCatalog()
-    app_name = (settings.reliefweb_app_name or "").strip().lower()
-    configured = bool(
-        app_name
-        and app_name not in {"disaster-monitor-local", "change-me", "your-app-name"}
-    )
-    firms_key = (
-        settings.nasa_firms_map_key.get_secret_value().strip()
-        if settings.nasa_firms_map_key is not None
-        else ""
-    )
-    firms_configured = (
-        len(firms_key) >= 8
-        and len(firms_key) <= 200
-        and all(character.isalnum() or character in "_-" for character in firms_key)
-    )
-    return StaticSourceCatalog(
-        {
-            "reliefweb-situation-reports": configured,
-            "nasa-firms-observations": firms_configured,
-            "noaa-tsunami-warnings": settings.noaa_tsunami_warnings_enabled,
-            "meteoalarm-warnings": bool(settings.meteoalarm_countries),
-        }
     )
 
 
