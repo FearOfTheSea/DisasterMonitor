@@ -197,8 +197,8 @@ export function ActiveIncidentsPanel({
             {status === 'loading'
               ? 'Updating…'
               : snapshot
-                ? `Retrieved ${formatTime(snapshot.retrieved_at)}`
-                : 'Not retrieved'}
+                ? 'Refresh'
+                : 'Load incidents'}
           </button>
         </div>
       </header>
@@ -291,7 +291,11 @@ export function ActiveIncidentsPanel({
         {status === 'loading' && !snapshot && (
           <div className="incident-loading" role="status">
             <span className="loading-indicator" aria-hidden="true" />
-            <span>Loading active incidents…</span>
+            <span className="incident-loading-copy">
+              <strong>Loading active incidents…</strong>
+              <span>Checking trusted source networks…</span>
+              <small>Some providers can take a moment to respond.</small>
+            </span>
           </div>
         )}
         {error && (

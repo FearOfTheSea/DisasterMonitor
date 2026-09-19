@@ -14,7 +14,7 @@
 }
 
 .coverage-heading-row h3 {
-  font-size: 0.8rem;
+  font-size: 0.84rem;
   margin: 0;
 }
 
@@ -28,7 +28,7 @@
   background: var(--accent-soft);
   border-left: 3px solid var(--accent);
   color: var(--ink-soft);
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   line-height: 1.4;
   margin: 0;
   padding: 7px 8px;
@@ -69,7 +69,7 @@
 .coverage-item strong {
   align-items: center;
   display: inline-flex;
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 650;
   gap: 7px;
   line-height: 1.25;
@@ -78,7 +78,7 @@
 
 .coverage-item small {
   color: var(--muted);
-  font-size: 0.64rem;
+  font-size: 0.7rem;
   line-height: 1.35;
   padding-left: 23px;
 }
@@ -87,7 +87,7 @@
   align-items: center;
   display: inline-flex;
   flex: 0 0 auto;
-  font-size: 0.64rem;
+  font-size: 0.7rem;
   font-weight: 680;
   gap: 5px;
   line-height: 1.2;

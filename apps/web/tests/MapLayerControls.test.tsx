@@ -60,6 +60,25 @@ describe('MapLayerControls', () => {
     );
     expect(screen.getByText('Integrated satellite source controls')).toBeVisible();
   });
+
+  it('keeps dense supplemental records behind an explicit disclosure', async () => {
+    const user = userEvent.setup();
+    render(
+      <MapLayerControls
+        state={createDefaultMapLayerState()}
+        onChange={vi.fn()}
+        supplemental={<div>Authoritative alert records</div>}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Layers' }));
+    expect(screen.queryByText('Authoritative alert records')).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Browse authoritative alerts' }),
+    );
+    expect(screen.getByText('Authoritative alert records')).toBeVisible();
+  });
 });
 
 it('lets the user reveal and dismiss layer controls without changing map state', async () => {

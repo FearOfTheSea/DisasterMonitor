@@ -33,7 +33,7 @@
 .ground-imagery-panel-header {
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
-  padding: 22px 24px;
+  padding: 24px;
 }
 
 .assistant-panel-header {
@@ -56,6 +56,16 @@
   display: flex;
   height: 40px;
   justify-content: center;
+  padding: 8px;
+  width: 40px;
+}
+
+.operations-panel .panel-close,
+.source-catalog-panel .panel-close {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  min-height: 40px;
   padding: 8px;
   width: 40px;
 }

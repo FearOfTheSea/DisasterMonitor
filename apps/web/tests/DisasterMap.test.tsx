@@ -596,6 +596,9 @@ describe('DisasterMap assistant focus', () => {
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Layers' }));
     expect(adapterMocks.setWeatherAlerts).toHaveBeenLastCalledWith(snapshot.alerts);
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Browse authoritative alerts' }));
     expect(
       screen.getByRole('complementary', { name: 'Weather alert coverage' }),
     ).toHaveTextContent(

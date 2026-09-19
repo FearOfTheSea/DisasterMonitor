@@ -334,7 +334,7 @@ class InMemoryOperationalRepository:
     async def append_physical_event(self, event: PhysicalEventRecord) -> bool:
         existing = self.physical_events.get(event.physical_event_id)
         if existing is not None:
-            if existing != event:
+            if replace(event, created_at=existing.created_at) != existing:
                 raise RuntimeError("Physical-event identity changed after persistence.")
             return False
         self.physical_events[event.physical_event_id] = event

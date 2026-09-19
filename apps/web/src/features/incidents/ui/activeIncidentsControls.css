@@ -19,7 +19,7 @@
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
-  font-size: 0.84rem;
+  font-size: 0.9rem;
   min-height: 48px;
   padding: 12px 12px 12px 40px;
   width: 100%;
@@ -41,7 +41,7 @@
 .incident-query-controls label {
   color: var(--muted);
   display: grid;
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 700;
   gap: 4px;
   min-width: 0;
@@ -52,8 +52,8 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   color: var(--ink-soft);
-  font-size: 0.72rem;
-  min-height: 36px;
+  font-size: 0.78rem;
+  min-height: 38px;
   min-width: 0;
   padding: 7px 8px;
 }
@@ -69,7 +69,7 @@
   color: var(--ink-soft);
   cursor: pointer;
   display: flex;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   justify-content: space-between;
   min-height: 48px;
   padding: 8px 0;
@@ -87,7 +87,7 @@
 
 .incident-details summary {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 650;
   padding: 8px 0 3px;
 }

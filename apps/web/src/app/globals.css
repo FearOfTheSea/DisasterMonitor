@@ -44,9 +44,9 @@
   --cyclone: #6141a5;
   --volcano: #8b2933;
   --header-height: 72px;
-  --incident-rail: 370px;
-  --assistant-rail: 520px;
-  --operations-rail: 500px;
+  --incident-rail: 400px;
+  --assistant-rail: 540px;
+  --operations-rail: 560px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 14px;
@@ -70,7 +70,7 @@ body {
   background: var(--surface);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 15px;
   overflow: hidden;
 }
 
@@ -304,7 +304,7 @@ input[type='radio'] {
 
 .map-introduction p {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   line-height: 1.5;
   margin: 0;
 }
@@ -389,7 +389,7 @@ input[type='radio'] {
 
 .selected-incident-copy > span {
   color: var(--incident-color);
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   font-weight: 750;
 }
 
@@ -405,7 +405,7 @@ input[type='radio'] {
 .selected-incident-copy small {
   color: var(--muted);
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   line-height: 1.35;
   margin-top: 3px;
   overflow-wrap: anywhere;

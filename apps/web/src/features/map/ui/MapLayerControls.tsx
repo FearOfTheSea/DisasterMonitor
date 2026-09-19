@@ -61,6 +61,7 @@ export function MapLayerControls({
   onRegionalSelectionChange,
 }: MapLayerControlsProps) {
   const [expanded, setExpanded] = useState(false);
+  const [supplementalExpanded, setSupplementalExpanded] = useState(false);
   const [explainedLayerId, setExplainedLayerId] = useState<MapLayerId>();
   const explainedLayer = explainedLayerId
     ? mapLayerDefinition(explainedLayerId)
@@ -209,7 +210,35 @@ export function MapLayerControls({
               {children}
             </details>
           ) : null}
-          {supplemental}
+          {supplemental ? (
+            <div className="map-layer-supplemental">
+              <button
+                type="button"
+                aria-label="Browse authoritative alerts"
+                aria-expanded={supplementalExpanded}
+                aria-controls="map-layer-supplemental-content"
+                onClick={() => setSupplementalExpanded((value) => !value)}
+              >
+                <span>
+                  <b>Browse authoritative alerts</b>
+                  <small>Filters and source records</small>
+                </span>
+                <svg
+                  className="disclosure-chevron"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  aria-hidden="true"
+                >
+                  <path d="m7 10 5 5 5-5" />
+                </svg>
+              </button>
+              {supplementalExpanded ? (
+                <div id="map-layer-supplemental-content">{supplemental}</div>
+              ) : null}
+            </div>
+          ) : null}
           {explainedLayer ? (
             <LayerExplanation
               layer={explainedLayer}

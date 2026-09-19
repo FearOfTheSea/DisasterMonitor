@@ -56,7 +56,7 @@
 .conversation-controls label,
 .message-label {
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 740;
   letter-spacing: 0.075em;
   text-transform: uppercase;
@@ -67,7 +67,7 @@
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   height: 38px;
   min-width: 0;
   padding: 7px 10px;
@@ -85,7 +85,7 @@
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   flex: 0 0 auto;
-  font-size: 0.74rem;
+  font-size: 0.78rem;
   line-height: 1.55;
   padding: 13px 24px;
 }
@@ -117,7 +117,7 @@
 .message {
   color: var(--ink-soft);
   display: grid;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   gap: 10px;
   line-height: 1.65;
   max-width: 100%;
@@ -178,7 +178,7 @@
   border-left: 3px solid var(--warning-icon);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   color: var(--warning);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   line-height: 1.55;
   padding: 12px 14px;
 }
@@ -214,7 +214,7 @@
 .report-event small,
 .report-sources small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   line-height: 1.55;
 }
 
@@ -277,7 +277,7 @@
 .source-media-card small,
 .source-media-card span {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   line-height: 1.5;
 }
 
@@ -337,7 +337,7 @@
 .visual-observation small,
 .cop-feature-summary small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   line-height: 1.5;
 }
 
@@ -350,7 +350,7 @@
 .evidence-badges span,
 .authority-label {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 680;
 }
 
@@ -386,13 +386,13 @@
 .visual-observation summary {
   color: var(--accent);
   cursor: pointer;
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   font-weight: 680;
 }
 
 .investigation-summary {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   line-height: 1.6;
 }
 
@@ -509,7 +509,7 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   color: var(--ink);
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   line-height: 1.5;
   min-height: 64px;
   padding: 11px 12px;
@@ -545,7 +545,7 @@
 
 .loading-label {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.74rem;
 }
 
 .empty-state {
@@ -596,7 +596,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   display: flex;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   justify-content: space-between;
   padding: 14px;
   text-align: left;

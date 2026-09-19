@@ -33,6 +33,7 @@ import type {
 } from '@/shared/api/generated/assistant';
 import { API_BASE_URL } from '@/shared/config/runtime';
 import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
+import { PanelCloseButton } from '@/shared/ui/PanelCloseButton';
 
 type GroundImageryPanelProps = {
   incidentId: string;
@@ -143,16 +144,7 @@ export function GroundImageryPanel({
           <h2 id="ground-imagery-heading">Ground view</h2>
           <p>{incidentLabel}</p>
         </div>
-        <button
-          className="panel-close"
-          type="button"
-          onClick={onClose}
-          aria-label="Close Ground view"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m6 6 12 12M18 6 6 18" />
-          </svg>
-        </button>
+        <PanelCloseButton label="Close Ground view" onClick={onClose} />
       </header>
 
       <div className="ground-imagery-scroll">

@@ -1,5 +1,6 @@
 """Bounded provider-backed discovery for the Active Incidents surface."""
 
+import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -243,17 +244,22 @@ class IncidentRetrieval:
         scan_complete = True
         records_seen = 0
         provider_attempts: list[ProviderAttempt] = []
-        for registration in selection.registrations:
-            (
-                records,
-                provider_observations,
-                provider_warnings,
-                provider_degraded,
-                provider_retryable,
-                provider_scan_complete,
-                provider_records_seen,
-                provider_attempt,
-            ) = await self._query_provider(registration, provider_query, now=now)
+        provider_results = await asyncio.gather(
+            *(
+                self._query_provider(registration, provider_query, now=now)
+                for registration in selection.registrations
+            )
+        )
+        for (
+            records,
+            provider_observations,
+            provider_warnings,
+            provider_degraded,
+            provider_retryable,
+            provider_scan_complete,
+            provider_records_seen,
+            provider_attempt,
+        ) in provider_results:
             warnings.extend(provider_warnings)
             degraded = degraded or provider_degraded
             retryable = retryable or provider_retryable
@@ -448,13 +454,16 @@ class IncidentRetrieval:
         material_issues = tuple(
             issue for issue in batch.issues if issue.reason_code != "empty_result"
         )
-        attempt_outcome = (
-            ProviderAttemptOutcome.EMPTY
-            if not batch.records and not material_issues
-            else ProviderAttemptOutcome.INCOMPLETE
-            if not scan_complete or material_issues and batch.records
-            else ProviderAttemptOutcome.FAILED
-        )
+        if not batch.records:
+            attempt_outcome = (
+                ProviderAttemptOutcome.FAILED
+                if material_issues
+                else ProviderAttemptOutcome.EMPTY
+            )
+        elif not scan_complete or material_issues or admission_failure:
+            attempt_outcome = ProviderAttemptOutcome.INCOMPLETE
+        else:
+            attempt_outcome = ProviderAttemptOutcome.SUCCESS
         attempt_issue = material_issues[0] if material_issues else None
         provider_attempt = ProviderAttempt(
             source_id=registration.source_id,

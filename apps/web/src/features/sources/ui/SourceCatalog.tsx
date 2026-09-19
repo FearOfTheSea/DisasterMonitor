@@ -13,6 +13,7 @@ import {
   readOfflineSnapshot,
   writeOfflineSnapshot,
 } from '@/shared/model/offlineSnapshot';
+import { PanelCloseButton } from '@/shared/ui/PanelCloseButton';
 
 type SourceCatalogProps = {
   onClose: () => void;
@@ -92,9 +93,7 @@ export function SourceCatalog({ onClose }: SourceCatalogProps) {
           <h2>Sources</h2>
           <p>See where information comes from and when it was last checked.</p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close Source Catalog">
-          Close
-        </button>
+        <PanelCloseButton label="Close Source Catalog" onClick={onClose} />
       </header>
       <div className="source-catalog-scroll">
         <div className="source-catalog-summary">

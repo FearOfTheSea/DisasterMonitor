@@ -18,11 +18,14 @@ const DISASTER_LABELS: Record<DisasterType, string> = {
   volcanic_eruption: 'Volcanic eruption',
 };
 
-function relativeEventTime(value: string): string {
+function relativeEventTime(value: string, reference: string): string {
   const eventTime = new Date(value).getTime();
-  if (Number.isNaN(eventTime)) return value;
-  const hours = Math.max(0, Math.round((Date.now() - eventTime) / 3_600_000));
-  if (hours < 1) return 'Reported recently';
+  const referenceTime = new Date(reference).getTime();
+  if (Number.isNaN(eventTime) || Number.isNaN(referenceTime)) return value;
+  const minutes = Math.max(0, Math.round((referenceTime - eventTime) / 60_000));
+  if (minutes < 5) return 'Reported recently';
+  if (minutes < 60) return `Reported ${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
   if (hours < 24) return `Reported ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
   const days = Math.round(hours / 24);
   return `Reported ${days} ${days === 1 ? 'day' : 'days'} ago`;
@@ -32,11 +35,13 @@ export function SelectedIncidentSummary({
   incident,
   onAsk,
   onGroundView,
+  snapshotRetrievedAt,
   warnings,
 }: {
   incident?: IncidentMapRecord;
   onAsk: () => void;
   onGroundView?: () => void;
+  snapshotRetrievedAt: string;
   warnings?: WeatherAlertsSnapshot;
 }) {
   if (!incident) return null;
@@ -55,7 +60,7 @@ export function SelectedIncidentSummary({
         <h3>{displayActiveIncidentCountry(incident)}</h3>
         {context ? <small>{context}</small> : null}
         <p>
-          {relativeEventTime(incident.event_time)} · {sourceCount}{' '}
+          {relativeEventTime(incident.event_time, snapshotRetrievedAt)} · {sourceCount}{' '}
           {sourceCount === 1 ? 'trusted source' : 'trusted sources'}
         </p>
         <div className="selected-incident-actions">

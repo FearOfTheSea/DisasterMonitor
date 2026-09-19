@@ -179,9 +179,9 @@ export function styleForActiveIncident(value: unknown, selected = false): Style 
     stroke: new Stroke({ color, width: selected ? 5 : 3 }),
     fill: new Fill({ color: `${color}26` }),
     image: new CircleStyle({
-      radius: selected ? 10 : 7,
+      radius: selected ? 12 : 9,
       fill: new Fill({ color }),
-      stroke: new Stroke({ color: '#ffffff', width: selected ? 4 : 2 }),
+      stroke: new Stroke({ color: '#ffffff', width: selected ? 4 : 3 }),
     }),
   });
 }

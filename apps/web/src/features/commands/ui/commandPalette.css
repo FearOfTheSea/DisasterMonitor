@@ -10,7 +10,7 @@
 .command-palette-trigger kbd {
   color: #adc1cb;
   font-family: inherit;
-  font-size: 0.62rem;
+  font-size: 0.68rem;
 }
 
 .command-palette-backdrop {
@@ -46,7 +46,7 @@
 }
 
 .command-palette header label {
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 730;
 }
 
@@ -54,7 +54,9 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   font: inherit;
-  padding: 11px 12px;
+  font-size: 0.94rem;
+  min-height: 48px;
+  padding: 12px 14px;
   width: 100%;
 }
 
@@ -72,7 +74,7 @@
   color: var(--ink);
   display: flex;
   justify-content: space-between;
-  min-height: 42px;
+  min-height: 46px;
   padding: 8px 10px;
   text-align: left;
   width: 100%;

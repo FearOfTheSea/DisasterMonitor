@@ -9,6 +9,7 @@ import type {
   ConversationSummary,
   ConversationStatus,
 } from '@/shared/types/assistant';
+import { PanelCloseButton } from '@/shared/ui/PanelCloseButton';
 
 type AssistantPanelProps = {
   conversationId?: string | null;
@@ -74,16 +75,7 @@ export function AssistantPanel({
           <p>Get a clear summary or ask about a place or event.</p>
         </div>
         {onClose ? (
-          <button
-            className="panel-close"
-            type="button"
-            onClick={onClose}
-            aria-label="Close assistant"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m6 6 12 12M18 6 6 18" />
-            </svg>
-          </button>
+          <PanelCloseButton label="Close assistant" onClick={onClose} />
         ) : null}
         <div className="conversation-controls">
           <label htmlFor="assistant-conversation">Conversation</label>

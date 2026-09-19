@@ -9,6 +9,7 @@ import pytest
 from disaster_monitor.application.disaster import DisasterQuery, WorldwideDisasterQuery
 from disaster_monitor.domain.disaster import (
     Disaster,
+    IncidentActivityStatus,
     MeasurementKind,
     SourceAuthority,
 )
@@ -193,6 +194,32 @@ async def test_gdacs_secondary_adapters_preserve_event_and_upstream_provenance(
         DisasterQuery(disaster, country, "recent", ("latest",)), now=NOW
     )
     assert country_result.records[0].country.alpha3_code == "JPN"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raw_status", "expected"),
+    (
+        ("true", IncidentActivityStatus.ONGOING),
+        (False, IncidentActivityStatus.ENDED),
+        ("unexpected", IncidentActivityStatus.UNKNOWN),
+    ),
+)
+async def test_gdacs_preserves_explicit_event_lifecycle_status(
+    raw_status: object,
+    expected: IncidentActivityStatus,
+) -> None:
+    payload = fixture("gdacs_flood_search.json")
+    feature = payload["features"][0]  # type: ignore[index]
+    feature["properties"]["iscurrent"] = raw_status  # type: ignore[index]
+    client = client_for(payload, [])
+
+    result = await GdacsFloodAdapter(client=client).find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.FLOOD), now=NOW
+    )
+
+    assert result.records[0].activity_status is expected
     await client.aclose()
 
 

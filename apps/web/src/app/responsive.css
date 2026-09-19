@@ -1,8 +1,23 @@
 @media (max-width: 1320px) {
   :root {
-    --incident-rail: 350px;
-    --assistant-rail: 480px;
-    --operations-rail: 440px;
+    --incident-rail: 380px;
+    --assistant-rail: 500px;
+    --operations-rail: 520px;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 851px) {
+  .selected-incident-summary {
+    grid-template-columns: auto minmax(0, 1fr);
+    max-width: 600px;
+    width: calc(100% - 80px);
+  }
+
+  .selected-incident-summary > details {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    grid-column: 1 / -1;
+    padding: 8px 0 0;
   }
 }
 

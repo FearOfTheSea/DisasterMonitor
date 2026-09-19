@@ -368,6 +368,12 @@ export default function Home() {
             incident={selectedIncident}
             onAsk={() => togglePanel('assistant')}
             onGroundView={openGroundImagery}
+            snapshotRetrievedAt={
+              activeIncidents.snapshot?.retrieved_at ??
+              selectedIncident?.source.retrieved_at ??
+              selectedIncident?.event_time ??
+              ''
+            }
             warnings={weatherAlerts.snapshot}
           />
         </div>

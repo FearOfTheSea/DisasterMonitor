@@ -78,6 +78,21 @@ function snapshot(incidents: ActiveIncident[] = [INCIDENT]): ActiveIncidentsSnap
 afterEach(cleanup);
 
 describe('ActiveIncidentsPanel', () => {
+  it('explains the initial multi-source loading state', () => {
+    render(
+      <ActiveIncidentsPanel
+        status="loading"
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Checking trusted source networks…')).toBeVisible();
+    expect(
+      screen.getByText('Some providers can take a moment to respond.'),
+    ).toBeVisible();
+  });
+
   it('labels provisional news incidents and exposes the detection clock', async () => {
     const user = userEvent.setup();
     const provisional: ActiveIncident = {

@@ -35,6 +35,19 @@ def _fact_lines(facts: Iterable[ReportedFact], categories: frozenset[str]) -> li
     return lines
 
 
+def _measurement_details(packet: EvidencePacket) -> tuple[str, ...]:
+    details: list[str] = []
+    seen: set[str] = set()
+    for measurement in packet.event.measurements:
+        detail = f"{measurement.kind.value} {measurement.value}"
+        if measurement.unit:
+            detail = f"{detail} {measurement.unit}"
+        if detail not in seen:
+            details.append(detail)
+            seen.add(detail)
+    return tuple(details)
+
+
 def _event_summary(packet: EvidencePacket) -> str:
     event = packet.event
     country_name = packet.query.country.canonical_name
@@ -44,11 +57,7 @@ def _event_summary(packet: EvidencePacket) -> str:
         else f"{event.location}, {country_name}"
     )
     details = [location, f"event time {_format_timestamp(event.event_time)}"]
-    details.extend(
-        f"{measurement.kind.value} {measurement.value}"
-        + (f" {measurement.unit}" if measurement.unit else "")
-        for measurement in event.measurements
-    )
+    details.extend(_measurement_details(packet))
     return "; ".join(details) + f". Source: {_citation(event.source)}"
 
 

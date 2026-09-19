@@ -20,6 +20,7 @@ from disaster_monitor.domain.disaster import (
     DisasterEvent,
     EventAssignmentStatus,
     EventObservationAssignment,
+    IncidentActivityStatus,
     PhysicalEventIdentity,
     PhysicalEventIdentityResult,
 )
@@ -93,7 +94,14 @@ class BaseEventPolicy:
     def _matches_time_window(
         self, event: DisasterEvent, window_start: datetime, window_end: datetime
     ) -> bool:
-        return window_start <= event.event_time <= window_end
+        if window_start <= event.event_time <= window_end:
+            return True
+        source_update = event.source.updated_at or event.source.published_at
+        return (
+            event.activity_status is IncidentActivityStatus.ONGOING
+            and source_update is not None
+            and window_start <= source_update <= window_end
+        )
 
     def same_physical_event(self, first: DisasterEvent, second: DisasterEvent) -> bool:
         if (

@@ -46,6 +46,7 @@ from disaster_monitor.domain.operations import (
     NormalizedObservationRecord,
     OperatorActionRecord,
     OperatorDecision,
+    PhysicalEventRecord,
     ProviderAttempt,
     ProviderAttemptOutcome,
 )
@@ -474,6 +475,27 @@ def test_blob_deletion_is_scoped_to_configured_root(tmp_path: Path) -> None:
     assert not list(root.rglob("*.bin"))
     with pytest.raises(ValueError, match="file URIs"):
         store.delete("https://example.com/not-a-local-blob")
+
+
+@pytest.mark.asyncio
+async def test_physical_event_creation_time_is_insert_only_metadata() -> None:
+    repository = InMemoryOperationalRepository()
+    event = PhysicalEventRecord(
+        physical_event_id="physical-event:flood:vnm:stable",
+        disaster="flood",
+        country_code="VNM",
+        latitude=10.5,
+        longitude=106.5,
+        created_at=NOW,
+    )
+
+    assert await repository.append_physical_event(event)
+    assert not await repository.append_physical_event(
+        replace(event, created_at=NOW + timedelta(minutes=1))
+    )
+    assert repository.physical_events[event.physical_event_id] == event
+    with pytest.raises(RuntimeError, match="identity changed"):
+        await repository.append_physical_event(replace(event, latitude=11.0))
 
 
 @pytest.mark.asyncio

@@ -102,6 +102,14 @@ def _associated_country_codes(properties: dict[object, object]) -> frozenset[str
     return frozenset(codes)
 
 
+def _activity_status(value: object) -> IncidentActivityStatus:
+    if value is True or (isinstance(value, str) and value.strip().lower() == "true"):
+        return IncidentActivityStatus.ONGOING
+    if value is False or (isinstance(value, str) and value.strip().lower() == "false"):
+        return IncidentActivityStatus.ENDED
+    return IncidentActivityStatus.UNKNOWN
+
+
 def build_gdacs_params(
     query: WorldwideDisasterQuery | DisasterQuery,
     *,
@@ -231,10 +239,7 @@ class _GdacsEventAdapter:
             raw_feature.get("geometry"), source, index=index
         )
         measurements = self._measurements(properties, source)
-        # GDACS `todate` is an event-interval field, not a documented lifecycle
-        # assertion that the hazard has ended or is still ongoing.  Keep that
-        # distinction explicit until a source contract supplies a status field.
-        activity_status = IncidentActivityStatus.UNKNOWN
+        activity_status = _activity_status(properties.get("iscurrent"))
         if country_query is None:
             event: WorldwideDisasterEvent | DisasterEvent = WorldwideDisasterEvent(
                 event_id=event_id,

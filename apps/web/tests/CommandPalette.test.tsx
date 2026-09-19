@@ -39,6 +39,7 @@ describe('CommandPalette', () => {
     expect(dialog).toBeVisible();
     const input = screen.getByRole('combobox', { name: 'Search commands' });
     expect(input).toHaveFocus();
+    expect(input).toHaveAttribute('placeholder', 'Type a command or location…');
     await user.type(input, 'Europe');
     expect(screen.getByRole('option', { name: 'Focus Europe' })).toBeVisible();
     await user.keyboard('{ArrowDown}{Enter}');

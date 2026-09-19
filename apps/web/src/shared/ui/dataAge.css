@@ -2,11 +2,11 @@
   align-items: center;
   background: var(--surface-soft);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   display: inline-flex;
   flex-wrap: wrap;
-  font-size: 0.64rem;
+  font-size: 0.69rem;
   gap: 5px;
   line-height: 1.2;
   padding: 4px 7px;

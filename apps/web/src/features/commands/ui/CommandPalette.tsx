@@ -141,6 +141,7 @@ export function CommandPalette({ commands }: CommandPaletteProps) {
               aria-controls="command-palette-results"
               aria-expanded="true"
               aria-autocomplete="list"
+              placeholder="Type a command or location…"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);

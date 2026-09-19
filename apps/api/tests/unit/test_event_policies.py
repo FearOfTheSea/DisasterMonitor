@@ -14,6 +14,7 @@ from disaster_monitor.domain.disaster import (
     DisasterEvent,
     EarthquakeEvent,
     EventMeasurement,
+    IncidentActivityStatus,
     MeasurementKind,
     SourceReference,
     point_event_geometry,
@@ -195,6 +196,34 @@ def test_generic_policy_ignores_earthquake_measurements_when_ranking_floods() ->
     )
 
     assert resolution.selected == newer
+
+
+def test_current_event_with_recent_source_update_matches_recent_query() -> None:
+    source = replace(SOURCE, updated_at=NOW - timedelta(days=1))
+    event = replace(
+        _generic_event("ongoing-flood", event_time=NOW - timedelta(days=45)),
+        source=source,
+        activity_status=IncidentActivityStatus.ONGOING,
+    )
+    query = DisasterQuery(Disaster.FLOOD, JAPAN, "recent", ("latest",))
+
+    resolution = DefaultEventPolicy().resolve((event,), query, now=NOW)
+
+    assert resolution.selected == event
+
+
+def test_ended_event_with_old_onset_does_not_match_recent_query() -> None:
+    source = replace(SOURCE, updated_at=NOW - timedelta(days=1))
+    event = replace(
+        _generic_event("ended-flood", event_time=NOW - timedelta(days=45)),
+        source=source,
+        activity_status=IncidentActivityStatus.ENDED,
+    )
+    query = DisasterQuery(Disaster.FLOOD, JAPAN, "recent", ("latest",))
+
+    resolution = DefaultEventPolicy().resolve((event,), query, now=NOW)
+
+    assert resolution.selected is None
 
 
 def test_volcanic_policy_accepts_current_wvar_observation_of_ongoing_eruption() -> None:

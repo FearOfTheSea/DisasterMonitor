@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from disaster_monitor.application.disaster import DisasterQuery, EvidencePacket
@@ -176,3 +177,38 @@ def test_generic_renderer_uses_selected_disaster_and_country_without_japan_prose
     assert "Japan" not in message
     assert "earthquake" not in message
     assert all(section.title != "Secondary impacts" for section in sections)
+
+
+def test_renderer_deduplicates_corroborating_measurement_values() -> None:
+    event = _event()
+    corroborating_source = _source("EMSC", SourceAuthority.SCIENTIFIC_AUTHORITY)
+    event = replace(
+        event,
+        measurements=(
+            *event.measurements,
+            EventMeasurement(
+                MeasurementKind.MAGNITUDE,
+                6.2,
+                source=corroborating_source,
+            ),
+        ),
+    )
+    packet = EvidencePacket(
+        DisasterQuery(Disaster.EARTHQUAKE, VENEZUELA, "recent", ("latest",)),
+        event,
+        (),
+        (),
+        (event.source, corroborating_source),
+        (),
+        (),
+        NOW,
+        False,
+    )
+
+    _, sections = DisasterReportRenderer().render(packet)
+
+    event_details = next(
+        section.content for section in sections if section.title == "Event details"
+    )
+    assert event_details.count("magnitude 6.2") == 1
+    assert len(packet.event.measurements) == 2

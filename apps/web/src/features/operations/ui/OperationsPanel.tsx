@@ -26,6 +26,7 @@ import { FindingsCenter } from '@/features/operations/ui/FindingsCenter';
 import { FieldReportWorkbench } from '@/features/operations/ui/FieldReportWorkbench';
 import { IncidentWatches } from '@/features/operations/ui/IncidentWatches';
 import { OperatorWorkspace } from '@/features/operations/ui/OperatorWorkspace';
+import { PanelCloseButton } from '@/shared/ui/PanelCloseButton';
 
 type OperationsPanelProps = {
   evidenceStateVersion?: string;
@@ -160,9 +161,7 @@ export function OperationsPanel({
           <h2>Saved &amp; activity</h2>
           <p>Follow places and review recent monitoring updates.</p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close operations panel">
-          Close
-        </button>
+        <PanelCloseButton label="Close operations panel" onClick={onClose} />
       </header>
       <div className="operations-scroll">
         <FindingsCenter
