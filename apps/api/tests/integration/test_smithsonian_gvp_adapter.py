@@ -10,6 +10,8 @@ from disaster_monitor.application.disaster import DisasterQuery, WorldwideDisast
 from disaster_monitor.domain.disaster import (
     Disaster,
     EventGeographyStatus,
+    EventTimePrecision,
+    ObservationKind,
     SourceAuthority,
 )
 from disaster_monitor.infrastructure.disaster.smithsonian_gvp_adapter import (
@@ -337,7 +339,7 @@ async def test_unrest_other_unknown_and_malformed_rows_are_not_eruptions() -> No
 
 
 @pytest.mark.asyncio
-async def test_uncertain_wvar_and_gvp_dates_are_excluded_without_fabrication() -> None:
+async def test_uncertain_wvar_and_gvp_dates_are_retained_as_week_observations() -> None:
     wvar = (
         (FIXTURES / "smithsonian_wvar_weekly.html")
         .read_text(encoding="utf-8")
@@ -357,8 +359,16 @@ async def test_uncertain_wvar_and_gvp_dates_are_excluded_without_fabrication() -
 
     result = await adapter.find_recent_events(query(), now=NOW)
 
-    assert not any(item.event_id == "gvp-eruption:41234" for item in result.records)
-    assert any(
+    preliminary = next(
+        item
+        for item in result.records
+        if item.event_id == "wvar-eruptive-activity:282030:20260716"
+    )
+    assert preliminary.observation_kind is ObservationKind.PRELIMINARY_EVENT
+    assert preliminary.event_time_precision is EventTimePrecision.WEEK
+    assert preliminary.event_time == datetime(2026, 7, 16, tzinfo=UTC)
+    assert preliminary.event_time_end == datetime(2026, 7, 22, tzinfo=UTC)
+    assert not any(
         issue.reason_code == "event_time_precision_unavailable"
         for issue in result.issues
     )

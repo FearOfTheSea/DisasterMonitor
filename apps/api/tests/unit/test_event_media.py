@@ -74,7 +74,9 @@ def _candidate(
         (Disaster.FLOOD, "flooding"),
         (Disaster.WILDFIRE, "wildfire"),
         (Disaster.LANDSLIDE, "landslide"),
+        (Disaster.DROUGHT, "drought"),
         (Disaster.TROPICAL_CYCLONE, "typhoon"),
+        (Disaster.VOLCANIC_ERUPTION, "volcanic eruption"),
     ),
 )
 def test_association_policy_is_disaster_neutral(disaster: Disaster, term: str) -> None:

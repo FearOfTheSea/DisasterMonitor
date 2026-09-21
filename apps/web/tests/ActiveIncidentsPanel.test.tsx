@@ -425,6 +425,44 @@ describe('ActiveIncidentsPanel', () => {
     ).toBeInTheDocument();
     expect(panel.getByText(/Provider coverage above is unchanged/)).toBeVisible();
   });
+
+  it('distinguishes preliminary week reports from acquisition observations', async () => {
+    const user = userEvent.setup();
+    const preliminary: ActiveIncident = {
+      ...INCIDENT,
+      event_id: 'wvar-eruptive-activity:262000:20260910',
+      disaster: 'volcanic_eruption',
+      location: 'Krakatau, Sunda-Banda Volcanic Regions',
+      event_time: '2026-09-10T00:00:00Z',
+      event_time_end: '2026-09-16T00:00:00Z',
+      event_time_precision: 'week',
+      observation_kind: 'preliminary_event',
+      source: {
+        ...INCIDENT.source,
+        publisher: 'Smithsonian Institution Global Volcanism Program',
+      },
+    };
+
+    render(
+      <ActiveIncidentsPanel
+        snapshot={{ ...snapshot([]), observations: [preliminary] }}
+        status="success"
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('1 source observation excluded from incident counts'),
+    ).toBeVisible();
+    await user.click(
+      screen.getByText('1 source observation excluded from incident counts'),
+    );
+    expect(screen.getByText(/Preliminary event report/)).toHaveTextContent(
+      'Week of Sep 10–Sep 16, 2026',
+    );
+    expect(screen.getByText(/Krakatau, Sunda-Banda Volcanic Regions/)).toBeVisible();
+  });
 });
 
 it('searches loaded locations and sources without changing provider coverage', async () => {

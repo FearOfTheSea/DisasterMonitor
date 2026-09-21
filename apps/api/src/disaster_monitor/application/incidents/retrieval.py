@@ -54,6 +54,7 @@ from disaster_monitor.domain.disaster import (
     Disaster,
     IncidentWatch,
 )
+from disaster_monitor.domain.disaster_types import event_temporality_overlaps
 from disaster_monitor.domain.operations import ProviderAttempt, ProviderAttemptOutcome
 
 
@@ -142,12 +143,12 @@ class IncidentRetrieval:
         physical_records = tuple(
             record
             for record in batch.records
-            if record.observation_kind is not ObservationKind.ACQUISITION
+            if record.observation_kind is ObservationKind.PHYSICAL_EVENT
         )
         observations = tuple(
             country_observation(record)
             for record in batch.records
-            if record.observation_kind is ObservationKind.ACQUISITION
+            if record.observation_kind is not ObservationKind.PHYSICAL_EVENT
         )
         identities = policy.identify(physical_records).physical_events
         retained = tuple(
@@ -431,12 +432,18 @@ class IncidentRetrieval:
                 admission_failure = True
                 continue
             normalized = incident(event, registration.tier, self._country_resolver)
-            if not interval_start <= normalized.event_time <= interval_end:
+            if not event_temporality_overlaps(
+                normalized.event_time,
+                normalized.event_time_end,
+                normalized.event_time_precision,
+                interval_start,
+                interval_end,
+            ):
                 continue
-            if event.observation_kind is ObservationKind.ACQUISITION:
-                observations.append(normalized)
-            else:
+            if event.observation_kind is ObservationKind.PHYSICAL_EVENT:
                 accepted.append(normalized)
+            else:
+                observations.append(normalized)
             if normalized.country is None:
                 warnings.append(
                     "A worldwide event has no trusted country association and is "

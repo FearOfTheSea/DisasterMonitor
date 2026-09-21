@@ -157,7 +157,7 @@ async def test_eonet_country_and_worldwide_queries_are_bounded_and_scoped() -> N
         "status": "all",
         "start": "2026-08-13",
         "end": "2026-08-18",
-        "limit": "50",
+        "limit": "500",
         "bbox": "122.0,46.0,154.0,20.0",
     }
     worldwide_params = dict(requests[1].url.params.multi_items())
@@ -166,7 +166,7 @@ async def test_eonet_country_and_worldwide_queries_are_bounded_and_scoped() -> N
         "status": "all",
         "start": "2026-07-19",
         "end": "2026-08-18",
-        "limit": "50",
+        "limit": "500",
     }
     await client.aclose()
 

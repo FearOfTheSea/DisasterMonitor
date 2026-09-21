@@ -75,7 +75,7 @@ async def test_coolr_translates_report_and_requests_exact_bounded_fields() -> No
     assert event.source.authority is SourceAuthority.SECONDARY
     assert event.source.source_id == "nasa-coolr-landslides"
     assert event.source.canonical_url.startswith(
-        "https://gis.earthdata.nasa.gov/gis05/"
+        "https://gis.earthdata.nasa.gov/portal/"
     )
     assert event.geometry is not None
     assert event.geometry.coordinates[0].latitude == 35.0
@@ -87,7 +87,9 @@ async def test_coolr_translates_report_and_requests_exact_bounded_fields() -> No
         item.kind is not MeasurementKind.MAGNITUDE for item in event.measurements
     )
     params = dict(requests[0].url.params.multi_items())
-    assert requests[0].url.path.startswith("/gis05/")
+    assert requests[0].url.path.startswith(
+        "/portal/rest/services/Landslides/COOLR_Reports_Points/"
+    )
     assert params["f"] == "json"
     assert params["returnGeometry"] == "true"
     assert params["outSR"] == "4326"

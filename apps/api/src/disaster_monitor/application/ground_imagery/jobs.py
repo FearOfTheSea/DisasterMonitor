@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -16,6 +17,8 @@ from disaster_monitor.application.ports.provider_budget import (
     ProviderBudgetExceeded,
     ProviderBudgetLedger,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def retry_time(*, failed_at: datetime, attempt: int) -> datetime:
@@ -116,9 +119,16 @@ class GroundImageryWorker:
                 # flight. The newer worker owns the terminal transition.
                 return job
             if failed.status is GroundImageryJobStatus.FAILED:
-                await self._executor.mark_preparation_failed(
-                    job.request_id, detail=str(error)
-                )
+                try:
+                    await self._executor.mark_preparation_failed(
+                        job.request_id, detail=str(error)
+                    )
+                except Exception:
+                    _LOGGER.exception(
+                        "Ground request failure state could not be persisted; "
+                        "the terminal queue diagnosis remains authoritative.",
+                        extra={"request_id": job.request_id},
+                    )
         return job
 
     async def _execute_with_lease(self, job: GroundImageryJob, worker_id: str) -> None:

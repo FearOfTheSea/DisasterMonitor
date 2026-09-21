@@ -26,12 +26,19 @@ _DISASTER_TERMS: dict[Disaster, tuple[str, ...]] = {
     Disaster.FLOOD: ("flood", "flooding", "inundation"),
     Disaster.WILDFIRE: ("wildfire", "bushfire", "forest fire"),
     Disaster.LANDSLIDE: ("landslide", "mudslide", "debris flow"),
+    Disaster.DROUGHT: ("drought", "dry spell", "water shortage"),
     Disaster.TROPICAL_CYCLONE: (
         "tropical cyclone",
         "cyclone",
         "hurricane",
         "typhoon",
         "tropical storm",
+    ),
+    Disaster.VOLCANIC_ERUPTION: (
+        "volcanic eruption",
+        "volcano eruption",
+        "eruptive activity",
+        "ash plume",
     ),
 }
 _ROLE_TERMS: tuple[tuple[MediaContentRole, tuple[str, ...]], ...] = (

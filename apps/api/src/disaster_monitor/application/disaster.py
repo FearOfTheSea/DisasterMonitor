@@ -17,12 +17,14 @@ from disaster_monitor.domain.disaster import (
     EventGeographyStatus,
     EventGeometry,
     EventMeasurement,
+    EventTimePrecision,
     EvidenceWorldState,
     IncidentActivityStatus,
     ReportedFact,
     SourceReference,
 )
 from disaster_monitor.domain.disaster import ObservationKind as ObservationKind
+from disaster_monitor.domain.disaster_types import validate_event_temporality
 
 
 class RequestType(StrEnum):
@@ -174,12 +176,22 @@ class WorldwideDisasterEvent:
     location: str
     event_time: datetime
     source: SourceReference
+    event_time_end: datetime | None = None
+    event_time_precision: EventTimePrecision = EventTimePrecision.EXACT
     geometry: EventGeometry | None = None
     measurements: tuple[EventMeasurement, ...] = ()
     provider_ids: tuple[str, ...] = ()
     lineage_ids: tuple[str, ...] = ()
     observation_kind: ObservationKind = ObservationKind.PHYSICAL_EVENT
     activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
+
+    def __post_init__(self) -> None:
+        validate_event_temporality(
+            self.event_time,
+            self.event_time_end,
+            self.event_time_precision,
+            self.observation_kind,
+        )
 
 
 @dataclass(frozen=True, slots=True)

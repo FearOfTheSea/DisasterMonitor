@@ -95,6 +95,39 @@ async def test_ground_worker_retries_provider_failure_and_preserves_fencing() ->
 
 
 @pytest.mark.asyncio
+async def test_ground_worker_keeps_terminal_queue_state_when_request_update_fails(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    queue = InMemoryGroundImageryJobQueue()
+    job = preparation_job(
+        request_id="invalid-ground-request",
+        request_version=1,
+        sensor=Sensor.SENTINEL_1,
+        role=TemporalRole.LATEST_USEFUL,
+        overview=True,
+        output_kind=None,
+        now=NOW,
+        max_attempts=1,
+    )
+    await queue.enqueue(job)
+
+    class InvalidRequestExecutor:
+        async def execute_preparation_job(self, claimed_job):
+            raise ValueError("invalid durable request")
+
+        async def mark_preparation_failed(self, request_id: str, *, detail: str):
+            raise ValueError("request cannot be decoded")
+
+    worker = GroundImageryWorker(queue, InvalidRequestExecutor(), clock=lambda: NOW)
+
+    claimed = await worker.run_once("ground-worker")
+
+    assert claimed is not None
+    assert queue.jobs[job.job_id].status is GroundImageryJobStatus.FAILED
+    assert "Ground request failure state could not be persisted" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_ground_worker_renews_lease_while_preparation_is_running() -> None:
     queue = InMemoryGroundImageryJobQueue()
     started_at = datetime.now(UTC)

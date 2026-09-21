@@ -18,6 +18,8 @@ from disaster_monitor.domain.disaster import (
     Disaster,
     DisasterEvent,
     EventGeographyStatus,
+    EventTimePrecision,
+    ObservationKind,
     SourceAuthority,
     SourceReference,
     point_event_geometry,
@@ -336,7 +338,7 @@ class SmithsonianGvpAdapter:
         self,
         row: _WvarRow,
         volcano: _GvpVolcano,
-        eruption: tuple[date, str | None],
+        eruption: tuple[date, str | None] | None,
         *,
         week_start: date,
         snapshot_id: str | None,
@@ -344,7 +346,24 @@ class SmithsonianGvpAdapter:
         country: Country | None,
         now: datetime,
     ) -> DisasterEvent | WorldwideDisasterEvent | None:
-        event_date, eruption_id = eruption
+        if eruption is None:
+            event_date = week_start
+            week_end = week_start + timedelta(days=6)
+            event_time_end = datetime(
+                week_end.year, week_end.month, week_end.day, tzinfo=UTC
+            )
+            eruption_id = None
+            event_id = f"wvar-eruptive-activity:{volcano.number}:{week_start:%Y%m%d}"
+            event_time_precision = EventTimePrecision.WEEK
+            observation_kind = ObservationKind.PRELIMINARY_EVENT
+        else:
+            event_date, eruption_id = eruption
+            event_time_end = None
+            event_id = eruption_id or (
+                f"gvp-eruption:{volcano.number}:{event_date:%Y%m%d}"
+            )
+            event_time_precision = EventTimePrecision.DAY
+            observation_kind = ObservationKind.PHYSICAL_EVENT
         source = self._source(row, week_start, now, snapshot_id, published_at)
         provider_ids = [f"gvp-volcano:{volcano.number}"]
         if eruption_id is not None:
@@ -355,16 +374,18 @@ class SmithsonianGvpAdapter:
         geometry = point_event_geometry(volcano.latitude, volcano.longitude, source)
         if country is None:
             return WorldwideDisasterEvent(
-                event_id=eruption_id
-                or f"gvp-eruption:{volcano.number}:{event_date:%Y%m%d}",
+                event_id=event_id,
                 disaster=Disaster.VOLCANIC_ERUPTION,
                 location=location,
                 event_time=datetime(
                     event_date.year, event_date.month, event_date.day, tzinfo=UTC
                 ),
+                event_time_end=event_time_end,
+                event_time_precision=event_time_precision,
                 source=source,
                 geometry=geometry,
                 provider_ids=tuple(provider_ids),
+                observation_kind=observation_kind,
             )
         geography_status = EventGeographyStatus.IN_COUNTRY
         if not self._geography.contains(country, volcano.latitude, volcano.longitude):
@@ -372,18 +393,20 @@ class SmithsonianGvpAdapter:
                 return None
             geography_status = EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
         return DisasterEvent(
-            event_id=eruption_id
-            or f"gvp-eruption:{volcano.number}:{event_date:%Y%m%d}",
+            event_id=event_id,
             disaster=Disaster.VOLCANIC_ERUPTION,
             location=location,
             country=country,
             event_time=datetime(
                 event_date.year, event_date.month, event_date.day, tzinfo=UTC
             ),
+            event_time_end=event_time_end,
+            event_time_precision=event_time_precision,
             source=source,
             geometry=geometry,
             provider_ids=tuple(provider_ids),
             geography_status=geography_status,
+            observation_kind=observation_kind,
         )
 
     async def _discover(
@@ -531,15 +554,6 @@ class SmithsonianGvpAdapter:
                 )
                 continue
             resolved = self._resolve_time(row, week_start, eruptions)
-            if resolved is None:
-                issues.append(
-                    ProviderIssue(
-                        self.provider_name,
-                        "A volcanic candidate had no day-precise eruption start.",
-                        reason_code="event_time_precision_unavailable",
-                    )
-                )
-                continue
             record = self._candidate(
                 row,
                 volcano,

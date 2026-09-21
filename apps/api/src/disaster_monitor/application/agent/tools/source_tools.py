@@ -175,15 +175,16 @@ class FindDisasterEventTool(_BaseTool):
         physical_records = tuple(
             record
             for record in state.workspace.event_batch.records
-            if record.observation_kind is not ObservationKind.ACQUISITION
+            if record.observation_kind is ObservationKind.PHYSICAL_EVENT
         )
-        acquisition_count = len(state.workspace.event_batch.records) - len(
+        excluded_observation_count = len(state.workspace.event_batch.records) - len(
             physical_records
         )
-        if acquisition_count:
+        if excluded_observation_count:
             state.warnings.append(
-                f"{acquisition_count} acquisition observation(s) were retained as "
-                "observations and were not treated as physical disaster events."
+                f"{excluded_observation_count} non-physical source observation(s) "
+                "were retained as observations and were not treated as physical "
+                "disaster events."
             )
         policy = self.dependencies.event_policies.for_disaster(task.query.disaster)
         resolution = policy.resolve(

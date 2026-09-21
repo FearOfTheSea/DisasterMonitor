@@ -95,6 +95,8 @@ async def test_aggregates_supported_disasters_and_orders_newest_then_identity() 
         IncidentCoverageState.UNAVAILABLE
     )
     assert snapshot.retrieved_at == NOW
+    assert earthquake.queries[0][0].limit == 500
+    assert flood.queries[0][0].limit == 500
 
 
 @pytest.mark.asyncio

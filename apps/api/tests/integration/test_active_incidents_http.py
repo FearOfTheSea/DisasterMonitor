@@ -32,6 +32,8 @@ from disaster_monitor.domain.disaster import (
     EventCoordinate,
     EventGeometry,
     EventGeometryKind,
+    EventTimePrecision,
+    ObservationKind,
     ProviderTier,
     SourceAuthority,
     SourceReference,
@@ -205,6 +207,8 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
         },
         "location": "Fixture reserve",
         "event_time": "2026-08-20T03:00:00Z",
+        "event_time_end": None,
+        "event_time_precision": "exact",
         "geometry": {
             "kind": "area",
             "coordinates": [
@@ -275,6 +279,60 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
     }
     assert body["correlations"] == []
     assert body["warnings"] == ["Fixture provider returned a partial response."]
+
+
+@pytest.mark.asyncio
+async def test_active_incidents_exposes_week_precision_preliminary_observation() -> (
+    None
+):
+    base = _snapshot()
+    source = base.incidents[0].source
+    observation = ActiveIncident(
+        event_id="wvar-eruptive-activity:262000:20260813",
+        disaster=Disaster.VOLCANIC_ERUPTION,
+        country=COUNTRY,
+        location="Fixture volcano",
+        event_time=datetime(2026, 8, 13, tzinfo=UTC),
+        event_time_end=datetime(2026, 8, 19, tzinfo=UTC),
+        event_time_precision=EventTimePrecision.WEEK,
+        geometry=None,
+        measurements=(),
+        provider_ids=("gvp-volcano:262000",),
+        provider_tier=ProviderTier.PRIMARY,
+        source_authority=source.authority,
+        source=source,
+        observation_kind=ObservationKind.PRELIMINARY_EVENT,
+    )
+    snapshot = ActiveIncidentsSnapshot(
+        retrieved_at=base.retrieved_at,
+        incidents=(),
+        observations=(observation,),
+        coverage=base.coverage,
+        warnings=(),
+    )
+
+    class PreliminaryObservationService:
+        async def execute(self, query=None):
+            return snapshot
+
+    app = create_app(
+        overrides=AppDependencyOverrides(
+            model=FakeLanguageModel(),
+            current_disaster_report=_current_service(),
+            active_incidents_service=PreliminaryObservationService(),  # type: ignore[arg-type]
+        ),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/incidents")
+
+    assert response.status_code == 200
+    item = response.json()["observations"][0]
+    assert item["observation_kind"] == "preliminary_event"
+    assert item["event_time_precision"] == "week"
+    assert item["event_time"] == "2026-08-13T00:00:00Z"
+    assert item["event_time_end"] == "2026-08-19T00:00:00Z"
 
 
 @pytest.mark.asyncio

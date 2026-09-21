@@ -4378,13 +4378,15 @@ export type ActiveIncidentResponse = {
   disaster: Disaster;
   event_id: string;
   event_time: string;
+  event_time_end?: string | null;
+  event_time_precision?: EventTimePrecision;
   evidence_sources?: Array<SourceResponse>;
   geometry?: EventGeometryResponse | null;
   last_meaningful_change_at?: string | null;
   lineage_ids?: Array<string>;
   location: string;
   measurements?: Array<EventMeasurementResponse>;
-  observation_kind?: 'physical_event' | 'acquisition';
+  observation_kind?: 'physical_event' | 'preliminary_event' | 'acquisition';
   physical_event_id?: string | null;
   provider_ids?: Array<string>;
   provider_tier: ProviderTier;
@@ -4730,6 +4732,8 @@ export type EventMeasurementResponse = {
   unit?: string | null;
   value: number | string;
 };
+
+export type EventTimePrecision = 'exact' | 'day' | 'week';
 
 export type EvidenceClaimResponse = {
   alternatives?: Array<EvidenceClaimVariantResponse>;

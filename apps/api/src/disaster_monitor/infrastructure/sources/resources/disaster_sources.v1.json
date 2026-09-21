@@ -539,6 +539,7 @@
         "Routine long-running activity can be omitted, and rapidly developing events can be covered only fragmentarily.",
         "Absence from WVAR is not evidence that no eruption is occurring.",
         "Only explicit New Eruptive Activity and Continuing Eruptive Activity report types are admitted; unrest and other observations are deliberately excluded from volcanic-eruption events.",
+        "Admitted reports without a day-precise eruption start remain week-precision preliminary observations and are excluded from physical-incident counts and selection.",
         "Event discovery does not establish casualties, evacuations, infrastructure impacts, local warnings, exclusion zones, or response status.",
         "WVAR summaries may cite national observatories, but DisasterMonitor does not independently ingest those embedded authorities through this provider."
       ],

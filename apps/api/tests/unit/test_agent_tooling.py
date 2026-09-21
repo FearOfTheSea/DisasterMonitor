@@ -69,6 +69,7 @@ from disaster_monitor.domain.disaster import (
     Country,
     Disaster,
     DisasterEvent,
+    EventTimePrecision,
     GeographicArea,
     SourceReference,
 )
@@ -242,7 +243,9 @@ class MixedEventProvider:
 
 
 @pytest.mark.asyncio
-async def test_acquisition_observation_cannot_be_selected_as_physical_event() -> None:
+async def test_non_physical_observations_cannot_be_selected_as_physical_events() -> (
+    None
+):
     country = Country("TST", "Testland", (), GeographicArea(0, 10, 0, 10), "UTC")
     source = SourceReference(
         "testland-floods",
@@ -261,7 +264,15 @@ async def test_acquisition_observation_cannot_be_selected_as_physical_event() ->
         event_id="test:acquisition-1",
         observation_kind=ObservationKind.ACQUISITION,
     )
-    provider = MixedEventProvider((acquisition, physical))
+    preliminary = replace(
+        physical,
+        event_id="test:preliminary-1",
+        event_time=NOW.replace(hour=0),
+        event_time_end=NOW.replace(hour=0) + timedelta(days=6),
+        event_time_precision=EventTimePrecision.WEEK,
+        observation_kind=ObservationKind.PRELIMINARY_EVENT,
+    )
+    provider = MixedEventProvider((acquisition, preliminary, physical))
     registration = ProviderRegistration(
         "Testland flood authority",
         provider,
@@ -324,7 +335,13 @@ async def test_acquisition_observation_cannot_be_selected_as_physical_event() ->
         state.workspace.selected_event.observation_kind
         is ObservationKind.PHYSICAL_EVENT
     )
-    assert any("acquisition observation" in warning for warning in state.warnings)
+    assert all(
+        event.event.observation_kind is ObservationKind.PHYSICAL_EVENT
+        for event in state.workspace.physical_events
+    )
+    assert any(
+        "non-physical source observation" in warning for warning in state.warnings
+    )
 
 
 @pytest.mark.asyncio

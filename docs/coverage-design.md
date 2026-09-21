@@ -84,7 +84,8 @@ discard records from the worldwide inventory. New query fields are additive:
 
 - `view=recent`, `ongoing`, `recently_updated`, or `historical`;
 - server-side `hazard`, `country`, and text filters;
-- `acquisition_limit_per_disaster` for each bounded provider request;
+- `acquisition_limit_per_disaster` for each bounded provider request, defaulting to
+  the 500-record operational ceiling;
 - `page_size` and an opaque cursor for result pagination;
 - per-disaster `scan_complete`, `records_seen`, and `truncated` metadata;
 - explicit `observation_kind` so acquisition observations are not mistaken for

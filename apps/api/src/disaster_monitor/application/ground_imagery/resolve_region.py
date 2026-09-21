@@ -15,6 +15,7 @@ from disaster_monitor.application.ports.ground_imagery.incidents import (
 )
 from disaster_monitor.application.ports.ground_imagery.places import (
     PlaceBoundaryLookup,
+    PlaceBoundaryLookupError,
 )
 from disaster_monitor.application.ports.ground_imagery.rendering import ImageryGrid
 from disaster_monitor.domain.disaster import Disaster
@@ -127,7 +128,9 @@ class GroundImageryRegionResolver:
                 point_fallback=False,
             )
 
-        place_candidates = await self._reported_place_candidates(context)
+        place_candidates, place_warnings = await self._reported_place_candidates(
+            context
+        )
         if place_candidates:
             selected = self._select_candidates(place_candidates)
             if selected is None:
@@ -149,6 +152,7 @@ class GroundImageryRegionResolver:
                 margin_km=margin,
                 point_fallback=False,
                 warnings=(
+                    *place_warnings,
                     "This region represents reported administrative context; it is "
                     "not a measured impact perimeter.",
                 ),
@@ -185,9 +189,11 @@ class GroundImageryRegionResolver:
                 context.verified_point,
                 point_evidence,
                 radius,
+                warnings=place_warnings,
             )
 
         warnings = [
+            *place_warnings,
             (
                 "No defensible impact, modeled, place, or verified-point geography "
                 "is available. The incident remains visible, but imagery needs a "
@@ -345,7 +351,7 @@ class GroundImageryRegionResolver:
 
     async def _reported_place_candidates(
         self, context: IncidentImageryContext
-    ) -> tuple[RegionEvidence, ...]:
+    ) -> tuple[tuple[RegionEvidence, ...], tuple[str, ...]]:
         existing = tuple(
             item
             for item in context.evidence
@@ -354,13 +360,21 @@ class GroundImageryRegionResolver:
             and item.association is not AssociationStatus.UNRELATED
         )
         if existing or self._place_lookup is None or context.country_code is None:
-            return existing
+            return existing, ()
         boundaries: list[RegionEvidence] = []
+        warnings: list[str] = []
         for place in context.reported_places:
-            matches = await self._place_lookup.find(
-                name=place,
-                country_code=context.country_code,
-            )
+            try:
+                matches = await self._place_lookup.find(
+                    name=place,
+                    country_code=context.country_code,
+                )
+            except PlaceBoundaryLookupError:
+                warnings.append(
+                    "The reported-place boundary lookup was unavailable; Ground "
+                    "view will use other source-backed geometry when available."
+                )
+                continue
             boundaries.extend(
                 RegionEvidence(
                     evidence_id=f"boundary:{match.boundary_id}",
@@ -378,7 +392,7 @@ class GroundImageryRegionResolver:
                 )
                 for match in matches
             )
-        return tuple(boundaries)
+        return tuple(boundaries), tuple(dict.fromkeys(warnings))
 
     def _priority_candidates(
         self, context: IncidentImageryContext
@@ -481,6 +495,8 @@ class GroundImageryRegionResolver:
         point: Coordinate,
         source: RegionEvidence,
         radius_km: float,
+        *,
+        warnings: tuple[str, ...] = (),
     ) -> RegionResolution:
         try:
             core = self._geometry.buffer_point(point, radius_km)
@@ -491,17 +507,15 @@ class GroundImageryRegionResolver:
                 warnings=(str(error),),
                 reason_code="invalid_point_region",
             )
-        warnings = (
-            (
+        if any(
+            item.source.source_kind is RegionSourceKind.ACQUISITION_FOOTPRINT
+            for item in context.evidence
+        ):
+            warnings = (
+                *warnings,
                 "Satellite acquisition footprints were ignored as geography; a tile "
                 "center is not an event location.",
             )
-            if any(
-                item.source.source_kind is RegionSourceKind.ACQUISITION_FOOTPRINT
-                for item in context.evidence
-            )
-            else ()
-        )
         return self._resolved(
             context,
             core,

@@ -59,7 +59,10 @@ from disaster_monitor.infrastructure.operations.filesystem_blob_store import (
 from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
 )
-from disaster_monitor.infrastructure.operations.runtime import scheduled_investigations
+from disaster_monitor.infrastructure.operations.runtime import (
+    run_ground_imagery_maintenance,
+    scheduled_investigations,
+)
 
 NOW = datetime(2026, 8, 13, 3, tzinfo=UTC)
 
@@ -653,3 +656,17 @@ async def test_retention_deletes_content_but_preserves_provenance(
 
 def test_scheduled_runtime_has_no_country_scoped_jobs() -> None:
     assert scheduled_investigations() == ()
+
+
+@pytest.mark.asyncio
+async def test_ground_imagery_maintenance_failure_does_not_stop_ingestion(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class FailingGroundImagery:
+        async def cleanup_artifacts(self, *, retention_days: int) -> tuple[str, ...]:
+            assert retention_days == 30
+            raise RuntimeError("invalid durable Ground request")
+
+    await run_ground_imagery_maintenance(FailingGroundImagery(), retention_days=30)
+
+    assert "Ground imagery artifact cleanup failed" in caplog.text

@@ -37,8 +37,8 @@ classifications, or legacy pre-2026 categories as eruptions.
 Narrative words such as ash, lava, tremor, alert, or eruption do not override the
 report-type gate.
 
-Use the physical eruption start as event time. Do not use retrieval time, report week,
-or publication time.
+Use a day-precise physical eruption start as event time when the source supplies one.
+Do not use retrieval or publication time as an eruption start.
 
 Prefer a day-precise WVAR `Eruption Start Date` from a historical page.
 
@@ -53,6 +53,12 @@ older eruption.
 
 Do not convert qualified, uncertain, month-only, year-only, or ambiguous dates into
 exact timestamps.
+
+When an explicitly admitted eruptive-activity row has no unambiguous day-precise
+start, retain the WVAR report week as a `preliminary_event` observation with
+`event_time_precision=week` and explicit start and end dates. Keep that observation
+outside physical-incident identity, counts, correlation, watches, and assistant event
+selection. Its expected temporal precision is not a provider failure.
 
 Normalize a source-backed calendar date to UTC midnight. This is date-granularity
 normalization, not an observed eruption clock time.

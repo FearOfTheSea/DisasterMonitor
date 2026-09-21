@@ -36,7 +36,7 @@ dynamically imports or constructs providers.
 | GDACS tropical cyclones | Secondary | Event discovery | Tropical cyclone | Named countries and worldwide | None |
 | NOAA IBTrACS track reconciliation | Secondary | Scientific verification and map layers | Tropical cyclone | Selected GDACS named-country or worldwide event | Unique name/start/track match against v04r01 active subset |
 | NOAA NHC/CPHC cyclone forecasts | Primary | Operational forecast map layers | Tropical cyclone | Selected GDACS named-country or worldwide event | Active Atlantic/Eastern/Central Pacific product; unique name/center match |
-| Smithsonian / USGS Weekly Volcanic Activity Report | Primary | Event discovery | Volcanic eruption | Named countries and worldwide | Explicit WVAR eruptive-activity classification and day-precise start |
+| Smithsonian / USGS Weekly Volcanic Activity Report | Primary | Event discovery | Volcanic eruption | Named countries and worldwide | Explicit WVAR eruptive-activity classification; day-precise starts become incidents and week-precise reports remain preliminary observations |
 | GDACS volcanic eruptions | Secondary | Event discovery | Volcanic eruption | Named countries and worldwide | VAA/Smithsonian-derived event records; volcano point only |
 | ReliefWeb | Secondary | Situation evidence | Earthquake, flood, wildfire, landslide, tropical cyclone, volcanic eruption | Named countries | `RELIEFWEB_APP_NAME` |
 
@@ -269,6 +269,11 @@ Smithsonian/GVP WVAR provides bounded volcanic-eruption discovery from its expli
 
 It enriches records with GVP volcano identity, geography, and eruption metadata.
 WVAR is preliminary and not comprehensive.
+
+Explicit eruptive-activity reports without a day-precise start remain visible as
+week-precision preliminary observations. They do not enter physical-incident counts or
+selection, and their source-backed temporal limitation is not reported as provider
+degradation.
 
 Unrest and other observations remain outside the eruption event definition.
 

@@ -15,11 +15,13 @@ from disaster_monitor.domain.disaster import (
     Disaster,
     EventGeometry,
     EventMeasurement,
+    EventTimePrecision,
     IncidentActivityStatus,
     ProviderTier,
     SourceAuthority,
     SourceReference,
 )
+from disaster_monitor.domain.disaster_types import validate_event_temporality
 from disaster_monitor.domain.news import (
     IncidentCandidateStatus,
     IncidentDetectionTimeline,
@@ -42,7 +44,7 @@ class ActiveIncidentsQuery:
 
     time_window_days: int = 7
     limit_per_disaster: int = 10
-    acquisition_limit_per_disaster: int = 100
+    acquisition_limit_per_disaster: int = 500
     view: IncidentView = IncidentView.RECENT
     hazard: Disaster | None = None
     country_code: str | None = None
@@ -128,6 +130,8 @@ class ActiveIncident:
     provider_tier: ProviderTier
     source_authority: SourceAuthority
     source: SourceReference
+    event_time_end: datetime | None = None
+    event_time_precision: EventTimePrecision = EventTimePrecision.EXACT
     lineage_ids: tuple[str, ...] = ()
     physical_event_id: str | None = None
     evidence_sources: tuple[SourceReference, ...] = ()
@@ -136,6 +140,14 @@ class ActiveIncident:
     verification_status: IncidentCandidateStatus = IncidentCandidateStatus.SOURCE_BACKED
     detection: IncidentDetectionTimeline = IncidentDetectionTimeline()
     last_meaningful_change_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        validate_event_temporality(
+            self.event_time,
+            self.event_time_end,
+            self.event_time_precision,
+            self.observation_kind,
+        )
 
 
 @dataclass(frozen=True, slots=True)

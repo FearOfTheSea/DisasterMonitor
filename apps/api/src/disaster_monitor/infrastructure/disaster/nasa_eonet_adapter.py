@@ -48,7 +48,7 @@ EONET_EVENTS_URL = "https://eonet.gsfc.nasa.gov/api/v3/events"
 _EONET_EVENT_URL = "https://eonet.gsfc.nasa.gov/api/v3/events"
 _EONET_RIGHTS_ID = "nasa-eonet-api"
 _MAX_TIME_WINDOW_DAYS = 30
-_MAX_EVENTS = 50
+_MAX_EVENTS = 500
 _WILDFIRE_CATEGORY = "wildfires"
 
 

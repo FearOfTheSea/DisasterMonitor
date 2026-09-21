@@ -11,10 +11,12 @@ from disaster_monitor.domain.disaster_types import (
     Country,
     Disaster,
     EventGeographyStatus,
+    EventTimePrecision,
     IncidentActivityStatus,
     ObservationKind,
     ProviderTier,
     _is_aware,
+    validate_event_temporality,
 )
 from disaster_monitor.domain.evidence_types import (
     EventAssignmentStatus,
@@ -286,6 +288,8 @@ class DisasterEvent:
     country: Country
     event_time: datetime
     source: SourceReference
+    event_time_end: datetime | None = None
+    event_time_precision: EventTimePrecision = EventTimePrecision.EXACT
     geometry: EventGeometry | None = None
     measurements: tuple[EventMeasurement, ...] = ()
     provider_ids: tuple[str, ...] = ()
@@ -296,6 +300,12 @@ class DisasterEvent:
     activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
 
     def __post_init__(self) -> None:
+        validate_event_temporality(
+            self.event_time,
+            self.event_time_end,
+            self.event_time_precision,
+            self.observation_kind,
+        )
         if not isinstance(self.provider_tier, ProviderTier):
             raise TypeError("A disaster event requires a typed provider tier.")
         if not isinstance(self.measurements, tuple) or any(

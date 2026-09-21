@@ -98,6 +98,37 @@ function formatDuration(seconds: number): string {
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
 }
 
+function formatObservationPeriod(observation: ActiveIncident): string {
+  if (observation.event_time_precision !== 'week' || !observation.event_time_end) {
+    return formatTime(observation.event_time);
+  }
+
+  const start = new Date(observation.event_time);
+  const end = new Date(observation.event_time_end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return `${observation.event_time}–${observation.event_time_end}`;
+  }
+
+  const startLabel = start.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  const endLabel = end.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  return `Week of ${startLabel}–${endLabel}`;
+}
+
+function observationKindLabel(observation: ActiveIncident): string {
+  return observation.observation_kind === 'preliminary_event'
+    ? 'Preliminary event report'
+    : 'Acquisition record';
+}
+
 function disasterLabel(disaster: DisasterType): string {
   return DISASTERS.find((item) => item.value === disaster)?.label ?? disaster;
 }
@@ -354,16 +385,23 @@ export function ActiveIncidentsPanel({
           >
             <details>
               <summary id="incident-observations-heading">
-                {snapshot.observations?.length} acquisition records excluded from
-                incident counts
+                {snapshot.observations?.length} source{' '}
+                {snapshot.observations?.length === 1 ? 'observation' : 'observations'}{' '}
+                excluded from incident counts
               </summary>
               <p>
-                These are source-backed sensing or product records, not separate
-                physical incidents. They remain available for provenance review.
+                These are source-backed preliminary reports, sensing observations, or
+                product records—not separate physical incidents. They remain available
+                for provenance review.
               </p>
               <ul>
                 {snapshot.observations?.slice(0, 5).map((observation) => (
                   <li key={`${observation.source.source_id}:${observation.event_id}`}>
+                    <span>
+                      {observationKindLabel(observation)} ·{' '}
+                      {formatObservationPeriod(observation)}
+                    </span>{' '}
+                    · {observation.location} ·{' '}
                     {displayActiveIncidentCountry(observation)} ·{' '}
                     {observation.source.publisher}
                   </li>

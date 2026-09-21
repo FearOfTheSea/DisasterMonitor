@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 
@@ -24,10 +24,87 @@ class Disaster(StrEnum):
 
 
 class ObservationKind(StrEnum):
-    """Whether a provider record describes an event or a sampled product."""
+    """How a provider record may participate in physical-incident workflows."""
 
     PHYSICAL_EVENT = "physical_event"
+    PRELIMINARY_EVENT = "preliminary_event"
     ACQUISITION = "acquisition"
+
+
+class EventTimePrecision(StrEnum):
+    """Source-backed temporal precision of a normalized event observation."""
+
+    EXACT = "exact"
+    DAY = "day"
+    WEEK = "week"
+
+
+def validate_event_temporality(
+    event_time: datetime,
+    event_time_end: datetime | None,
+    event_time_precision: EventTimePrecision,
+    observation_kind: ObservationKind,
+) -> None:
+    """Protect week observations from becoming fabricated exact events."""
+    if not isinstance(event_time_precision, EventTimePrecision):
+        raise TypeError("An event requires typed temporal precision.")
+    if not isinstance(observation_kind, ObservationKind):
+        raise TypeError("An event requires a typed observation kind.")
+    if event_time_precision is EventTimePrecision.WEEK:
+        if event_time_end is None:
+            raise ValueError("A week-precision event requires an end date.")
+        if not _is_aware(event_time) or not _is_aware(event_time_end):
+            raise ValueError("A week-precision event interval must be timezone-aware.")
+        if any(
+            value.utcoffset() != timedelta(0)
+            or any((value.hour, value.minute, value.second, value.microsecond))
+            for value in (event_time, event_time_end)
+        ):
+            raise ValueError(
+                "A week-precision event interval requires UTC calendar dates."
+            )
+        if event_time_end - event_time != timedelta(days=6):
+            raise ValueError("A week-precision event must span seven calendar dates.")
+        if observation_kind is not ObservationKind.PRELIMINARY_EVENT:
+            raise ValueError(
+                "A week-precision event must remain a preliminary observation."
+            )
+        return
+    if event_time_precision is EventTimePrecision.DAY and (
+        not _is_aware(event_time)
+        or event_time.utcoffset() != timedelta(0)
+        or any(
+            (
+                event_time.hour,
+                event_time.minute,
+                event_time.second,
+                event_time.microsecond,
+            )
+        )
+    ):
+        raise ValueError("A day-precision event requires a UTC calendar date.")
+    if event_time_end is not None:
+        raise ValueError("Only week-precision events may carry an end date.")
+    if observation_kind is ObservationKind.PRELIMINARY_EVENT:
+        raise ValueError("A preliminary event requires week temporal precision.")
+
+
+def event_temporality_overlaps(
+    event_time: datetime,
+    event_time_end: datetime | None,
+    event_time_precision: EventTimePrecision,
+    interval_start: datetime,
+    interval_end: datetime,
+) -> bool:
+    """Return whether exact instants or inclusive calendar dates overlap a window."""
+    if event_time_precision is EventTimePrecision.WEEK:
+        if event_time_end is None:
+            return False
+        return (
+            event_time.date() <= interval_end.date()
+            and event_time_end.date() >= interval_start.date()
+        )
+    return interval_start <= event_time <= interval_end
 
 
 class IncidentActivityStatus(StrEnum):

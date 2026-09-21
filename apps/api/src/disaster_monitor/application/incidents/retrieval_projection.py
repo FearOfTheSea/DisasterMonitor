@@ -40,6 +40,8 @@ def incident(
         country=country,
         location=event.location,
         event_time=event.event_time,
+        event_time_end=event.event_time_end,
+        event_time_precision=event.event_time_precision,
         geometry=event.geometry,
         measurements=event.measurements,
         provider_ids=event.provider_ids,
@@ -70,6 +72,8 @@ def country_incident(identity: PhysicalEventIdentity) -> ActiveIncident:
         ),
         location=event.location,
         event_time=event.event_time,
+        event_time_end=event.event_time_end,
+        event_time_precision=event.event_time_precision,
         geometry=event.geometry,
         measurements=event.measurements,
         provider_ids=event.provider_ids,
@@ -85,7 +89,7 @@ def country_incident(identity: PhysicalEventIdentity) -> ActiveIncident:
 
 
 def country_observation(event: DisasterEvent) -> ActiveIncident:
-    """Keep country-scoped product acquisitions visible outside incident counts."""
+    """Keep non-physical observations visible outside incident counts."""
     return ActiveIncident(
         event_id=event.event_id,
         disaster=event.disaster,
@@ -96,6 +100,8 @@ def country_observation(event: DisasterEvent) -> ActiveIncident:
         ),
         location=event.location,
         event_time=event.event_time,
+        event_time_end=event.event_time_end,
+        event_time_precision=event.event_time_precision,
         geometry=event.geometry,
         measurements=event.measurements,
         provider_ids=event.provider_ids,
@@ -133,6 +139,8 @@ def resolve_worldwide_incidents(
             location=item.location,
             country=country,
             event_time=item.event_time,
+            event_time_end=item.event_time_end,
+            event_time_precision=item.event_time_precision,
             source=item.source,
             geometry=item.geometry,
             measurements=item.measurements,
@@ -191,6 +199,8 @@ def resolved_worldwide_incident(
         country=associated,
         location=event.location,
         event_time=event.event_time,
+        event_time_end=event.event_time_end,
+        event_time_precision=event.event_time_precision,
         geometry=event.geometry,
         measurements=event.measurements,
         provider_ids=event.provider_ids,

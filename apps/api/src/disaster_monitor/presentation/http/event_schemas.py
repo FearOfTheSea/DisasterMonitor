@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from disaster_monitor.domain.disaster import (
     Disaster,
+    EventTimePrecision,
     IncidentActivityStatus,
     MeasurementKind,
     ProviderTier,
@@ -127,7 +128,7 @@ class IncidentDetectionTimelineResponse(BaseModel):
 
 
 class ActiveIncidentResponse(BaseModel):
-    """One worldwide event with exact provider evidence and authority."""
+    """One worldwide event or observation with source-backed evidence."""
 
     event_id: str
     physical_event_id: str | None = None
@@ -135,6 +136,8 @@ class ActiveIncidentResponse(BaseModel):
     country: ActiveIncidentCountryResponse | None = None
     location: str
     event_time: datetime
+    event_time_end: datetime | None = None
+    event_time_precision: EventTimePrecision = EventTimePrecision.EXACT
     geometry: EventGeometryResponse | None = None
     measurements: list[EventMeasurementResponse] = Field(default_factory=list)
     provider_ids: list[str] = Field(default_factory=list)
@@ -143,7 +146,9 @@ class ActiveIncidentResponse(BaseModel):
     source_authority: SourceAuthority
     source: SourceResponse
     evidence_sources: list[SourceResponse] = Field(default_factory=list)
-    observation_kind: Literal["physical_event", "acquisition"] = "physical_event"
+    observation_kind: Literal["physical_event", "preliminary_event", "acquisition"] = (
+        "physical_event"
+    )
     activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
     verification_status: Literal[
         "provisional_news_detected", "source_backed", "rejected"

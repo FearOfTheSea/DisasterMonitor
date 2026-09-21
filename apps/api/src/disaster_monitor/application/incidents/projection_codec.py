@@ -25,6 +25,7 @@ from disaster_monitor.application.ports.incident_projection import (
 )
 from disaster_monitor.domain.disaster import (
     Disaster,
+    EventTimePrecision,
     IncidentActivityStatus,
     ObservationKind,
     ProviderTier,
@@ -125,6 +126,8 @@ def _incident_document(value: ActiveIncident) -> dict[str, object]:
         ),
         "location": value.location,
         "event_time": value.event_time.isoformat(),
+        "event_time_end": _optional_time(value.event_time_end),
+        "event_time_precision": value.event_time_precision.value,
         "geometry": geometry_document(value.geometry),
         "measurements": [measurement_document(item) for item in value.measurements],
         "provider_ids": list(value.provider_ids),
@@ -183,6 +186,10 @@ def _incident_from_document(value: object) -> ActiveIncident:
         country=country,
         location=str(item["location"]),
         event_time=datetime.fromisoformat(str(item["event_time"])),
+        event_time_end=_optional_datetime(item.get("event_time_end")),
+        event_time_precision=EventTimePrecision(
+            str(item.get("event_time_precision", EventTimePrecision.EXACT))
+        ),
         geometry=geometry_from_document(item.get("geometry"), sources_by_id),
         measurements=tuple(
             measurement_from_document(entry, sources_by_id)

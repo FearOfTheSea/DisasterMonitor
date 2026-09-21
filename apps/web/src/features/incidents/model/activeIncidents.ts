@@ -10,7 +10,8 @@ export type DisasterType =
 export type IncidentCoverageState =
   'events_found' | 'no_matching_records' | 'degraded' | 'unavailable';
 
-export type ObservationKind = 'physical_event' | 'acquisition';
+export type ObservationKind = 'physical_event' | 'preliminary_event' | 'acquisition';
+export type EventTimePrecision = 'exact' | 'day' | 'week';
 
 export type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
 
@@ -91,6 +92,8 @@ export type ActiveIncident = {
   country: IncidentCountry | null;
   location: string;
   event_time: string;
+  event_time_end?: string | null;
+  event_time_precision?: EventTimePrecision;
   geometry: IncidentGeometry | null;
   measurements: IncidentMeasurement[];
   provider_ids: string[];

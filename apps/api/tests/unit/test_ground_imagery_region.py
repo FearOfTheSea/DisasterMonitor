@@ -1,9 +1,15 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from disaster_monitor.application.ground_imagery.resolve_region import (
     IncidentImageryContext,
     RegionResolutionState,
     RegionResolver,
+)
+from disaster_monitor.application.ports.ground_imagery.places import (
+    PlaceBoundary,
+    PlaceBoundaryLookupError,
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.domain.imagery.regions import (
@@ -130,3 +136,43 @@ def test_competing_same_priority_regions_are_selectable_not_unioned() -> None:
     assert result.state is RegionResolutionState.AMBIGUOUS
     assert result.region is None
     assert [item.evidence_id for item in result.alternatives] == ["west", "east"]
+
+
+@pytest.mark.asyncio
+async def test_region_resolver_falls_back_when_place_boundary_lookup_fails() -> None:
+    class FailingPlaceLookup:
+        async def find(
+            self,
+            *,
+            name: str,
+            country_code: str,
+            admin_context: str | None = None,
+        ) -> tuple[PlaceBoundary, ...]:
+            del name, country_code, admin_context
+            raise PlaceBoundaryLookupError(
+                "geoBoundaries returned an unsupported boundary geometry."
+            )
+
+    context = IncidentImageryContext(
+        incident_id="incident-1",
+        disaster=Disaster.FLOOD,
+        country_code="HND",
+        event_time=datetime(2026, 9, 17, tzinfo=UTC),
+        verified_point=Coordinate(14.1, -87.2),
+        reported_places=("Honduras",),
+    )
+
+    result = await RegionResolver(
+        GeodesicGeometryEngine(),
+        place_lookup=FailingPlaceLookup(),
+    ).resolve_async(context)
+
+    assert result.state is RegionResolutionState.RESOLVED
+    assert result.region is not None
+    assert (
+        result.region.source_footprints[0].source.source_kind
+        is RegionSourceKind.VERIFIED_EVENT_POINT
+    )
+    assert any(
+        "boundary lookup was unavailable" in warning for warning in result.warnings
+    )

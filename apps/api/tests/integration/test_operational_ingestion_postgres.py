@@ -6,7 +6,10 @@ from uuid import uuid4
 import psycopg
 import pytest
 
-from disaster_monitor.application.ports.ground_imagery.jobs import preparation_job
+from disaster_monitor.application.ports.ground_imagery.jobs import (
+    GroundImageryJobStatus,
+    preparation_job,
+)
 from disaster_monitor.application.ports.incident_projection import (
     IncidentProjectionRecord,
 )
@@ -312,38 +315,54 @@ async def test_postgres_ground_jobs_serialize_per_request_and_fence_old_worker(
             """,
             (request_id, request_id, NOW, NOW, NOW),
         )
-    for role in (
-        TemporalRole.PRE_EVENT_REFERENCE,
-        TemporalRole.LATEST_USEFUL,
-    ):
-        assert await queue.enqueue(
-            preparation_job(
-                request_id=request_id,
-                request_version=1,
-                sensor=Sensor.SENTINEL_1,
-                role=role,
-                overview=True,
-                output_kind=None,
-                now=NOW,
+    try:
+        for role in (
+            TemporalRole.PRE_EVENT_REFERENCE,
+            TemporalRole.LATEST_USEFUL,
+        ):
+            assert await queue.enqueue(
+                preparation_job(
+                    request_id=request_id,
+                    request_version=1,
+                    sensor=Sensor.SENTINEL_1,
+                    role=role,
+                    overview=True,
+                    output_kind=None,
+                    now=NOW,
+                )
             )
-        )
 
-    concurrent = await asyncio.gather(
-        queue.claim("worker-one", now=NOW, lease_seconds=60),
-        queue.claim("worker-two", now=NOW, lease_seconds=60),
-    )
-    claimed = tuple(item for item in concurrent if item is not None)
-    assert len(claimed) == 1
-    first = claimed[0]
-    reclaimed = await queue.claim(
-        "worker-two", now=NOW + timedelta(seconds=61), lease_seconds=60
-    )
-    assert reclaimed is not None
-    assert reclaimed.job_id == first.job_id
-    assert reclaimed.fencing_token == first.fencing_token + 1
-    with pytest.raises(RuntimeError, match="fencing token"):
-        await queue.complete(
-            first.job_id,
-            completed_at=NOW + timedelta(seconds=62),
-            fencing_token=first.fencing_token,
+        concurrent = await asyncio.gather(
+            queue.claim("worker-one", now=NOW, lease_seconds=60),
+            queue.claim("worker-two", now=NOW, lease_seconds=60),
         )
+        claimed = tuple(item for item in concurrent if item is not None)
+        assert len(claimed) == 1
+        first = claimed[0]
+        reclaimed = await queue.claim(
+            "worker-two", now=NOW + timedelta(seconds=61), lease_seconds=60
+        )
+        assert reclaimed is not None
+        assert reclaimed.job_id == first.job_id
+        assert reclaimed.fencing_token == first.fencing_token + 1
+        with pytest.raises(RuntimeError, match="fencing token"):
+            await queue.complete(
+                first.job_id,
+                completed_at=NOW + timedelta(seconds=62),
+                fencing_token=first.fencing_token,
+            )
+        failed = await queue.fail(
+            reclaimed.job_id,
+            failed_at=NOW + timedelta(seconds=62),
+            fencing_token=reclaimed.fencing_token,
+            error_code="ground_preparation_failed",
+            error_detail="Stored Ground request metadata is invalid.",
+            retry_at=None,
+        )
+        assert failed.status is GroundImageryJobStatus.FAILED
+        assert failed.diagnostic == "Stored Ground request metadata is invalid."
+    finally:
+        async with await psycopg.AsyncConnection.connect(postgres_dsn) as connection:
+            await connection.execute(
+                "DELETE FROM imagery_requests WHERE request_id = %s", (request_id,)
+            )

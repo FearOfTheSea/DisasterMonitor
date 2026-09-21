@@ -189,11 +189,12 @@ class PostgresGroundImageryJobQueue(PostgresRepositoryBase, GroundImageryJobQueu
                 await cursor.execute(
                     """
                     UPDATE imagery_jobs
-                    SET status=CASE WHEN %s IS NOT NULL AND attempt < max_attempts
+                    SET status=CASE WHEN %s::timestamptz IS NOT NULL
+                                         AND attempt < max_attempts
                                     THEN 'retry_wait' ELSE 'failed' END,
-                        next_attempt_at=COALESCE(%s, %s), error_code=%s,
+                        next_attempt_at=COALESCE(%s::timestamptz, %s), error_code=%s,
                         diagnostic=%s,
-                        progress=jsonb_build_object('diagnostic', %s),
+                        progress=jsonb_build_object('diagnostic', %s::text),
                         claimed_by=NULL, claimed_at=NULL, lease_expires_at=NULL,
                         updated_at=%s
                     WHERE job_id=%s AND status='running' AND fencing_token=%s

@@ -149,8 +149,9 @@ See [noaa-nws-weather-alerts.md](sources/noaa-nws-weather-alerts.md).
   than that hazard. EMSN risk assessments and activation-only claims are excluded.
 - Smithsonian/GVP provides bounded named-country and worldwide volcanic-eruption
   discovery from explicit WVAR eruptive-activity report types, with source-backed GVP
-  identity and point geometry. It does not admit unrest or other observations and is
-  not comprehensive global eruption surveillance.
+  identity and point geometry. Reports without a day-precise start remain week-precise
+  preliminary observations outside incident counts and selection. It does not admit
+  unrest or other observations and is not comprehensive global eruption surveillance.
 - ReliefWeb is an optional configured supplementary situation-evidence provider for
   named-country requests. Without `RELIEFWEB_APP_NAME`, it remains unavailable and
   reports disclose that gap.

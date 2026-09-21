@@ -97,7 +97,7 @@ async def active_incidents(
     service: Annotated[ActiveIncidentsService, Depends(get_active_incidents_service)],
     time_window_days: Annotated[int, Query(ge=1, le=30)] = 7,
     limit_per_disaster: Annotated[int, Query(ge=1, le=20)] = 10,
-    acquisition_limit_per_disaster: Annotated[int, Query(ge=1, le=500)] = 100,
+    acquisition_limit_per_disaster: Annotated[int, Query(ge=1, le=500)] = 500,
     view: Annotated[IncidentView, Query()] = IncidentView.RECENT,
     hazard: Annotated[str | None, Query(min_length=1)] = None,
     country: Annotated[str | None, Query(min_length=3, max_length=3)] = None,
@@ -146,6 +146,8 @@ async def active_incidents(
             ),
             location=incident.location,
             event_time=incident.event_time,
+            event_time_end=incident.event_time_end,
+            event_time_precision=incident.event_time_precision,
             geometry=_event_geometry_response(incident.geometry),
             measurements=[
                 EventMeasurementResponse(

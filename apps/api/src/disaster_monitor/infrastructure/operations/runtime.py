@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import socket
 from datetime import UTC, datetime
+from typing import Protocol
 
 from disaster_monitor.application.ground_imagery.jobs import GroundImageryWorker
 from disaster_monitor.application.incidents.active_incidents import (
@@ -43,6 +45,26 @@ from disaster_monitor.infrastructure.geography.static_geographic_region_catalog 
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
 )
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class GroundImageryMaintenance(Protocol):
+    async def cleanup_artifacts(self, *, retention_days: int) -> tuple[str, ...]: ...
+
+
+async def run_ground_imagery_maintenance(
+    ground_imagery: GroundImageryMaintenance,
+    *,
+    retention_days: int,
+) -> None:
+    """Run optional retention without disabling critical ingestion work."""
+    try:
+        await ground_imagery.cleanup_artifacts(retention_days=retention_days)
+    except Exception:
+        _LOGGER.exception(
+            "Ground imagery artifact cleanup failed; ingestion will continue."
+        )
 
 
 def scheduled_investigations(
@@ -128,8 +150,9 @@ async def _worker(settings: Settings, *, once: bool) -> None:
     )
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
     try:
-        await ground_imagery.cleanup_artifacts(
-            retention_days=settings.ground_imagery_retention_days
+        await run_ground_imagery_maintenance(
+            ground_imagery,
+            retention_days=settings.ground_imagery_retention_days,
         )
         while True:
             ground_job = (
