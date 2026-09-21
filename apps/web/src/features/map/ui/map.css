@@ -548,6 +548,10 @@
   z-index: 3;
 }
 
+.map-region-selection-active .map-overlay {
+  bottom: 220px;
+}
+
 .map-overlay summary {
   align-items: center;
   color: var(--ink-soft);

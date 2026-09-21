@@ -10,6 +10,7 @@ import '../features/map/ui/mapLegends.css';
 import './panels.css';
 import '../features/sources/ui/sourceCatalog.css';
 import '../features/commands/ui/commandPalette.css';
+import '../features/help/ui/workspaceHelp.css';
 import '../features/assistant/ui/assistant.css';
 import '../features/assistant/ui/assistantEvidence.css';
 import '../features/operations/ui/operations.css';

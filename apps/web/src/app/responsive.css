@@ -7,6 +7,10 @@
 }
 
 @media (max-width: 1180px) and (min-width: 851px) {
+  .map-region-selection-active .map-overlay {
+    bottom: 296px;
+  }
+
   .selected-incident-summary {
     grid-template-columns: auto minmax(0, 1fr);
     max-width: 600px;
@@ -168,6 +172,10 @@
   }
 
   .header-actions > button:not(.command-palette-trigger) {
+    display: none;
+  }
+
+  .workspace-help {
     display: none;
   }
 

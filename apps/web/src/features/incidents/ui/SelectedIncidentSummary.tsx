@@ -35,12 +35,14 @@ export function SelectedIncidentSummary({
   incident,
   onAsk,
   onGroundView,
+  onDismiss,
   snapshotRetrievedAt,
   warnings,
 }: {
   incident?: IncidentMapRecord;
   onAsk: () => void;
   onGroundView?: () => void;
+  onDismiss?: () => void;
   snapshotRetrievedAt: string;
   warnings?: WeatherAlertsSnapshot;
 }) {
@@ -52,6 +54,18 @@ export function SelectedIncidentSummary({
     <article
       className={`selected-incident-summary selected-incident-${incident.disaster}`}
     >
+      {onDismiss ? (
+        <button
+          type="button"
+          className="selected-incident-dismiss"
+          aria-label="Clear selected event"
+          onClick={onDismiss}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+      ) : null}
       <div className="selected-incident-icon" aria-hidden="true">
         <DisasterIcon disaster={incident.disaster} />
       </div>
@@ -79,7 +93,7 @@ export function SelectedIncidentSummary({
         </div>
       </div>
       <details>
-        <summary>Open Event Brief</summary>
+        <summary>Event brief</summary>
         <EventBrief
           incident={incident}
           warnings={warnings}

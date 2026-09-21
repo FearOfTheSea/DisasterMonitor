@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ActiveIncident } from '@/features/incidents/model/activeIncidents';
@@ -46,5 +47,22 @@ describe('SelectedIncidentSummary', () => {
 
     expect(screen.getByText(/Reported 30 min ago/)).toBeVisible();
     expect(screen.queryByText(/Reported \d+ days ago/)).not.toBeInTheDocument();
+  });
+
+  it('lets the operator dismiss the selected event summary', async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+
+    render(
+      <SelectedIncidentSummary
+        incident={INCIDENT}
+        snapshotRetrievedAt="2026-08-06T10:00:00Z"
+        onAsk={vi.fn()}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Clear selected event' }));
+    expect(onDismiss).toHaveBeenCalledOnce();
   });
 });

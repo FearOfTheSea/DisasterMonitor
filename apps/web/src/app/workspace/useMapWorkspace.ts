@@ -80,6 +80,10 @@ export function useMapWorkspace(activeIncidents: {
       setMapLayerVisibility(current, 'active-incidents', true),
     );
   }, []);
+  const clearSelectedIncident = useCallback(() => {
+    setWatchFocusIncident(undefined);
+    setSelectedIncidentId(undefined);
+  }, []);
   const handleSelectWatchIncident = useCallback((incident: IncidentMapRecord) => {
     setWatchFocusIncident(incident);
     setSelectedIncidentId(incident.event_id);
@@ -128,6 +132,7 @@ export function useMapWorkspace(activeIncidents: {
     setFocusRequestToken,
     watchFocusIncident,
     usableSelectedIncidentId,
+    clearSelectedIncident,
     handleViewChange,
     handleSelectRegion,
     handleSelectActiveIncident,

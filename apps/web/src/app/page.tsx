@@ -14,6 +14,7 @@ import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncident
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
 import { SelectedIncidentSummary } from '@/features/incidents/ui/SelectedIncidentSummary';
 import { GroundImageryPanel } from '@/features/imagery/ui/GroundImageryPanel';
+import { WorkspaceHelp } from '@/features/help/ui/WorkspaceHelp';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
 import {
   filterCorrelationsForDisplay,
@@ -101,6 +102,7 @@ export default function Home() {
     setFocusRequestToken,
     watchFocusIncident,
     usableSelectedIncidentId,
+    clearSelectedIncident,
     handleViewChange,
     handleSelectRegion,
     handleSelectActiveIncident,
@@ -283,6 +285,7 @@ export default function Home() {
             <EvidenceIcon className="button-icon" />
             Saved
           </button>
+          <WorkspaceHelp />
           <button
             className="assistant-toggle"
             type="button"
@@ -321,7 +324,9 @@ export default function Home() {
           onSelectIncident={handleSelectActiveIncident}
           onRefresh={activeIncidents.refresh}
         />
-        <div className="map-region">
+        <div
+          className={`map-region${selectedIncident ? ' map-region-selection-active' : ''}`}
+        >
           <div className="map-introduction">
             <PositionIcon className="map-introduction-icon" />
             <div>
@@ -368,6 +373,7 @@ export default function Home() {
             incident={selectedIncident}
             onAsk={() => togglePanel('assistant')}
             onGroundView={openGroundImagery}
+            onDismiss={clearSelectedIncident}
             snapshotRetrievedAt={
               activeIncidents.snapshot?.retrieved_at ??
               selectedIncident?.source.retrieved_at ??

@@ -405,6 +405,78 @@ describe('ActiveIncidentsPanel', () => {
     );
   });
 
+  it('consolidates offline status and recovery without duplicating an error alert', async () => {
+    const user = userEvent.setup();
+    const onRefresh = vi.fn();
+
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot()}
+        status="offline"
+        error="Network unavailable. Showing the last successful snapshot; data is stale."
+        onSelectIncident={vi.fn()}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    const status = screen.getByRole('status', { name: 'Incident data status' });
+    expect(status).toHaveTextContent('Offline snapshot');
+    expect(status).toHaveTextContent('Last updated');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await user.click(within(status).getByRole('button', { name: 'Try again' }));
+    expect(onRefresh).toHaveBeenCalledOnce();
+  });
+
+  it('resets all incident filters from one clear action', async () => {
+    const user = userEvent.setup();
+    const onSearchChange = vi.fn();
+    const onViewChange = vi.fn();
+    const onHazardChange = vi.fn();
+    const onOccurrenceStartChange = vi.fn();
+    const onOccurrenceEndChange = vi.fn();
+
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot()}
+        status="success"
+        search="indonesia"
+        onSearchChange={onSearchChange}
+        view="historical"
+        onViewChange={onViewChange}
+        hazard="wildfire"
+        onHazardChange={onHazardChange}
+        occurrenceStart="2026-08-01T00:00"
+        occurrenceEnd="2026-08-20T00:00"
+        onOccurrenceStartChange={onOccurrenceStartChange}
+        onOccurrenceEndChange={onOccurrenceEndChange}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(onSearchChange).toHaveBeenCalledWith('');
+    expect(onViewChange).toHaveBeenCalledWith('recent');
+    expect(onHazardChange).toHaveBeenCalledWith(undefined);
+    expect(onOccurrenceStartChange).toHaveBeenCalledWith('');
+    expect(onOccurrenceEndChange).toHaveBeenCalledWith('');
+  });
+
+  it('describes the visible incident count in plain language', () => {
+    render(
+      <ActiveIncidentsPanel
+        snapshot={{ ...snapshot(), total_incident_count: 265 }}
+        status="success"
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Showing 1 of 265 incidents')).toBeVisible();
+  });
+
   it('keeps coverage freshness from the unfiltered snapshot while filtering records', () => {
     const view = render(
       <ActiveIncidentsPanel

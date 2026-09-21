@@ -15,6 +15,7 @@ import {
 } from '@/features/incidents/model/activeIncidents';
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
 import { DisasterIcon } from '@/features/incidents/ui/DisasterIcon';
+import { IncidentPanelControls } from '@/features/incidents/ui/IncidentPanelControls';
 import type { MapTimeWindow } from '@/shared/model/displayTimeWindow';
 import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 
@@ -212,129 +213,24 @@ export function ActiveIncidentsPanel({
           <h2>What&apos;s happening</h2>
           <p>Recent events reported by trusted sources</p>
         </div>
-        <div className="active-incidents-header-actions">
-          {snapshot ? (
-            <DataAgeBadge
-              kind="projection"
-              timestamp={snapshot.retrieved_at}
-              label="Monitoring snapshot"
-            />
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void onRefresh()}
-            disabled={status === 'loading'}
-          >
-            {status === 'loading'
-              ? 'Updating…'
-              : snapshot
-                ? 'Refresh'
-                : 'Load incidents'}
-          </button>
-        </div>
       </header>
-      {status === 'offline' ? (
-        <p role="status" className="active-incidents-offline">
-          Offline · read-only · showing a stale cached snapshot from{' '}
-          {snapshot
-            ? new Date(snapshot.retrieved_at).toLocaleString()
-            : 'an unknown time'}
-          .
-        </p>
-      ) : null}
-      <div className="incident-search">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          aria-hidden="true"
-        >
-          <circle cx="10.5" cy="10.5" r="6.5" />
-          <path d="m16 16 4.5 4.5" />
-        </svg>
-        <input
-          type="search"
-          aria-label="Search locations or sources"
-          placeholder="Search a place or event"
-          value={currentSearch}
-          onChange={(event) => updateSearch(event.target.value)}
-        />
-      </div>
-      <div className="incident-query-controls" aria-label="Incident filters">
-        <label>
-          <span>View</span>
-          <select
-            aria-label="Incident view"
-            value={view}
-            onChange={(event) => onViewChange?.(event.target.value as IncidentView)}
-          >
-            {Object.entries(VIEW_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Hazard</span>
-          <select
-            aria-label="Hazard filter"
-            value={hazard ?? ''}
-            onChange={(event) =>
-              onHazardChange?.(
-                event.target.value ? (event.target.value as DisasterType) : undefined,
-              )
-            }
-          >
-            <option value="">All hazards</option>
-            {DISASTERS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {view === 'historical' ? (
-          <>
-            <label>
-              <span>Occurrence start (UTC)</span>
-              <input
-                type="datetime-local"
-                aria-label="Historical occurrence start UTC"
-                value={occurrenceStart}
-                onChange={(event) => onOccurrenceStartChange?.(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>Occurrence end (UTC)</span>
-              <input
-                type="datetime-local"
-                aria-label="Historical occurrence end UTC"
-                value={occurrenceEnd}
-                onChange={(event) => onOccurrenceEndChange?.(event.target.value)}
-              />
-            </label>
-          </>
-        ) : null}
-      </div>
+      <IncidentPanelControls
+        snapshot={snapshot}
+        status={status}
+        error={error}
+        search={currentSearch}
+        onSearchChange={updateSearch}
+        view={view}
+        onViewChange={onViewChange}
+        hazard={hazard}
+        onHazardChange={onHazardChange}
+        occurrenceStart={occurrenceStart}
+        occurrenceEnd={occurrenceEnd}
+        onOccurrenceStartChange={onOccurrenceStartChange}
+        onOccurrenceEndChange={onOccurrenceEndChange}
+        onRefresh={onRefresh}
+      />
       <div className="active-incidents-scroll">
-        {status === 'loading' && !snapshot && (
-          <div className="incident-loading" role="status">
-            <span className="loading-indicator" aria-hidden="true" />
-            <span className="incident-loading-copy">
-              <strong>Loading active incidents…</strong>
-              <span>Checking trusted source networks…</span>
-              <small>Some providers can take a moment to respond.</small>
-            </span>
-          </div>
-        )}
-        {error && (
-          <div className="incident-error" role="alert">
-            {snapshot ? 'Refresh failed: ' : ''}
-            {error}
-          </div>
-        )}
         {snapshot ? (
           <IncidentCoverageStatus snapshot={coverageSnapshot ?? snapshot} />
         ) : null}
@@ -417,13 +313,16 @@ export function ActiveIncidentsPanel({
           >
             <div className="incident-section-heading">
               <h3 id="incident-list-heading">{VIEW_LABELS[view]}</h3>
-              <span>
-                {incidents.length}
+              <span className="incident-result-count">
+                Showing {incidents.length}
                 {snapshot.total_incident_count !== undefined &&
                 snapshot.total_incident_count !== null &&
                 snapshot.total_incident_count !== incidents.length
-                  ? ` / ${snapshot.total_incident_count}`
-                  : ''}
+                  ? ` of ${snapshot.total_incident_count}`
+                  : ''}{' '}
+                {snapshot.total_incident_count === 1 && incidents.length === 1
+                  ? 'incident'
+                  : 'incidents'}
               </span>
             </div>
             {displayTimeWindow && displayTimeWindow !== '7d' ? (
@@ -465,15 +364,20 @@ export function ActiveIncidentsPanel({
                         onClick={() => onSelectIncident(incident.event_id)}
                       >
                         <span className="incident-card-heading">
+                          <span
+                            className="incident-selection-indicator"
+                            aria-hidden="true"
+                          >
+                            {selectedIncidentId === incident.event_id ? (
+                              <SelectedIcon />
+                            ) : null}
+                          </span>
                           <span className="incident-disaster-label">
                             <DisasterIcon disaster={incident.disaster} />
                             {disasterLabel(incident.disaster)}
                           </span>
                           {selectedIncidentId === incident.event_id && (
-                            <span className="incident-selected-label">
-                              <SelectedIcon />
-                              Selected
-                            </span>
+                            <span className="incident-selected-label">Selected</span>
                           )}
                           <span className="incident-chevron">
                             <ChevronIcon />

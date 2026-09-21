@@ -336,14 +336,44 @@ input[type='radio'] {
   box-shadow: var(--shadow-overlay);
   display: grid;
   gap: 16px;
-  grid-template-columns: auto minmax(0, 1fr) minmax(170px, 0.45fr);
-  left: 50%;
-  max-width: 760px;
-  padding: 20px;
+  grid-template-columns: auto minmax(0, 1fr) minmax(280px, 0.7fr);
+  left: 24px;
+  max-width: none;
+  padding: 18px 48px 18px 20px;
   position: absolute;
-  transform: translateX(-50%);
-  width: calc(100% - 220px);
+  right: 24px;
+  width: auto;
   z-index: 5;
+}
+
+.selected-incident-dismiss {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  display: flex;
+  height: 36px;
+  justify-content: center;
+  padding: 8px;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 36px;
+}
+
+.selected-incident-dismiss:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.selected-incident-dismiss svg {
+  fill: none;
+  height: 18px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+  width: 18px;
 }
 
 .selected-incident-earthquake {

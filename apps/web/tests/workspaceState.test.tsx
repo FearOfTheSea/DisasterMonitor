@@ -59,6 +59,9 @@ describe('workspace coordination', () => {
     act(() => result.current.handleSelectActiveIncident('event-1'));
     expect(result.current.usableSelectedIncidentId).toBe('event-1');
     expect(result.current.mapLayerState.visibility['active-incidents']).toBe(true);
+    act(() => result.current.clearSelectedIncident());
+    expect(result.current.usableSelectedIncidentId).toBeUndefined();
+    act(() => result.current.handleSelectActiveIncident('event-1'));
     act(() => vi.advanceTimersByTime(500));
     expect(new URLSearchParams(window.location.search).get('i')).toBe('event-1');
     act(() => {

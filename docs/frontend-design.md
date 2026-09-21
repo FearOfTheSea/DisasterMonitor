@@ -23,8 +23,18 @@ it for compatibility.
 Incident search matches loaded country names and codes, source locations, publishers,
 and source titles. It does not request new provider data or change map records or
 coverage. Coverage status and snapshot time remain visible; detailed provider notices
-expand independently. Map layers open on demand and retain their selected state when
-the controls close.
+expand independently. The incident rail uses one status surface for live, loading,
+offline-cache, and unavailable states so recovery guidance is not duplicated. Offline
+and unavailable states keep the last safe context visible and expose a single retry
+action. Search and filters share a one-click reset, result counts use plain language,
+and historical dates constrain the end time to follow the start time. Map layers open
+on demand and retain their selected state when the controls close.
+
+Selected incidents use both color-independent check state and a focused summary. The
+summary can be dismissed without changing map-layer visibility. A compact Help guide
+explains how incident selection, source coverage, and map-display options relate, while
+the command palette keeps the keyboard path discoverable. These progressive-disclosure
+surfaces preserve the map-first hierarchy without hiding provenance or recovery paths.
 
 A new assistant conversation starts with an empty transcript. Its starter questions
 fill and focus the composer for editing; submitting remains an explicit action.
