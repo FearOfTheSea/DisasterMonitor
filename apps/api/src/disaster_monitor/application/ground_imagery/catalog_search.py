@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -35,6 +36,16 @@ class CatalogSearchResult:
     reason_codes: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _SensorSearchResult:
+    sensor: Sensor
+    observations: tuple[Observation, ...]
+    scanned_count: int
+    scan_complete: bool
+    next_cursor: str | None
+    failure: tuple[str, str] | None
+
+
 class GroundImageryCatalogSearcher:
     """Search each sensor and temporal role under one global item budget."""
 
@@ -54,95 +65,107 @@ class GroundImageryCatalogSearcher:
         plan: TemporalPlan,
         sensors: tuple[Sensor, ...],
     ) -> CatalogSearchResult:
-        results: dict[Sensor, list[Observation]] = {sensor: [] for sensor in sensors}
-        scanned: dict[Sensor, int] = {sensor: 0 for sensor in sensors}
-        complete: dict[Sensor, bool] = {sensor: True for sensor in sensors}
-        cursors: dict[Sensor, str | None] = {sensor: None for sensor in sensors}
-        failures: dict[Sensor, tuple[str, str] | None] = {
-            sensor: None for sensor in sensors
-        }
-
-        for sensor in sensors:
-            for role in _roles_for(plan, sensor):
-                window = plan.window_for(role, sensor=sensor)
-                if window.is_empty:
-                    continue
-                (
-                    observations,
-                    count,
-                    is_complete,
-                    cursor,
-                    failure,
-                ) = await self._scan_window(
-                    geometry,
-                    sensor,
-                    role,
-                    window.start,
-                    window.end,
-                    scanned[sensor],
-                )
-                results[sensor].extend(observations)
-                scanned[sensor] = min(
-                    self._maximum_catalog_items, scanned[sensor] + count
-                )
-                cursors[sensor] = cursor
-                complete[sensor] = complete[sensor] and is_complete
-                if failure is not None:
-                    failures[sensor] = failure
-                    continue
-
-                if not _needs_window_expansion(plan, role, observations):
-                    continue
-                expanded = plan.window_for(role, sensor=sensor, expanded=True)
-                if expanded.is_empty or (expanded.start, expanded.end) == (
-                    window.start,
-                    window.end,
-                ):
-                    continue
-                (
-                    extra,
-                    extra_count,
-                    extra_complete,
-                    extra_cursor,
-                    failure,
-                ) = await self._scan_window(
-                    geometry,
-                    sensor,
-                    role,
-                    expanded.start,
-                    expanded.end,
-                    scanned[sensor],
-                )
-                results[sensor].extend(extra)
-                scanned[sensor] = min(
-                    self._maximum_catalog_items, scanned[sensor] + extra_count
-                )
-                cursors[sensor] = extra_cursor
-                complete[sensor] = complete[sensor] and extra_complete
-                if failure is not None:
-                    failures[sensor] = failure
+        sensor_results = await asyncio.gather(
+            *(self._search_sensor(geometry, plan, sensor) for sensor in sensors)
+        )
+        results = {result.sensor: result for result in sensor_results}
 
         statuses = tuple(
             _search_status(
                 sensor=sensor,
-                scanned_count=min(scanned[sensor], self._maximum_catalog_items),
-                scan_complete=complete[sensor],
-                next_cursor=cursors[sensor],
-                failure=failures[sensor],
+                scanned_count=results[sensor].scanned_count,
+                scan_complete=results[sensor].scan_complete,
+                next_cursor=results[sensor].next_cursor,
+                failure=results[sensor].failure,
             )
             for sensor in sensors
         )
         return CatalogSearchResult(
             candidates={
-                sensor: tuple(_dedup_observations(results[sensor]))
+                sensor: tuple(_dedup_observations(list(results[sensor].observations)))
                 for sensor in sensors
             },
             statuses=statuses,
             reason_codes=tuple(
-                failure[0]
-                for sensor in sensors
-                if (failure := failures[sensor]) is not None
+                result.failure[0]
+                for result in sensor_results
+                if result.failure is not None
             ),
+        )
+
+    async def _search_sensor(
+        self,
+        geometry: MultiPolygon,
+        plan: TemporalPlan,
+        sensor: Sensor,
+    ) -> _SensorSearchResult:
+        observations: list[Observation] = []
+        scanned = 0
+        complete = True
+        cursor: str | None = None
+        failure: tuple[str, str] | None = None
+
+        for role in _roles_for(plan, sensor):
+            window = plan.window_for(role, sensor=sensor)
+            if window.is_empty:
+                continue
+            (
+                window_observations,
+                count,
+                is_complete,
+                cursor,
+                window_failure,
+            ) = await self._scan_window(
+                geometry,
+                sensor,
+                role,
+                window.start,
+                window.end,
+                scanned,
+            )
+            observations.extend(window_observations)
+            scanned = min(self._maximum_catalog_items, scanned + count)
+            complete = complete and is_complete
+            if window_failure is not None:
+                failure = window_failure
+                break
+
+            if not _needs_window_expansion(plan, role, window_observations):
+                continue
+            expanded = plan.window_for(role, sensor=sensor, expanded=True)
+            if expanded.is_empty or (expanded.start, expanded.end) == (
+                window.start,
+                window.end,
+            ):
+                continue
+            (
+                extra,
+                extra_count,
+                extra_complete,
+                cursor,
+                window_failure,
+            ) = await self._scan_window(
+                geometry,
+                sensor,
+                role,
+                expanded.start,
+                expanded.end,
+                scanned,
+            )
+            observations.extend(extra)
+            scanned = min(self._maximum_catalog_items, scanned + extra_count)
+            complete = complete and extra_complete
+            if window_failure is not None:
+                failure = window_failure
+                break
+
+        return _SensorSearchResult(
+            sensor=sensor,
+            observations=tuple(observations),
+            scanned_count=scanned,
+            scan_complete=complete,
+            next_cursor=cursor,
+            failure=failure,
         )
 
     async def _scan_window(

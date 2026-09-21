@@ -217,12 +217,32 @@
 }
 
 .ground-imagery-loading {
-  align-items: center;
+  align-items: flex-start;
   color: var(--muted);
   display: flex;
   font-size: 0.72rem;
   gap: 9px;
   padding: 18px 24px;
+}
+
+.ground-imagery-loading .loading-indicator {
+  margin-top: 2px;
+}
+
+.ground-imagery-loading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.ground-imagery-loading strong {
+  color: var(--ink);
+  font-size: 0.74rem;
+}
+
+.ground-imagery-loading p {
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 3px 0 0;
 }
 
 .ground-imagery-sensors {

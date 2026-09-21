@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,7 +38,10 @@ const request: GroundImageryRequestResponse = {
       source_footprints: [{ source_kind: 'mapped_impact' }],
     },
     alternatives: [],
-    warnings: [],
+    warnings: [
+      'The reported-place boundary lookup was unavailable.',
+      'The region is a point-derived inspection buffer.',
+    ],
     reason_code: null,
   },
   temporal_plan: {
@@ -221,7 +224,36 @@ describe('GroundImageryPanel', () => {
     });
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('shows readiness and slow-provider guidance while catalog search continues', async () => {
+    vi.useFakeTimers();
+    api.createGroundImageryRequest.mockImplementation(
+      () => new Promise<GroundImageryRequestResponse>(() => undefined),
+    );
+
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+
+    expect(screen.getByText('Catalog discovery is available.')).toBeVisible();
+    expect(screen.getByText('Searching Sentinel acquisitions')).toBeVisible();
+
+    await act(async () => vi.advanceTimersByTimeAsync(8_000));
+
+    expect(
+      screen.getByText(/Copernicus Data Space is taking longer than usual/),
+    ).toBeVisible();
+  });
 
   it('shows the region, temporal uncertainty, and independent sensor states', async () => {
     render(
@@ -240,6 +272,43 @@ describe('GroundImageryPanel', () => {
     expect(screen.getByText('Sentinel-2 optical')).toBeVisible();
     expect(screen.getByText('Onset unknown')).toBeVisible();
     expect(screen.getByText('No recent observation')).toBeVisible();
+    expect(
+      screen.getByText('The reported-place boundary lookup was unavailable.'),
+    ).toBeVisible();
+    expect(
+      screen.getByText('The region is a point-derived inspection buffer.'),
+    ).toBeVisible();
+  });
+
+  it('clears the previous incident while the next ground view loads', async () => {
+    const { rerender } = render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Region basis')).toBeVisible();
+
+    api.createGroundImageryRequest.mockImplementation(
+      () => new Promise<GroundImageryRequestResponse>(() => undefined),
+    );
+    api.fetchGroundImageryReadiness.mockImplementation(
+      () => new Promise<GroundImageryReadinessResponse>(() => undefined),
+    );
+    rerender(
+      <GroundImageryPanel
+        incidentId="incident-2"
+        incidentLabel="Coastal earthquake"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Searching Sentinel acquisitions')).toBeVisible();
+    expect(screen.getByText('Coastal earthquake')).toBeVisible();
+    expect(screen.queryByText('Region basis')).not.toBeInTheDocument();
+    expect(screen.queryByText('Request ground-imagery:1')).not.toBeInTheDocument();
   });
 
   it('refreshes the request and persists a watch action', async () => {

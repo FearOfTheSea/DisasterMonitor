@@ -44,6 +44,7 @@ type GroundImageryPanelProps = {
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 const DISPLAY_SENSORS: Sensor[] = ['sentinel-1', 'sentinel-2'];
+const SLOW_SEARCH_DELAY_MS = 8_000;
 
 export function GroundImageryPanel({
   incidentId,
@@ -53,19 +54,26 @@ export function GroundImageryPanel({
   const [request, setRequest] = useState<GroundImageryPanelRequest>();
   const [readiness, setReadiness] = useState<GroundImageryPanelReadiness>();
   const [loadState, setLoadState] = useState<LoadState>('idle');
+  const [searchIsSlow, setSearchIsSlow] = useState(false);
   const [error, setError] = useState<string>();
   const [action, setAction] = useState<string>();
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
       setLoadState('loading');
+      setRequest(undefined);
+      setReadiness(undefined);
+      setSearchIsSlow(false);
       setError(undefined);
+      setAction(undefined);
       try {
-        const [nextReadiness, nextRequest] = await Promise.all([
-          fetchGroundImageryReadiness(signal),
+        const [, nextRequest] = await Promise.all([
+          fetchGroundImageryReadiness(signal).then((nextReadiness) => {
+            setReadiness(nextReadiness);
+            return nextReadiness;
+          }),
           createGroundImageryRequest(incidentId, signal),
         ]);
-        setReadiness(nextReadiness);
         setRequest(nextRequest);
         setLoadState('ready');
       } catch (loadError) {
@@ -89,6 +97,12 @@ export function GroundImageryPanel({
       controller.abort();
     };
   }, [load]);
+
+  useEffect(() => {
+    if (loadState !== 'loading') return;
+    const timer = window.setTimeout(() => setSearchIsSlow(true), SLOW_SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [loadState]);
 
   const runAction = useCallback(
     async (name: string, operation: () => Promise<GroundImageryPanelRequest>) => {
@@ -151,7 +165,19 @@ export function GroundImageryPanel({
         {loadState === 'loading' ? (
           <div className="ground-imagery-loading" role="status" aria-live="polite">
             <span className="loading-indicator" />
-            <span>Resolving event geography and searching Sentinel acquisitions…</span>
+            <div>
+              <strong>Searching Sentinel acquisitions</strong>
+              <span>
+                Resolving event geography and checking radar and optical catalogs.
+              </span>
+              {searchIsSlow ? (
+                <p>
+                  Copernicus Data Space is taking longer than usual. Ground view will
+                  return separate partial sensor statuses if a bounded provider timeout
+                  is reached.
+                </p>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -232,11 +258,13 @@ export function GroundImageryPanel({
                   </p>
                 </div>
               )}
-              {request.region.warnings?.slice(1).map((warning) => (
-                <p className="ground-imagery-note" key={warning}>
-                  {warning}
-                </p>
-              ))}
+              {request.region.warnings
+                ?.slice(request.region.region ? 0 : 1)
+                .map((warning) => (
+                  <p className="ground-imagery-note" key={warning}>
+                    {warning}
+                  </p>
+                ))}
             </section>
 
             <section className="ground-imagery-section">

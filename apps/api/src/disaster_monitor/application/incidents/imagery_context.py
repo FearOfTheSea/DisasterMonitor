@@ -146,6 +146,9 @@ class EarthquakeProductImageryContextReader(IncidentImageryContextReader):
         context = await self._base.get_imagery_context(incident_id)
         if context is None or context.disaster is not Disaster.EARTHQUAKE:
             return context
+        usgs_event_id = incident_id.removeprefix("usgs:")
+        if not incident_id.startswith("usgs:") or not usgs_event_id.isalnum():
+            return context
         try:
             products = await self._earthquake_context.execute(incident_id)
         except Exception:
