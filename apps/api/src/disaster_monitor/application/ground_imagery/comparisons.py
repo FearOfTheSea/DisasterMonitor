@@ -1,5 +1,6 @@
 """Reproducible synchronized before/after Ground comparison manifests."""
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -50,8 +51,23 @@ class GroundComparisonBuilder:
         derived_metrics: tuple[tuple[str, float], ...],
         created_at: datetime,
     ) -> GroundComparisonManifest:
+        identity_fields = (
+            comparison_id,
+            before_product_id,
+            after_product_id,
+            recipe_version,
+            coverage_mask_version,
+            normalization,
+        )
+        if any(not value.strip() for value in identity_fields):
+            raise ValueError("Ground comparison identities and recipes are required.")
         if before_grid != after_grid:
             raise ValueError("Ground comparison inputs must use the same grid.")
+        if any(
+            value.tzinfo is None or value.utcoffset() is None
+            for value in (before_capture, after_capture, created_at)
+        ):
+            raise ValueError("Ground comparison timestamps must be timezone-aware.")
         if before_capture >= after_capture:
             raise ValueError(
                 "Ground comparison before capture must precede after capture."
@@ -62,10 +78,17 @@ class GroundComparisonBuilder:
             before_mask_checksum,
             after_mask_checksum,
         )
-        if any(len(value) != 64 for value in checksums):
+        if any(not _is_sha256(value) for value in checksums):
             raise ValueError("Ground comparison artifacts require SHA-256 checksums.")
-        if any(not key.strip() for key, _ in derived_metrics):
-            raise ValueError("Ground comparison metrics require stable names.")
+        metric_names = [key for key, _ in derived_metrics]
+        if (
+            any(not key.strip() for key in metric_names)
+            or len(metric_names) != len(set(metric_names))
+            or any(not math.isfinite(value) for _, value in derived_metrics)
+        ):
+            raise ValueError(
+                "Ground comparison metrics require finite and unique stable names."
+            )
         return GroundComparisonManifest(
             manifest_version="ground-comparison-manifest-v1",
             comparison_id=comparison_id,
@@ -88,6 +111,12 @@ class GroundComparisonBuilder:
             derived_metrics=tuple(sorted(derived_metrics)),
             created_at=created_at,
         )
+
+
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )
 
 
 def comparison_document(value: GroundComparisonManifest) -> dict[str, object]:

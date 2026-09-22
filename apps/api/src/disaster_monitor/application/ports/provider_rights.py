@@ -68,6 +68,7 @@ class ProviderRightsManifest:
 
     def validate_production(self, *, today: date) -> None:
         """Reject missing, expired, or commercial production entitlements."""
+        annual_review_boundary = _previous_year_boundary(today)
         for entry in self.entries:
             if entry.production and entry.access_model is AccessModel.PAID:
                 raise ValueError(
@@ -77,7 +78,7 @@ class ProviderRightsManifest:
                 raise ValueError(
                     f"Provider-rights review for {entry.asset_id} is in the future."
                 )
-            if entry.last_human_review < date(today.year - 1, today.month, today.day):
+            if entry.last_human_review < annual_review_boundary:
                 raise ValueError(
                     f"Provider-rights review for {entry.asset_id} has expired."
                 )
@@ -89,3 +90,10 @@ class ProviderRightsManifest:
             raise ValueError(
                 "Provider-rights metadata is missing for: " + ", ".join(missing)
             )
+
+
+def _previous_year_boundary(today: date) -> date:
+    try:
+        return today.replace(year=today.year - 1)
+    except ValueError:
+        return date(today.year - 1, 2, 28)

@@ -46,8 +46,10 @@ class GfmMaskLineage:
             )
         ):
             raise ValueError("GFM component extraction requires complete lineage.")
-        if len(self.source_sha256) != 64:
-            raise ValueError("GFM source checksums must be SHA-256 values.")
+        if len(self.source_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in self.source_sha256
+        ):
+            raise ValueError("GFM source checksums must be lowercase SHA-256 values.")
         for value in (self.captured_at, self.retrieved_at):
             if value.tzinfo is None or value.utcoffset() is None:
                 raise ValueError("GFM lineage times must be timezone-aware.")

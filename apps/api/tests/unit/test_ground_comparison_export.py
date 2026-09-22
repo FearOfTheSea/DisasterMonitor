@@ -1,6 +1,9 @@
+import hashlib
 import json
 import zipfile
 from datetime import UTC, datetime
+
+import pytest
 
 from disaster_monitor.application.ground_imagery.comparisons import (
     GroundComparisonBuilder,
@@ -47,19 +50,68 @@ def test_comparison_manifest_records_reproducible_matched_grid_and_masks() -> No
     assert manifest.view_modes == ("side_by_side", "swipe")
 
 
+def test_comparison_manifest_rejects_malformed_checksums_and_metrics() -> None:
+    with pytest.raises(ValueError, match="SHA-256"):
+        GroundComparisonBuilder().build(
+            comparison_id="comparison:1",
+            before_product_id="before",
+            after_product_id="after",
+            before_capture=datetime(2026, 9, 1, tzinfo=UTC),
+            after_capture=datetime(2026, 9, 14, tzinfo=UTC),
+            before_checksum="z" * 64,
+            after_checksum="b" * 64,
+            before_grid=GRID,
+            after_grid=GRID,
+            recipe_version="recipe-v1",
+            coverage_mask_version="mask-v1",
+            before_mask_checksum="c" * 64,
+            after_mask_checksum="d" * 64,
+            normalization="none",
+            derived_metrics=(),
+            created_at=NOW,
+        )
+
+    with pytest.raises(ValueError, match="finite and unique"):
+        GroundComparisonBuilder().build(
+            comparison_id="comparison:1",
+            before_product_id="before",
+            after_product_id="after",
+            before_capture=datetime(2026, 9, 1, tzinfo=UTC),
+            after_capture=datetime(2026, 9, 14, tzinfo=UTC),
+            before_checksum="a" * 64,
+            after_checksum="b" * 64,
+            before_grid=GRID,
+            after_grid=GRID,
+            recipe_version="recipe-v1",
+            coverage_mask_version="mask-v1",
+            before_mask_checksum="c" * 64,
+            after_mask_checksum="d" * 64,
+            normalization="none",
+            derived_metrics=(
+                ("valid_overlap_fraction", 0.82),
+                ("valid_overlap_fraction", float("nan")),
+            ),
+            created_at=NOW,
+        )
+
+
 def test_export_bundle_packages_only_explicit_artifacts_and_metadata(tmp_path) -> None:
-    cog = tmp_path / "before.tif"
+    before_cog = tmp_path / "before.tif"
+    after_cog = tmp_path / "after.tif"
     preview = tmp_path / "preview.png"
-    cog.write_bytes(b"cog")
+    before_cog.write_bytes(b"before-cog")
+    after_cog.write_bytes(b"after-cog")
     preview.write_bytes(b"png")
+    before_checksum = hashlib.sha256(before_cog.read_bytes()).hexdigest()
+    after_checksum = hashlib.sha256(after_cog.read_bytes()).hexdigest()
     manifest = GroundComparisonBuilder().build(
         comparison_id="comparison:1",
         before_product_id="before",
         after_product_id="after",
         before_capture=datetime(2026, 9, 1, tzinfo=UTC),
         after_capture=datetime(2026, 9, 14, tzinfo=UTC),
-        before_checksum="a" * 64,
-        after_checksum="b" * 64,
+        before_checksum=before_checksum,
+        after_checksum=after_checksum,
         before_grid=GRID,
         after_grid=GRID,
         recipe_version="recipe-v1",
@@ -76,7 +128,7 @@ def test_export_bundle_packages_only_explicit_artifacts_and_metadata(tmp_path) -
         incident_id="earthquake:1",
         region=REGION,
         comparison=manifest,
-        cogs=(cog,),
+        cogs=(before_cog, after_cog),
         previews=(preview,),
     )
 
@@ -84,6 +136,7 @@ def test_export_bundle_packages_only_explicit_artifacts_and_metadata(tmp_path) -
         names = set(archive.namelist())
         assert names == {
             "cogs/before.tif",
+            "cogs/after.tif",
             "previews/preview.png",
             "region.geojson",
             "comparison-manifest.json",
@@ -92,3 +145,38 @@ def test_export_bundle_packages_only_explicit_artifacts_and_metadata(tmp_path) -
         readme = json.loads(archive.read("README.json"))
     assert readme["credentials_included"] is False
     assert readme["incident_id"] == "earthquake:1"
+
+
+def test_export_bundle_rejects_cogs_that_do_not_match_manifest(tmp_path) -> None:
+    before_cog = tmp_path / "before.tif"
+    after_cog = tmp_path / "after.tif"
+    before_cog.write_bytes(b"before-cog")
+    after_cog.write_bytes(b"tampered-after-cog")
+    manifest = GroundComparisonBuilder().build(
+        comparison_id="comparison:1",
+        before_product_id="before",
+        after_product_id="after",
+        before_capture=datetime(2026, 9, 1, tzinfo=UTC),
+        after_capture=datetime(2026, 9, 14, tzinfo=UTC),
+        before_checksum=hashlib.sha256(before_cog.read_bytes()).hexdigest(),
+        after_checksum="b" * 64,
+        before_grid=GRID,
+        after_grid=GRID,
+        recipe_version="recipe-v1",
+        coverage_mask_version="mask-v1",
+        before_mask_checksum="c" * 64,
+        after_mask_checksum="d" * 64,
+        normalization="none",
+        derived_metrics=(),
+        created_at=NOW,
+    )
+
+    with pytest.raises(ValueError, match="manifest checksums"):
+        GroundExportBundleBuilder().build(
+            output_path=tmp_path / "bundle.zip",
+            incident_id="earthquake:1",
+            region=REGION,
+            comparison=manifest,
+            cogs=(before_cog, after_cog),
+            previews=(),
+        )

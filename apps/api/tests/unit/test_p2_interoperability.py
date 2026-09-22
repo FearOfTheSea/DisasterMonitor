@@ -3,6 +3,8 @@ import io
 import json
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from disaster_monitor.application.evidence.provenance_graph import (
     ProvenanceGraphBuilder,
     ProvenanceNodeKind,
@@ -79,6 +81,17 @@ def test_geojson_csv_and_ogc_exports_preserve_meaning_and_time_bounds() -> None:
     assert collection["numberMatched"] == 1
     assert collection["timeStamp"] == "2026-09-15T08:00:00Z"
     assert collection["links"][0]["rel"] == "self"
+
+
+def test_ogc_time_bounds_require_timezone_aware_values() -> None:
+    projection = OgcFeatureProjection(_snapshot())
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        projection.query(
+            "incidents",
+            occurrence_start=datetime(2026, 9, 15, 6),
+            occurrence_end=datetime(2026, 9, 15, 9),
+        )
 
 
 def test_print_brief_is_deterministic_html_without_model_text() -> None:

@@ -1,6 +1,8 @@
 """Credential-free Ground comparison export bundles."""
 
+import hashlib
 import json
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -25,6 +27,14 @@ class GroundExportBundleBuilder:
         artifacts = (*cogs, *previews)
         if any(not path.is_file() for path in artifacts):
             raise ValueError("Every Ground export artifact must be an existing file.")
+        expected_cog_checksums = sorted(
+            (comparison.before.artifact_checksum, comparison.after.artifact_checksum)
+        )
+        packaged_cog_checksums = sorted(_file_sha256(path) for path in cogs)
+        if packaged_cog_checksums != expected_cog_checksums:
+            raise ValueError(
+                "Ground export COGs must match both comparison manifest checksums."
+            )
         names = [path.name for path in artifacts]
         if len(names) != len(set(names)):
             raise ValueError("Ground export artifact filenames must be unique.")
@@ -44,9 +54,9 @@ class GroundExportBundleBuilder:
             output_path, "w", compression=zipfile.ZIP_DEFLATED
         ) as archive:
             for path in cogs:
-                _write(archive, f"cogs/{path.name}", path.read_bytes())
+                _write_file(archive, f"cogs/{path.name}", path)
             for path in previews:
-                _write(archive, f"previews/{path.name}", path.read_bytes())
+                _write_file(archive, f"previews/{path.name}", path)
             _write_json(archive, "region.geojson", region.as_geojson())
             _write_json(
                 archive,
@@ -68,7 +78,21 @@ def _write_json(
 
 
 def _write(archive: zipfile.ZipFile, name: str, content: bytes) -> None:
+    archive.writestr(_zip_info(name), content)
+
+
+def _write_file(archive: zipfile.ZipFile, name: str, path: Path) -> None:
+    with path.open("rb") as source, archive.open(_zip_info(name), "w") as destination:
+        shutil.copyfileobj(source, destination, length=1024 * 1024)
+
+
+def _zip_info(name: str) -> zipfile.ZipInfo:
     info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
     info.compress_type = zipfile.ZIP_DEFLATED
     info.external_attr = 0o600 << 16
-    archive.writestr(info, content)
+    return info
+
+
+def _file_sha256(path: Path) -> str:
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()

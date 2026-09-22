@@ -201,3 +201,23 @@ def test_media_lineage_requires_recorded_transformation_and_retention() -> None:
             transformations=(),
             retention_expires_at=NOW + timedelta(days=30),
         )
+
+
+@pytest.mark.asyncio
+async def test_import_privacy_validation_is_atomic_before_report_persistence() -> None:
+    store = InMemoryFieldReportStore()
+    service = FieldReportService(
+        store,
+        privacy=FieldMediaPrivacyService(clock=lambda: NOW),
+        clock=lambda: NOW,
+    )
+    safe = _report("report:safe")
+    sensitive = replace(
+        _report("report:sensitive"),
+        text="Contact field coordinator at person@example.test.",
+    )
+
+    with pytest.raises(SensitiveFieldContentError, match="PII"):
+        await service.import_reports((safe, sensitive))
+
+    assert await service.list_queue() == ()

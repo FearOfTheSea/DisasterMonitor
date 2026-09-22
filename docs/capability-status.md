@@ -62,9 +62,10 @@ lane with append-only observations, provisional candidate revisions, six detecti
 timestamps, and a shared assistant/monitoring projection. Automated tests establish
 the deterministic lifecycle, persistence contract, projection transport, and
 provisional UI language. They do not establish the external 12-hour recall claim;
-approved controlled-web sources and an independent news-break denominator remain
-promotion gates. The bounded RSS/sitemap foundation is implemented, but no live
-publisher has been admitted.
+an independent news-break denominator remains a promotion gate. The bounded
+RSS/sitemap path admits one rights-reviewed publisher feed, NASA Earth Observatory
+Natural Events, under explicit host, path, cadence, byte, attribution, and
+review-expiry controls. No other direct publisher feed is admitted.
 
 Those claims remain promotion-pending. They require locked live episodes and
 supervised human evaluation.

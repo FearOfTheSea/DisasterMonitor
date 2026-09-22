@@ -99,3 +99,28 @@ def test_rights_manifest_rejects_unregistered_assets() -> None:
     manifest = load_provider_rights_manifest()
     with pytest.raises(ValueError, match="missing"):
         manifest.require_all(["not-registered"])
+
+
+def test_rights_review_window_handles_leap_day() -> None:
+    reviewed = date(2027, 2, 28)
+    manifest = ProviderRightsManifest(
+        "provider-rights.v1",
+        "test",
+        (
+            ProviderRights(
+                asset_id="leap-day-review",
+                authority="Test authority",
+                license_name="Test license",
+                attribution_text="Test attribution",
+                redistribution_policy="Test redistribution",
+                cache_policy="Test cache",
+                rate_limit_policy="Test rate limits",
+                credential_class="none",
+                retention_limit_days=1,
+                last_human_review=reviewed,
+                access_model=AccessModel.PUBLIC,
+            ),
+        ),
+    )
+
+    manifest.validate_production(today=date(2028, 2, 29))

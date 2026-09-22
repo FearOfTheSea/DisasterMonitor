@@ -343,6 +343,9 @@ describe('GroundImageryPanel', () => {
     expect(await screen.findByText('Matched before / after')).toBeVisible();
     expect(screen.getByAltText('Sentinel-1 radar before capture')).toBeVisible();
     expect(screen.getByText(/S1-before → S1-after/)).toBeVisible();
+    expect(
+      screen.getByText(/no comparison manifest or export has been generated/i),
+    ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Swipe' }));
     expect(screen.getByRole('slider', { name: 'Reveal position' })).toBeVisible();
   });

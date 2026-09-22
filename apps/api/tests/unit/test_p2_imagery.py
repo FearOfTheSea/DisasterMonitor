@@ -104,6 +104,21 @@ def test_gfm_mask_components_are_bounded_and_retain_processing_lineage() -> None
     assert regions[0].evidence.semantic_role == "official observed flood extent"
 
 
+def test_gfm_lineage_rejects_non_sha256_checksum_text() -> None:
+    with pytest.raises(ValueError, match="lowercase SHA-256"):
+        GfmMaskLineage(
+            source_item_id="GFM_20260915T060000Z",
+            source_asset_url="https://example.test/gfm.tif",
+            source_sha256="z" * 64,
+            source_crs="EPSG:4326",
+            mask_band="ensemble_flood_extent",
+            threshold_expression="pixel == 1",
+            algorithm_version="gfm-components:v1",
+            captured_at=NOW,
+            retrieved_at=NOW,
+        )
+
+
 def test_cems_and_shakemap_products_become_distinct_source_regions() -> None:
     polygon = {
         "type": "Polygon",

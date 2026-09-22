@@ -473,8 +473,8 @@ function GroundComparisonCard({
       ) : null}
       <p>
         Grid {pair.before.grid.crs} · {pair.before.grid.width} ×{' '}
-        {pair.before.grid.height} · independent source masks retained in the comparison
-        manifest.
+        {pair.before.grid.height} · matching artifact grids are required. No comparison
+        manifest or export has been generated for this display-only pairing.
       </p>
     </article>
   );

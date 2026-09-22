@@ -59,9 +59,22 @@ class EvidencePackageBuilder:
             raise ValueError(
                 "Evidence packages require incident and software identity."
             )
+        snapshot_ids = tuple(
+            value
+            for key in ("event_id", "incident_id")
+            if isinstance((value := incident_snapshot.get(key)), str) and value.strip()
+        )
+        if snapshot_ids and any(value != incident_id for value in snapshot_ids):
+            raise ValueError("Evidence package incident identity is inconsistent.")
+        if any(not value.strip() for value in policy_versions):
+            raise ValueError("Evidence package policy versions must not be empty.")
+        if any(not isinstance(item, dict) for item in (*findings, *imagery_manifests)):
+            raise ValueError("Evidence package records must be JSON objects.")
         if any(not url.startswith("https://") for url in source_links):
             raise ValueError("Evidence package source links must use HTTPS.")
         created_at = self._clock()
+        if created_at.tzinfo is None or created_at.utcoffset() is None:
+            raise ValueError("Evidence package creation time must be timezone-aware.")
         files = {
             "incident.json": _json_bytes(incident_snapshot),
             "normalized-data.json": _json_bytes(normalized_data),
@@ -100,6 +113,8 @@ class EvidencePackageBuilder:
 
 class EvidencePackageVerifier:
     def __init__(self, *, maximum_bytes: int = 50_000_000) -> None:
+        if maximum_bytes <= 0:
+            raise ValueError("Evidence-package byte limits must be positive.")
         self._maximum_bytes = maximum_bytes
 
     def verify(self, content: bytes) -> VerifiedEvidencePackage:
@@ -149,9 +164,20 @@ class EvidencePackageVerifier:
         if (
             not isinstance(manifest, dict)
             or manifest.get("schema_version") != _SCHEMA_VERSION
+            or manifest.get("classification") != "bounded_incident_snapshot"
         ):
             raise EvidencePackageVerificationError(
                 "Evidence package schema version is unsupported."
+            )
+        incident_id = _required_manifest_text(manifest, "incident_id")
+        software_version = _required_manifest_text(manifest, "software_version")
+        raw_policy_versions = manifest.get("policy_versions")
+        if not isinstance(raw_policy_versions, list) or any(
+            not isinstance(item, str) or not item.strip()
+            for item in raw_policy_versions
+        ):
+            raise EvidencePackageVerificationError(
+                "Evidence package policy versions are invalid."
             )
         raw_files = manifest.get("files")
         if not isinstance(raw_files, list):
@@ -165,14 +191,31 @@ class EvidencePackageVerifier:
                     "Evidence package file manifest is invalid."
                 )
             path = str(item.get("path") or "")
-            expected = str(item.get("sha256") or "")
-            if path in declared or path not in archive.namelist():
+            expected = item.get("sha256")
+            expected_bytes = item.get("bytes")
+            if (
+                path == "manifest.json"
+                or _unsafe_path(path)
+                or path in declared
+                or path not in archive.namelist()
+            ):
                 raise EvidencePackageVerificationError(
                     "Evidence package declared files are incomplete."
                 )
+            if (
+                not isinstance(expected, str)
+                or len(expected) != 64
+                or any(character not in "0123456789abcdef" for character in expected)
+                or isinstance(expected_bytes, bool)
+                or not isinstance(expected_bytes, int)
+                or expected_bytes < 0
+            ):
+                raise EvidencePackageVerificationError(
+                    "Evidence package file metadata is invalid."
+                )
             file_content = archive.read(path)
             if (
-                len(file_content) != item.get("bytes")
+                len(file_content) != expected_bytes
                 or sha256(file_content).hexdigest() != expected
             ):
                 raise EvidencePackageVerificationError(
@@ -196,18 +239,74 @@ class EvidencePackageVerifier:
             raise EvidencePackageVerificationError(
                 "Evidence package import boundary is invalid."
             )
+        _validate_payload_documents(archive, incident_id=incident_id)
         created_at = datetime.fromisoformat(str(manifest["created_at"]))
         if created_at.tzinfo is None or created_at.utcoffset() is None:
             raise EvidencePackageVerificationError(
                 "Evidence package creation time lacks a timezone."
             )
         return VerifiedEvidencePackage(
-            incident_id=str(manifest["incident_id"]),
+            incident_id=incident_id,
             created_at=created_at,
-            software_version=str(manifest["software_version"]),
-            policy_versions=tuple(str(item) for item in manifest["policy_versions"]),
+            software_version=software_version,
+            policy_versions=tuple(raw_policy_versions),
             verified_files=tuple(sorted(declared)),
         )
+
+
+def _required_manifest_text(manifest: dict[str, Any], key: str) -> str:
+    value = manifest.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise EvidencePackageVerificationError(
+            f"Evidence package {key.replace('_', ' ')} is invalid."
+        )
+    return value
+
+
+def _validate_payload_documents(archive: ZipFile, *, incident_id: str) -> None:
+    incident = _read_payload_json(archive, "incident.json")
+    normalized = _read_payload_json(archive, "normalized-data.json")
+    findings = _read_payload_json(archive, "findings.json")
+    imagery = _read_payload_json(archive, "imagery-manifests.json")
+    source_links = _read_payload_json(archive, "source-links.json")
+    if not isinstance(incident, dict) or not isinstance(normalized, dict):
+        raise EvidencePackageVerificationError(
+            "Evidence package JSON payload shapes are invalid."
+        )
+    declared_incident_ids = tuple(
+        value
+        for key in ("event_id", "incident_id")
+        if isinstance((value := incident.get(key)), str) and value.strip()
+    )
+    if declared_incident_ids and any(
+        value != incident_id for value in declared_incident_ids
+    ):
+        raise EvidencePackageVerificationError(
+            "Evidence package incident identity is inconsistent."
+        )
+    if (
+        not isinstance(findings, list)
+        or any(not isinstance(item, dict) for item in findings)
+        or not isinstance(imagery, list)
+        or any(not isinstance(item, dict) for item in imagery)
+        or not isinstance(source_links, list)
+        or any(
+            not isinstance(item, str) or not item.startswith("https://")
+            for item in source_links
+        )
+    ):
+        raise EvidencePackageVerificationError(
+            "Evidence package JSON payload shapes are invalid."
+        )
+
+
+def _read_payload_json(archive: ZipFile, path: str) -> object:
+    try:
+        return json.loads(archive.read(path))
+    except (json.JSONDecodeError, UnicodeError) as error:
+        raise EvidencePackageVerificationError(
+            f"Evidence package JSON payload is invalid: {path}."
+        ) from error
 
 
 def _json_bytes(value: object) -> bytes:

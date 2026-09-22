@@ -30,6 +30,11 @@ class OgcFeatureProjection:
             raise ValueError("The OGC feature collection is not supported.")
         if not 1 <= limit <= 1000:
             raise ValueError("The OGC feature limit must be between 1 and 1000.")
+        for value in (occurrence_start, occurrence_end):
+            if value is not None and (
+                value.tzinfo is None or value.utcoffset() is None
+            ):
+                raise ValueError("OGC occurrence bounds must be timezone-aware.")
         if occurrence_start and occurrence_end and occurrence_end < occurrence_start:
             raise ValueError("The OGC occurrence interval is reversed.")
         source = export_incidents_geojson(self._snapshot)

@@ -166,12 +166,12 @@ daily bandwidth and concurrency accounting, `Retry-After`/backoff scheduling, pa
 drift and latency metrics, and an observation-only route that cannot promote candidates.
 These are promotion gates, not deferred production cleanup.
 
-There are no packaged or enabled publisher records. To make an approved registry
-available to the scheduler and worker, set `APPROVED_WEB_SOURCE_REGISTRY_PATH` to an
-operator-managed JSON file following
-`docs/examples/approved-web-sources.example.json`. Editing the example alone has no
-runtime effect. A worker restart is required after registry membership or kill-switch
-changes.
+The packaged registry admits one enabled source, NASA Earth Observatory Natural
+Events, under the bounded controls and rights review recorded in
+`docs/p2-interoperability-and-provider-evaluations.md`. Operators can replace that
+default by setting `APPROVED_WEB_SOURCE_REGISTRY_PATH` to a reviewed registry; an empty
+registry disables direct publisher collection. A worker restart is required after
+registry membership or kill-switch changes.
 
 The two-source live pilot, shadow evaluation, and guarded production stages remain
 blocked on those controls and source-by-source governance approval. DNS is checked

@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from hashlib import sha256
 from io import BytesIO
 from zipfile import ZipFile
 
@@ -187,6 +188,20 @@ def test_evidence_package_manifest_is_deterministic_json() -> None:
     assert manifest["classification"] == "bounded_incident_snapshot"
 
 
+def test_evidence_package_builder_rejects_inconsistent_incident_identity() -> None:
+    with pytest.raises(ValueError, match="incident identity"):
+        EvidencePackageBuilder(clock=lambda: NOW).build(
+            incident_id="event-1",
+            incident_snapshot={"event_id": "event-2"},
+            source_links=(),
+            normalized_data={},
+            findings=(),
+            imagery_manifests=(),
+            software_version="0.1.0",
+            policy_versions=(),
+        )
+
+
 def test_evidence_package_rejects_undeclared_files_and_expansion_bombs() -> None:
     builder = EvidencePackageBuilder(clock=lambda: NOW)
     archive = builder.build(
@@ -210,3 +225,38 @@ def test_evidence_package_rejects_undeclared_files_and_expansion_bombs() -> None
         EvidencePackageVerifier().verify(target.getvalue())
     with pytest.raises(EvidencePackageVerificationError, match="expanded"):
         EvidencePackageVerifier(maximum_bytes=5_000).verify(archive)
+
+
+def test_evidence_package_rejects_checksum_valid_invalid_json_payload() -> None:
+    archive = EvidencePackageBuilder(clock=lambda: NOW).build(
+        incident_id="event-1",
+        incident_snapshot={"event_id": "event-1"},
+        source_links=(),
+        normalized_data={},
+        findings=(),
+        imagery_manifests=(),
+        software_version="0.1.0",
+        policy_versions=(),
+    )
+    source = BytesIO(archive)
+    target = BytesIO()
+    replacement = b"not-json"
+    with ZipFile(source) as current:
+        manifest = json.loads(current.read("manifest.json"))
+        for item in manifest["files"]:
+            if item["path"] == "incident.json":
+                item["sha256"] = sha256(replacement).hexdigest()
+                item["bytes"] = len(replacement)
+        with ZipFile(target, "w") as changed:
+            for name in current.namelist():
+                content = (
+                    json.dumps(manifest).encode()
+                    if name == "manifest.json"
+                    else replacement
+                    if name == "incident.json"
+                    else current.read(name)
+                )
+                changed.writestr(name, content)
+
+    with pytest.raises(EvidencePackageVerificationError, match="JSON payload"):
+        EvidencePackageVerifier().verify(target.getvalue())

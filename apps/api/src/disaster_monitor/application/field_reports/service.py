@@ -106,9 +106,10 @@ class FieldReportService:
     async def import_reports(
         self, reports: tuple[UnverifiedFieldReport, ...]
     ) -> tuple[UnverifiedFieldReport, ...]:
-        for report in reports:
-            if self._privacy is not None:
+        if self._privacy is not None:
+            for report in reports:
                 self._privacy.validate_report_text(report.text)
+        for report in reports:
             await self._store.add_report(report)
         return reports
 
