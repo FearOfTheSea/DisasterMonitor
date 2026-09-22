@@ -138,6 +138,10 @@ application helpers that change with them:
 | `media_analysis` | Media discovery and visual-analysis orchestration |
 | `ground_imagery` | Event-scoped region/time planning, independent Sentinel-1/Sentinel-2 catalog selection, artifact preparation, provenance manifests, and Ground view status |
 | `learning` | Offline learning, drift evaluation, governed optimization |
+| `social_signals` | Open-feed admission and local triage of untrusted discovery candidates |
+| `planning` | Structurally isolated hypothetical scenario and historical replay workspaces |
+| `historical_loss` | Retrospective preparedness/comparison context |
+| `localization` | Human-reviewed terminology resolution that preserves authority names |
 | `agent` | Bounded agent planning, execution, tools, and task validation |
 | `ports` | Consumer-owned external seams and shared boundary admission rules |
 | `compatibility` | Legacy construction only; no new use-case behavior |

@@ -1,0 +1,18 @@
+{
+  "schema_version": "terminology-pack.v1",
+  "language": "vi",
+  "version": "1.0.0",
+  "reviewed_by": "DisasterMonitor maintainers",
+  "reviewed_at": "2026-09-22T00:00:00+00:00",
+  "human_reviewed": true,
+  "terms": {
+    "cap.event.tsunami_warning": "Cảnh báo sóng thần",
+    "hazard.drought": "Hạn hán",
+    "hazard.earthquake": "Động đất",
+    "hazard.flood": "Lũ lụt",
+    "hazard.landslide": "Sạt lở đất",
+    "hazard.tropical_cyclone": "Bão nhiệt đới",
+    "hazard.volcanic_eruption": "Phun trào núi lửa",
+    "hazard.wildfire": "Cháy rừng"
+  }
+}

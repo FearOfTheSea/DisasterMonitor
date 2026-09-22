@@ -11,11 +11,16 @@ import {
   displayActiveIncidentCountry,
   displayActiveIncidentContext,
   IncidentView,
-  IncidentSourceAuthority,
 } from '@/features/incidents/model/activeIncidents';
+import { AccessibleIncidentIndex } from '@/features/incidents/ui/AccessibleIncidentIndex';
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
 import { DisasterIcon } from '@/features/incidents/ui/DisasterIcon';
 import { IncidentPanelControls } from '@/features/incidents/ui/IncidentPanelControls';
+import {
+  activityStatusLabel,
+  AUTHORITY_LABELS,
+  disasterLabel,
+} from '@/features/incidents/ui/incidentPresentation';
 import type { MapTimeWindow } from '@/shared/model/displayTimeWindow';
 import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 
@@ -40,23 +45,6 @@ type ActiveIncidentsPanelProps = {
   loadingMore?: boolean;
   onSelectIncident: (eventId: string) => void;
   onRefresh: () => void | Promise<void>;
-};
-
-const DISASTERS: { value: DisasterType; label: string }[] = [
-  { value: 'earthquake', label: 'Earthquake' },
-  { value: 'flood', label: 'Flood' },
-  { value: 'wildfire', label: 'Wildfire' },
-  { value: 'landslide', label: 'Landslide' },
-  { value: 'drought', label: 'Drought' },
-  { value: 'tropical_cyclone', label: 'Tropical cyclone' },
-  { value: 'volcanic_eruption', label: 'Volcanic eruption' },
-];
-
-const AUTHORITY_LABELS: Record<IncidentSourceAuthority, string> = {
-  national_authority: 'National authority',
-  scientific_authority: 'Scientific authority',
-  humanitarian_aggregator: 'Humanitarian aggregator',
-  secondary: 'Secondary authority',
 };
 
 function SelectedIcon() {
@@ -130,27 +118,12 @@ function observationKindLabel(observation: ActiveIncident): string {
     : 'Acquisition record';
 }
 
-function disasterLabel(disaster: DisasterType): string {
-  return DISASTERS.find((item) => item.value === disaster)?.label ?? disaster;
-}
-
 const VIEW_LABELS: Record<IncidentView, string> = {
   recent: 'Recent onset',
   ongoing: 'Ongoing',
   recently_updated: 'Recently updated',
   historical: 'Historical window',
 };
-
-function activityStatusLabel(status: ActiveIncident['activity_status']): string {
-  switch (status) {
-    case 'ongoing':
-      return 'Ongoing';
-    case 'ended':
-      return 'Ended';
-    default:
-      return 'Activity unknown';
-  }
-}
 
 function sourceTimestamp(incident: ActiveIncident): { label: string; value: string } {
   if (incident.source.updated_at) {
@@ -330,6 +303,12 @@ export function ActiveIncidentsPanel({
                 Showing records in the {displayTimeWindow} display window. Provider
                 coverage above is unchanged.
               </p>
+            ) : null}
+            {incidents.length > 0 ? (
+              <AccessibleIncidentIndex
+                incidents={incidents}
+                retrievedAt={snapshot.retrieved_at}
+              />
             ) : null}
             {incidents.length === 0 ? (
               <div className="incident-empty">

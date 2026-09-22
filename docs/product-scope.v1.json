@@ -13,7 +13,8 @@
     "public_warning_issuance",
     "evacuation_directives",
     "resource_orders",
-    "model_created_facts"
+    "model_created_facts",
+    "simulation_in_live_evidence"
   ],
   "data_entitlement_policy": [
     "public",

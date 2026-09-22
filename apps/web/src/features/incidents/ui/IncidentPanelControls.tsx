@@ -6,6 +6,7 @@ import type {
   DisasterType,
   IncidentView,
 } from '@/features/incidents/model/activeIncidents';
+import { HAZARD_OPTIONS } from '@/features/incidents/ui/incidentPresentation';
 
 type IncidentPanelControlsProps = {
   snapshot?: ActiveIncidentsSnapshot;
@@ -23,16 +24,6 @@ type IncidentPanelControlsProps = {
   onOccurrenceEndChange?: (value: string) => void;
   onRefresh: () => void | Promise<void>;
 };
-
-const DISASTERS: { value: DisasterType; label: string }[] = [
-  { value: 'earthquake', label: 'Earthquake' },
-  { value: 'flood', label: 'Flood' },
-  { value: 'wildfire', label: 'Wildfire' },
-  { value: 'landslide', label: 'Landslide' },
-  { value: 'drought', label: 'Drought' },
-  { value: 'tropical_cyclone', label: 'Tropical cyclone' },
-  { value: 'volcanic_eruption', label: 'Volcanic eruption' },
-];
 
 const VIEW_LABELS: Record<IncidentView, string> = {
   recent: 'Recent onset',
@@ -184,7 +175,7 @@ export function IncidentPanelControls({
             }
           >
             <option value="">All hazards</option>
-            {DISASTERS.map((item) => (
+            {HAZARD_OPTIONS.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
               </option>

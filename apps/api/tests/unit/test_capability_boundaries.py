@@ -60,6 +60,10 @@ def test_production_composition_owns_investigation_dependencies() -> None:
 
 # Explicit cross-capability collaboration; ports and boundary DTOs are shared.
 CAPABILITY_DEPENDENCIES = {
+    "historical_loss": set(),
+    "localization": set(),
+    "planning": set(),
+    "social_signals": set(),
     "sources": {"agent"},
     "evidence": {"agent", "sources"},
     "decision": set(),

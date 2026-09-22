@@ -3,6 +3,7 @@ import { PwaRegistration } from './PwaRegistration';
 import './globals.css';
 import '../features/map/ui/map.css';
 import '../features/incidents/ui/activeIncidents.css';
+import '../features/incidents/ui/accessibleIncident.css';
 import '../features/incidents/ui/coverageStatus.css';
 import '../features/incidents/ui/activeIncidentsControls.css';
 import '../features/incidents/ui/provisionalIncidents.css';

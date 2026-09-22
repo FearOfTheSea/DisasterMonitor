@@ -32,6 +32,11 @@ Analyst notes, tags, bookmarks, and runbook/checklist templates are exported wit
 `boundary=non_evidence_operator_state`. Checklists contain text references only and
 cannot trigger autonomous actions.
 
+Case notebooks extend the same non-evidence boundary. Operators can pin source
+snapshot and analytical-run identifiers or record questions and conclusions for later
+audit. Notebook entries cannot alter canonical state and are stored atomically with
+the existing local operator workspace.
+
 ## Local storage and privacy
 
 Reports, immutable review history, operator observations, notes, bookmarks, and

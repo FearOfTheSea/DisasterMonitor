@@ -1,0 +1,18 @@
+{
+  "schema_version": "terminology-pack.v1",
+  "language": "en",
+  "version": "1.0.0",
+  "reviewed_by": "DisasterMonitor maintainers",
+  "reviewed_at": "2026-09-22T00:00:00+00:00",
+  "human_reviewed": true,
+  "terms": {
+    "cap.event.tsunami_warning": "Tsunami warning",
+    "hazard.drought": "Drought",
+    "hazard.earthquake": "Earthquake",
+    "hazard.flood": "Flood",
+    "hazard.landslide": "Landslide",
+    "hazard.tropical_cyclone": "Tropical cyclone",
+    "hazard.volcanic_eruption": "Volcanic eruption",
+    "hazard.wildfire": "Wildfire"
+  }
+}

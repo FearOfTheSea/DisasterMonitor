@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from disaster_monitor.domain.disaster_types import _is_aware
 
@@ -64,3 +65,74 @@ class RunbookTemplate:
             raise ValueError("Runbook steps are outside their bounds.")
         if not _is_aware(self.created_at) or self.autonomous_actions:
             raise ValueError("Runbooks cannot contain autonomous actions.")
+
+
+class NotebookEntryKind(StrEnum):
+    SOURCE_SNAPSHOT = "source_snapshot"
+    QUESTION = "question"
+    ANALYTICAL_RUN = "analytical_run"
+    CONCLUSION = "conclusion"
+
+
+@dataclass(frozen=True, slots=True)
+class CaseNotebook:
+    notebook_id: str
+    title: str
+    created_by: str
+    created_at: datetime
+    incident_ids: tuple[str, ...]
+    evidence: bool = False
+
+    def __post_init__(self) -> None:
+        if any(
+            not value.strip()
+            for value in (self.notebook_id, self.title, self.created_by)
+        ):
+            raise ValueError("Case notebooks require identity and attribution.")
+        if len(self.title) > 500 or any(
+            not incident_id.strip() for incident_id in self.incident_ids
+        ):
+            raise ValueError("Case notebook content is outside its bounds.")
+        if not _is_aware(self.created_at) or self.evidence:
+            raise ValueError("Case notebooks must remain timestamped non-evidence.")
+
+
+@dataclass(frozen=True, slots=True)
+class NotebookEntry:
+    entry_id: str
+    notebook_id: str
+    kind: NotebookEntryKind
+    title: str
+    content: str
+    reference_id: str | None
+    created_by: str
+    created_at: datetime
+    evidence: bool = False
+    alters_canonical_state: bool = False
+
+    def __post_init__(self) -> None:
+        if any(
+            not value.strip()
+            for value in (
+                self.entry_id,
+                self.notebook_id,
+                self.title,
+                self.content,
+                self.created_by,
+            )
+        ):
+            raise ValueError("Notebook entries require bounded attributed content.")
+        if len(self.title) > 500 or len(self.content) > 20_000:
+            raise ValueError("Notebook entry content is outside its bounds.")
+        if self.reference_id is not None and not self.reference_id.strip():
+            raise ValueError("Notebook reference IDs must not be empty.")
+        reference_required = self.kind in {
+            NotebookEntryKind.SOURCE_SNAPSHOT,
+            NotebookEntryKind.ANALYTICAL_RUN,
+        }
+        if reference_required and self.reference_id is None:
+            raise ValueError("Pinned notebook entries require a reference ID.")
+        if not _is_aware(self.created_at):
+            raise ValueError("Notebook entry time must be timezone-aware.")
+        if self.evidence or self.alters_canonical_state:
+            raise ValueError("Notebook entries cannot alter canonical evidence.")

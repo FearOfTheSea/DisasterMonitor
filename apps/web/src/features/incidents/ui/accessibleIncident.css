@@ -1,0 +1,153 @@
+.incident-text-view {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin: 12px 0;
+}
+
+.incident-text-view > summary {
+  color: var(--accent-hover);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 10px 12px;
+}
+
+.incident-text-view > p {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  margin: 0;
+  padding: 0 12px 10px;
+}
+
+.incident-text-table-wrap {
+  overflow-x: auto;
+  padding: 0 12px 12px;
+}
+
+.incident-text-view table {
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  min-width: 760px;
+  width: 100%;
+}
+
+.incident-text-view caption {
+  color: var(--muted);
+  padding: 4px 0 8px;
+  text-align: left;
+}
+
+.incident-text-view th,
+.incident-text-view td {
+  border: 1px solid var(--line-strong);
+  padding: 7px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.incident-text-view thead th {
+  background: var(--surface-soft);
+}
+
+@media (forced-colors: active) {
+  .incident-card,
+  .incident-text-view,
+  .incident-text-view th,
+  .incident-text-view td {
+    border-color: CanvasText;
+  }
+
+  .incident-card-selected {
+    border-left-style: double;
+    border-left-width: 6px;
+  }
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+    overflow: visible;
+  }
+
+  .app-header {
+    border-bottom: 2px solid #000000;
+    height: auto;
+    padding: 0 0 12px;
+  }
+
+  .app-header .header-actions,
+  .incident-data-status,
+  .incident-search,
+  .incident-query-controls,
+  .incident-coverage-status,
+  .incident-correlations,
+  .incident-observations,
+  .incident-display-filter-note,
+  .incident-list,
+  .incident-load-more,
+  .map-region,
+  .assistant-panel,
+  .operations-panel,
+  .source-catalog-panel,
+  .ground-imagery-panel,
+  .mobile-navigation {
+    display: none !important;
+  }
+
+  .workspace,
+  .active-incidents-panel,
+  .active-incidents-scroll {
+    display: block;
+    height: auto;
+    overflow: visible;
+    width: 100%;
+  }
+
+  .active-incidents-panel {
+    border: 0;
+  }
+
+  .active-incidents-header,
+  .incident-list-section {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .incident-text-view {
+    border: 0;
+    display: block;
+    margin: 0;
+  }
+
+  .incident-text-view > summary,
+  .incident-text-view > p {
+    display: none;
+  }
+
+  .incident-text-view:not([open]) > .incident-text-table-wrap,
+  .incident-text-table-wrap {
+    display: block;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .incident-text-view table {
+    color: #000000;
+    font-size: 9pt;
+    min-width: 0;
+  }
+
+  .incident-text-view thead th {
+    background: #ffffff;
+  }
+
+  .incident-text-view tr {
+    break-inside: avoid;
+  }
+}

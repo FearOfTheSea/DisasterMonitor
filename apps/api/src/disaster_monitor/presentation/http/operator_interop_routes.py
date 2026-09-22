@@ -20,15 +20,18 @@ from disaster_monitor.application.interoperability.evidence_packages import (
 from disaster_monitor.application.operator_workspace.service import (
     OperatorWorkspaceService,
 )
+from disaster_monitor.domain.operator_workspace import NotebookEntryKind
 from disaster_monitor.presentation.http.field_report_routes import (
     get_operator_workspace_service,
 )
 from disaster_monitor.presentation.http.operator_interop_schemas import (
     AnalystNoteRequest,
     BookmarkRequest,
+    CaseNotebookRequest,
     EvidencePackageCreateRequest,
     EvidencePackageVerifyRequest,
     MappingWorkflowRequest,
+    NotebookEntryRequest,
     RunbookTemplateRequest,
 )
 
@@ -101,6 +104,78 @@ async def add_runbook(
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.post(
+    "/operator-workspace/notebooks",
+    tags=["operator-workspace"],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_case_notebook(
+    body: CaseNotebookRequest,
+    service: Annotated[
+        OperatorWorkspaceService, Depends(get_operator_workspace_service)
+    ],
+) -> dict[str, object]:
+    try:
+        return asdict(
+            await service.create_notebook(
+                title=body.title,
+                created_by=body.created_by,
+                incident_ids=tuple(body.incident_ids),
+            )
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.post(
+    "/operator-workspace/notebooks/{notebook_id}/entries",
+    tags=["operator-workspace"],
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_case_notebook_entry(
+    notebook_id: str,
+    body: NotebookEntryRequest,
+    service: Annotated[
+        OperatorWorkspaceService, Depends(get_operator_workspace_service)
+    ],
+) -> dict[str, object]:
+    try:
+        return asdict(
+            await service.add_notebook_entry(
+                notebook_id=notebook_id,
+                kind=NotebookEntryKind(body.kind),
+                title=body.title,
+                content=body.content,
+                reference_id=body.reference_id,
+                created_by=body.created_by,
+            )
+        )
+    except LookupError as error:
+        raise HTTPException(
+            status_code=404, detail="Case notebook not found."
+        ) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.get(
+    "/operator-workspace/notebooks/{notebook_id}/entries",
+    tags=["operator-workspace"],
+)
+async def case_notebook_entries(
+    notebook_id: str,
+    service: Annotated[
+        OperatorWorkspaceService, Depends(get_operator_workspace_service)
+    ],
+) -> list[dict[str, object]]:
+    try:
+        return [asdict(item) for item in await service.notebook_entries(notebook_id)]
+    except LookupError as error:
+        raise HTTPException(
+            status_code=404, detail="Case notebook not found."
+        ) from error
 
 
 @router.get("/operator-workspace", tags=["operator-workspace"])

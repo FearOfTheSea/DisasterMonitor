@@ -1,0 +1,1 @@
+"""Terminology pack adapters."""

@@ -23,6 +23,20 @@ class RunbookTemplateRequest(BaseModel):
     steps: list[str] = Field(min_length=1, max_length=100)
 
 
+class CaseNotebookRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    created_by: str = Field(min_length=1, max_length=200)
+    incident_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class NotebookEntryRequest(BaseModel):
+    kind: str = Field(pattern="^(source_snapshot|question|analytical_run|conclusion)$")
+    title: str = Field(min_length=1, max_length=500)
+    content: str = Field(min_length=1, max_length=20_000)
+    reference_id: str | None = Field(default=None, max_length=500)
+    created_by: str = Field(min_length=1, max_length=200)
+
+
 class MappingWorkflowRequest(BaseModel):
     incident_id: str = Field(min_length=1, max_length=500)
     aoi: dict[str, Any]

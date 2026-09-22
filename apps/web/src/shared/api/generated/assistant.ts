@@ -4511,6 +4511,12 @@ export type BookmarkRequest = {
 
 export type CaptureRole = 'pre_event' | 'post_event' | 'single_capture' | 'unknown';
 
+export type CaseNotebookRequest = {
+  created_by: string;
+  incident_ids?: Array<string>;
+  title: string;
+};
+
 export type CommonOperationalPictureResponse = {
   cop_id: string;
   created_at: string;
@@ -5438,6 +5444,14 @@ export type MultimodalStateResponse = {
   observations?: Array<VisualObservationResponse>;
   physical_event_id: string;
   state_version: string;
+};
+
+export type NotebookEntryRequest = {
+  content: string;
+  created_by: string;
+  kind: string;
+  reference_id?: string | null;
+  title: string;
 };
 
 export type OpenPanelOperatorActionResponse = {

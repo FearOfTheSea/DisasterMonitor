@@ -9,6 +9,9 @@ from disaster_monitor.application.ports.operator_workspace import (
 )
 from disaster_monitor.domain.operator_workspace import (
     AnalystNote,
+    CaseNotebook,
+    NotebookEntry,
+    NotebookEntryKind,
     OperatorBookmark,
     RunbookTemplate,
 )
@@ -71,6 +74,67 @@ class OperatorWorkspaceService:
         await self._store.add_runbook(runbook)
         return runbook
 
+    async def create_notebook(
+        self,
+        *,
+        title: str,
+        created_by: str,
+        incident_ids: tuple[str, ...] = (),
+    ) -> CaseNotebook:
+        created_at = self._clock()
+        notebook = CaseNotebook(
+            notebook_id=_identity("case-notebook", created_by, title, created_at),
+            title=title.strip(),
+            created_by=created_by.strip(),
+            created_at=created_at,
+            incident_ids=tuple(dict.fromkeys(incident_ids)),
+        )
+        await self._store.add_notebook(notebook)
+        return notebook
+
+    async def add_notebook_entry(
+        self,
+        *,
+        notebook_id: str,
+        kind: NotebookEntryKind,
+        title: str,
+        content: str,
+        reference_id: str | None,
+        created_by: str,
+    ) -> NotebookEntry:
+        if not any(
+            item.notebook_id == notebook_id for item in await self._store.notebooks()
+        ):
+            raise LookupError(notebook_id)
+        created_at = self._clock()
+        entry = NotebookEntry(
+            entry_id=_identity(
+                "notebook-entry",
+                notebook_id,
+                f"{kind.value}|{title}|{content}|{reference_id or ''}",
+                created_at,
+            ),
+            notebook_id=notebook_id,
+            kind=kind,
+            title=title.strip(),
+            content=content.strip(),
+            reference_id=reference_id,
+            created_by=created_by.strip(),
+            created_at=created_at,
+        )
+        await self._store.add_notebook_entry(entry)
+        return entry
+
+    async def notebooks(self) -> tuple[CaseNotebook, ...]:
+        return await self._store.notebooks()
+
+    async def notebook_entries(self, notebook_id: str) -> tuple[NotebookEntry, ...]:
+        if not any(
+            item.notebook_id == notebook_id for item in await self._store.notebooks()
+        ):
+            raise LookupError(notebook_id)
+        return await self._store.notebook_entries(notebook_id)
+
     async def export_state(self, *, incident_id: str | None) -> dict[str, object]:
         return {
             "boundary": "non_evidence_operator_state",
@@ -78,6 +142,7 @@ class OperatorWorkspaceService:
             "notes": await self._store.notes(incident_id),
             "bookmarks": await self._store.bookmarks(incident_id),
             "runbooks": await self._store.runbooks(),
+            "notebooks": await self._store.notebooks(),
         }
 
 

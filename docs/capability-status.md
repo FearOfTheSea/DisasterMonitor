@@ -29,6 +29,7 @@ complete global surveillance or impact evidence.
 | CL | Allowlisted reversible analytical ordering with rollback | CL-A/B/C passing | Pending real trajectories and reviewer corrections |
 | OP | Rights-gated snapshots, history, leased workers, freshness telemetry, durable projections, backup/restore validation, persistent Incident Watches, and deterministic situational-awareness views | Local operational, replay, recovery, and deterministic browser checks passing | Deployment-specific external and supervised-pilot evidence remains separate |
 | HF | Licensed humanitarian context, isolated unverified field reports, human review, privacy filtering, reviewed imports, bounded handoffs, and local access context | Deterministic domain, adapter, HTTP, persistence, UI, and trust-boundary benchmark checks passing | Provider completeness, field truth, and operational suitability remain unproven |
+| P4 | Untrusted open-signal primitives, local triage, imagery micro-review, isolated scenario/replay state, retrospective loss imports, durable case notebooks, text/print incidents, and reviewed terminology packs | Deterministic domain, adapter, HTTP, persistence, and frontend component checks passing | No live social source, historical dataset, exercise library, or deployment-specific utility is promoted |
 
 ## Evidence rules
 
@@ -85,6 +86,11 @@ benchmark demonstrates authority isolation under duplication, volume, claimed
 confidence, and uncertain location. It does not establish that crowd reports are true,
 that PII detection is complete, that public humanitarian datasets are complete, or
 that route estimates are safe for operational use.
+
+Bounded P4 foundations and the explicitly deferred deployment gates are documented in
+[p4-long-term-capabilities.md](p4-long-term-capabilities.md). Classification, human
+label volume, simulation, retrospective losses, and notebook conclusions cannot alter
+canonical evidence or source authority.
 
 P1 operational awareness adds an informational Source Catalog, dataset-specific
 hidden-tab-aware polling, bounded shareable presentation URL state, and deterministic

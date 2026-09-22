@@ -172,7 +172,10 @@ describe('ActiveIncidentsPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText('Fixture Fire Authority')[0]).not.toBeVisible();
     expect(screen.getByText('Primary tier')).not.toBeVisible();
-    expect(screen.getByText('Scientific authority')).not.toBeVisible();
+    const authorityMetadata = screen
+      .getAllByText('Scientific authority')
+      .find((item) => item.tagName === 'SPAN');
+    expect(authorityMetadata).not.toBeVisible();
     expect(screen.getByText('Selected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Focus Japan on map' })).toHaveAttribute(
       'aria-pressed',
@@ -186,7 +189,7 @@ describe('ActiveIncidentsPanel', () => {
     await user.click(screen.getByText('Source details'));
     expect(screen.getAllByText('Fixture Fire Authority')[0]).toBeVisible();
     expect(screen.getByText('Primary tier')).toBeVisible();
-    expect(screen.getByText('Scientific authority')).toBeVisible();
+    expect(authorityMetadata).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Focus Japan on map' }));
     expect(onSelectIncident).toHaveBeenCalledWith('fire-1');
@@ -237,6 +240,31 @@ describe('ActiveIncidentsPanel', () => {
     );
 
     expect(screen.getByText('estimated')).toBeInTheDocument();
+  });
+
+  it('provides a text-first incident representation for low vision and print', async () => {
+    const user = userEvent.setup();
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot()}
+        status="success"
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByText('Text and print view'));
+
+    const table = screen.getByRole('table', {
+      name: 'Text incident representation',
+    });
+    const row = within(table).getByRole('row', { name: /Japan/ });
+
+    expect(within(row).getByText('Wildfire')).toBeInTheDocument();
+    expect(within(row).getByText('Scientific authority')).toBeInTheDocument();
+    expect(within(row).getByText('Primary')).toBeInTheDocument();
+    expect(within(row).getByText('Activity unknown')).toBeInTheDocument();
+    expect(within(row).getByText('Not reported')).toBeInTheDocument();
   });
 
   it('uses the associated country and keeps the flood event ID in the details', () => {
@@ -303,7 +331,11 @@ describe('ActiveIncidentsPanel', () => {
     expect(
       screen.getByRole('button', { name: 'Focus Japan on map' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Japan')).toHaveClass('incident-card-location');
+    expect(
+      screen
+        .getAllByText('Japan')
+        .find((item) => item.classList.contains('incident-card-location')),
+    ).toHaveClass('incident-card-location');
     expect(screen.getByText(`Event ID: ${floodEventId}`)).toBeInTheDocument();
   });
 

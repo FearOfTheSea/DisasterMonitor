@@ -104,3 +104,9 @@ Adding another language should not require language-specific disaster, current-e
 or information-need vocabulary in application regexes or alias tables.
 
 It requires model coverage and a corresponding deterministic smoke check.
+
+Human-reviewed terminology packs are a separate deterministic display aid. They are
+versioned under `infrastructure/localization/resources`, currently cover English and
+Vietnamese maintained hazard/CAP names, and preserve authority names exactly. They do
+not replace grounded response localization or authorize runtime model translations as
+canonical terminology.

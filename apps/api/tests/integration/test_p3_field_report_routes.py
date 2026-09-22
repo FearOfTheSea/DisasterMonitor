@@ -40,9 +40,12 @@ def app(tmp_path):
         privacy=FieldMediaPrivacyService(clock=lambda: NOW),
         media_store=FilesystemFieldMediaStore(tmp_path / "media"),
     )
+    operator_workspace = OperatorWorkspaceService(
+        InMemoryOperatorWorkspaceStore(), clock=lambda: NOW
+    )
     result.dependency_overrides[get_field_report_service] = lambda: field_reports
     result.dependency_overrides[get_operator_workspace_service] = lambda: (
-        OperatorWorkspaceService(InMemoryOperatorWorkspaceStore(), clock=lambda: NOW)
+        operator_workspace
     )
     result.dependency_overrides[get_humanitarian_context_service] = lambda: (
         HumanitarianContextService(clock=lambda: NOW)
@@ -148,6 +151,48 @@ async def test_operator_workspace_routes_label_notes_as_non_evidence(app) -> Non
         )
         assert exported.status_code == 200
         assert exported.json()["boundary"] == "non_evidence_operator_state"
+
+
+@pytest.mark.asyncio
+async def test_case_notebook_routes_keep_research_out_of_evidence(app) -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post(
+            "/api/v1/operator-workspace/notebooks",
+            json={
+                "title": "Flood chronology review",
+                "created_by": "operator:local",
+                "incident_ids": ["event-1"],
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["evidence"] is False
+        notebook_id = created.json()["notebook_id"]
+
+        entry = await client.post(
+            f"/api/v1/operator-workspace/notebooks/{notebook_id}/entries",
+            json={
+                "kind": "source_snapshot",
+                "title": "Initial bulletin",
+                "content": "Pinned for later comparison.",
+                "reference_id": "snapshot:one",
+                "created_by": "operator:local",
+            },
+        )
+        assert entry.status_code == 201
+        assert entry.json()["evidence"] is False
+        assert entry.json()["alters_canonical_state"] is False
+
+        entries = await client.get(
+            f"/api/v1/operator-workspace/notebooks/{notebook_id}/entries"
+        )
+        assert entries.status_code == 200
+        assert entries.json()[0]["reference_id"] == "snapshot:one"
+
+        missing = await client.get(
+            "/api/v1/operator-workspace/notebooks/missing/entries"
+        )
+        assert missing.status_code == 404
 
 
 @pytest.mark.asyncio
