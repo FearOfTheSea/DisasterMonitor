@@ -4,10 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchActiveIncidents } from '@/features/incidents/api/incidentsClient';
 import type {
+  ActiveIncident,
   ActiveIncidentsSnapshot,
   DisasterType,
   IncidentView,
 } from '@/features/incidents/model/activeIncidents';
+import { matchesApiSchema } from '@/shared/api/generated/assistant';
+import { HttpResponseError } from '@/shared/api/http';
 import {
   createRefreshController,
   REFRESH_POLICIES,
@@ -39,16 +42,11 @@ function readCachedSnapshot(key: string): ActiveIncidentsSnapshot | undefined {
   try {
     const value = window.localStorage.getItem(key);
     if (!value || value.length > 2_000_000) return undefined;
-    const parsed = JSON.parse(value) as ActiveIncidentsSnapshot;
-    if (
-      typeof parsed.retrieved_at !== 'string' ||
-      !Array.isArray(parsed.incidents) ||
-      !Array.isArray(parsed.coverage) ||
-      !Array.isArray(parsed.warnings)
-    ) {
+    const parsed: unknown = JSON.parse(value);
+    if (!matchesApiSchema('ActiveIncidentsSnapshotResponse', parsed)) {
       return undefined;
     }
-    return { ...parsed, availability: 'offline-cache' };
+    return { ...(parsed as ActiveIncidentsSnapshot), availability: 'offline-cache' };
   } catch {
     return undefined;
   }
@@ -75,8 +73,37 @@ function errorMessage(caught: unknown): string {
     : 'Active incidents could not be loaded.';
 }
 
+function incidentIdentity(incident: ActiveIncident): string {
+  return [
+    incident.event_id,
+    incident.physical_event_id ?? '',
+    incident.source.source_id,
+    incident.observation_kind ?? '',
+  ].join('|');
+}
+
+function appendUnique(
+  current: ActiveIncident[],
+  incoming: ActiveIncident[],
+): ActiveIncident[] {
+  const seen = new Set(current.map(incidentIdentity));
+  return [
+    ...current,
+    ...incoming.filter((item) => {
+      const identity = incidentIdentity(item);
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    }),
+  ];
+}
+
 export function useActiveIncidents() {
-  const [snapshot, setSnapshot] = useState<ActiveIncidentsSnapshot>();
+  const [snapshotState, setSnapshotState] = useState<{
+    key: string;
+    version: number;
+    value: ActiveIncidentsSnapshot;
+  }>();
   const [status, setStatus] = useState<ActiveIncidentsStatus>('loading');
   const [error, setError] = useState<string>();
   const [search, setSearch] = useState('');
@@ -85,8 +112,21 @@ export function useActiveIncidents() {
   const [hazard, setHazard] = useState<DisasterType | undefined>();
   const [occurrenceStart, setOccurrenceStart] = useState('');
   const [occurrenceEnd, setOccurrenceEnd] = useState('');
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingPageKey, setLoadingPageKey] = useState<string | null>(null);
   const refreshController = useRef<RefreshController | undefined>(undefined);
+  const pageController = useRef<AbortController | null>(null);
+  const pageLoading = useRef(false);
+  const version = useRef(0);
+  const queryKey = cacheKey(
+    view,
+    hazard,
+    appliedSearch,
+    occurrenceStart,
+    occurrenceEnd,
+  );
+  const queryKeyRef = useRef(queryKey);
+  const loadingMore = loadingPageKey === queryKey;
+  const snapshot = snapshotState?.key === queryKey ? snapshotState.value : undefined;
 
   useEffect(() => {
     const timer = setTimeout(() => setAppliedSearch(search.trim()), 250);
@@ -98,13 +138,7 @@ export function useActiveIncidents() {
       setStatus('loading');
       setError(undefined);
       try {
-        const key = cacheKey(
-          view,
-          hazard,
-          appliedSearch,
-          occurrenceStart,
-          occurrenceEnd,
-        );
+        const key = queryKey;
         const nextSnapshot = await fetchActiveIncidents({
           pageSize: 20,
           view: view === 'recent' ? undefined : view,
@@ -116,19 +150,29 @@ export function useActiveIncidents() {
           signal,
         });
         if (signal.aborted) return;
+        pageController.current?.abort();
+        pageLoading.current = false;
+        setLoadingPageKey(null);
         const liveSnapshot = { ...nextSnapshot, availability: 'live' as const };
-        setSnapshot(liveSnapshot);
+        setSnapshotState({ key, version: ++version.current, value: liveSnapshot });
         writeCachedSnapshot(key, liveSnapshot);
         setStatus('success');
       } catch (caught) {
         if (signal.aborted) return;
-        const cached = readCachedSnapshot(
-          cacheKey(view, hazard, appliedSearch, occurrenceStart, occurrenceEnd),
-        );
+        if (caught instanceof HttpResponseError && caught.status < 500) {
+          setError(errorMessage(caught));
+          setStatus('error');
+          return;
+        }
+        const cached = readCachedSnapshot(queryKey);
         if (cached) {
-          setSnapshot(cached);
+          setSnapshotState({
+            key: queryKey,
+            version: ++version.current,
+            value: cached,
+          });
           setError(
-            'Network unavailable. Showing the last successful snapshot; data is stale.',
+            `Showing the last successful snapshot; data is stale. ${errorMessage(caught)}`,
           );
           setStatus('offline');
           return;
@@ -137,10 +181,13 @@ export function useActiveIncidents() {
         setStatus('error');
       }
     },
-    [appliedSearch, hazard, occurrenceEnd, occurrenceStart, view],
+    [appliedSearch, hazard, occurrenceEnd, occurrenceStart, queryKey, view],
   );
 
   useEffect(() => {
+    queryKeyRef.current = queryKey;
+    pageController.current?.abort();
+    pageLoading.current = false;
     const controller = createRefreshController(
       REFRESH_POLICIES['active-incidents'],
       load,
@@ -150,9 +197,10 @@ export function useActiveIncidents() {
     controller.start();
     return () => {
       controller.stop();
+      pageController.current?.abort();
       refreshController.current = undefined;
     };
-  }, [load]);
+  }, [load, queryKey]);
 
   const refresh = useCallback(
     () => refreshController.current?.refreshNow() ?? Promise.resolve(),
@@ -161,8 +209,19 @@ export function useActiveIncidents() {
 
   const loadMore = useCallback(async () => {
     const cursor = snapshot?.next_cursor;
-    if (!cursor || loadingMore) return;
-    setLoadingMore(true);
+    if (
+      !cursor ||
+      pageLoading.current ||
+      !snapshotState ||
+      snapshotState.key !== queryKey
+    )
+      return;
+    const pageVersion = snapshotState.version;
+    const pageSnapshotVersion = snapshot.snapshot_version;
+    const controller = new AbortController();
+    pageController.current = controller;
+    pageLoading.current = true;
+    setLoadingPageKey(queryKey);
     try {
       const nextSnapshot = await fetchActiveIncidents({
         pageSize: 20,
@@ -172,51 +231,61 @@ export function useActiveIncidents() {
         occurrenceStart: view === 'historical' ? utcInput(occurrenceStart) : undefined,
         occurrenceEnd: view === 'historical' ? utcInput(occurrenceEnd) : undefined,
         cursor,
+        signal: controller.signal,
       });
-      setSnapshot((current) => {
-        if (!current) return nextSnapshot;
-        const incidentIds = new Set(current.incidents.map((item) => item.event_id));
-        const observationIds = new Set(
-          (current.observations ?? []).map((item) => item.event_id),
-        );
+      if (controller.signal.aborted || queryKeyRef.current !== queryKey) return;
+      if (
+        pageSnapshotVersion &&
+        nextSnapshot.snapshot_version !== pageSnapshotVersion
+      ) {
+        setError('Incident snapshot changed. Refresh to load the current pages.');
+        return;
+      }
+      setSnapshotState((current) => {
+        if (!current || current.key !== queryKey || current.version !== pageVersion)
+          return current;
         const correlationIds = new Set(
-          (current.correlations ?? []).map((item) => item.correlation_id),
+          (current.value.correlations ?? []).map((item) => item.correlation_id),
         );
         return {
           ...current,
-          incidents: [
-            ...current.incidents,
-            ...nextSnapshot.incidents.filter((item) => !incidentIds.has(item.event_id)),
-          ],
-          observations: [
-            ...(current.observations ?? []),
-            ...(nextSnapshot.observations ?? []).filter(
-              (item) => !observationIds.has(item.event_id),
+          value: {
+            ...current.value,
+            incidents: appendUnique(current.value.incidents, nextSnapshot.incidents),
+            observations: appendUnique(
+              current.value.observations ?? [],
+              nextSnapshot.observations ?? [],
             ),
-          ],
-          correlations: [
-            ...(current.correlations ?? []),
-            ...(nextSnapshot.correlations ?? []).filter(
-              (item) => !correlationIds.has(item.correlation_id),
-            ),
-          ],
-          next_cursor: nextSnapshot.next_cursor,
-          has_more: nextSnapshot.has_more,
-          total_incident_count: nextSnapshot.total_incident_count,
+            correlations: [
+              ...(current.value.correlations ?? []),
+              ...(nextSnapshot.correlations ?? []).filter(
+                (item) => !correlationIds.has(item.correlation_id),
+              ),
+            ],
+            next_cursor: nextSnapshot.next_cursor,
+            has_more: nextSnapshot.has_more,
+            total_incident_count: nextSnapshot.total_incident_count,
+          },
         };
       });
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (!controller.signal.aborted && queryKeyRef.current === queryKey)
+        setError(errorMessage(caught));
     } finally {
-      setLoadingMore(false);
+      if (pageController.current === controller) {
+        pageController.current = null;
+        pageLoading.current = false;
+        setLoadingPageKey(null);
+      }
     }
   }, [
     appliedSearch,
     hazard,
-    loadingMore,
     occurrenceEnd,
     occurrenceStart,
-    snapshot?.next_cursor,
+    snapshot,
+    snapshotState,
+    queryKey,
     view,
   ]);
 

@@ -123,10 +123,20 @@ FIELD_MEDIA_RETENTION_DAYS=30
 FIELD_MEDIA_MAXIMUM_BYTES=100000000
 OPERATOR_WORKSPACE_STORE_PATH=data/operator-workspace/workspace.json
 
+# Reviews and reviewed imports are unavailable until a trusted identity proxy
+# supplies this header and strips any client-provided copy.
+TRUSTED_OPERATOR_IDENTITY_ENABLED=false
+TRUSTED_OPERATOR_IDENTITY_HEADER=x-disastermonitor-operator
+
 # Must resolve to localhost/private network space and name the local extract version.
 SELF_HOSTED_OSRM_URL=http://127.0.0.1:5000
 SELF_HOSTED_OSRM_DATA_VERSION=geofabrik-YYYY-MM-DD
 ```
+
+The review-capability endpoint at `/api/v1/field-reports/review-capability`
+reports whether the trusted identity is available. Field-report submission and
+import requests are limited to 52 MiB. Exact submission retries return the
+existing report; conflicting content under the same report identity is rejected.
 
 ## Offline trust benchmark
 

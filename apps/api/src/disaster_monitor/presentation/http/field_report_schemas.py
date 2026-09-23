@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from disaster_monitor.domain.field_reports import (
     FieldReportReviewDecision,
@@ -23,6 +23,8 @@ class FieldGeometryRequest(BaseModel):
 
 
 class FieldReportCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     report_type: str = Field(min_length=1, max_length=100)
     text: str = Field(min_length=1, max_length=10_000)
     captured_at: datetime
@@ -37,8 +39,9 @@ class FieldReportCreateRequest(BaseModel):
 
 
 class FieldReportReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     decision: FieldReportReviewDecision
-    reviewer_id: str = Field(min_length=1, max_length=200)
     rationale: str = Field(min_length=1, max_length=2_000)
     event_id: str | None = Field(default=None, min_length=1, max_length=500)
     authority_policy_id: str | None = Field(default=None, min_length=1, max_length=200)
@@ -56,10 +59,11 @@ class ExternalFieldMappingRequest(BaseModel):
 
 
 class FieldReportImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     source_system: Literal["kobotoolbox", "odk", "ushahidi"]
     format: Literal["csv", "geojson", "ushahidi"]
     content: str | dict[str, object]
-    reviewed_by: str = Field(min_length=1, max_length=200)
     mapping: ExternalFieldMappingRequest | None = None
     media_packages: list["ImportedFieldMediaRequest"] = Field(
         default_factory=list, max_length=4_000
@@ -68,3 +72,8 @@ class FieldReportImportRequest(BaseModel):
 
 class ImportedFieldMediaRequest(FieldAttachmentRequest):
     external_id: str = Field(min_length=1, max_length=500)
+
+
+class FieldReviewCapabilityResponse(BaseModel):
+    available: bool
+    reason: Literal["not_configured", "identity_missing"] | None

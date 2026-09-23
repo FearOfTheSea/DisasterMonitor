@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   AssistantClient,
@@ -23,6 +23,7 @@ export function useAssistantConversation() {
   const [status, setStatus] = useState<ConversationStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [conversationLoading, setConversationLoading] = useState(false);
+  const selectionRequest = useRef(0);
 
   useEffect(() => {
     let current = true;
@@ -51,6 +52,8 @@ export function useAssistantConversation() {
     if (status === 'loading') {
       return;
     }
+    selectionRequest.current += 1;
+    setConversationLoading(false);
     setConversationId(null);
     setMessages([]);
     setStatus('idle');
@@ -66,10 +69,12 @@ export function useAssistantConversation() {
         startNewConversation();
         return;
       }
+      const requestId = ++selectionRequest.current;
       setConversationLoading(true);
       setError(null);
       try {
         const loaded = await client.getConversation(selectedId);
+        if (requestId !== selectionRequest.current) return;
         setConversationId(loaded.conversation_id);
         setMessages(
           loaded.messages.map(({ id, role, content, assistant_response }) => {
@@ -92,11 +97,12 @@ export function useAssistantConversation() {
         );
         setStatus('idle');
       } catch (caught) {
+        if (requestId !== selectionRequest.current) return;
         setError(
           caught instanceof Error ? caught.message : 'The conversation failed to load.',
         );
       } finally {
-        setConversationLoading(false);
+        if (requestId === selectionRequest.current) setConversationLoading(false);
       }
     },
     [client, startNewConversation, status],

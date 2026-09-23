@@ -175,8 +175,9 @@ Create one checksummed database-and-blob archive from the repository defaults:
 ```
 
 The command stops the API, scheduler, and worker, then includes operational blobs,
-event-media blobs, Ground artifacts, and a PostgreSQL custom dump in one checksummed
-archive. It validates the archive before restarting the writers.
+event-media blobs, Ground artifacts, field reports and media, operator workspaces,
+and a PostgreSQL custom dump in one checksummed schema v3 archive. It validates
+the archive before restarting the writers.
 
 On POSIX hosts the equivalent is:
 
@@ -206,6 +207,11 @@ Restore deliberately replaces operational state:
 
 On POSIX hosts, pass the archive and exact confirmation to
 `./scripts/restore_operational.sh`.
+
+Schema v2 archives remain valid for inspection. They lack field reports and
+operator workspaces, so restoring one requires the explicit
+`--allow-legacy-partial-restore` flag (or `-AllowLegacyPartialRestore` on
+PowerShell). That operation restores only the components present in v2.
 
 Exercise restore in a disposable environment before relying on a release.
 

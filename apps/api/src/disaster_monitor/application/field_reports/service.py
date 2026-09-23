@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -9,8 +10,10 @@ from hashlib import sha256
 
 from disaster_monitor.application.field_reports.media_privacy import (
     FieldMediaPrivacyService,
+    SanitizedFieldMedia,
 )
 from disaster_monitor.application.ports.field_reports import (
+    CurrentIncidentVerifier,
     FieldMediaStore,
     FieldReportStore,
 )
@@ -45,6 +48,18 @@ class FieldReportNotFoundError(LookupError):
     pass
 
 
+class FieldReportEventNotFoundError(LookupError):
+    pass
+
+
+class IncidentEvidenceUnavailableError(RuntimeError):
+    pass
+
+
+class FieldReportConflictError(RuntimeError):
+    pass
+
+
 class FieldReportService:
     def __init__(
         self,
@@ -52,17 +67,40 @@ class FieldReportService:
         *,
         privacy: FieldMediaPrivacyService | None = None,
         media_store: FieldMediaStore | None = None,
+        event_verifier: CurrentIncidentVerifier | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._store = store
         self._privacy = privacy
         self._media_store = media_store
+        self._event_verifier = event_verifier
         self._clock = clock
+        self._write_lock = asyncio.Lock()
+
+    def sanitize_media(
+        self, *, filename: str, media_type: str, content: bytes
+    ) -> SanitizedFieldMedia:
+        if self._privacy is None or self._media_store is None:
+            raise RuntimeError("Field-media persistence is not configured.")
+        return self._privacy.sanitize(
+            filename=filename, media_type=media_type, content=content
+        )
 
     async def submit(self, submission: NewFieldReport) -> UnverifiedFieldReport:
+        report, _ = await self.submit_with_media(submission)
+        return report
+
+    async def submit_with_media(
+        self,
+        submission: NewFieldReport,
+        prepared_media: tuple[SanitizedFieldMedia, ...] = (),
+    ) -> tuple[UnverifiedFieldReport, bool]:
         received_at = self._clock()
         if self._privacy is not None:
             self._privacy.validate_report_text(submission.text)
+        media = tuple(item.lineage for item in prepared_media)
+        if submission.media and prepared_media:
+            raise ValueError("Field media was specified twice.")
         identity = sha256(
             "|".join(
                 (
@@ -85,33 +123,63 @@ class FieldReportService:
             geometry=submission.geometry,
             location_precision=submission.location_precision,
             location_uncertainty_m=submission.location_uncertainty_m,
-            media=submission.media,
+            media=media or submission.media,
             import_provenance=None,
             review_state=FieldReportReviewState.PENDING_REVIEW,
         )
-        await self._store.add_report(report)
-        return report
-
-    def admit_media(
-        self, *, filename: str, media_type: str, content: bytes
-    ) -> FieldMediaLineage:
-        if self._privacy is None or self._media_store is None:
-            raise RuntimeError("Field-media persistence is not configured.")
-        sanitized = self._privacy.sanitize(
-            filename=filename, media_type=media_type, content=content
-        )
-        self._media_store.put(sanitized.lineage, sanitized.content)
-        return sanitized.lineage
+        async with self._write_lock:
+            existing = await self._store.report(report.report_id)
+            if existing is not None:
+                if not _same_submission(existing, report):
+                    raise FieldReportConflictError(
+                        "Field-report identity was reused with conflicting content."
+                    )
+                return existing, False
+            new_media_ids = self._publish_media(prepared_media)
+            try:
+                await self._store.add_report(report)
+            except Exception:
+                self._remove_new_media(new_media_ids)
+                raise
+            return report, True
 
     async def import_reports(
-        self, reports: tuple[UnverifiedFieldReport, ...]
+        self,
+        reports: tuple[UnverifiedFieldReport, ...],
+        prepared_media: tuple[SanitizedFieldMedia, ...] = (),
     ) -> tuple[UnverifiedFieldReport, ...]:
         if self._privacy is not None:
             for report in reports:
                 self._privacy.validate_report_text(report.text)
-        for report in reports:
-            await self._store.add_report(report)
+        async with self._write_lock:
+            new_media_ids = self._publish_media(prepared_media)
+            try:
+                await self._store.add_reports(reports)
+            except Exception:
+                self._remove_new_media(new_media_ids)
+                raise
         return reports
+
+    def _publish_media(self, media: tuple[SanitizedFieldMedia, ...]) -> tuple[str, ...]:
+        if not media:
+            return ()
+        assert self._media_store is not None
+        new_ids: list[str] = []
+        try:
+            for item in media:
+                if self._media_store.get(item.lineage.media_id) is None:
+                    new_ids.append(item.lineage.media_id)
+                self._media_store.put(item.lineage, item.content)
+        except Exception:
+            self._remove_new_media(tuple(new_ids))
+            raise
+        return tuple(new_ids)
+
+    def _remove_new_media(self, media_ids: tuple[str, ...]) -> None:
+        if self._media_store is None:
+            return
+        for media_id in media_ids:
+            self._media_store.delete(media_id)
 
     async def list_queue(
         self, *, review_state: FieldReportReviewState | None = None, limit: int = 100
@@ -134,6 +202,16 @@ class FieldReportService:
         report = await self._store.report(report_id)
         if report is None:
             raise FieldReportNotFoundError(report_id)
+        if decision in {
+            FieldReportReviewDecision.ASSOCIATE_TO_EVENT,
+            FieldReportReviewDecision.ADMIT_OPERATOR_OBSERVATION,
+        }:
+            if self._event_verifier is None:
+                raise IncidentEvidenceUnavailableError(
+                    "Current incident evidence is unavailable."
+                )
+            if not event_id or not await self._event_verifier.exists(event_id):
+                raise FieldReportEventNotFoundError(event_id or "")
         reviewed_at = self._clock()
         revision = report.review_revision + 1
         identity = sha256(
@@ -165,3 +243,24 @@ class FieldReportService:
         )
         await self._store.record_review(updated, review, observation)
         return FieldReportReviewOutcome(updated, review, observation)
+
+
+def _same_submission(
+    existing: UnverifiedFieldReport, candidate: UnverifiedFieldReport
+) -> bool:
+    return (
+        existing.report_type == candidate.report_type
+        and existing.text == candidate.text
+        and existing.captured_at == candidate.captured_at
+        and existing.source_created_at == candidate.source_created_at
+        and existing.submitter_channel == candidate.submitter_channel
+        and existing.geometry == candidate.geometry
+        and existing.location_precision == candidate.location_precision
+        and existing.location_uncertainty_m == candidate.location_uncertainty_m
+        and tuple(
+            (item.original_filename, item.original_sha256) for item in existing.media
+        )
+        == tuple(
+            (item.original_filename, item.original_sha256) for item in candidate.media
+        )
+    )

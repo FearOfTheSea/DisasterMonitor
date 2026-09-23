@@ -4,6 +4,249 @@
 import { matchesOpenApiSchema } from '@/shared/api/openapiSchema';
 
 const apiSchemas = {
+  ActiveIncidentCountryResponse: {
+    properties: {
+      association_basis: {
+        enum: [
+          'coordinate_polygon',
+          'source_mention',
+          'named_region',
+          'nearby_boundary',
+        ],
+        type: 'string',
+      },
+      code: {
+        maxLength: 3,
+        minLength: 3,
+        type: 'string',
+      },
+      distance_km: {
+        anyOf: [
+          {
+            minimum: 0,
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      name: {
+        minLength: 1,
+        type: 'string',
+      },
+    },
+    required: ['code', 'name', 'association_basis'],
+    type: 'object',
+  },
+  ActiveIncidentResponse: {
+    properties: {
+      activity_status: {
+        $ref: '#/components/schemas/IncidentActivityStatus',
+      },
+      country: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/ActiveIncidentCountryResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      detection: {
+        $ref: '#/components/schemas/IncidentDetectionTimelineResponse',
+      },
+      disaster: {
+        $ref: '#/components/schemas/Disaster',
+      },
+      event_id: {
+        type: 'string',
+      },
+      event_time: {
+        format: 'date-time',
+        type: 'string',
+      },
+      event_time_end: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      event_time_precision: {
+        $ref: '#/components/schemas/EventTimePrecision',
+      },
+      evidence_sources: {
+        items: {
+          $ref: '#/components/schemas/SourceResponse',
+        },
+        type: 'array',
+      },
+      geometry: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/EventGeometryResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      last_meaningful_change_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      lineage_ids: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      location: {
+        type: 'string',
+      },
+      measurements: {
+        items: {
+          $ref: '#/components/schemas/EventMeasurementResponse',
+        },
+        type: 'array',
+      },
+      observation_kind: {
+        enum: ['physical_event', 'preliminary_event', 'acquisition'],
+        type: 'string',
+      },
+      physical_event_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      provider_ids: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      provider_tier: {
+        $ref: '#/components/schemas/ProviderTier',
+      },
+      source: {
+        $ref: '#/components/schemas/SourceResponse',
+      },
+      source_authority: {
+        $ref: '#/components/schemas/SourceAuthority',
+      },
+      verification_status: {
+        enum: ['provisional_news_detected', 'source_backed', 'rejected'],
+        type: 'string',
+      },
+    },
+    required: [
+      'event_id',
+      'disaster',
+      'location',
+      'event_time',
+      'provider_tier',
+      'source_authority',
+      'source',
+    ],
+    type: 'object',
+  },
+  ActiveIncidentsSnapshotResponse: {
+    properties: {
+      correlations: {
+        items: {
+          $ref: '#/components/schemas/CompoundHazardCorrelationResponse',
+        },
+        type: 'array',
+      },
+      coverage: {
+        items: {
+          $ref: '#/components/schemas/DisasterIncidentCoverageResponse',
+        },
+        type: 'array',
+      },
+      has_more: {
+        type: 'boolean',
+      },
+      historical_limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      incidents: {
+        items: {
+          $ref: '#/components/schemas/ActiveIncidentResponse',
+        },
+        type: 'array',
+      },
+      next_cursor: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      observations: {
+        items: {
+          $ref: '#/components/schemas/ActiveIncidentResponse',
+        },
+        type: 'array',
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      snapshot_version: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      total_incident_count: {
+        anyOf: [
+          {
+            type: 'integer',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      warnings: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+    },
+    required: ['retrieved_at'],
+    type: 'object',
+  },
   AnalyticalMapFeatureResponse: {
     properties: {
       attribution: {
@@ -973,6 +1216,40 @@ const apiSchemas = {
     ],
     type: 'string',
   },
+  DisasterIncidentCoverageResponse: {
+    properties: {
+      detail: {
+        type: 'string',
+      },
+      disaster: {
+        $ref: '#/components/schemas/Disaster',
+      },
+      incident_count: {
+        type: 'integer',
+      },
+      providers: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      records_seen: {
+        type: 'integer',
+      },
+      scan_complete: {
+        type: 'boolean',
+      },
+      state: {
+        enum: ['events_found', 'no_matching_records', 'degraded', 'unavailable'],
+        type: 'string',
+      },
+      truncated: {
+        type: 'boolean',
+      },
+    },
+    required: ['disaster', 'state', 'incident_count', 'detail'],
+    type: 'object',
+  },
   DisasterMediaGalleryResponse: {
     properties: {
       event_id: {
@@ -1210,6 +1487,10 @@ const apiSchemas = {
     },
     required: ['kind', 'value', 'source_id'],
     type: 'object',
+  },
+  EventTimePrecision: {
+    enum: ['exact', 'day', 'week'],
+    type: 'string',
   },
   EvidenceClaimResponse: {
     additionalProperties: false,
@@ -2361,6 +2642,81 @@ const apiSchemas = {
     required: ['role', 'sensor', 'start', 'end', 'expanded_start', 'expanded_end'],
     type: 'object',
   },
+  IncidentActivityStatus: {
+    enum: ['ongoing', 'ended', 'unknown'],
+    type: 'string',
+  },
+  IncidentDetectionTimelineResponse: {
+    properties: {
+      assistant_ready_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      candidate_created_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      first_observed_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      monitor_visible_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      news_break_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      verified_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    type: 'object',
+  },
   InvestigationCaseCountryResponse: {
     properties: {
       country_code: {
@@ -3290,6 +3646,10 @@ const apiSchemas = {
     },
     required: ['type', 'coordinates', 'crs'],
     type: 'object',
+  },
+  ProviderTier: {
+    enum: ['primary', 'secondary'],
+    type: 'string',
   },
   ReportSectionResponse: {
     properties: {
@@ -4883,7 +5243,6 @@ export type FieldReportImportRequest = {
   format: 'csv' | 'geojson' | 'ushahidi';
   mapping?: ExternalFieldMappingRequest | null;
   media_packages?: Array<ImportedFieldMediaRequest>;
-  reviewed_by: string;
   source_system: 'kobotoolbox' | 'odk' | 'ushahidi';
 };
 
@@ -4895,7 +5254,6 @@ export type FieldReportReviewRequest = {
   decision: FieldReportReviewDecision;
   event_id?: string | null;
   rationale: string;
-  reviewer_id: string;
 };
 
 export type FieldReportReviewState =
@@ -4904,6 +5262,11 @@ export type FieldReportReviewState =
   | 'rejected'
   | 'associated'
   | 'admitted_operator_observation';
+
+export type FieldReviewCapabilityResponse = {
+  available: boolean;
+  reason: 'not_configured' | 'identity_missing' | null;
+};
 
 export type FootprintRequest = {
   coordinates: Array<Array<[number, number]>>;

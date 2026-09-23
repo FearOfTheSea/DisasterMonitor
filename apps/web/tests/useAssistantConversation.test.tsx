@@ -190,4 +190,35 @@ describe('useAssistantConversation', () => {
     expect(result.current.status).toBe('idle');
     expect(result.current.error).toBeNull();
   });
+
+  it('ignores a late conversation load after starting a new conversation', async () => {
+    let resolveLoad: ((value: Response) => void) | undefined;
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    fetchMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveLoad = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useAssistantConversation());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    let pending: Promise<void> | undefined;
+    act(() => {
+      pending = result.current.selectConversation('old');
+      result.current.startNewConversation();
+    });
+    await act(async () => {
+      resolveLoad?.(
+        jsonResponse({
+          conversation_id: 'old',
+          created_at: '2026-08-21T10:00:00Z',
+          updated_at: '2026-08-21T10:00:00Z',
+          messages: [],
+        }),
+      );
+      await pending;
+    });
+    expect(result.current.conversationId).toBeNull();
+    expect(result.current.messages).toEqual([]);
+  });
 });

@@ -12,6 +12,9 @@ from disaster_monitor.application.humanitarian.context import HumanitarianContex
 from disaster_monitor.application.operator_workspace.service import (
     OperatorWorkspaceService,
 )
+from disaster_monitor.application.ports.operator_identity import (
+    TrustedOperatorIdentityPolicy,
+)
 from disaster_monitor.infrastructure.field_reports.filesystem_media_store import (
     FilesystemFieldMediaStore,
 )
@@ -27,8 +30,17 @@ from disaster_monitor.presentation.http.field_report_routes import (
     get_humanitarian_context_service,
     get_operator_workspace_service,
 )
+from disaster_monitor.presentation.http.operator_identity import (
+    get_trusted_operator_identity_policy,
+)
 
 NOW = datetime(2026, 9, 16, 8, tzinfo=UTC)
+OPERATOR_HEADERS = {"x-test-operator": "operator:local"}
+
+
+class ExistingIncidentVerifier:
+    async def exists(self, event_id: str) -> bool:
+        return event_id == "event-1"
 
 
 @pytest.fixture
@@ -39,6 +51,7 @@ def app(tmp_path):
         clock=lambda: NOW,
         privacy=FieldMediaPrivacyService(clock=lambda: NOW),
         media_store=FilesystemFieldMediaStore(tmp_path / "media"),
+        event_verifier=ExistingIncidentVerifier(),
     )
     operator_workspace = OperatorWorkspaceService(
         InMemoryOperatorWorkspaceStore(), clock=lambda: NOW
@@ -49,6 +62,9 @@ def app(tmp_path):
     )
     result.dependency_overrides[get_humanitarian_context_service] = lambda: (
         HumanitarianContextService(clock=lambda: NOW)
+    )
+    result.dependency_overrides[get_trusted_operator_identity_policy] = lambda: (
+        TrustedOperatorIdentityPolicy(enabled=True, header_name="x-test-operator")
     )
     return result
 
@@ -85,9 +101,9 @@ async def test_operator_submits_and_reviews_unverified_field_report(app) -> None
 
         reviewed = await client.post(
             f"/api/v1/field-reports/{report['report_id']}/reviews",
+            headers=OPERATOR_HEADERS,
             json={
                 "decision": "associate_to_event",
-                "reviewer_id": "operator:local",
                 "rationale": "Time and location overlap the selected event.",
                 "event_id": "event-1",
             },
@@ -95,6 +111,51 @@ async def test_operator_submits_and_reviews_unverified_field_report(app) -> None
         assert reviewed.status_code == 200
         assert reviewed.json()["report"]["review_state"] == "associated"
         assert reviewed.json()["operator_observation"] is None
+
+
+@pytest.mark.asyncio
+async def test_review_requires_trusted_identity_and_existing_event(app) -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        submitted = await client.post(
+            "/api/v1/field-reports",
+            json={
+                "report_type": "flooding",
+                "text": "Water covers the road.",
+                "captured_at": "2026-09-16T07:45:00Z",
+                "source_created_at": "2026-09-16T07:50:00Z",
+                "submitter_channel": "operator-form",
+                "geometry": {"type": "Point", "coordinates": [106.0, 21.0]},
+                "location_precision": "approximate",
+                "location_uncertainty_m": 100,
+            },
+        )
+        report_id = submitted.json()["report_id"]
+        path = f"/api/v1/field-reports/{report_id}/reviews"
+        review = {
+            "decision": "admit_operator_observation",
+            "rationale": "Verified against the source record.",
+            "event_id": "event-1",
+            "authority_policy_id": "operator-observation-admission.v1",
+        }
+        assert (await client.post(path, json=review)).status_code == 401
+        assert (
+            await client.post(
+                path,
+                headers=OPERATOR_HEADERS,
+                json={**review, "reviewer_id": "forged"},
+            )
+        ).status_code == 422
+        assert (
+            await client.post(
+                path,
+                headers=OPERATOR_HEADERS,
+                json={**review, "event_id": "missing"},
+            )
+        ).status_code == 404
+        admitted = await client.post(path, headers=OPERATOR_HEADERS, json=review)
+        assert admitted.status_code == 200
+        assert admitted.json()["review"]["reviewer_id"] == "operator:local"
 
 
 @pytest.mark.asyncio
@@ -129,6 +190,75 @@ async def test_field_report_attachment_is_sanitized_before_persistence(app) -> N
     assert response.json()["media"][0]["transformations"][0] == (
         "stripped-jpeg-app1-exif"
     )
+
+
+@pytest.mark.asyncio
+async def test_rejected_report_does_not_leave_media(app, tmp_path) -> None:
+    png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\x00IEND\xaeB\x60\x82"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/field-reports",
+            json={
+                "report_type": "flooding",
+                "text": "Contact person@example.test about flooding.",
+                "captured_at": "2026-09-16T07:45:00Z",
+                "source_created_at": "2026-09-16T07:50:00Z",
+                "submitter_channel": "operator-form",
+                "geometry": {"type": "Point", "coordinates": [106.0, 21.0]},
+                "location_precision": "approximate",
+                "location_uncertainty_m": 100,
+                "attachments": [
+                    {
+                        "filename": "road.png",
+                        "media_type": "image/png",
+                        "content_base64": base64.b64encode(png).decode(),
+                    }
+                ],
+            },
+        )
+    assert response.status_code == 422
+    assert not tuple((tmp_path / "media").rglob("*.bin"))
+
+
+@pytest.mark.asyncio
+async def test_exact_retry_returns_existing_report_and_conflicting_retry_is_rejected(
+    app,
+) -> None:
+    body = {
+        "report_type": "flooding",
+        "text": "Water covers the lower road.",
+        "captured_at": "2026-09-16T07:45:00Z",
+        "source_created_at": "2026-09-16T07:50:00Z",
+        "submitter_channel": "operator-form",
+        "geometry": {"type": "Point", "coordinates": [106.0, 21.0]},
+        "location_precision": "approximate",
+        "location_uncertainty_m": 100,
+        "attachments": [],
+    }
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        first = await client.post("/api/v1/field-reports", json=body)
+        retry = await client.post("/api/v1/field-reports", json=body)
+        conflict = await client.post(
+            "/api/v1/field-reports",
+            json={**body, "location_uncertainty_m": 200},
+        )
+    assert first.status_code == 201
+    assert retry.status_code == 200
+    assert retry.json() == first.json()
+    assert conflict.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_field_report_body_limit_rejects_oversized_requests(app) -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/field-reports/imports",
+            content=b"x" * (52 * 1024 * 1024 + 1),
+        )
+    assert response.status_code == 413
 
 
 @pytest.mark.asyncio
@@ -202,10 +332,10 @@ async def test_reviewed_kobo_import_preserves_mapping_and_sanitized_media(app) -
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/v1/field-reports/imports",
+            headers=OPERATOR_HEADERS,
             json={
                 "source_system": "kobotoolbox",
                 "format": "csv",
-                "reviewed_by": "operator:local",
                 "content": (
                     "id,kind,details,captured,created,lat,lon,verified\n"
                     "row-1,flooding,Water near bridge,2026-09-15T07:00:00Z,"

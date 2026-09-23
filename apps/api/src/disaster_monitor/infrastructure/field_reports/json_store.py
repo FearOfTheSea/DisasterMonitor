@@ -46,9 +46,23 @@ class JsonFieldReportStore:
                 return False
             if len(self._reports) >= self._maximum_reports:
                 raise ValueError("Field-report storage has reached its record limit.")
-            self._reports[report.report_id] = report
-            self._persist()
+            reports = {**self._reports, report.report_id: report}
+            self._persist(reports, self._reviews, self._observations)
+            self._reports = reports
             return True
+
+    async def add_reports(self, reports: tuple[UnverifiedFieldReport, ...]) -> None:
+        async with self._lock:
+            updated = dict(self._reports)
+            for report in reports:
+                existing = updated.get(report.report_id)
+                if existing is not None and existing != report:
+                    raise RuntimeError("Field-report identity was reused.")
+                updated[report.report_id] = report
+            if len(updated) > self._maximum_reports:
+                raise ValueError("Field-report storage has reached its record limit.")
+            self._persist(updated, self._reviews, self._observations)
+            self._reports = updated
 
     async def report(self, report_id: str) -> UnverifiedFieldReport | None:
         return self._reports.get(report_id)
@@ -83,14 +97,26 @@ class JsonFieldReportStore:
                 raise ValueError("Field report does not exist.")
             if current.review_revision + 1 != review.revision:
                 raise RuntimeError("Field-report review revision is stale.")
-            self._reports[report.report_id] = report
-            self._reviews.setdefault(report.report_id, []).append(review)
+            reports = {**self._reports, report.report_id: report}
+            reviews = {key: list(items) for key, items in self._reviews.items()}
+            reviews.setdefault(report.report_id, []).append(review)
+            observations = dict(self._observations)
             if observation is not None:
-                self._observations[observation.observation_id] = observation
-            self._persist()
+                observations[observation.observation_id] = observation
+            self._persist(reports, reviews, observations)
+            self._reports = reports
+            self._reviews = reviews
+            self._observations = observations
 
     async def reviews(self, report_id: str) -> tuple[FieldReportReview, ...]:
         return tuple(self._reviews.get(report_id, ()))
+
+    def referenced_media_ids(self) -> frozenset[str]:
+        return frozenset(
+            media.media_id
+            for report in self._reports.values()
+            for media in report.media
+        )
 
     def _load(self) -> None:
         if not self._path.is_file():
@@ -111,17 +137,22 @@ class JsonFieldReportStore:
             for item in raw.get("operator_observations", [])
         }
 
-    def _persist(self) -> None:
+    def _persist(
+        self,
+        reports: dict[str, UnverifiedFieldReport],
+        reviews: dict[str, list[FieldReportReview]],
+        observations: dict[str, OperatorObservation],
+    ) -> None:
         document: dict[str, object] = {
             "schema_version": "field-report-store.v1",
-            "reports": [_json_value(asdict(item)) for item in self._reports.values()],
+            "reports": [_json_value(asdict(item)) for item in reports.values()],
             "reviews": [
                 _json_value(asdict(review))
-                for reviews in self._reviews.values()
-                for review in reviews
+                for history in reviews.values()
+                for review in history
             ],
             "operator_observations": [
-                _json_value(asdict(item)) for item in self._observations.values()
+                _json_value(asdict(item)) for item in observations.values()
             ],
         }
         _atomic_json_write(self._path, document)

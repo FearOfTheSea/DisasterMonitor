@@ -16,12 +16,20 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-SCHEMA_VERSION = "dm.operational-backup.v2"
+SCHEMA_VERSION = "dm.operational-backup.v3"
+LEGACY_SCHEMA_VERSION = "dm.operational-backup.v2"
 CONFIRMATION = "REPLACE_OPERATIONAL_STATE"
 COMPONENTS = {
     "operational_blobs": "files/operational-blobs",
     "event_media": "files/event-media",
     "ground_imagery": "files/ground-imagery",
+    "field_reports": "files/field-reports",
+    "operator_workspace": "files/operator-workspace",
+}
+LEGACY_COMPONENTS = {
+    name: path
+    for name, path in COMPONENTS.items()
+    if name not in {"field_reports", "operator_workspace"}
 }
 DATABASE_CONTENTS = (
     "incident_watches",
@@ -84,7 +92,7 @@ def create_backup(
         try:
             with tarfile.open(temporary_archive, "w:gz") as archive:
                 for path in sorted(staging.rglob("*")):
-                    archive.add(path, arcname=path.relative_to(staging))
+                    archive.add(path, arcname=path.relative_to(staging), recursive=False)
             temporary_archive.replace(backup_path)
         finally:
             temporary_archive.unlink(missing_ok=True)
@@ -100,7 +108,7 @@ def validate_backup(backup_path: Path) -> dict[str, Any]:
     except (OSError, tarfile.TarError) as error:
         raise BackupError(f"Could not open backup archive: {backup_path}") from error
     with archive:
-        members = {member.name: member for member in archive.getmembers()}
+        members = _archive_members(archive)
         _validate_members(members)
         manifest_member = members.get("manifest.json")
         if manifest_member is None:
@@ -112,10 +120,10 @@ def validate_backup(backup_path: Path) -> dict[str, Any]:
             manifest = json.loads(handle.read().decode("utf-8"))
         except (UnicodeError, json.JSONDecodeError) as error:
             raise BackupError("Backup manifest is invalid JSON.") from error
-        if (
-            not isinstance(manifest, dict)
-            or manifest.get("schema_version") != SCHEMA_VERSION
-        ):
+        if not isinstance(manifest, dict) or manifest.get("schema_version") not in {
+            SCHEMA_VERSION,
+            LEGACY_SCHEMA_VERSION,
+        }:
             raise BackupError("Unsupported operational backup schema.")
         entries = manifest.get("files")
         if not isinstance(entries, list):
@@ -138,7 +146,12 @@ def validate_backup(backup_path: Path) -> dict[str, Any]:
             digest = _stream_sha256(handle)
             if digest != _required_text(entry, "sha256"):
                 raise BackupError(f"Backup checksum mismatch: {name}")
-        required = set(COMPONENTS.values())
+        components = (
+            COMPONENTS
+            if manifest["schema_version"] == SCHEMA_VERSION
+            else LEGACY_COMPONENTS
+        )
+        required = set(components.values())
         if manifest.get("database_mode") == "pg_dump_custom":
             required.add("database.dump")
         for prefix in required:
@@ -156,11 +169,18 @@ def restore_backup(
     component_roots: dict[str, Path],
     confirmation: str,
     writers_paused: bool = False,
+    allow_legacy_partial_restore: bool = False,
 ) -> dict[str, Any]:
     """Restore an archive only after explicit replacement confirmation."""
     if confirmation != CONFIRMATION:
         raise BackupError(f"Pass {CONFIRMATION} to authorize replacement.")
     manifest = validate_backup(backup_path)
+    legacy = manifest["schema_version"] == LEGACY_SCHEMA_VERSION
+    if legacy and not allow_legacy_partial_restore:
+        raise BackupError(
+            "The v2 archive lacks field reports and operator workspace data; "
+            "pass --allow-legacy-partial-restore to restore only included data."
+        )
     if manifest.get("database_mode") == "pg_dump_custom" and database_url is None:
         raise BackupError("A database URL is required to restore database state.")
     if manifest.get("database_mode") == "pg_dump_custom" and not writers_paused:
@@ -173,6 +193,7 @@ def restore_backup(
             component_roots=component_roots,
             database_url=database_url,
             restore_database=manifest.get("database_mode") == "pg_dump_custom",
+            components=LEGACY_COMPONENTS if legacy else COMPONENTS,
         )
     return manifest
 
@@ -190,12 +211,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             subparser.add_argument("--operational-blobs", type=Path, required=True)
             subparser.add_argument("--event-media", type=Path, required=True)
             subparser.add_argument("--ground-imagery", type=Path, required=True)
+            subparser.add_argument("--field-reports", type=Path, required=True)
+            subparser.add_argument("--operator-workspace", type=Path, required=True)
         if command == "backup":
             subparser.add_argument("--filesystem-only", action="store_true")
         if command in {"backup", "restore"}:
             subparser.add_argument("--writers-paused", action="store_true")
         if command == "restore":
             subparser.add_argument("--confirm", required=True)
+            subparser.add_argument(
+                "--allow-legacy-partial-restore", action="store_true"
+            )
     arguments = parser.parse_args(argv)
     try:
         if arguments.command == "validate":
@@ -206,6 +232,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "operational_blobs": arguments.operational_blobs,
                 "event_media": arguments.event_media,
                 "ground_imagery": arguments.ground_imagery,
+                "field_reports": arguments.field_reports,
+                "operator_workspace": arguments.operator_workspace,
             }
             if arguments.command == "backup":
                 path = create_backup(
@@ -223,6 +251,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     component_roots=roots,
                     confirmation=arguments.confirm,
                     writers_paused=arguments.writers_paused,
+                    allow_legacy_partial_restore=arguments.allow_legacy_partial_restore,
                 )
                 print(f"Operational state restored from {arguments.archive}")
     except (
@@ -307,7 +336,7 @@ def _restore_database(database_url: str, dump_path: Path) -> None:
 
 def _extract_archive(archive_path: Path, target: Path) -> None:
     with tarfile.open(archive_path, "r:gz") as archive:
-        members = {member.name: member for member in archive.getmembers()}
+        members = _archive_members(archive)
         _validate_members(members)
         for member in members.values():
             destination = (target / member.name).resolve()
@@ -315,7 +344,18 @@ def _extract_archive(archive_path: Path, target: Path) -> None:
                 raise BackupError(
                     "Backup archive path escaped its restore staging root."
                 )
-        archive.extractall(target, filter="data")
+        for member in sorted(members.values(), key=lambda item: (not item.isdir(), item.name)):
+            destination = target / member.name
+            if member.isdir():
+                destination.mkdir(parents=True, exist_ok=True)
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source = archive.extractfile(member)
+            if source is None:
+                raise BackupError(f"Backup file cannot be read: {member.name}")
+            with source, destination.open("xb") as output:
+                shutil.copyfileobj(source, output)
+            destination.chmod(0o600)
 
 
 def _restore_components(
@@ -324,11 +364,12 @@ def _restore_components(
     component_roots: dict[str, Path],
     database_url: str | None,
     restore_database: bool,
+    components: dict[str, str],
 ) -> None:
     prepared: list[tuple[Path, Path, Path]] = []
-    swapped: list[tuple[Path, Path]] = []
+    swapped: list[tuple[Path, Path, bool]] = []
     try:
-        for component, relative_source in COMPONENTS.items():
+        for component, relative_source in components.items():
             source = staging / relative_source
             target = component_roots.get(component)
             if target is None:
@@ -344,20 +385,29 @@ def _restore_components(
             prepared.append((target, candidate, backup))
 
         for target, candidate, backup in prepared:
-            if target.exists():
-                target.replace(backup)
-            candidate.replace(target)
-            swapped.append((target, backup))
+            mounted = os.path.ismount(target)
+            if mounted:
+                shutil.copytree(target, backup, symlinks=False)
+                swapped.append((target, backup, True))
+                _replace_directory_contents(target, candidate)
+            else:
+                if target.exists():
+                    target.replace(backup)
+                swapped.append((target, backup, False))
+                candidate.replace(target)
 
         if restore_database:
             assert database_url is not None
             _restore_database(database_url, staging / "database.dump")
     except Exception:
-        for target, backup in reversed(swapped):
-            if target.exists():
-                shutil.rmtree(target)
-            if backup.exists():
-                backup.replace(target)
+        for target, backup, mounted in reversed(swapped):
+            if mounted:
+                _replace_directory_contents(target, backup)
+            else:
+                if target.exists():
+                    shutil.rmtree(target)
+                if backup.exists():
+                    backup.replace(target)
         raise
     finally:
         for _, candidate, backup in prepared:
@@ -365,6 +415,18 @@ def _restore_components(
                 shutil.rmtree(candidate)
             if backup.exists():
                 shutil.rmtree(backup)
+
+
+def _replace_directory_contents(target: Path, source: Path) -> None:
+    owner = target.stat()
+    for child in target.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+    shutil.copytree(source, target, symlinks=False, dirs_exist_ok=True)
+    for child in target.rglob("*"):
+        os.chown(child, owner.st_uid, owner.st_gid, follow_symlinks=False)
 
 
 def _validate_restore_target(target: Path) -> None:
@@ -381,6 +443,13 @@ def _validate_members(members: dict[str, tarfile.TarInfo]) -> None:
             raise BackupError(f"Backup archive path is unsafe: {name}")
         if not (member.isdir() or member.isfile()):
             raise BackupError(f"Backup archive contains a non-regular member: {name}")
+
+
+def _archive_members(archive: tarfile.TarFile) -> dict[str, tarfile.TarInfo]:
+    members = archive.getmembers()
+    for member in members:
+        _validate_members({member.name: member})
+    return {member.name: member for member in members}
 
 
 def _file_sha256(path: Path) -> str:

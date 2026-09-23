@@ -7,7 +7,7 @@ import binascii
 from dataclasses import asdict
 from typing import Annotated, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from disaster_monitor.application.field_reports.duplicates import (
     FieldReportDuplicateDetector,
@@ -18,8 +18,11 @@ from disaster_monitor.application.field_reports.importers import (
     UshahidiMapper,
 )
 from disaster_monitor.application.field_reports.service import (
+    FieldReportConflictError,
+    FieldReportEventNotFoundError,
     FieldReportNotFoundError,
     FieldReportService,
+    IncidentEvidenceUnavailableError,
     NewFieldReport,
 )
 from disaster_monitor.application.humanitarian.context import (
@@ -27,6 +30,9 @@ from disaster_monitor.application.humanitarian.context import (
 )
 from disaster_monitor.application.operator_workspace.service import (
     OperatorWorkspaceService,
+)
+from disaster_monitor.application.ports.operator_identity import (
+    TrustedOperatorIdentityPolicy,
 )
 from disaster_monitor.domain.field_reports import (
     FieldCoordinate,
@@ -39,6 +45,11 @@ from disaster_monitor.presentation.http.field_report_schemas import (
     FieldReportCreateRequest,
     FieldReportImportRequest,
     FieldReportReviewRequest,
+    FieldReviewCapabilityResponse,
+)
+from disaster_monitor.presentation.http.operator_identity import (
+    get_trusted_operator_identity_policy,
+    trusted_operator_id,
 )
 
 router = APIRouter()
@@ -68,18 +79,19 @@ def get_humanitarian_context_service(request: Request) -> HumanitarianContextSer
 )
 async def submit_field_report(
     body: FieldReportCreateRequest,
+    response: Response,
     service: Annotated[FieldReportService, Depends(get_field_report_service)],
 ) -> dict[str, object]:
     try:
-        media = tuple(
-            service.admit_media(
+        prepared_media = tuple(
+            service.sanitize_media(
                 filename=item.filename,
                 media_type=item.media_type,
                 content=base64.b64decode(item.content_base64, validate=True),
             )
             for item in body.attachments
         )
-        report = await service.submit(
+        report, created = await service.submit_with_media(
             NewFieldReport(
                 report_type=body.report_type,
                 text=body.text,
@@ -89,10 +101,14 @@ async def submit_field_report(
                 geometry=_geometry(body.geometry.type, body.geometry.coordinates),
                 location_precision=body.location_precision,
                 location_uncertainty_m=body.location_uncertainty_m,
-                media=media,
-            )
+            ),
+            prepared_media,
         )
+        if not created:
+            response.status_code = status.HTTP_200_OK
         return asdict(report)
+    except FieldReportConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except (binascii.Error, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -115,18 +131,44 @@ async def field_report_duplicate_candidates(
     return [asdict(item) for item in FieldReportDuplicateDetector().detect(reports)]
 
 
+@router.get(
+    "/field-reports/review-capability",
+    response_model=FieldReviewCapabilityResponse,
+    tags=["field-reports"],
+)
+async def field_review_capability(
+    request: Request,
+    policy: Annotated[
+        TrustedOperatorIdentityPolicy,
+        Depends(get_trusted_operator_identity_policy),
+    ],
+) -> FieldReviewCapabilityResponse:
+    if not policy.enabled:
+        return FieldReviewCapabilityResponse(available=False, reason="not_configured")
+    identity = request.headers.get(policy.header_name, "").strip()
+    if not identity or len(identity) > 200:
+        return FieldReviewCapabilityResponse(available=False, reason="identity_missing")
+    return FieldReviewCapabilityResponse(available=True, reason=None)
+
+
 @router.post("/field-reports/{report_id}/reviews", tags=["field-reports"])
 async def review_field_report(
     report_id: str,
     body: FieldReportReviewRequest,
+    request: Request,
+    policy: Annotated[
+        TrustedOperatorIdentityPolicy,
+        Depends(get_trusted_operator_identity_policy),
+    ],
     service: Annotated[FieldReportService, Depends(get_field_report_service)],
 ) -> dict[str, object]:
+    reviewer_id = trusted_operator_id(request, policy)
     try:
         return asdict(
             await service.review(
                 report_id,
                 body.decision,
-                reviewer_id=body.reviewer_id,
+                reviewer_id=reviewer_id,
                 rationale=body.rationale,
                 event_id=body.event_id,
                 authority_policy_id=body.authority_policy_id,
@@ -136,6 +178,10 @@ async def review_field_report(
         raise HTTPException(
             status_code=404, detail="Field report not found."
         ) from error
+    except FieldReportEventNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Incident not found.") from error
+    except IncidentEvidenceUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -147,22 +193,29 @@ async def review_field_report(
 )
 async def import_field_reports(
     body: FieldReportImportRequest,
+    request: Request,
+    policy: Annotated[
+        TrustedOperatorIdentityPolicy,
+        Depends(get_trusted_operator_identity_policy),
+    ],
     service: Annotated[FieldReportService, Depends(get_field_report_service)],
 ) -> dict[str, object]:
+    reviewer_id = trusted_operator_id(request, policy)
     importer = FieldReportImportService()
     try:
         media_by_external_id: dict[str, list[FieldMediaLineage]] = {}
+        prepared_media = []
         for item in body.media_packages:
             target = media_by_external_id.setdefault(item.external_id, [])
             if len(target) >= 4:
                 raise ValueError("Each imported record is limited to four media files.")
-            target.append(
-                service.admit_media(
-                    filename=item.filename,
-                    media_type=item.media_type,
-                    content=base64.b64decode(item.content_base64, validate=True),
-                )
+            prepared = service.sanitize_media(
+                filename=item.filename,
+                media_type=item.media_type,
+                content=base64.b64decode(item.content_base64, validate=True),
             )
+            target.append(prepared.lineage)
+            prepared_media.append(prepared)
         imported_media = {
             external_id: tuple(items)
             for external_id, items in media_by_external_id.items()
@@ -175,7 +228,7 @@ async def import_field_reports(
                     "Ushahidi media packages are not supported by this mapping."
                 )
             result = UshahidiMapper().import_posts(
-                body.content, reviewed_by=body.reviewed_by
+                body.content, reviewed_by=reviewer_id
             )
         else:
             if body.mapping is None:
@@ -188,7 +241,7 @@ async def import_field_reports(
                     body.content,
                     source_system=body.source_system,
                     mapping=mapping,
-                    reviewed_by=body.reviewed_by,
+                    reviewed_by=reviewer_id,
                     media_by_external_id=imported_media,
                 )
             else:
@@ -198,12 +251,23 @@ async def import_field_reports(
                     body.content,
                     source_system=body.source_system,
                     mapping=mapping,
-                    reviewed_by=body.reviewed_by,
+                    reviewed_by=reviewer_id,
                     media_by_external_id=imported_media,
                 )
-        await service.import_reports(result.reports)
+        imported_record_ids = {
+            report.import_provenance.source_record_id
+            for report in result.reports
+            if report.import_provenance is not None
+        }
+        if any(
+            item.external_id not in imported_record_ids for item in body.media_packages
+        ):
+            raise ValueError(
+                "An import media package did not match an imported record."
+            )
+        await service.import_reports(result.reports, tuple(prepared_media))
         return asdict(result)
-    except ValueError as error:
+    except (binascii.Error, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 

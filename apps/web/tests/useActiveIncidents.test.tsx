@@ -1,5 +1,5 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchActiveIncidents } from '@/features/incidents/api/incidentsClient';
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
@@ -19,6 +19,7 @@ function snapshot(retrievedAt: string): ActiveIncidentsSnapshot {
 }
 
 describe('useActiveIncidents', () => {
+  afterEach(() => cleanup());
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
@@ -76,5 +77,64 @@ describe('useActiveIncidents', () => {
     await waitFor(() => expect(result.current.status).toBe('offline'));
     expect(result.current.snapshot?.availability).toBe('offline-cache');
     expect(result.current.error).toContain('stale');
+  });
+
+  it('does not merge a late page into a different query', async () => {
+    let resolvePage: ((value: ActiveIncidentsSnapshot) => void) | undefined;
+    vi.mocked(fetchActiveIncidents)
+      .mockResolvedValueOnce({ ...snapshot('old'), next_cursor: 'next' })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolvePage = resolve;
+        }),
+      )
+      .mockResolvedValueOnce(snapshot('new'));
+    const { result } = renderHook(() => useActiveIncidents());
+    await waitFor(() => expect(result.current.snapshot?.retrieved_at).toBe('old'));
+    let pending: Promise<void> | undefined;
+    act(() => {
+      pending = result.current.loadMore();
+      result.current.setView('ongoing');
+    });
+    await waitFor(() => expect(result.current.snapshot?.retrieved_at).toBe('new'));
+    await act(async () => {
+      resolvePage?.({
+        ...snapshot('late-old-page'),
+        incidents: [
+          { event_id: 'stale-event' } as ActiveIncidentsSnapshot['incidents'][number],
+        ],
+      });
+      await pending;
+    });
+    expect(result.current.snapshot?.retrieved_at).toBe('new');
+    expect(result.current.snapshot?.incidents).toEqual([]);
+  });
+
+  it('retains distinct sources with the same event id across pages', async () => {
+    const incident = (sourceId: string) =>
+      ({
+        event_id: 'shared-event',
+        source: { source_id: sourceId },
+      }) as ActiveIncidentsSnapshot['incidents'][number];
+    vi.mocked(fetchActiveIncidents)
+      .mockResolvedValueOnce({
+        ...snapshot('first'),
+        snapshot_version: 'v1',
+        next_cursor: 'page-2',
+        incidents: [incident('source-a')],
+      })
+      .mockResolvedValueOnce({
+        ...snapshot('second'),
+        snapshot_version: 'v1',
+        incidents: [incident('source-b'), incident('source-b')],
+      });
+    const { result } = renderHook(() => useActiveIncidents());
+    await waitFor(() => expect(result.current.snapshot?.retrieved_at).toBe('first'));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(
+      result.current.snapshot?.incidents.map((item) => item.source.source_id),
+    ).toEqual(['source-a', 'source-b']);
   });
 });

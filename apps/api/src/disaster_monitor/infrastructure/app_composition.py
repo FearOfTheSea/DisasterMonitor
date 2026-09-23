@@ -36,6 +36,9 @@ from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
 from disaster_monitor.application.exposure.access_context import (
     RouteAccessContextService,
 )
+from disaster_monitor.application.field_reports.incident_verifier import (
+    ProjectionIncidentVerifier,
+)
 from disaster_monitor.application.field_reports.media_privacy import (
     FieldMediaPrivacyService,
 )
@@ -74,6 +77,9 @@ from disaster_monitor.application.ports.field_reports import FieldMediaStore
 from disaster_monitor.application.ports.humanitarian import (
     HumanitarianIndicatorProvider,
     OperationalPresenceProvider,
+)
+from disaster_monitor.application.ports.incident_projection import (
+    IncidentProjectionStore,
 )
 from disaster_monitor.application.ports.incident_watch_store import IncidentWatchStore
 from disaster_monitor.application.ports.operator_identity import (
@@ -149,6 +155,7 @@ def _build_humanitarian_field_services(
     *,
     clock: Callable[[], datetime],
     configured: AppDependencyOverrides,
+    projection_store: IncidentProjectionStore | None,
 ) -> _HumanitarianFieldServices:
     close_resources: list[object] = []
     humanitarian_context = configured.humanitarian_context_service
@@ -172,13 +179,24 @@ def _build_humanitarian_field_services(
         maximum_bytes=settings.field_media_maximum_bytes,
         clock=clock,
     )
+    if configured.field_report_service is None:
+        field_report_store = JsonFieldReportStore(settings.field_report_store_path)
+        if configured.field_media_store is None and isinstance(
+            media_store, FilesystemFieldMediaStore
+        ):
+            media_store.reconcile(field_report_store.referenced_media_ids())
     field_reports = configured.field_report_service or FieldReportService(
-        JsonFieldReportStore(settings.field_report_store_path),
+        field_report_store,
         privacy=FieldMediaPrivacyService(
             clock=clock,
             retention_days=settings.field_media_retention_days,
         ),
         media_store=media_store,
+        event_verifier=(
+            ProjectionIncidentVerifier(projection_store)
+            if projection_store is not None
+            else None
+        ),
         clock=clock,
     )
     operator_workspace = (
@@ -430,7 +448,14 @@ def build_app_dependencies(
         return datetime.now(UTC)
 
     humanitarian_field = _build_humanitarian_field_services(
-        settings, clock=clock, configured=configured
+        settings,
+        clock=clock,
+        configured=configured,
+        projection_store=(
+            operational.repository
+            if isinstance(operational.repository, PostgresOperationalRepository)
+            else None
+        ),
     )
 
     if configured.event_media is None:

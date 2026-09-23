@@ -22,6 +22,15 @@ class InMemoryFieldReportStore:
         self._reports[report.report_id] = report
         return True
 
+    async def add_reports(self, reports: tuple[UnverifiedFieldReport, ...]) -> None:
+        updated = dict(self._reports)
+        for report in reports:
+            existing = updated.get(report.report_id)
+            if existing is not None and existing != report:
+                raise RuntimeError("Field-report identity was reused.")
+            updated[report.report_id] = report
+        self._reports = updated
+
     async def report(self, report_id: str) -> UnverifiedFieldReport | None:
         return self._reports.get(report_id)
 

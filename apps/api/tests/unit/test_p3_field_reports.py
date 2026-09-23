@@ -32,6 +32,11 @@ from disaster_monitor.infrastructure.field_reports.memory_store import (
 NOW = datetime(2026, 9, 16, 8, tzinfo=UTC)
 
 
+class ExistingIncidentVerifier:
+    async def exists(self, event_id: str) -> bool:
+        return event_id == "event-1"
+
+
 def _report(
     report_id: str,
     *,
@@ -117,7 +122,9 @@ def test_duplicate_detection_only_proposes_review_candidates() -> None:
 @pytest.mark.asyncio
 async def test_human_review_has_explicit_non_promoting_and_operator_paths() -> None:
     store = InMemoryFieldReportStore()
-    service = FieldReportService(store, clock=lambda: NOW)
+    service = FieldReportService(
+        store, clock=lambda: NOW, event_verifier=ExistingIncidentVerifier()
+    )
     report = await service.submit(
         NewFieldReport(
             report_type="flooding",

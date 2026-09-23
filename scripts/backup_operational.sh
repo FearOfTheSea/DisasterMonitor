@@ -18,4 +18,6 @@ docker compose --profile tools run --rm backup-tool backup \
   --operational-blobs /operational-blobs \
   --event-media /event-media \
   --ground-imagery /ground-imagery \
+  --field-reports /field-reports \
+  --operator-workspace /operator-workspace \
   --writers-paused

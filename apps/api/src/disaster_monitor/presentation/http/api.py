@@ -4,6 +4,9 @@ from fastapi import FastAPI
 from starlette.types import Lifespan
 
 from disaster_monitor.presentation.http.error_handlers import register_error_handlers
+from disaster_monitor.presentation.http.field_report_body_limit import (
+    FieldReportBodyLimitMiddleware,
+)
 from disaster_monitor.presentation.http.routes import router
 
 
@@ -15,6 +18,7 @@ def create_http_app(
 ) -> FastAPI:
     """Register the production routes and schemas without constructing adapters."""
     app = FastAPI(title=title, version=version, lifespan=lifespan)
+    app.add_middleware(FieldReportBodyLimitMiddleware)
     app.include_router(router, prefix="/api/v1")
     register_error_handlers(app)
     return app

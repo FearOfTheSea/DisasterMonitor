@@ -393,6 +393,8 @@ def _page_snapshot(
             if has_more
             else None
         )
+    previously_visible_ids = {item.event_id for item in filtered[:offset]}
+    visible_ids = previously_visible_ids | {item.event_id for item in page}
     observations = tuple(
         observation
         for observation in snapshot.observations
@@ -407,8 +409,9 @@ def _page_snapshot(
         correlations=tuple(
             correlation
             for correlation in snapshot.correlations
-            if {correlation.first_event_id, correlation.second_event_id}
-            <= {item.event_id for item in page}
+            if (endpoints := {correlation.first_event_id, correlation.second_event_id})
+            <= visible_ids
+            and not endpoints <= previously_visible_ids
         ),
         snapshot_version=snapshot.snapshot_version,
         next_cursor=next_cursor,

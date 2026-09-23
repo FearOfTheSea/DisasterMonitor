@@ -6,6 +6,7 @@ import {
   createFieldReport,
   fetchDuplicateCandidates,
   fetchFieldReports,
+  fetchFieldReviewCapability,
   reviewFieldReport,
 } from '@/features/operations/api/fieldReportsClient';
 import { FieldReportWorkbench } from '@/features/operations/ui/FieldReportWorkbench';
@@ -14,6 +15,7 @@ vi.mock('@/features/operations/api/fieldReportsClient', () => ({
   createFieldReport: vi.fn(),
   fetchDuplicateCandidates: vi.fn(),
   fetchFieldReports: vi.fn(),
+  fetchFieldReviewCapability: vi.fn(),
   reviewFieldReport: vi.fn(),
 }));
 
@@ -45,6 +47,10 @@ describe('FieldReportWorkbench', () => {
 
   beforeEach(() => {
     vi.mocked(fetchFieldReports).mockResolvedValue([report]);
+    vi.mocked(fetchFieldReviewCapability).mockResolvedValue({
+      available: true,
+      reason: null,
+    });
     vi.mocked(fetchDuplicateCandidates).mockResolvedValue([
       {
         candidate_id: 'duplicate:one',
@@ -137,5 +143,17 @@ describe('FieldReportWorkbench', () => {
         }),
       ),
     );
+  });
+
+  it('disables review when trusted identity is unavailable', async () => {
+    vi.mocked(fetchFieldReviewCapability).mockResolvedValue({
+      available: false,
+      reason: 'not_configured',
+    });
+    render(<FieldReportWorkbench selectedIncidentId="event-1" />);
+    expect(await screen.findByText(/Review is unavailable until/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Record field report review' }),
+    ).toBeDisabled();
   });
 });

@@ -32,6 +32,10 @@ from disaster_monitor.presentation.http.common_response_serialization import (
     _event_geometry_response,
     _source_response,
 )
+from disaster_monitor.presentation.http.operator_identity import (
+    get_trusted_operator_identity_policy,
+    trusted_operator_id,
+)
 from disaster_monitor.presentation.http.response_serialization import (
     _incident_watch_change_response,
     _incident_watch_response,
@@ -75,16 +79,6 @@ def get_evidence_history_query(request: Request) -> EvidenceHistoryQuery:
 def get_record_operator_action(request: Request) -> RecordOperatorAction:
     return cast(
         RecordOperatorAction, request.app.state.dependencies.record_operator_action
-    )
-
-
-def get_trusted_operator_identity_policy(
-    request: Request,
-) -> TrustedOperatorIdentityPolicy:
-    """Retrieve the application-facing identity policy from the composition root."""
-    return cast(
-        TrustedOperatorIdentityPolicy,
-        request.app.state.dependencies.operator_identity,
     )
 
 
@@ -392,17 +386,7 @@ async def operator_action(
     use_case: Annotated[RecordOperatorAction, Depends(get_record_operator_action)],
 ) -> OperatorActionResponse:
     """Record an attributable bounded review from a trusted identity boundary."""
-    if not policy.enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Trusted operator identity is not configured.",
-        )
-    operator_id = request.headers.get(policy.header_name, "").strip()
-    if not operator_id or len(operator_id) > 200:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="A trusted operator identity is required.",
-        )
+    operator_id = trusted_operator_id(request, policy)
     try:
         result = await use_case.execute(
             operator_id=operator_id,

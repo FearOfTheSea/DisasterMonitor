@@ -15,6 +15,8 @@ try {
     --operational-blobs /operational-blobs `
     --event-media /event-media `
     --ground-imagery /ground-imagery `
+    --field-reports /field-reports `
+    --operator-workspace /operator-workspace `
     --writers-paused
 } finally {
   docker compose start api scheduler worker | Out-Null

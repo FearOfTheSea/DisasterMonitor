@@ -35,6 +35,8 @@ services:
   api:
     build:
       context: ./apps/api
+    extra_hosts:
+      - host.docker.internal:host-gateway
     env_file:
       - path: ./apps/api/.env
         required: false
@@ -46,6 +48,9 @@ services:
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
       EVENT_MEDIA_BLOB_ROOT: /var/lib/disaster-monitor/event-media
       GROUND_IMAGERY_STORAGE_ROOT: /var/lib/disaster-monitor/ground-imagery
+      FIELD_REPORT_STORE_PATH: /var/lib/disaster-monitor/field-reports/reports.json
+      FIELD_MEDIA_ROOT: /var/lib/disaster-monitor/field-reports/media
+      OPERATOR_WORKSPACE_STORE_PATH: /var/lib/disaster-monitor/operator-workspace/workspace.json
       GROUND_IMAGERY_STORAGE_BUDGET_BYTES: "21474836480"
       OPERATIONAL_AUTO_MIGRATE: "false"
       COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
@@ -68,8 +73,10 @@ services:
       - event-media-blobs:/var/lib/disaster-monitor/event-media
       - ground-imagery-data:/var/lib/disaster-monitor/ground-imagery
       - country-catalog-data:/var/lib/disaster-monitor/geography
+      - field-reports-data:/var/lib/disaster-monitor/field-reports
+      - operator-workspace-data:/var/lib/disaster-monitor/operator-workspace
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
 
   scheduler:
     build:
@@ -92,6 +99,8 @@ services:
   worker:
     build:
       context: ./apps/api
+    extra_hosts:
+      - host.docker.internal:host-gateway
     env_file:
       - path: ./apps/api/.env
         required: false
@@ -129,6 +138,8 @@ services:
       - operational-blobs:/operational-blobs
       - event-media-blobs:/event-media
       - ground-imagery-data:/ground-imagery
+      - field-reports-data:/field-reports
+      - operator-workspace-data:/operator-workspace
       - ./data/backups:/backups
 
   web:
@@ -142,7 +153,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   postgres-data:
@@ -151,3 +162,5 @@ volumes:
   ground-imagery-data:
   operational-backups:
   country-catalog-data:
+  field-reports-data:
+  operator-workspace-data:

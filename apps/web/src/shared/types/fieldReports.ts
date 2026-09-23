@@ -63,10 +63,14 @@ export type NewFieldReportRequest = {
 
 export type FieldReportReviewRequest = {
   decision: FieldReportReviewDecision;
-  reviewer_id: string;
   rationale: string;
   event_id: string | null;
   authority_policy_id: string | null;
+};
+
+export type FieldReviewCapability = {
+  available: boolean;
+  reason: 'not_configured' | 'identity_missing' | null;
 };
 
 export type FieldReportReviewOutcome = {

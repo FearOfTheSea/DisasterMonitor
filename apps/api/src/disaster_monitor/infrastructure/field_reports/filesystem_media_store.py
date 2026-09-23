@@ -102,6 +102,15 @@ class FilesystemFieldMediaStore:
                 removed += 1
         return removed
 
+    def reconcile(self, referenced_media_ids: frozenset[str]) -> int:
+        removed = self.purge_expired()
+        for path in self._root.rglob("*.bin"):
+            media_id = f"field-media:{path.stem}"
+            if media_id not in referenced_media_ids:
+                self.delete(media_id)
+                removed += 1
+        return removed
+
     def _path(self, media_id: str) -> Path:
         digest = media_id.removeprefix("field-media:")
         if len(digest) != 64 or any(

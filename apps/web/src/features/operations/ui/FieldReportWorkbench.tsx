@@ -6,6 +6,7 @@ import {
   createFieldReport,
   fetchDuplicateCandidates,
   fetchFieldReports,
+  fetchFieldReviewCapability,
   reviewFieldReport,
 } from '@/features/operations/api/fieldReportsClient';
 import type {
@@ -70,13 +71,16 @@ async function attachmentRequest(file: File | null) {
   if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
     throw new Error('Attach a JPEG or PNG image only.');
   }
+  if (file.size > 8_000_000) {
+    throw new Error('Field attachment must be 8 MB or smaller.');
+  }
   const mediaType: 'image/jpeg' | 'image/png' = file.type;
   const content = await file.arrayBuffer();
   const bytes = new Uint8Array(content);
   let binary = '';
-  bytes.forEach((value) => {
-    binary += String.fromCharCode(value);
-  });
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
   return [
     {
       filename: file.name,
@@ -108,18 +112,25 @@ export function FieldReportWorkbench({
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reviewCapability, setReviewCapability] = useState<{
+    available: boolean;
+    reason: string | null;
+  }>({ available: false, reason: 'checking' });
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const [nextReports, nextDuplicates] = await Promise.all([
+      const [nextReports, nextDuplicates, capability] = await Promise.all([
         fetchFieldReports(signal),
         fetchDuplicateCandidates(signal),
+        fetchFieldReviewCapability(signal),
       ]);
       setReports(nextReports);
       setDuplicates(nextDuplicates);
+      setReviewCapability(capability);
       setError(null);
     } catch (caught) {
+      setReviewCapability({ available: false, reason: 'unavailable' });
       if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
         setError(
           caught instanceof Error ? caught.message : 'Field reports failed to load.',
@@ -198,7 +209,6 @@ export function FieldReportWorkbench({
       setStatus('Recording review…');
       await reviewFieldReport(reportId, {
         decision: draft.decision,
-        reviewer_id: 'operator:local',
         rationale: draft.rationale.trim(),
         event_id: needsEvent ? (selectedIncidentId ?? null) : null,
         authority_policy_id:
@@ -369,6 +379,13 @@ export function FieldReportWorkbench({
       </details>
 
       <div className="field-report-queue">
+        {!reviewCapability.available && (
+          <p role="status">
+            {reviewCapability.reason === 'identity_missing'
+              ? 'Review requires a trusted operator identity from the configured proxy.'
+              : 'Review is unavailable until a trusted operator identity proxy is configured.'}
+          </p>
+        )}
         {reports.map((report) => {
           const draft = reviewDrafts[report.report_id] ?? EMPTY_REVIEW;
           return (
@@ -406,6 +423,7 @@ export function FieldReportWorkbench({
                   <select
                     aria-label={`Review decision for ${report.report_id}`}
                     value={draft.decision}
+                    disabled={!reviewCapability.available}
                     onChange={(event) =>
                       updateReview(report.report_id, {
                         decision: event.target.value as FieldReportReviewDecision,
@@ -428,13 +446,14 @@ export function FieldReportWorkbench({
                   rows={2}
                   placeholder="Required rationale"
                   value={draft.rationale}
+                  disabled={!reviewCapability.available}
                   onChange={(event) =>
                     updateReview(report.report_id, { rationale: event.target.value })
                   }
                 />
                 <button
                   type="button"
-                  disabled={!draft.rationale.trim()}
+                  disabled={!reviewCapability.available || !draft.rationale.trim()}
                   onClick={() => void submitFieldReview(report.report_id)}
                 >
                   Record field report review

@@ -5,6 +5,7 @@ import type {
   FieldReportDuplicateCandidate,
   FieldReportReviewOutcome,
   FieldReportReviewRequest,
+  FieldReviewCapability,
   NewFieldReportRequest,
 } from '@/shared/types/fieldReports';
 
@@ -21,6 +22,13 @@ export async function fetchDuplicateCandidates(signal?: AbortSignal) {
     signal,
   });
   return readJsonResponse<FieldReportDuplicateCandidate[]>(response);
+}
+
+export async function fetchFieldReviewCapability(signal?: AbortSignal) {
+  const response = await fetch(`${API_BASE_URL}/field-reports/review-capability`, {
+    signal,
+  });
+  return readJsonResponse<FieldReviewCapability>(response);
 }
 
 export async function createFieldReport(body: NewFieldReportRequest) {

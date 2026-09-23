@@ -1,3 +1,13 @@
+export class HttpResponseError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'HttpResponseError';
+  }
+}
+
 export async function readJsonResponse<T>(
   response: Response,
   fallbackMessage = `Request failed with status ${response.status}.`,
@@ -7,13 +17,16 @@ export async function readJsonResponse<T>(
     body = await response.json();
   } catch (error) {
     if (!response.ok) {
-      throw new Error(fallbackMessage);
+      throw new HttpResponseError(fallbackMessage, response.status);
     }
     throw error;
   }
 
   if (!response.ok) {
-    throw new Error(responseDetail(body) ?? fallbackMessage);
+    throw new HttpResponseError(
+      responseDetail(body) ?? fallbackMessage,
+      response.status,
+    );
   }
   return body as T;
 }

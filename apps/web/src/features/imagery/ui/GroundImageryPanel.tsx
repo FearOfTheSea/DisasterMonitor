@@ -1,19 +1,9 @@
 'use client';
 
-/* eslint-disable @next/next/no-img-element -- Comparison tiles are dynamic evidence URLs and must not be transformed. */
-
-import { useCallback, useEffect, useState } from 'react';
-
-import {
-  createGroundImageryRequest,
-  fetchGroundImageryReadiness,
-  prepareGroundImagerySelection,
-  refreshGroundImageryRequest,
-  setGroundImageryWatch,
-} from '@/features/imagery/api/groundImageryClient';
+import { useGroundImageryWorkflow } from '@/features/imagery/hooks/useGroundImageryWorkflow';
+import { GroundComparisons } from '@/features/imagery/ui/GroundComparisons';
 import {
   artifactForSelection,
-  comparisonForSensor,
   formatFraction,
   formatImageryTime,
   labelImageryRole,
@@ -23,7 +13,6 @@ import {
   SENSOR_SHORT_LABELS,
   sensorStatus,
   statusClass,
-  type GroundImageryPanelReadiness,
   type GroundImageryPanelRequest,
 } from '@/features/imagery/model/groundImagery';
 import type {
@@ -41,110 +30,25 @@ type GroundImageryPanelProps = {
   onClose: () => void;
 };
 
-type LoadState = 'idle' | 'loading' | 'ready' | 'error';
-
 const DISPLAY_SENSORS: Sensor[] = ['sentinel-1', 'sentinel-2'];
-const SLOW_SEARCH_DELAY_MS = 8_000;
 
 export function GroundImageryPanel({
   incidentId,
   incidentLabel,
   onClose,
 }: GroundImageryPanelProps) {
-  const [request, setRequest] = useState<GroundImageryPanelRequest>();
-  const [readiness, setReadiness] = useState<GroundImageryPanelReadiness>();
-  const [loadState, setLoadState] = useState<LoadState>('idle');
-  const [searchIsSlow, setSearchIsSlow] = useState(false);
-  const [error, setError] = useState<string>();
-  const [action, setAction] = useState<string>();
-
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      setLoadState('loading');
-      setRequest(undefined);
-      setReadiness(undefined);
-      setSearchIsSlow(false);
-      setError(undefined);
-      setAction(undefined);
-      try {
-        const [, nextRequest] = await Promise.all([
-          fetchGroundImageryReadiness(signal).then((nextReadiness) => {
-            setReadiness(nextReadiness);
-            return nextReadiness;
-          }),
-          createGroundImageryRequest(incidentId, signal),
-        ]);
-        setRequest(nextRequest);
-        setLoadState('ready');
-      } catch (loadError) {
-        if (loadError instanceof DOMException && loadError.name === 'AbortError') {
-          return;
-        }
-        setError(
-          loadError instanceof Error ? loadError.message : 'Ground view failed.',
-        );
-        setLoadState('error');
-      }
-    },
-    [incidentId],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => void load(controller.signal), 0);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [load]);
-
-  useEffect(() => {
-    if (loadState !== 'loading') return;
-    const timer = window.setTimeout(() => setSearchIsSlow(true), SLOW_SEARCH_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [loadState]);
-
-  const runAction = useCallback(
-    async (name: string, operation: () => Promise<GroundImageryPanelRequest>) => {
-      setAction(name);
-      setError(undefined);
-      try {
-        setRequest(await operation());
-      } catch (actionError) {
-        setError(
-          actionError instanceof Error
-            ? actionError.message
-            : 'Ground view action failed.',
-        );
-      } finally {
-        setAction(undefined);
-      }
-    },
-    [],
-  );
-
-  const handleRefresh = () => {
-    if (!request) return;
-    void runAction('refresh', () => refreshGroundImageryRequest(request.request_id));
-  };
-
-  const handleWatch = () => {
-    if (!request) return;
-    void runAction('watch', () =>
-      setGroundImageryWatch(request.request_id, !request.watch_enabled),
-    );
-  };
-
-  const handlePrepare = (selection: GroundImagerySelectionResponse) => {
-    if (!request || !selection.observation) return;
-    void runAction(`prepare:${selection.selection_id}`, () =>
-      prepareGroundImagerySelection(request.request_id, {
-        sensor: selection.sensor,
-        role: selection.role,
-        overview: true,
-      }),
-    );
-  };
+  const {
+    request,
+    readiness,
+    loadState,
+    searchIsSlow,
+    error,
+    action,
+    load,
+    handleRefresh,
+    handleWatch,
+    handlePrepare,
+  } = useGroundImageryWorkflow(incidentId);
 
   return (
     <aside
@@ -369,170 +273,6 @@ export function GroundImageryPanel({
       </div>
     </aside>
   );
-}
-
-function GroundComparisons({ request }: { request: GroundImageryPanelRequest }) {
-  const comparisons = DISPLAY_SENSORS.map((sensor) => ({
-    sensor,
-    pair: comparisonForSensor(request, sensor),
-  })).filter((value) => value.pair !== undefined);
-  if (comparisons.length === 0) return null;
-  return (
-    <section className="ground-imagery-section" aria-label="Ground comparisons">
-      <div className="ground-imagery-section-heading">
-        <div>
-          <h3>Matched before / after</h3>
-          <p>Both views use the same grid and synchronized viewport.</p>
-        </div>
-        <span className="ground-imagery-status is-positive">Comparable</span>
-      </div>
-      {comparisons.map(({ sensor, pair }) => (
-        <GroundComparisonCard
-          key={sensor}
-          sensor={sensor}
-          pair={pair!}
-          region={request.region.region?.inspection}
-        />
-      ))}
-    </section>
-  );
-}
-
-function GroundComparisonCard({
-  sensor,
-  pair,
-  region,
-}: {
-  sensor: Sensor;
-  pair: NonNullable<ReturnType<typeof comparisonForSensor>>;
-  region: unknown;
-}) {
-  const [mode, setMode] = useState<'side-by-side' | 'swipe'>('side-by-side');
-  const [position, setPosition] = useState(50);
-  const tile = comparisonTile(region);
-  const beforeUrl = tileUrl(pair.before.artifact_id, tile);
-  const afterUrl = tileUrl(pair.after.artifact_id, tile);
-  return (
-    <article className="ground-comparison-card">
-      <header>
-        <div>
-          <strong>{SENSOR_LABELS[sensor]}</strong>
-          <small>
-            {pair.beforeSelection.observation?.product_id} →{' '}
-            {pair.afterSelection.observation?.product_id}
-          </small>
-        </div>
-        <div className="ground-comparison-modes" aria-label="Comparison view mode">
-          <button
-            type="button"
-            aria-pressed={mode === 'side-by-side'}
-            onClick={() => setMode('side-by-side')}
-          >
-            Side by side
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === 'swipe'}
-            onClick={() => setMode('swipe')}
-          >
-            Swipe
-          </button>
-        </div>
-      </header>
-      <div className={`ground-comparison-images is-${mode}`}>
-        <figure>
-          <img src={beforeUrl} alt={`${SENSOR_LABELS[sensor]} before capture`} />
-          <figcaption>
-            Before ·{' '}
-            {formatImageryTime(pair.beforeSelection.observation?.captured_start)}
-          </figcaption>
-        </figure>
-        <figure
-          style={
-            mode === 'swipe' ? { clipPath: `inset(0 0 0 ${position}%)` } : undefined
-          }
-        >
-          <img src={afterUrl} alt={`${SENSOR_LABELS[sensor]} after capture`} />
-          <figcaption>
-            After · {formatImageryTime(pair.afterSelection.observation?.captured_start)}
-          </figcaption>
-        </figure>
-      </div>
-      {mode === 'swipe' ? (
-        <label className="ground-comparison-slider">
-          Reveal position
-          <input
-            aria-label="Reveal position"
-            type="range"
-            min="0"
-            max="100"
-            value={position}
-            onChange={(event) => setPosition(Number(event.target.value))}
-          />
-        </label>
-      ) : null}
-      <p>
-        Grid {pair.before.grid.crs} · {pair.before.grid.width} ×{' '}
-        {pair.before.grid.height} · matching artifact grids are required. No comparison
-        manifest or export has been generated for this display-only pairing.
-      </p>
-    </article>
-  );
-}
-
-type TileCoordinate = { zoom: number; x: number; y: number };
-
-function tileUrl(artifactId: string, tile: TileCoordinate): string {
-  return `${API_BASE_URL}/ground-imagery/artifacts/${encodeURIComponent(artifactId)}/tiles/${tile.zoom}/${tile.x}/${tile.y}.png`;
-}
-
-function comparisonTile(region: unknown): TileCoordinate {
-  const points: [number, number][] = [];
-  collectLonLat(region, points);
-  if (points.length === 0) return { zoom: 0, x: 0, y: 0 };
-  const west = Math.min(...points.map(([longitude]) => longitude));
-  const east = Math.max(...points.map(([longitude]) => longitude));
-  const south = Math.min(...points.map(([, latitude]) => latitude));
-  const north = Math.max(...points.map(([, latitude]) => latitude));
-  for (let zoom = 12; zoom >= 0; zoom -= 1) {
-    const northwest = lonLatTile(west, north, zoom);
-    const southeast = lonLatTile(east, south, zoom);
-    if (northwest.x === southeast.x && northwest.y === southeast.y) return northwest;
-  }
-  return { zoom: 0, x: 0, y: 0 };
-}
-
-function collectLonLat(value: unknown, output: [number, number][]): void {
-  if (!value || typeof value !== 'object') return;
-  if ('coordinates' in value) {
-    collectCoordinateArray((value as { coordinates: unknown }).coordinates, output);
-  }
-}
-
-function collectCoordinateArray(value: unknown, output: [number, number][]): void {
-  if (!Array.isArray(value)) return;
-  if (
-    value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number'
-  ) {
-    output.push([value[0], value[1]]);
-    return;
-  }
-  value.forEach((item) => collectCoordinateArray(item, output));
-}
-
-function lonLatTile(longitude: number, latitude: number, zoom: number): TileCoordinate {
-  const scale = 2 ** zoom;
-  const boundedLatitude = Math.max(-85.0511, Math.min(85.0511, latitude));
-  const x = Math.floor(((longitude + 180) / 360) * scale);
-  const radians = (boundedLatitude * Math.PI) / 180;
-  const y = Math.floor(((1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2) * scale);
-  return {
-    zoom,
-    x: Math.max(0, Math.min(scale - 1, x)),
-    y: Math.max(0, Math.min(scale - 1, y)),
-  };
 }
 
 function SensorCard({

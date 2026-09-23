@@ -32,30 +32,61 @@ class JsonOperatorWorkspaceStore:
 
     async def add_note(self, note: AnalystNote) -> None:
         async with self._lock:
-            self._notes.setdefault(note.note_id, note)
-            self._persist()
+            notes = {**self._notes, note.note_id: note}
+            self._persist(
+                notes,
+                self._bookmarks,
+                self._runbooks,
+                self._notebooks,
+                self._notebook_entries,
+            )
+            self._notes = notes
 
     async def add_bookmark(self, bookmark: OperatorBookmark) -> None:
         async with self._lock:
-            self._bookmarks.setdefault(bookmark.bookmark_id, bookmark)
-            self._persist()
+            bookmarks = {**self._bookmarks, bookmark.bookmark_id: bookmark}
+            self._persist(
+                self._notes,
+                bookmarks,
+                self._runbooks,
+                self._notebooks,
+                self._notebook_entries,
+            )
+            self._bookmarks = bookmarks
 
     async def add_runbook(self, runbook: RunbookTemplate) -> None:
         async with self._lock:
-            self._runbooks.setdefault(runbook.template_id, runbook)
-            self._persist()
+            runbooks = {**self._runbooks, runbook.template_id: runbook}
+            self._persist(
+                self._notes,
+                self._bookmarks,
+                runbooks,
+                self._notebooks,
+                self._notebook_entries,
+            )
+            self._runbooks = runbooks
 
     async def add_notebook(self, notebook: CaseNotebook) -> None:
         async with self._lock:
-            self._notebooks.setdefault(notebook.notebook_id, notebook)
-            self._persist()
+            notebooks = {**self._notebooks, notebook.notebook_id: notebook}
+            self._persist(
+                self._notes,
+                self._bookmarks,
+                self._runbooks,
+                notebooks,
+                self._notebook_entries,
+            )
+            self._notebooks = notebooks
 
     async def add_notebook_entry(self, entry: NotebookEntry) -> None:
         async with self._lock:
             if entry.notebook_id not in self._notebooks:
                 raise LookupError(entry.notebook_id)
-            self._notebook_entries.setdefault(entry.entry_id, entry)
-            self._persist()
+            entries = {**self._notebook_entries, entry.entry_id: entry}
+            self._persist(
+                self._notes, self._bookmarks, self._runbooks, self._notebooks, entries
+            )
+            self._notebook_entries = entries
 
     async def notes(self, incident_id: str | None) -> tuple[AnalystNote, ...]:
         return tuple(
@@ -151,21 +182,22 @@ class JsonOperatorWorkspaceStore:
             for item in raw.get("notebook_entries", [])
         }
 
-    def _persist(self) -> None:
+    def _persist(
+        self,
+        notes: dict[str, AnalystNote],
+        bookmarks: dict[str, OperatorBookmark],
+        runbooks: dict[str, RunbookTemplate],
+        notebooks: dict[str, CaseNotebook],
+        entries: dict[str, NotebookEntry],
+    ) -> None:
         document = {
             "schema_version": "operator-workspace-store.v2",
-            "notes": [_json_record(asdict(item)) for item in self._notes.values()],
-            "bookmarks": [
-                _json_record(asdict(item)) for item in self._bookmarks.values()
-            ],
-            "runbooks": [
-                _json_record(asdict(item)) for item in self._runbooks.values()
-            ],
-            "notebooks": [
-                _json_record(asdict(item)) for item in self._notebooks.values()
-            ],
+            "notes": [_json_record(asdict(item)) for item in notes.values()],
+            "bookmarks": [_json_record(asdict(item)) for item in bookmarks.values()],
+            "runbooks": [_json_record(asdict(item)) for item in runbooks.values()],
+            "notebooks": [_json_record(asdict(item)) for item in notebooks.values()],
             "notebook_entries": [
-                _json_record(asdict(item)) for item in self._notebook_entries.values()
+                _json_record(asdict(item)) for item in entries.values()
             ],
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
