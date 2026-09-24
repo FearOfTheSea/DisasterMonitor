@@ -7,6 +7,9 @@ import httpx
 import pytest
 
 from disaster_monitor.application.disaster import DisasterQuery, WorldwideDisasterQuery
+from disaster_monitor.application.evidence.source_evidence_policy import (
+    validate_event_evidence,
+)
 from disaster_monitor.domain.disaster import (
     Disaster,
     IncidentActivityStatus,
@@ -18,6 +21,9 @@ from disaster_monitor.infrastructure.disaster.gdacs_adapter import (
     GdacsFloodAdapter,
     GdacsVolcanicEruptionAdapter,
     GdacsWildfireAdapter,
+)
+from disaster_monitor.infrastructure.disaster.gdacs_place_verification import (
+    _matching_headline,
 )
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
@@ -121,6 +127,156 @@ CASES = (
         "TOKYO",
     ),
 )
+
+
+@pytest.mark.asyncio
+async def test_gdacs_volcano_keeps_event_name_instead_of_country_as_location() -> None:
+    requests: list[httpx.Request] = []
+    adapter = GdacsVolcanicEruptionAdapter(
+        geography=CATALOG,
+        client=client_for(fixture("gdacs_volcano_search.json"), requests),
+    )
+
+    result = await adapter.find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.VOLCANIC_ERUPTION), now=NOW
+    )
+
+    assert len(result.records) == 1
+    assert result.records[0].location == "Eruption Mayon"
+
+
+@pytest.mark.asyncio
+async def test_gdacs_flood_place_is_verified_by_its_event_report_headline() -> None:
+    payload = {
+        "type": "FeatureCollection",
+        "features": [
+            flood_feature(1104141, iso3="VNM", longitude=105.8, latitude=18.7)
+        ],
+    }
+    properties = payload["features"][0]["properties"]
+    assert isinstance(properties, dict)
+    properties.update(
+        {
+            "country": "Vietnam",
+            "name": "Flood in Vietnam",
+            "fromdate": "2026-09-03T01:00:00",
+            "todate": "2026-09-22T01:00:00",
+            "episodeid": 7,
+        }
+    )
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/report.aspx":
+            region = (
+                "Lam Dong Province"
+                if request.url.params.get("episodeid") == "7"
+                else "Nghe An Province"
+            )
+            return httpx.Response(
+                200,
+                text=(
+                    f'<html><div id="item_description"><span class="news_title">'
+                    f"{region}, Vietnam, Mid September 2026</span></div></html>"
+                ),
+                headers={"content-type": "text/html"},
+            )
+        return httpx.Response(
+            200, json=payload, headers={"content-type": "application/json"}
+        )
+
+    country = CATALOG.get_by_alpha3("VNM")
+    assert country is not None
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = GdacsFloodAdapter(geography=CATALOG, client=client)
+    query = DisasterQuery(
+        Disaster.FLOOD, country, "recent", ("latest",), location_hint="Nghệ An"
+    )
+
+    result = await adapter.find_recent_events(
+        query, now=datetime(2026, 9, 24, tzinfo=UTC)
+    )
+
+    assert result.records[0].location == "Nghe An Province, Vietnam"
+    assert result.records[0].location_source is not None
+    assert "/report.aspx" in result.records[0].location_source.canonical_url
+    assert "eventid=1104141" in result.records[0].location_source.canonical_url
+    assert "episodeid=6" in result.records[0].location_source.canonical_url
+    assert result.records[0].location_source.updated_at is None
+    validate_event_evidence(
+        result.records[0],
+        query,
+        source_id="gdacs-floods",
+        allowed_hosts=adapter.allowed_hosts,
+    )
+    assert [request.url.path for request in requests] == [
+        "/gdacsapi/api/Events/geteventlist/SEARCH",
+        "/report.aspx",
+        "/report.aspx",
+    ]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_flood_does_not_use_a_headline_from_another_country() -> None:
+    payload = {
+        "type": "FeatureCollection",
+        "features": [
+            flood_feature(1104141, iso3="VNM", longitude=105.8, latitude=18.7)
+        ],
+    }
+    properties = payload["features"][0]["properties"]
+    assert isinstance(properties, dict)
+    properties.update({"country": "Vietnam", "name": "Flood in Vietnam"})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/report.aspx":
+            return httpx.Response(
+                200,
+                text=(
+                    '<div id="item_description"><span class="news_title">'
+                    "Nghe An Province, Laos</span></div>"
+                ),
+                headers={"content-type": "text/html"},
+            )
+        return httpx.Response(200, json=payload)
+
+    country = CATALOG.get_by_alpha3("VNM")
+    assert country is not None
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    result = await GdacsFloodAdapter(
+        geography=CATALOG, client=client
+    ).find_recent_events(
+        DisasterQuery(Disaster.FLOOD, country, "recent", (), location_hint="Nghệ An"),
+        now=NOW,
+    )
+
+    assert result.records[0].location == "Vietnam"
+    await client.aclose()
+
+
+def test_gdacs_place_verifier_ignores_unrelated_news_headlines() -> None:
+    html = (
+        '<div id="item_description"><span class="news_title">'
+        "Lam Dong Province, Vietnam</span></div>"
+        '<div class="news_box"><span class="news_title">'
+        "Nghe An Province, Vietnam</span></div>"
+    )
+
+    assert _matching_headline(html, place="Nghệ An", country="Vietnam") is None
+
+
+def test_gdacs_place_verifier_accepts_country_suffix_in_place_hint() -> None:
+    html = (
+        '<div id="item_description"><span class="news_title">'
+        "Nghe An Province, Vietnam, Mid September 2026</span></div>"
+    )
+
+    assert _matching_headline(html, place="Nghệ An, Vietnam", country="Vietnam") == (
+        "Nghe An Province, Vietnam, Mid September 2026",
+        "Nghe An Province",
+    )
 
 
 @pytest.mark.asyncio

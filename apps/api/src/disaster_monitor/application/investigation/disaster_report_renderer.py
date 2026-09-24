@@ -1,5 +1,7 @@
 """Disaster-neutral deterministic rendering of normalized evidence."""
 
+import re
+import unicodedata
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
@@ -35,6 +37,57 @@ def _fact_lines(facts: Iterable[ReportedFact], categories: frozenset[str]) -> li
     return lines
 
 
+def _fold_place(value: str) -> str:
+    unaccented = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", value.casefold())
+        if not unicodedata.combining(character)
+    )
+    return " ".join(re.sub(r"[^a-z0-9?]+", " ", unaccented).split())
+
+
+def _place_core(value: str, country: str) -> str:
+    folded = _fold_place(value)
+    country_suffix = f" {_fold_place(country)}"
+    if folded.endswith(country_suffix):
+        folded = folded[: -len(country_suffix)].strip()
+    return re.sub(r" (?:province|district|city|ward)$", "", folded)
+
+
+def _fact_matches_named_place(
+    fact: ReportedFact, *, place: str, country: str
+) -> bool:
+    if fact.reported_location is None:
+        return True
+    wanted = _place_core(place, country)
+    actual = _place_core(fact.reported_location, country)
+    if not wanted or not actual:
+        return False
+    if "?" not in actual:
+        return actual == wanted
+    # One replacement character in a provider label may stand for a lost accent.
+    # Keep the source spelling visible when accepting this narrow match.
+    if actual.count("?") != 1 or len(wanted) < 5:
+        return False
+    return bool(re.fullmatch(re.escape(actual).replace(r"\?", "[a-z]"), wanted))
+
+
+def _scoped_facts(
+    packet: EvidencePacket,
+) -> tuple[tuple[ReportedFact, ...], tuple[ReportedFact, ...]]:
+    if not packet.query.location_hint:
+        return packet.facts, ()
+    visible: list[ReportedFact] = []
+    omitted: list[ReportedFact] = []
+    for fact in packet.facts:
+        (visible if _fact_matches_named_place(
+            fact,
+            place=packet.query.location_hint,
+            country=packet.query.country.canonical_name,
+        ) else omitted).append(fact)
+    return tuple(visible), tuple(omitted)
+
+
 def _measurement_details(packet: EvidencePacket) -> tuple[str, ...]:
     details: list[str] = []
     seen: set[str] = set()
@@ -43,7 +96,7 @@ def _measurement_details(packet: EvidencePacket) -> tuple[str, ...]:
         if measurement.unit:
             detail = f"{detail} {measurement.unit}"
         if detail not in seen:
-            details.append(detail)
+            details.append(f"{detail} (source: {_citation(measurement.source)})")
             seen.add(detail)
     return tuple(details)
 
@@ -56,9 +109,19 @@ def _event_summary(packet: EvidencePacket) -> str:
         if country_name.lower() in event.location.lower()
         else f"{event.location}, {country_name}"
     )
-    details = [location, f"event time {_format_timestamp(event.event_time)}"]
-    details.extend(_measurement_details(packet))
-    return "; ".join(details) + f". Source: {_citation(event.source)}"
+    location_citation = (
+        f" Location source: {_citation(event.location_source)}."
+        if event.location_source is not None
+        else ""
+    )
+    summary = (
+        f"{location}; event time {_format_timestamp(event.event_time)}."
+        f"{location_citation} Event source: {_citation(event.source)}"
+    )
+    measurements = _measurement_details(packet)
+    if measurements:
+        summary += ". Measurements: " + "; ".join(measurements)
+    return summary + "."
 
 
 class DisasterReportRenderer:
@@ -70,9 +133,22 @@ class DisasterReportRenderer:
         profile: ReportProfile | None = None,
     ) -> tuple[str, tuple[ReportSection, ...]]:
         profile = profile or report_profile_for(packet.query.disaster)
-        human_lines = _fact_lines(packet.facts, profile.human_categories)
-        physical_lines = _fact_lines(packet.facts, profile.physical_categories)
-        response_lines = _fact_lines(packet.facts, profile.response_categories)
+        visible_facts, omitted_facts = _scoped_facts(packet)
+        place_phrase = " for the requested place" if packet.query.location_hint else ""
+
+        def scoped_lines(categories: frozenset[str], missing: str) -> str:
+            lines = _fact_lines(visible_facts, categories)
+            omitted_count = sum(
+                fact.category in categories for fact in omitted_facts
+            )
+            content = "\n".join(lines) if lines else missing
+            if omitted_count:
+                content += (
+                    f"\n{omitted_count} other-area or country-wide reported "
+                    "figures were omitted for the requested place."
+                )
+            return content
+
         narrative_lines = [f"- {narrative}" for narrative in packet.narratives]
         summary = (
             f"The selected source-backed {packet.query.disaster.value} event is "
@@ -85,21 +161,20 @@ class DisasterReportRenderer:
             ReportSection("Event details", _event_summary(packet)),
             ReportSection(
                 "Human impact",
-                "\n".join(human_lines)
-                if human_lines
-                else (
+                scoped_lines(
+                    profile.human_categories,
                     "No reliable human-impact figures were found in the retrieved "
-                    "situation reports; this is not confirmation of zero impact."
+                    f"situation reports{place_phrase}; this is not confirmation "
+                    "of zero impact.",
                 ),
             ),
             ReportSection(
                 "Physical and infrastructure damage",
-                "\n".join(physical_lines)
-                if physical_lines
-                else (
+                scoped_lines(
+                    profile.physical_categories,
                     "No reliable damage or infrastructure-disruption figure was found "
-                    "in the retrieved situation reports; event severity was "
-                    "not used to infer damage."
+                    f"in the retrieved situation reports{place_phrase}; event "
+                    "severity was not used to infer damage.",
                 ),
             ),
         ]
@@ -108,23 +183,22 @@ class DisasterReportRenderer:
                 ReportSection("Qualitative source evidence", "\n".join(narrative_lines))
             )
         if profile.secondary_title is not None:
-            secondary_lines = _fact_lines(packet.facts, profile.secondary_categories)
             sections.append(
                 ReportSection(
                     profile.secondary_title,
-                    "\n".join(secondary_lines)
-                    if secondary_lines
-                    else (profile.secondary_missing or "No verified evidence found."),
+                    scoped_lines(
+                        profile.secondary_categories,
+                        profile.secondary_missing or "No verified evidence found.",
+                    ),
                 )
             )
         sections.append(
             ReportSection(
                 "Emergency and government response",
-                "\n".join(response_lines)
-                if response_lines
-                else (
+                scoped_lines(
+                    profile.response_categories,
                     "No source-backed emergency response action was found in the "
-                    "retrieved situation reports."
+                    f"retrieved situation reports{place_phrase}.",
                 ),
             )
         )

@@ -180,6 +180,11 @@ def build_evidence_packet(
                     event_id=fact.event_id or report.event_id or event.event_id,
                     observed_at=fact.observed_at,
                     claim_id=fact.claim_id,
+                    reported_location=(
+                        sanitize_provider_text(fact.reported_location, limit=120)
+                        if fact.reported_location
+                        else None
+                    ),
                 )
             )
         normalized_reports.append(
@@ -228,12 +233,18 @@ def build_evidence_packet(
     )
 
     sources: list[SourceReference] = [event.source]
+    if event.location_source is not None:
+        sources.append(event.location_source)
     if physical_event is not None:
         for observation in physical_event.observations:
             if _source_key(observation.source) not in {
                 _source_key(item) for item in sources
             }:
                 sources.append(observation.source)
+            if observation.location_source is not None and _source_key(
+                observation.location_source
+            ) not in {_source_key(item) for item in sources}:
+                sources.append(observation.location_source)
     for report in projection_reports:
         if _source_key(report.source) not in {_source_key(item) for item in sources}:
             sources.append(report.source)

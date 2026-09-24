@@ -436,6 +436,7 @@ def _observation(
         source=replace(source, published_at=published, updated_at=published),
         event_id=event.event_id,
         observed_at=onset,
+        reported_location=region,
         claim_id="gdacs-observation:"
         + hashlib.sha256(identity.encode()).hexdigest()[:24],
     )
@@ -489,6 +490,7 @@ def _report_observation(
         ),
         event_id=event.event_id,
         observed_at=observed_at,
+        reported_location=observation.region,
         claim_id="gdacs-report-observation:"
         + hashlib.sha256(identity.encode()).hexdigest()[:24],
     )

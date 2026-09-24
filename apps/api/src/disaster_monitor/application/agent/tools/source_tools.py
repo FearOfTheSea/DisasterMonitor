@@ -196,7 +196,13 @@ class FindDisasterEventTool(_BaseTool):
         state.workspace.selected_physical_event = resolution.selected_physical_event
         state.workspace.selected_event = resolution.selected
         state.workspace.alternatives = resolution.alternatives
+        state.workspace.place_candidates = resolution.place_candidates
         if resolution.selected is None:
+            if resolution.place_candidates:
+                return (
+                    "Found country-level event candidates, but their event location "
+                    "does not verify the requested place."
+                )
             return "No matching event was discovered from the selected sources."
         return f"Selected the source-backed event {resolution.selected.event_id}."
 

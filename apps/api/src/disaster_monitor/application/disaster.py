@@ -279,6 +279,7 @@ class SelectedEventSummary:
     provider_ids: tuple[str, ...] = ()
     lineage_ids: tuple[str, ...] = ()
     supplemental_geometry: tuple[CycloneMapLayer, ...] = ()
+    location_source: SourceReference | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -33,6 +33,7 @@ class ReportedFact:
     event_id: str | None = None
     observed_at: datetime | None = None
     claim_id: str | None = None
+    reported_location: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

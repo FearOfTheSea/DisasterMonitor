@@ -316,6 +316,7 @@ class EvidenceWorkspace:
     selected_physical_event: PhysicalEventIdentity | None = None
     selected_event: DisasterEvent | None = None
     alternatives: tuple[DisasterEvent, ...] = ()
+    place_candidates: tuple[DisasterEvent, ...] = ()
     situation_batch: ProviderBatch[SituationReport] | None = None
     evidence_state: EvidenceWorldState | None = None
     hypotheses: tuple[HypothesisArtifact, ...] = ()

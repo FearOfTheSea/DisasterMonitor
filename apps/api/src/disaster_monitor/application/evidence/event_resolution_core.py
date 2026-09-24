@@ -1,7 +1,8 @@
 """Generic event filtering, ranking, resolution, and ambiguity mechanics."""
 
 import re
-from dataclasses import dataclass
+import unicodedata
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Protocol
 
@@ -37,6 +38,7 @@ class EventResolution:
     physical_events: tuple[PhysicalEventIdentity, ...] = ()
     selected_physical_event: PhysicalEventIdentity | None = None
     ambiguous_assignments: tuple[EventObservationAssignment, ...] = ()
+    place_candidates: tuple[DisasterEvent, ...] = ()
 
 
 class EventPolicy(Protocol):
@@ -72,8 +74,16 @@ class EventPolicy(Protocol):
 
 
 def location_matches(event: DisasterEvent, value: str) -> bool:
-    wanted = re.sub(r"[^a-z0-9]+", " ", value.lower()).split()
-    actual = re.sub(r"[^a-z0-9]+", " ", event.location.lower()).split()
+    def words(text: str) -> list[str]:
+        plain = "".join(
+            character
+            for character in unicodedata.normalize("NFKD", text.casefold())
+            if not unicodedata.combining(character)
+        )
+        return re.sub(r"[^\w]+", " ", plain).split()
+
+    wanted = words(value)
+    actual = words(event.location)
     return bool(wanted) and all(token in actual for token in wanted)
 
 
@@ -218,6 +228,20 @@ class BaseEventPolicy:
             reverse=True,
         )
         if not ranked:
+            place_candidates = (
+                tuple(
+                    sorted(
+                        eligible,
+                        key=lambda item: (
+                            self.rank(item, query, now),
+                            event_observation_key(item),
+                        ),
+                        reverse=True,
+                    )[:3]
+                )
+                if any(place_filters)
+                else ()
+            )
             return EventResolution(
                 None,
                 (),
@@ -225,9 +249,34 @@ class BaseEventPolicy:
                 "No candidate matched the bounded query window.",
                 physical_events=identity_result.physical_events,
                 ambiguous_assignments=identity_result.ambiguous_assignments,
+                place_candidates=place_candidates,
             )
         selected = ranked[0]
         selected_identity = identity_by_observation[event_observation_key(selected)]
+        matching_observations = tuple(
+            observation
+            for observation in selected_identity.observations
+            if all(
+                value is None or location_matches(observation, value)
+                for value in place_filters
+            )
+        )
+        if any(place_filters) and matching_observations:
+            representative = max(
+                matching_observations,
+                key=lambda item: (
+                    len(item.location),
+                    item.source.effective_at,
+                    event_observation_key(item),
+                ),
+            )
+            selected = replace(
+                selected,
+                event_id=representative.event_id,
+                location=representative.location,
+                source=representative.source,
+                location_source=representative.location_source,
+            )
         alternatives = tuple(ranked[1:4])
         ambiguous = any(
             assignment.status is EventAssignmentStatus.AMBIGUOUS

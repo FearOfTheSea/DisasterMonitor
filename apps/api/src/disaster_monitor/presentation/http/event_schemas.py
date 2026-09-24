@@ -98,6 +98,7 @@ class SelectedEventResponse(BaseModel):
     geometry: EventGeometryResponse | None = None
     measurements: list[EventMeasurementResponse] = Field(default_factory=list)
     source: SourceResponse
+    location_source: SourceResponse | None = None
     provider_ids: list[str] = Field(default_factory=list)
     lineage_ids: list[str] = Field(default_factory=list)
     geography_status: str

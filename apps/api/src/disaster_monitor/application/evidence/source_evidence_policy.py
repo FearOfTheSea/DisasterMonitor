@@ -42,6 +42,12 @@ def validate_event_evidence(
             "The event provider returned a wrong record type."
         )
     _validate_source(record.source, source_id=source_id, allowed_hosts=allowed_hosts)
+    if record.location_source is not None:
+        _validate_source(
+            record.location_source,
+            source_id=source_id,
+            allowed_hosts=allowed_hosts,
+        )
     if not isinstance(record.country, Country):
         raise SourceEvidencePolicyError("The event country is invalid.")
     if not isinstance(record.disaster, Disaster) or record.disaster != query.disaster:
@@ -301,6 +307,17 @@ def validate_physical_event_evidence(
     ):
         raise SourceEvidencePolicyError("The merged event identity or time is invalid.")
     observation_sources = {item.source for item in physical_event.observations}
+    location_sources = {
+        item.location_source
+        for item in physical_event.observations
+        if item.location_source is not None
+    }
+    if record.location_source is not None and (
+        record.location_source not in location_sources
+    ):
+        raise SourceEvidencePolicyError(
+            "The merged event location source is not one of its observations."
+        )
     if record.source not in observation_sources:
         raise SourceEvidencePolicyError(
             "The merged event source is not one of its observations."

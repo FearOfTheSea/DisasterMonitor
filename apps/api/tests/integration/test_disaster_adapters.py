@@ -54,6 +54,19 @@ INDONESIA = Country(
         ),
     ),
 )
+UNITED_STATES = Country(
+    alpha3_code="USA",
+    canonical_name="United States",
+    aliases=("US", "USA"),
+    geographic_area=GeographicArea(
+        min_latitude=52.0,
+        max_latitude=54.0,
+        min_longitude=-170.0,
+        max_longitude=-168.0,
+        validation_quality=BoundaryValidationQuality.POLYGON,
+        polygons=(((52.0, -170.0), (52.0, -169.0), (53.0, -169.0), (53.0, -170.0)),),
+    ),
+)
 QUERY = DisasterQuery(
     disaster=Disaster.EARTHQUAKE,
     country=JAPAN,
@@ -322,6 +335,32 @@ async def test_usgs_accepts_near_shore_event_with_explicit_country_place() -> No
     assert (
         result.records[0].geography_status
         == EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
+    )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_accepts_near_shore_alaska_event_for_united_states() -> None:
+    payload = usgs_payload()
+    feature = payload["features"][0]  # type: ignore[index]
+    feature["properties"]["place"] = "84 km SSW of Nikolski, Alaska"  # type: ignore[index]
+    feature["geometry"]["coordinates"] = [-169.4, 51.8, 10.0]  # type: ignore[index]
+    client = client_for(payload)
+    query = DisasterQuery(
+        Disaster.EARTHQUAKE,
+        UNITED_STATES,
+        "recent",
+        ("latest",),
+        location_hint="Nikolski",
+    )
+
+    result = await UsgsEarthquakeAdapter(
+        geography=CATALOG, client=client
+    ).find_recent_events(query, now=NOW)
+
+    assert len(result.records) == 1
+    assert result.records[0].geography_status is (
+        EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
     )
     await client.aclose()
 

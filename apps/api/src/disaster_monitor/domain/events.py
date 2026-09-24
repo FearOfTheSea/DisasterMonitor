@@ -298,6 +298,7 @@ class DisasterEvent:
     provider_tier: ProviderTier = ProviderTier.SECONDARY
     observation_kind: ObservationKind = ObservationKind.PHYSICAL_EVENT
     activity_status: IncidentActivityStatus = IncidentActivityStatus.UNKNOWN
+    location_source: SourceReference | None = None
 
     def __post_init__(self) -> None:
         validate_event_temporality(

@@ -35,6 +35,9 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
     DisasterProviderResponseError,
 )
+from disaster_monitor.infrastructure.disaster.gdacs_place_verification import (
+    verify_gdacs_flood_places,
+)
 from disaster_monitor.infrastructure.disaster.http import (
     SourcePayloadRecorder,
     build_snapshot_capture,
@@ -190,11 +193,16 @@ class _GdacsEventAdapter:
             raw_event_id = _identifier(properties.get("eventid"))
             event_time = normalize_timestamp(properties.get("fromdate"))
             end_time = normalize_timestamp(properties.get("todate"))
-            location = (
-                _text(properties.get("country"))
-                or _text(properties.get("name"))
+            name = (
+                _text(properties.get("name"))
                 or _text(properties.get("eventname"))
                 or _text(properties.get("description"))
+            )
+            country_name = _text(properties.get("country"))
+            location = (
+                name or country_name
+                if self.disaster is Disaster.VOLCANIC_ERUPTION
+                else country_name or name
             )
             if not raw_event_id or event_time is None or not location:
                 raise ValueError("event identifier, time, or location is missing")
@@ -507,7 +515,7 @@ class _GdacsEventAdapter:
             result = await self._fetch_events(
                 query, now=now, country_query=query, country_filter=False
             )
-        return ProviderBatch(
+        event_batch = ProviderBatch(
             records=tuple(
                 event for event in result.records if isinstance(event, DisasterEvent)
             ),
@@ -515,6 +523,19 @@ class _GdacsEventAdapter:
             scan_complete=result.scan_complete,
             records_seen=result.records_seen,
         )
+        if self.disaster is Disaster.FLOOD and query.location_hint:
+            return await verify_gdacs_flood_places(
+                event_batch,
+                query,
+                now=now,
+                client=self._client,
+                allowed_hosts=self.allowed_hosts,
+                max_response_bytes=self._max_response_bytes,
+                snapshot_recorder=self._snapshot_recorder,
+                provider_name=self.provider_name,
+                source_id=self.source_id,
+            )
+        return event_batch
 
     async def aclose(self) -> None:
         if self._owns_client:

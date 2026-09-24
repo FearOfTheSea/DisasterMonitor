@@ -22,13 +22,16 @@ from disaster_monitor.application.disaster import (
     WorldwideDisasterQuery,
     WorldwideSelectionIntent,
 )
+from disaster_monitor.application.disaster_aliases import recognized_disasters
 from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
+    calendar_date_from_text,
     has_explicit_date,
     location_hint_from_mentions,
 )
 from disaster_monitor.application.investigation.disaster_query_policy import (
     default_disaster_query_policies,
+    selection_intent_for,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.domain.disaster import Country, Disaster
@@ -124,6 +127,23 @@ def _validate_canonical_task(
                 response_language=draft.requested_response_language,
                 response_language_explicit=draft.response_language_explicit,
             )
+        stated_countries = country_catalog.find_mentions(question)
+        if stated_countries and (
+            len(stated_countries) != 1
+            or stated_countries[0].alpha3_code != country.alpha3_code
+        ):
+            return _canonical_invalid(
+                question,
+                "The requested country conflicts with the interpreted country.",
+                disaster=draft.disaster,
+            )
+    stated_disasters = recognized_disasters(question)
+    if stated_disasters and stated_disasters != (draft.disaster,):
+        return _canonical_invalid(
+            question,
+            "The requested disaster conflicts with the interpreted disaster.",
+            disaster=draft.disaster,
+        )
     discriminator_requested = bool(draft.event_discriminators) or bool(
         default_disaster_query_policies()
         .for_disaster(draft.disaster)
@@ -164,6 +184,18 @@ def _validate_canonical_task(
         if matched_query.date_from is not None and matched_query.date_to is not None:
             dates = matched_query.date_from, matched_query.date_to
             date_detail = None
+    if deterministic_date_requested and matched_query is None and country is not None:
+        calendar = calendar_date_from_text(question, country)
+        if calendar.status is not None:
+            return _canonical_invalid(
+                question,
+                calendar.detail
+                or "The explicit event date could not be normalized safely.",
+                disaster=draft.disaster,
+            )
+        if calendar.date_range is not None:
+            dates = calendar.date_range
+            date_detail = None
     if date_detail is not None:
         return _canonical_invalid(
             question,
@@ -172,7 +204,7 @@ def _validate_canonical_task(
             response_language=draft.requested_response_language,
             response_language_explicit=draft.response_language_explicit,
         )
-    if deterministic_date_requested and matched_query is None:
+    if deterministic_date_requested and dates == (None, None):
         return _canonical_invalid(
             question,
             "The explicit event date could not be normalized safely.",
@@ -257,7 +289,11 @@ def _validate_canonical_task(
         selection_intent=(
             matched_query.selection_intent
             if matched_query is not None
-            else WorldwideSelectionIntent.LATEST
+            else (
+                WorldwideSelectionIntent.STRONGEST
+                if date_from is not None and location_hint
+                else selection_intent_for(question)
+            )
         ),
     )
     return ValidatedDisasterTask(

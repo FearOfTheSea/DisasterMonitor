@@ -3011,6 +3011,25 @@ const apiSchemas = {
           },
         ],
       },
+      event_issue_codes: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      event_records_seen: {
+        type: 'integer',
+      },
+      event_scan_complete: {
+        anyOf: [
+          {
+            type: 'boolean',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       evidence_count: {
         type: 'integer',
       },
@@ -3039,6 +3058,9 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      physical_event_count: {
+        type: 'integer',
+      },
       physical_event_id: {
         anyOf: [
           {
@@ -3048,6 +3070,9 @@ const apiSchemas = {
             type: 'null',
           },
         ],
+      },
+      place_candidate_count: {
+        type: 'integer',
       },
       source_ids: {
         items: {
@@ -3696,6 +3721,16 @@ const apiSchemas = {
       },
       location: {
         type: 'string',
+      },
+      location_source: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/SourceResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       measurements: {
         items: {
@@ -5671,12 +5706,17 @@ export type InvestigationResponse = {
   decision_state_revision?: number | null;
   decision_termination_reason?: string | null;
   disaster?: string | null;
+  event_issue_codes?: Array<string>;
+  event_records_seen?: number;
+  event_scan_complete?: boolean | null;
   evidence_count?: number;
   evidence_state_version?: string | null;
   geographic_scope?: string;
   information_needs?: Array<string>;
   output_modalities?: Array<string>;
+  physical_event_count?: number;
   physical_event_id?: string | null;
+  place_candidate_count?: number;
   source_ids?: Array<string>;
   specialist_fallback_reason?: string | null;
   specialist_handoff_count?: number;
@@ -5955,6 +5995,7 @@ export type SelectedEventResponse = {
   geometry?: EventGeometryResponse | null;
   lineage_ids?: Array<string>;
   location: string;
+  location_source?: SourceResponse | null;
   measurements?: Array<EventMeasurementResponse>;
   provider_ids?: Array<string>;
   source: SourceResponse;

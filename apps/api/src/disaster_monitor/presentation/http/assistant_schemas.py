@@ -284,6 +284,11 @@ class InvestigationResponse(BaseModel):
     specialist_fallback_reason: str | None = None
     specialist_provenance_validation_failures: int = 0
     specialist_latency_ms: float = 0.0
+    event_records_seen: int = 0
+    event_scan_complete: bool | None = None
+    event_issue_codes: list[str] = Field(default_factory=list)
+    physical_event_count: int = 0
+    place_candidate_count: int = 0
 
 
 class DecisionFactResponse(BaseModel):

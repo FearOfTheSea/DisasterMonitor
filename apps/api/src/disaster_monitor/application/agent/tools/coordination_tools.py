@@ -107,6 +107,32 @@ def compose_report(
     task = state.task
     packet = state.workspace.evidence_packet
     if packet is None:
+        query = task.query
+        if query is not None and state.workspace.place_candidates:
+            place = query.city or query.prefecture or query.location_hint
+            candidates = state.workspace.place_candidates
+            source_lines = "\n".join(
+                f"- {event.location}: {event.source.publisher} — "
+                f"{event.source.title} ({event.source.canonical_url})"
+                for event in candidates
+            )
+            detail = (
+                f"I found source-backed {query.disaster.value} event candidates in "
+                f"{query.country.canonical_name}, but their event locations do not "
+                f"verify {place}. This does not establish an event or impact in "
+                f"{place}.\n{source_lines}"
+            )
+            section = ReportSection("Place verification", detail)
+            return DisasterReport(
+                message=f"## Place verification\n{detail}",
+                response_type="current_disaster_place_unverified",
+                selected_event=None,
+                retrieval_time=retrieved_at,
+                sources=tuple(dict.fromkeys(event.source for event in candidates)),
+                warnings=tuple(dict.fromkeys(state.warnings)),
+                sections=(section,),
+                partial=True,
+            )
         coverage_unavailable = bool(state.capability_gaps)
         if state.workspace.event_batch is not None:
             coverage_unavailable = False
@@ -234,6 +260,7 @@ def compose_report(
             geometry=packet.event.geometry,
             measurements=packet.event.measurements,
             source=packet.event.source,
+            location_source=packet.event.location_source,
             provider_ids=packet.event.provider_ids,
             lineage_ids=packet.event.lineage_ids,
             geography_status=packet.event.geography_status,

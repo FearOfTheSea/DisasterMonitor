@@ -427,6 +427,7 @@ def _response_type_without_report(status: AgentStatus) -> str:
 def _summary(state: AgentExecutionState) -> InvestigationSummary:
     task = state.task
     packet = state.workspace.evidence_packet
+    event_batch = state.workspace.event_batch
     priority = state.workspace.incident_priority
     decision = state.workspace.triage_decision
     decision_outcome = state.workspace.decision_outcome
@@ -558,4 +559,25 @@ def _summary(state: AgentExecutionState) -> InvestigationSummary:
             state.specialist_provenance_validation_failures
         ),
         specialist_latency_ms=state.specialist_latency_ms,
+        event_records_seen=(
+            max(event_batch.records_seen or 0, len(event_batch.records))
+            if event_batch is not None
+            else 0
+        ),
+        event_scan_complete=(
+            event_batch.scan_complete if event_batch is not None else None
+        ),
+        event_issue_codes=(
+            tuple(
+                dict.fromkeys(
+                    issue.reason_code
+                    for issue in event_batch.issues
+                    if issue.reason_code
+                )
+            )
+            if event_batch is not None
+            else ()
+        ),
+        physical_event_count=len(state.workspace.physical_events),
+        place_candidate_count=len(state.workspace.place_candidates),
     )

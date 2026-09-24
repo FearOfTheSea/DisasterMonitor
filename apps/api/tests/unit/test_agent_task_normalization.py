@@ -13,6 +13,7 @@ from disaster_monitor.application.agent.task_normalization import (
     validate_disaster_task,
     worldwide_disaster_query,
 )
+from disaster_monitor.application.disaster import WorldwideSelectionIntent
 from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
 )
@@ -188,6 +189,69 @@ def test_invalid_explicit_event_date_does_not_become_a_recent_query() -> None:
     assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
     assert task.query is None
     assert task.detail == "The explicit event date could not be normalized safely."
+
+
+def test_canonical_dated_volcano_uses_source_verified_eruption_lookup() -> None:
+    question = "What happened at Sakurajima volcano in Japan on September 4, 2026?"
+    task = validate(
+        question,
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.VOLCANIC_ERUPTION,
+            country_code="JPN",
+            country_name="Japan",
+            place_mentions=("Sakurajima", "Japan"),
+            canonical=True,
+        ),
+    )
+
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.query is not None
+    assert task.query.location_hint == "Sakurajima"
+    assert task.query.date_from.isoformat() == "2026-09-03T15:00:00+00:00"
+
+
+def test_canonical_dated_region_does_not_require_country_name_in_text() -> None:
+    question = "What happened in the September 3 earthquake near Uken?"
+    task = validate(
+        question,
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.EARTHQUAKE,
+            country_code="JPN",
+            country_name="Japan",
+            place_mentions=("Uken",),
+            canonical=True,
+        ),
+    )
+
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.query is not None
+    assert task.query.location_hint == "Uken"
+    assert task.query.date_from is not None
+    assert task.query.selection_intent is WorldwideSelectionIntent.STRONGEST
+
+
+def test_canonical_country_must_not_override_conflicting_explicit_country() -> None:
+    task = validate(
+        "What happened in the September 3 earthquake in Vietnam?",
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.EARTHQUAKE,
+            country_code="JPN",
+            country_name="Japan",
+            canonical=True,
+        ),
+    )
+
+    assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
+    assert task.query is None
 
 
 def test_incomplete_canonical_date_range_uses_matching_deterministic_range() -> None:

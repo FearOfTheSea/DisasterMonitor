@@ -1,6 +1,7 @@
 """Deterministic disaster intent parsing backed by a country catalog."""
 
 import re
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -22,6 +23,7 @@ from disaster_monitor.application.investigation.prompt_preparation import (
     normalize_question,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
+from disaster_monitor.domain.disaster import Country
 
 _CURRENT_TERMS = re.compile(
     r"\b(?:recent|latest|current|today|now|news|update|updates|developments|"
@@ -211,6 +213,71 @@ def _calendar_range(day: date, timezone_name: str) -> tuple[datetime, datetime] 
     return start.astimezone(UTC), (start + timedelta(days=1)).astimezone(UTC)
 
 
+@dataclass(frozen=True, slots=True)
+class CalendarDateResult:
+    date_range: tuple[datetime, datetime] | None = None
+    status: QueryParseStatus | None = None
+    detail: str | None = None
+
+
+def calendar_date_from_text(
+    text: str, country: Country, *, now: datetime | None = None
+) -> CalendarDateResult:
+    """Parse a stated calendar day using validated country metadata alone."""
+    day = _extract_day(text)
+    if (
+        day is None
+        and not (_MONTH_DATE.search(text) or _DAY_MONTH_DATE.search(text))
+        and (_MONTH_DAY.search(text) or _DAY_MONTH.search(text))
+    ):
+        if not country.default_timezone:
+            return CalendarDateResult(
+                status=QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
+                detail=(
+                    "No deterministic calendar timezone is configured for "
+                    f"{country.canonical_name}."
+                ),
+            )
+        local_timezone = _calendar_timezone(country.default_timezone)
+        if local_timezone is None:
+            return CalendarDateResult(
+                status=QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
+                detail=(
+                    "The configured calendar timezone for "
+                    f"{country.canonical_name} is unavailable."
+                ),
+            )
+        local_today = (now or datetime.now(UTC)).astimezone(local_timezone).date()
+        day = _extract_yearless_day(text, local_today)
+    if day is None:
+        return (
+            CalendarDateResult(
+                status=QueryParseStatus.INVALID_DATE,
+                detail="The explicit event date could not be normalized safely.",
+            )
+            if has_explicit_date(text)
+            else CalendarDateResult()
+        )
+    if not country.default_timezone:
+        return CalendarDateResult(
+            status=QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
+            detail=(
+                "No deterministic calendar timezone is configured for "
+                f"{country.canonical_name}."
+            ),
+        )
+    date_range = _calendar_range(day, country.default_timezone)
+    if date_range is None:
+        return CalendarDateResult(
+            status=QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
+            detail=(
+                "The configured calendar timezone for "
+                f"{country.canonical_name} is unavailable."
+            ),
+        )
+    return CalendarDateResult(date_range=date_range)
+
+
 def _extract_coordinates(text: str) -> tuple[float | None, float | None]:
     match = _COORDINATES.search(text)
     if not match:
@@ -253,57 +320,10 @@ class DisasterQueryParser:
                 detail="More than one country was recognized.",
             )
         country = countries[0]
-        day = _extract_day(normalized)
-        if (
-            day is None
-            and not (
-                _MONTH_DATE.search(normalized) or _DAY_MONTH_DATE.search(normalized)
-            )
-            and (_MONTH_DAY.search(normalized) or _DAY_MONTH.search(normalized))
-        ):
-            if not country.default_timezone:
-                return DisasterQueryParseResult(
-                    QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
-                    detail=(
-                        f"No deterministic calendar timezone is configured for "
-                        f"{country.canonical_name}."
-                    ),
-                )
-            local_timezone = _calendar_timezone(country.default_timezone)
-            if local_timezone is None:
-                return DisasterQueryParseResult(
-                    QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
-                    detail=(
-                        f"The configured calendar timezone for "
-                        f"{country.canonical_name} is unavailable."
-                    ),
-                )
-            local_today = (now or datetime.now(UTC)).astimezone(local_timezone).date()
-            day = _extract_yearless_day(normalized, local_today)
-        if day is None and has_explicit_date(normalized):
-            return DisasterQueryParseResult(
-                QueryParseStatus.INVALID_DATE,
-                detail="The explicit event date could not be normalized safely.",
-            )
-        date_range: tuple[datetime, datetime] | None = None
-        if day is not None:
-            if not country.default_timezone:
-                return DisasterQueryParseResult(
-                    QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
-                    detail=(
-                        f"No deterministic calendar timezone is configured for "
-                        f"{country.canonical_name}."
-                    ),
-                )
-            date_range = _calendar_range(day, country.default_timezone)
-            if date_range is None:
-                return DisasterQueryParseResult(
-                    QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
-                    detail=(
-                        f"The configured calendar timezone for "
-                        f"{country.canonical_name} is unavailable."
-                    ),
-                )
+        calendar = calendar_date_from_text(normalized, country, now=now)
+        if calendar.status is not None:
+            return DisasterQueryParseResult(calendar.status, detail=calendar.detail)
+        date_range = calendar.date_range
         coordinates = _extract_coordinates(normalized)
         location_hint = location_hint_from_text(normalized, self._country_catalog)
         selection_intent = selection_intent_for(normalized)

@@ -1,0 +1,47 @@
+{
+  "schema_version": "local-assistant-cases.v1",
+  "verified_on": "2026-09-24",
+  "cases": [
+    {
+      "id": "2026-09-03-nikolski-earthquake",
+      "question": "What happened in the September 3, 2026 earthquake near Nikolski, Alaska?",
+      "expected_event_id": "usgs:us7000tdvt",
+      "requested_place": "Nikolski",
+      "source_url_contains": "us7000tdvt",
+      "independent_source_url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000tdvt/executive"
+    },
+    {
+      "id": "2026-09-vietnam-flood",
+      "question": "What happened in the September 2026 flooding in Nghệ An, Vietnam?",
+      "expected_event_id": "gdacs:fl:1104141",
+      "requested_place": "Nghệ An",
+      "answer_excludes": ["Phu Tho Province", "Lam Dong Province", "Phuoc Tan Ward", "Thong Nhat"],
+      "source_url_contains": "1104141",
+      "independent_source_url": "https://www.gdacs.org/report.aspx?episodeid=6&eventid=1104141&eventtype=FL"
+    },
+    {
+      "id": "2026-09-04-krakatau-volcano",
+      "question": "What happened at Krakatau volcano in Indonesia on September 4, 2026?",
+      "expected_event_id": "gdacs:vo:1000148",
+      "requested_place": "Krakatau",
+      "source_url_contains": "1000148",
+      "independent_source_url": "https://volcano.si.edu/reports_daily.cfm?activitydate=2026-09-04&vtab=reports"
+    },
+    {
+      "id": "2026-09-22-uken-earthquake",
+      "question": "What happened in the September 22, 2026 earthquake near Uken, Japan?",
+      "expected_event_id": "usgs:us7000tj4y",
+      "requested_place": "Uken",
+      "source_url_contains": "us7000tj4y",
+      "independent_source_url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000tj4y/executive"
+    },
+    {
+      "id": "2026-09-18-cotabato-flood",
+      "question": "What happened in the September 18, 2026 flooding in Cotabato Province, Philippines?",
+      "expected_event_id": "gdacs:fl:1104176",
+      "requested_place": "Cotabato",
+      "source_url_contains": "1104176",
+      "independent_source_url": "https://www.gdacs.org/report.aspx?episodeid=1&eventid=1104176&eventtype=FL"
+    }
+  ]
+}

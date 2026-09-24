@@ -72,6 +72,11 @@ def _assistant_response(
             actions=list(result.investigation.actions),
             source_ids=list(result.investigation.source_ids),
             evidence_count=result.investigation.evidence_count,
+            event_records_seen=result.investigation.event_records_seen,
+            event_scan_complete=result.investigation.event_scan_complete,
+            event_issue_codes=list(result.investigation.event_issue_codes),
+            physical_event_count=result.investigation.physical_event_count,
+            place_candidate_count=result.investigation.place_candidate_count,
             capability_gaps=list(result.investigation.capability_gaps),
             termination_reason=result.investigation.termination_reason,
             geographic_scope=result.investigation.geographic_scope,
@@ -204,6 +209,11 @@ def _assistant_response(
                     for layer in selected_event.supplemental_geometry
                 ],
                 source=_source_response(selected_event.source),
+                location_source=(
+                    _source_response(selected_event.location_source)
+                    if selected_event.location_source is not None
+                    else None
+                ),
             )
         ),
         retrieval_time=result.retrieval_time,
@@ -326,6 +336,11 @@ def _selected_event_response(
             for layer in selected_event.supplemental_geometry
         ],
         source=_source_response(selected_event.source),
+        location_source=(
+            _source_response(selected_event.location_source)
+            if selected_event.location_source is not None
+            else None
+        ),
     )
 
 

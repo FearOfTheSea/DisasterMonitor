@@ -27,7 +27,8 @@ NOW = datetime(2026, 8, 6, 3, 0, tzinfo=UTC)
 CATALOG = StaticCountryCatalog()
 JAPAN = CATALOG.get_by_alpha3("JPN")
 VENEZUELA = CATALOG.get_by_alpha3("VEN")
-assert JAPAN is not None and VENEZUELA is not None
+VIETNAM = CATALOG.get_by_alpha3("VNM")
+assert JAPAN is not None and VENEZUELA is not None and VIETNAM is not None
 SOURCE = SourceReference(
     "usgs-earthquakes",
     "USGS",
@@ -106,6 +107,39 @@ def _provider_event(
     )
 
 
+def test_country_event_remains_visible_when_named_region_is_unverified() -> None:
+    event = _provider_event(
+        Disaster.FLOOD,
+        "gdacs-floods",
+        "gdacs:fl:1104141",
+        event_time=NOW - timedelta(hours=2),
+        latitude=37.0,
+        longitude=137.0,
+    )
+    query = DisasterQuery(
+        Disaster.FLOOD, JAPAN, "recent", ("latest",), location_hint="Ishikawa"
+    )
+
+    result = DefaultEventPolicy().resolve((event,), query, now=NOW)
+
+    assert result.selected is None
+    assert result.place_candidates == (event,)
+
+
+def test_accented_place_matches_source_romanization() -> None:
+    event = replace(
+        _generic_event("gdacs:fl:1104141", country=VIETNAM),
+        location="Nghe An Province, Vietnam",
+    )
+    query = DisasterQuery(
+        Disaster.FLOOD, VIETNAM, "recent", (), location_hint="Nghệ An, Vietnam"
+    )
+
+    result = DefaultEventPolicy().resolve((event,), query, now=NOW)
+
+    assert result.selected == event
+
+
 def test_earthquake_policy_clusters_cross_provider_observations() -> None:
     policy = EarthquakeEventPolicy()
     observations = (
@@ -165,6 +199,8 @@ def test_location_hint_matches_any_observation_of_a_resolved_event() -> None:
     resolution = policy.resolve((specific, general), query, now=NOW)
 
     assert resolution.selected is not None
+    assert resolution.selected.location == "63 km NE of Ruteng, Japan"
+    assert resolution.selected.source.source_id == "usgs-earthquakes"
     assert {
         item.event_id for item in resolution.selected_physical_event.observations
     } == {"usgs:ruteng", "gdacs:ruteng"}
