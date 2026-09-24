@@ -30,6 +30,40 @@ from disaster_monitor.infrastructure.geography.static_country_catalog import (
 NOW = datetime(2026, 8, 15, 8, tzinfo=UTC)
 
 
+def test_direction_abbreviation_does_not_override_country_mention() -> None:
+    catalog = StaticCountryCatalog()
+    catalog.activate_payload(
+        {
+            "metadata": {},
+            "countries": [
+                {
+                    "alpha3": "NER",
+                    "name": "Niger",
+                    "aliases": ["NE"],
+                    "bounds": [0, 20, 0, 20],
+                    "polygons": [],
+                },
+                {
+                    "alpha3": "IDN",
+                    "name": "Indonesia",
+                    "aliases": ["ID"],
+                    "bounds": [-11, 6, 95, 141],
+                    "polygons": [],
+                },
+            ],
+        }
+    )
+
+    assert tuple(
+        country.alpha3_code
+        for country in catalog.find_mentions("63 km NE of Ruteng, Indonesia")
+    ) == ("IDN",)
+    assert tuple(
+        country.alpha3_code
+        for country in catalog.find_mentions("Latest earthquake in NE")
+    ) == ("NER",)
+
+
 class FakeSource:
     def __init__(self, snapshot: CountryCatalogSourceSnapshot) -> None:
         self.snapshot = snapshot

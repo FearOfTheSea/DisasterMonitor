@@ -1,53 +1,49 @@
 # Frontend design
 
-The workspace uses an approachable map-first layout with a quiet white header, cool
-map surfaces, deep navy type, teal controls, and locally served Inter fonts. Shared
-tokens live in `app/globals.css`; feature styles remain with the feature, and
-breakpoint composition lives in `app/responsive.css`. Inter is distributed under the
-license in `public/fonts`.
+Disaster Monitor is a desktop-first Earth observatory. The 64px header leads to
+Explore, Saved, Sources, Tools, Help, the command palette, and the assistant. Dark
+tokens in `app/globals.css` define the ocean, land, panels, text, dividers, and mint
+interactive accent. Feature styling stays with its feature; `app/observatory.css`
+owns the desktop composition. Inter is served locally under `public/fonts`.
 
-The default experience prioritizes recent events, associated country or territory,
-source location, relative time, and map context. Every Active Incidents card uses the
-structured country association as its heading. A meaningful provider location remains
-secondary context, while technical acquisition identifiers stay in source details.
-Provider tiers, association basis, identifiers, exact source timestamps, coverage
-limitations, map coordinates, and other specialist metadata remain available through
-labelled native disclosures. Search, sources, saved monitoring, and the assistant open
-one at a time in an overlay drawer so the map retains its context.
+Explore keeps the incident rail and OpenLayers map mounted while a user visits other
+workspaces. At 1440px and wider, the rail is 352px and the event or assistant reading
+pane is 440px. At 1200–1439px, they are 304px and 400px. Below 1200px, opening a
+reading pane hides the incident rail until the user returns to events. The map gets
+the remaining width and remains interactive. Incident search filters loaded records;
+it does not run worldwide discovery. List rows show hazard, place, source location,
+activity state, and time. Coverage and excluded observations remain available in a
+disclosure. Cached records show absolute event time.
 
-The initial map provides a Southeast Asian regional overview. Existing URL state
-still restores the operator's location, zoom, display layers, and selected panel.
-The shared runtime configuration owns the default view; the map feature re-exports
-it for compatibility.
+The default geographic view is global and fits the available map rectangle. The
+locally bundled Natural Earth atlas shows land, borders, country labels, marine
+labels, and graticules. It begins with generalized geography and loads finer country
+geometry at detailed zoom. Streets is an explicit OpenStreetMap alternative;
+satellite imagery remains an independent source-dated overlay. Atlas asset provenance
+is recorded in `public/atlas/README.md`. The map does not generate geographic or
+impact geometry from visual design. Existing URLs with explicit position or zoom
+take precedence over the default view.
 
-Incident search matches loaded country names and codes, source locations, publishers,
-and source titles. It does not request new provider data or change map records or
-coverage. Coverage status and snapshot time remain visible; detailed provider notices
-expand independently. The incident rail uses one status surface for live, loading,
-offline-cache, and unavailable states so recovery guidance is not duplicated. Offline
-and unavailable states keep the last safe context visible and expose a single retry
-action. Search and filters share a one-click reset, result counts use plain language,
-and historical dates constrain the end time to follow the start time. Map layers open
-on demand and retain their selected state when the controls close.
+Selecting a list row or map marker opens an event reading pane without invoking the
+assistant. Its Overview is built from recorded incident fields, the Evidence tab
+retains source categories and provenance, and Timeline shows only recorded times.
+An explicit action fills the assistant draft for editing. Assistant requests preserve
+the draft on failure and show elapsed request time without invented progress. Ground
+view uses a wide inspection workspace with its existing radar and optical controls,
+comparison modes, and imagery limitations.
 
-Selected incidents use both color-independent check state and a focused summary. The
-summary can be dismissed without changing map-layer visibility. A compact Help guide
-explains how incident selection, source coverage, and map-display options relate, while
-the command palette keeps the keyboard path discoverable. These progressive-disclosure
-surfaces preserve the map-first hierarchy without hiding provenance or recovery paths.
+Saved contains Watches, Bookmarks, and Activity. Sources is a read-only directory
+with search, hazard and role filters, and expandable provenance; configuration
+availability does not imply live provider health. Tools contains Field reports,
+Workspace notes and checklists, Source health, Evidence history, and Maintenance.
+Workspace notes remain separate from evidence. Help and the command palette are
+dialogs; nonmodal reading panes do not trap focus. Focus indicators, keyboard
+selection paths, native disclosures, and reduced-motion styling apply throughout.
 
-A new assistant conversation starts with an empty transcript. Its starter questions
-fill and focus the composer for editing; submitting remains an explicit action.
-Source limitations remain available in the coverage disclosure and in actual
-reports. Assistant responses use the same open white surfaces, navy hierarchy, teal
-accents, and restrained dividers as the incident rail. User questions remain compact,
-while source-backed reports use readable body text, spaced sections, and wrapping
-metadata so long identifiers and URLs cannot force horizontal scrolling. The UI never
-substitutes illustrative records for unavailable data.
-
-On phones, the compact header and persistent Explore, Ask, Saved, and Sources
-navigation keep the primary paths reachable. The incident feed scrolls within a
-bounded region, the selected event summary remains above the navigation, and the map
-stays reachable below the feed. Assistant, operations, and catalog panels occupy the
-available screen below the header. Native disclosure controls, labelled search,
-keyboard focus rings, and reduced-motion support apply across these surfaces.
+Application-level URL parameters hold the destination, subsection, and active
+Explore pane. Map URL parameters independently hold position, region, layers,
+selection, time window, satellite state, and basemap. Each serializer preserves the
+other's parameters and unrelated query values. Browser Back and Forward restore
+both groups of state. The assistant conversation and map selection live above pane
+visibility so changing workspace does not start duplicate requests or recreate the
+map.

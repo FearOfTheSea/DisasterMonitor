@@ -11,6 +11,7 @@ import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { createEmpty, extend } from 'ol/extent';
+import { createAtlasBasemap } from './atlasBasemap';
 
 import {
   clusterMembers,
@@ -52,6 +53,8 @@ type MapAdapterOptions = {
   onViewChange: (view: MapView) => void;
   onSelectIncident: (incidentId: string) => void;
   onSelectIncidentCluster?: (incidentIds: string[]) => void;
+  onAtlasError?: () => void;
+  onAtlasReady?: () => void;
 };
 
 export type SatelliteLayerConfiguration = {
@@ -75,6 +78,10 @@ type PendingArea = {
 
 export class OpenLayersMapAdapter {
   private readonly map: Map;
+  private readonly streetLayer: TileLayer<OSM>;
+  private readonly atlasLayers: ReturnType<typeof createAtlasBasemap>;
+  private basemap: 'atlas' | 'streets' = 'atlas';
+  private detailReady = false;
   private readonly pointIncidentSource: VectorSource<Feature<Geometry>>;
   private readonly clusteredIncidentSource: Cluster<Feature<Geometry>>;
   private readonly clusteredIncidentLayer: VectorLayer<Cluster<Feature<Geometry>>>;
@@ -96,19 +103,24 @@ export class OpenLayersMapAdapter {
   constructor(private readonly options: MapAdapterOptions) {
     this.clusterDistance = clusterDistanceForZoom(options.initialView.zoom);
     this.lastReportedView = options.initialView;
-    const baseLayer = new TileLayer({ source: new OSM() });
-    baseLayer.set('dmLayerType', 'base');
-    baseLayer.setZIndex(0);
+    this.streetLayer = new TileLayer({ source: new OSM(), visible: false });
+    this.streetLayer.set('dmLayerType', 'base');
+    this.streetLayer.setZIndex(0);
+    this.atlasLayers = createAtlasBasemap(options.onAtlasError, options.onAtlasReady);
+    this.atlasLayers.detailedCountries.getSource()?.on('featuresloadend', () => {
+      this.detailReady = true;
+      this.updateAtlasDetailVisibility();
+    });
     const view = new View({
       center: fromLonLat([
         options.initialView.centerLongitude,
         options.initialView.centerLatitude,
       ]),
       zoom: options.initialView.zoom,
-      minZoom: 2,
+      minZoom: 0,
       maxZoom: 18,
       projection: 'EPSG:3857',
-      constrainResolution: true,
+      constrainResolution: false,
     });
     this.pointIncidentSource = new VectorSource<Feature<Geometry>>();
     this.clusteredIncidentSource = new Cluster({
@@ -154,7 +166,11 @@ export class OpenLayersMapAdapter {
     this.map = new Map({
       target: options.target,
       layers: [
-        baseLayer,
+        this.atlasLayers.graticule,
+        this.atlasLayers.countries,
+        this.atlasLayers.detailedCountries,
+        this.atlasLayers.marine,
+        this.streetLayer,
         this.clusteredIncidentLayer,
         this.sourceGeometryIncidentLayer,
         this.weatherAlertLayer,
@@ -199,6 +215,7 @@ export class OpenLayersMapAdapter {
     this.map.on('moveend', () => this.reportView());
     view.on('change:resolution', () => {
       this.updateClusterDistance(view.getZoom() ?? options.initialView.zoom);
+      this.updateAtlasDetailVisibility();
     });
   }
 
@@ -216,6 +233,33 @@ export class OpenLayersMapAdapter {
 
   updateSize(): void {
     this.map.updateSize();
+  }
+
+  setBasemap(basemap: 'atlas' | 'streets'): void {
+    this.basemap = basemap;
+    this.streetLayer.setVisible(basemap === 'streets');
+    this.atlasLayers.graticule.setVisible(basemap === 'atlas');
+    this.atlasLayers.marine.setVisible(basemap === 'atlas');
+    this.updateAtlasDetailVisibility();
+  }
+
+  private updateAtlasDetailVisibility(): void {
+    const useDetail = (this.map.getView().getZoom() ?? 0) > 4.5;
+    this.atlasLayers.countries.setVisible(
+      this.basemap === 'atlas' && (!useDetail || !this.detailReady),
+    );
+    this.atlasLayers.detailedCountries.setVisible(
+      this.basemap === 'atlas' && useDetail,
+    );
+  }
+
+  fitInitialWorld(): void {
+    const size = this.map.getSize();
+    if (!size || size[0] === 0 || size[1] === 0) return;
+    const worldPixelWidth = Math.max(256, size[0] - 48);
+    const view = this.map.getView();
+    view.setCenter(fromLonLat([0, 10]));
+    view.setZoom(Math.log2(worldPixelWidth / 256));
   }
 
   setCommonOperationalPicture(cop?: CommonOperationalPicture): void {
@@ -414,7 +458,7 @@ export class OpenLayersMapAdapter {
     const view = this.map.getView();
     view.cancelAnimations();
     this.map.getView().fit(extent, {
-      duration: reducedMotionPreferred() ? 0 : 400,
+      duration: reducedMotionPreferred() ? 0 : 350,
       padding: fitPadding(size),
       maxZoom,
       size,
@@ -437,9 +481,9 @@ export class OpenLayersMapAdapter {
     const view = this.map.getView();
     view.cancelAnimations();
     view.fit(geometry.getExtent(), {
-      duration: reducedMotionPreferred() ? 0 : 400,
+      duration: reducedMotionPreferred() ? 0 : 350,
       padding: fitPadding(size),
-      maxZoom: 9,
+      maxZoom: 5,
       size,
     });
   }

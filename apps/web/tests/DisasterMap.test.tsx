@@ -18,6 +18,7 @@ import { TEST_INCIDENT_COUNTRY } from './fixtures/incidents';
 const adapterMocks = vi.hoisted(() => ({
   destroy: vi.fn(),
   fitArea: vi.fn(),
+  fitInitialWorld: vi.fn(),
   focusActiveIncident: vi.fn(),
   onViewChange: undefined as ((view: MapView) => void) | undefined,
   onSelectIncidentCluster: undefined as ((incidentIds: string[]) => void) | undefined,
@@ -30,6 +31,7 @@ const adapterMocks = vi.hoisted(() => ({
   setSatelliteOpacity: vi.fn(),
   setSelectedIncident: vi.fn(),
   setView: vi.fn(),
+  setBasemap: vi.fn(),
   setWeatherAlerts: vi.fn(),
 }));
 
@@ -60,6 +62,7 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
 
     destroy = adapterMocks.destroy;
     fitArea = adapterMocks.fitArea;
+    fitInitialWorld = adapterMocks.fitInitialWorld;
     focusActiveIncident = adapterMocks.focusActiveIncident;
     setActiveIncidents = adapterMocks.setActiveIncidents;
     setCommonOperationalPicture = adapterMocks.setCommonOperationalPicture;
@@ -69,6 +72,7 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
     setSatelliteOpacity = adapterMocks.setSatelliteOpacity;
     setSelectedIncident = adapterMocks.setSelectedIncident;
     setView = adapterMocks.setView;
+    setBasemap = adapterMocks.setBasemap;
     setWeatherAlerts = adapterMocks.setWeatherAlerts;
   },
 }));

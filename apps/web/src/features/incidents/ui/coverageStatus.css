@@ -116,3 +116,14 @@
 .coverage-unavailable {
   color: var(--warning);
 }
+.observatory-explore .incident-coverage-status {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 0 16px;
+}
+.observatory-explore .coverage-disclosure > summary {
+  background: transparent;
+  color: var(--muted);
+  min-height: 38px;
+  padding: 8px 0;
+}

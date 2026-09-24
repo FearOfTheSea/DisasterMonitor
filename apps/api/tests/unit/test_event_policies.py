@@ -130,6 +130,68 @@ def test_earthquake_policy_clusters_cross_provider_observations() -> None:
     )
 
 
+def test_location_hint_matches_any_observation_of_a_resolved_event() -> None:
+    policy = EarthquakeEventPolicy()
+    specific_source = replace(SOURCE, updated_at=NOW - timedelta(minutes=1))
+    general_source = replace(SOURCE, source_id="gdacs-earthquakes", updated_at=NOW)
+    specific = _event(
+        "usgs:ruteng",
+        location="63 km NE of Ruteng, Japan",
+        source=specific_source,
+        geometry=point_event_geometry(37.0, 137.0, specific_source),
+        measurements=(
+            EventMeasurement(MeasurementKind.MAGNITUDE, 6.1, source=specific_source),
+        ),
+        provider_ids=("shared:quake",),
+    )
+    general = _event(
+        "gdacs:ruteng",
+        location="Japan",
+        source=general_source,
+        geometry=point_event_geometry(37.0, 137.0, general_source),
+        measurements=(
+            EventMeasurement(MeasurementKind.MAGNITUDE, 6.1, source=general_source),
+        ),
+        provider_ids=("shared:quake",),
+    )
+    query = DisasterQuery(
+        Disaster.EARTHQUAKE,
+        JAPAN,
+        "recent",
+        ("event_overview",),
+        location_hint="Ruteng",
+    )
+
+    resolution = policy.resolve((specific, general), query, now=NOW)
+
+    assert resolution.selected is not None
+    assert {
+        item.event_id for item in resolution.selected_physical_event.observations
+    } == {"usgs:ruteng", "gdacs:ruteng"}
+
+
+def test_location_hint_preserves_date_boundary_tolerance_during_resolution() -> None:
+    event = _event(
+        "usgs:tokyo",
+        location="Tokyo, Japan",
+        event_time=datetime(2026, 8, 5, 18, 0, tzinfo=UTC),
+    )
+    query = DisasterQuery(
+        Disaster.EARTHQUAKE,
+        JAPAN,
+        "specified",
+        ("event_overview",),
+        date_from=datetime(2026, 8, 4, 15, 0, tzinfo=UTC),
+        date_to=datetime(2026, 8, 5, 15, 0, tzinfo=UTC),
+        location_hint="Tokyo",
+    )
+
+    resolution = EarthquakeEventPolicy().resolve((event,), query, now=NOW)
+
+    assert resolution.selected is not None
+    assert resolution.selected.event_id == "usgs:tokyo"
+
+
 def test_earthquake_policy_never_clusters_across_country_or_disaster() -> None:
     policy = EarthquakeEventPolicy()
     clustered = policy.cluster(

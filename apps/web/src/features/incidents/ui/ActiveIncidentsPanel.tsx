@@ -45,6 +45,7 @@ type ActiveIncidentsPanelProps = {
   loadingMore?: boolean;
   onSelectIncident: (eventId: string) => void;
   onRefresh: () => void | Promise<void>;
+  compact?: boolean;
 };
 
 function SelectedIcon() {
@@ -156,6 +157,7 @@ export function ActiveIncidentsPanel({
   loadingMore = false,
   onSelectIncident,
   onRefresh,
+  compact = false,
 }: ActiveIncidentsPanelProps) {
   const [localSearch, setLocalSearch] = useState('');
   const isServerSearch = search !== undefined;
@@ -183,8 +185,12 @@ export function ActiveIncidentsPanel({
     <aside className="active-incidents-panel" aria-label="Active incidents monitoring">
       <header className="active-incidents-header">
         <div>
-          <h2>What&apos;s happening</h2>
-          <p>Recent events reported by trusted sources</p>
+          <h2>{compact ? 'Explore the world' : "What's happening"}</h2>
+          <p>
+            {compact
+              ? 'Recent events, grounded in sources.'
+              : 'Recent events reported by trusted sources'}
+          </p>
         </div>
       </header>
       <IncidentPanelControls
@@ -205,7 +211,10 @@ export function ActiveIncidentsPanel({
       />
       <div className="active-incidents-scroll">
         {snapshot ? (
-          <IncidentCoverageStatus snapshot={coverageSnapshot ?? snapshot} />
+          <IncidentCoverageStatus
+            snapshot={coverageSnapshot ?? snapshot}
+            label={compact ? 'Coverage & limitations' : 'View coverage'}
+          />
         ) : null}
         {snapshot && (snapshot.correlations?.length ?? 0) > 0 && (
           <section
@@ -304,7 +313,7 @@ export function ActiveIncidentsPanel({
                 coverage above is unchanged.
               </p>
             ) : null}
-            {incidents.length > 0 ? (
+            {incidents.length > 0 && !compact ? (
               <AccessibleIncidentIndex
                 incidents={incidents}
                 retrievedAt={snapshot.retrieved_at}
@@ -379,103 +388,109 @@ export function ActiveIncidentsPanel({
                             estimated
                           </small>
                         )}
-                        <small
-                          className={`incident-activity-status incident-activity-status-${incident.activity_status ?? 'unknown'}`}
-                        >
-                          {activityStatusLabel(incident.activity_status)}
-                        </small>
-                        <time dateTime={incident.event_time}>
-                          {formatRelativeTime(
-                            incident.event_time,
-                            snapshot.retrieved_at,
-                          )}
-                        </time>
-                      </button>
-                      <details className="incident-details">
-                        <summary>Source details</summary>
-                        <div className="incident-metadata">
-                          <span>
-                            {incident.provider_tier === 'primary'
-                              ? 'Primary tier'
-                              : 'Secondary tier'}
-                          </span>
-                          <span>{AUTHORITY_LABELS[incident.source_authority]}</span>
-                        </div>
-                        <div className="incident-source">
-                          <small className="incident-event-id">
-                            Event ID: {incident.event_id}
-                          </small>
-                          <span>{countryAssociationLabel(incident)}</span>
-                          <span>{incident.source.publisher}</span>
-                          <a
-                            href={incident.source.canonical_url}
-                            target="_blank"
-                            rel="noreferrer"
+                        <span className="incident-card-meta">
+                          <small
+                            className={`incident-activity-status incident-activity-status-${incident.activity_status ?? 'unknown'}`}
                           >
-                            {incident.source.title}
-                          </a>
-                          <small>
-                            {timestamp.label}: {formatTime(timestamp.value)}
+                            {activityStatusLabel(incident.activity_status)}
                           </small>
-                          <DataAgeBadge
-                            kind="source"
-                            timestamp={
-                              incident.source.updated_at ??
-                              incident.source.published_at ??
-                              incident.source.retrieved_at
-                            }
-                            ageSeconds={incident.source.source_age_seconds}
-                          />
-                          <details className="incident-provenance-graph">
-                            <summary>Provenance graph</summary>
-                            <ol aria-label={`Provenance for ${incident.event_id}`}>
-                              {(incident.evidence_sources?.length
-                                ? incident.evidence_sources
-                                : [incident.source]
-                              ).map((source) => (
-                                <li key={`${incident.event_id}:${source.source_id}`}>
-                                  <strong>Source observation</strong>{' '}
-                                  <a
-                                    href={source.canonical_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    {source.publisher}
-                                  </a>
+                          <time dateTime={incident.event_time}>
+                            {snapshot.availability === 'offline-cache'
+                              ? formatTime(incident.event_time)
+                              : formatRelativeTime(
+                                  incident.event_time,
+                                  snapshot.retrieved_at,
+                                )}
+                          </time>
+                        </span>
+                      </button>
+                      {!compact && (
+                        <details className="incident-details">
+                          <summary>Source details</summary>
+                          <div className="incident-metadata">
+                            <span>
+                              {incident.provider_tier === 'primary'
+                                ? 'Primary tier'
+                                : 'Secondary tier'}
+                            </span>
+                            <span>{AUTHORITY_LABELS[incident.source_authority]}</span>
+                          </div>
+                          <div className="incident-source">
+                            <small className="incident-event-id">
+                              Event ID: {incident.event_id}
+                            </small>
+                            <span>{countryAssociationLabel(incident)}</span>
+                            <span>{incident.source.publisher}</span>
+                            <a
+                              href={incident.source.canonical_url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {incident.source.title}
+                            </a>
+                            <small>
+                              {timestamp.label}: {formatTime(timestamp.value)}
+                            </small>
+                            <DataAgeBadge
+                              kind="source"
+                              timestamp={
+                                incident.source.updated_at ??
+                                incident.source.published_at ??
+                                incident.source.retrieved_at
+                              }
+                              ageSeconds={incident.source.source_age_seconds}
+                            />
+                            <details className="incident-provenance-graph">
+                              <summary>Provenance graph</summary>
+                              <ol aria-label={`Provenance for ${incident.event_id}`}>
+                                {(incident.evidence_sources?.length
+                                  ? incident.evidence_sources
+                                  : [incident.source]
+                                ).map((source) => (
+                                  <li key={`${incident.event_id}:${source.source_id}`}>
+                                    <strong>Source observation</strong>{' '}
+                                    <a
+                                      href={source.canonical_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {source.publisher}
+                                    </a>
+                                  </li>
+                                ))}
+                                <li>
+                                  <strong>Derived into</strong> normalized evidence
                                 </li>
-                              ))}
-                              <li>
-                                <strong>Derived into</strong> normalized evidence
-                              </li>
-                              <li>
-                                <strong>Supports</strong> physical event{' '}
-                                {incident.physical_event_id ?? incident.event_id}
-                              </li>
-                            </ol>
-                            <small>
-                              This trace shows provenance, not proof of causation or
-                              completeness.
+                                <li>
+                                  <strong>Supports</strong> physical event{' '}
+                                  {incident.physical_event_id ?? incident.event_id}
+                                </li>
+                              </ol>
+                              <small>
+                                This trace shows provenance, not proof of causation or
+                                completeness.
+                              </small>
+                            </details>
+                            {incident.detection?.news_break_at ? (
+                              <small>
+                                News first published:{' '}
+                                {formatTime(incident.detection.news_break_at)}
+                              </small>
+                            ) : null}
+                            {incident.detection?.monitor_visible_at ? (
+                              <small>
+                                Visible in monitoring:{' '}
+                                {formatTime(incident.detection.monitor_visible_at)}
+                              </small>
+                            ) : null}
+                          </div>
+                          {incident.geometry?.kind === 'descriptive' && (
+                            <small className="incident-geometry-note">
+                              Descriptive location only; no map geometry was supplied.
                             </small>
-                          </details>
-                          {incident.detection?.news_break_at ? (
-                            <small>
-                              News first published:{' '}
-                              {formatTime(incident.detection.news_break_at)}
-                            </small>
-                          ) : null}
-                          {incident.detection?.monitor_visible_at ? (
-                            <small>
-                              Visible in monitoring:{' '}
-                              {formatTime(incident.detection.monitor_visible_at)}
-                            </small>
-                          ) : null}
-                        </div>
-                        {incident.geometry?.kind === 'descriptive' && (
-                          <small className="incident-geometry-note">
-                            Descriptive location only; no map geometry was supplied.
-                          </small>
-                        )}
-                      </details>
+                          )}
+                        </details>
+                      )}
                     </article>
                   );
                 })}
@@ -490,6 +505,12 @@ export function ActiveIncidentsPanel({
               >
                 {loadingMore ? 'Loading more…' : 'Load more incidents'}
               </button>
+            ) : null}
+            {incidents.length > 0 && compact ? (
+              <AccessibleIncidentIndex
+                incidents={incidents}
+                retrievedAt={snapshot.retrieved_at}
+              />
             ) : null}
           </section>
         )}

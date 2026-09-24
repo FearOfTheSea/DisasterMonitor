@@ -462,7 +462,9 @@ export function FieldReportWorkbench({
             </article>
           );
         })}
-        {!loading && reports.length === 0 && <p>No field reports await review.</p>}
+        {!loading && !error && reports.length === 0 && (
+          <p>No field reports await review.</p>
+        )}
       </div>
       {status && <p role="status">{status}</p>}
       {error && <p role="alert">{error}</p>}

@@ -63,7 +63,7 @@ describe('OperatorWorkspace', () => {
     render(<OperatorWorkspace selectedIncidentId="event-1" />);
 
     expect(await screen.findByText('Non-evidence operator state')).toBeInTheDocument();
-    expect(screen.getByText('Call the district desk.')).toBeInTheDocument();
+    expect(await screen.findByText('Call the district desk.')).toBeInTheDocument();
     await user.click(screen.getByText('Add note, bookmark, or checklist'));
     await user.type(screen.getByLabelText('Analyst note'), 'Confirm bridge access.');
     await user.type(screen.getByLabelText('Note tags'), 'handoff, access');

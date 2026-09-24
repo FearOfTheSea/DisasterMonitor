@@ -12,6 +12,21 @@
   padding: 22px 24px;
 }
 
+.ground-return-button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.ground-return-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .ground-imagery-panel-header h2,
 .ground-imagery-panel-header p {
   margin: 0;
@@ -484,4 +499,68 @@
   margin: auto 24px 0;
   padding: 15px 0 20px;
   overflow-wrap: anywhere;
+}
+.ground-workspace .ground-imagery-scroll {
+  align-content: start;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  overflow-y: auto;
+}
+.ground-workspace .ground-imagery-scroll > .ground-imagery-loading,
+.ground-workspace .ground-imagery-scroll > .ground-imagery-error,
+.ground-workspace .ground-imagery-scroll > .ground-imagery-provenance {
+  grid-column: 1 / -1;
+}
+.ground-workspace
+  .ground-imagery-scroll
+  > .ground-imagery-section:not(.ground-imagery-comparisons) {
+  border-right: 1px solid var(--line);
+  grid-column: 1;
+}
+.ground-workspace .ground-imagery-scroll > .ground-imagery-comparisons {
+  align-content: start;
+  grid-column: 2;
+  grid-row: 1 / span 7;
+  min-height: 480px;
+  overflow: auto;
+  padding: 24px;
+}
+.ground-workspace .ground-imagery-scroll > .ground-imagery-actions {
+  border-right: 1px solid var(--line);
+  grid-column: 1;
+}
+.ground-workspace .ground-imagery-comparisons h3 {
+  color: var(--ink);
+  font-size: 20px;
+}
+.ground-workspace .ground-imagery-comparisons p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 22px;
+}
+.ground-workspace .ground-imagery-scroll {
+  align-content: stretch;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  overflow: hidden;
+}
+.ground-workspace .ground-settings {
+  border-right: 1px solid var(--line);
+  min-height: 0;
+  overflow-y: auto;
+}
+.ground-workspace .ground-stage {
+  background: var(--ocean);
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+}
+.ground-workspace .ground-stage .ground-imagery-comparisons {
+  border: 0;
+  min-height: 100%;
+  padding: 24px;
+}
+.ground-workspace .ground-settings .ground-imagery-section,
+.ground-workspace .ground-settings .ground-imagery-actions {
+  padding: 16px;
 }

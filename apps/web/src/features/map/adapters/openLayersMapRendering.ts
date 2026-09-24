@@ -53,7 +53,7 @@ export function validMapView(view: MapView): boolean {
     view.centerLongitude >= -180 &&
     view.centerLongitude <= 180 &&
     Number.isFinite(view.zoom) &&
-    view.zoom >= 2 &&
+    view.zoom >= 0 &&
     view.zoom <= 18
   );
 }

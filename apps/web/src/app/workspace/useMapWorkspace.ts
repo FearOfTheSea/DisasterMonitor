@@ -34,6 +34,7 @@ export function useMapWorkspace(activeIncidents: {
   const [watchFocusIncident, setWatchFocusIncident] = useState<IncidentMapRecord>();
   const [mapLayerState, setMapLayerState] = useState(createDefaultMapLayerState);
   const [mapView, setMapView] = useState<MapView>(DEFAULT_MAP_VIEW);
+  const [basemap, setBasemap] = useState<'atlas' | 'streets'>('atlas');
   const [regionalSelection, setRegionalSelection] =
     useState<RegionalSelection>('custom');
   const [satelliteState, setSatelliteState] = useState<SatelliteMapState>(() => {
@@ -47,6 +48,7 @@ export function useMapWorkspace(activeIncidents: {
   const [defaultUrlState] = useState<MapUrlState>(() => {
     return {
       view: DEFAULT_MAP_VIEW,
+      basemap: 'atlas',
       regionalPreset: 'custom',
       selectedIncidentId: undefined,
       layerState: createDefaultMapLayerState(),
@@ -94,6 +96,7 @@ export function useMapWorkspace(activeIncidents: {
   }, []);
   const restoreUrlState = useCallback((restored: MapUrlState) => {
     setMapView(restored.view);
+    setBasemap(restored.basemap);
     setRegionalSelection(restored.regionalPreset);
     setSelectedIncidentId(restored.selectedIncidentId);
     setWatchFocusIncident(undefined);
@@ -106,6 +109,7 @@ export function useMapWorkspace(activeIncidents: {
   const urlState = useMemo(
     () => ({
       view: mapView,
+      basemap,
       regionalPreset: regionalSelection,
       selectedIncidentId: usableSelectedIncidentId,
       layerState: mapLayerState,
@@ -114,6 +118,7 @@ export function useMapWorkspace(activeIncidents: {
     }),
     [
       mapView,
+      basemap,
       regionalSelection,
       usableSelectedIncidentId,
       mapLayerState,
@@ -123,6 +128,8 @@ export function useMapWorkspace(activeIncidents: {
   useWorkspaceUrlState(defaultUrlState, urlState, restoreUrlState);
   return {
     mapView,
+    basemap,
+    setBasemap,
     mapLayerState,
     setMapLayerState,
     regionalSelection,

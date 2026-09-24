@@ -122,3 +122,52 @@
   margin-bottom: 0;
   padding-left: 17px;
 }
+.source-directory-filters {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1fr) 180px 180px;
+}
+.source-directory-filters label {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 5px;
+}
+.source-directory-filters input,
+.source-directory-filters select {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  min-height: 38px;
+  padding: 8px 10px;
+}
+.secondary-workspace .source-catalog-list {
+  gap: 0;
+}
+.secondary-workspace .source-catalog-card {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  gap: 8px;
+  padding: 16px 0;
+}
+.secondary-workspace .source-catalog-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.secondary-workspace .source-catalog-card > button {
+  border: 0;
+  color: var(--accent);
+  justify-self: start;
+  min-height: 32px;
+  padding: 0;
+}
+.secondary-workspace .source-catalog-boundary {
+  background: transparent;
+  border-color: var(--line);
+}
+.source-directory-summary {
+  margin: 0;
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAssistantConversation } from '@/features/assistant/hooks/useAssistantConversation';
 import { executeAutomaticOperatorActions } from '@/features/assistant/model/operatorActions';
@@ -9,10 +9,13 @@ import {
   buildCommandRegistry,
   type CommandRegistryContext,
 } from '@/features/commands/model/commandRegistry';
-import { CommandPalette } from '@/features/commands/ui/CommandPalette';
+import {
+  CommandPalette,
+  type CommandPaletteHandle,
+} from '@/features/commands/ui/CommandPalette';
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
-import { SelectedIncidentSummary } from '@/features/incidents/ui/SelectedIncidentSummary';
+import { SelectedEventPane } from '@/features/incidents/ui/SelectedEventPane';
 import { GroundImageryPanel } from '@/features/imagery/ui/GroundImageryPanel';
 import { WorkspaceHelp } from '@/features/help/ui/WorkspaceHelp';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
@@ -24,30 +27,15 @@ import { DisasterMap } from '@/features/map/ui/DisasterMap';
 import { OperationsPanel } from '@/features/operations/ui/OperationsPanel';
 import { SourceCatalog } from '@/features/sources/ui/SourceCatalog';
 import { useWeatherAlerts } from '@/features/weather/hooks/useWeatherAlerts';
-
 import { useMapWorkspace } from '@/app/workspace/useMapWorkspace';
-import { useWorkspacePanels } from '@/app/workspace/useWorkspacePanels';
+import { useWorkspaceNavigation } from '@/app/workspace/useWorkspaceNavigation';
+import {
+  useWorkspaceScrollRestoration,
+  workspaceScrollKey,
+} from '@/app/workspace/useWorkspaceScrollRestoration';
+import type { WorkspaceSection } from '@/app/workspace/workspaceLocation';
 
 type IconProps = { className?: string };
-
-function EvidenceIcon({ className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <ellipse cx="12" cy="5" rx="7.5" ry="3" />
-      <path d="M4.5 5v7c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V5" />
-      <path d="M4.5 12v7c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-7" />
-    </svg>
-  );
-}
 
 function AssistantIcon({ className }: IconProps) {
   return (
@@ -86,13 +74,56 @@ function PositionIcon({ className }: IconProps) {
   );
 }
 
+const SAVED_SECTIONS = ['watches', 'bookmarks', 'activity'] as const;
+const TOOL_SECTIONS = [
+  'field-reports',
+  'workspace',
+  'source-health',
+  'evidence-history',
+  'maintenance',
+] as const;
+function sectionLabel(section: WorkspaceSection): string {
+  return section.replaceAll('-', ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
 export default function Home() {
   const conversation = useAssistantConversation();
-  const submitAssistant = conversation.submit;
   const activeIncidents = useActiveIncidents();
   const weatherAlerts = useWeatherAlerts();
+  const navigation = useWorkspaceNavigation();
+  const { navigate, openPane, openSection } = navigation;
+  useWorkspaceScrollRestoration(navigation.destination, navigation.section);
+  const [assistantDraft, setAssistantDraft] = useState('');
+  const [assistantFocusToken, setAssistantFocusToken] = useState(0);
+  const commandPaletteRef = useRef<CommandPaletteHandle>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const toolsButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const dismiss = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (event.key === 'Escape') {
+          setToolsOpen(false);
+          toolsButtonRef.current?.focus();
+        }
+      } else if (
+        event.target instanceof Node &&
+        !toolsRef.current?.contains(event.target)
+      )
+        setToolsOpen(false);
+    };
+    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('keydown', dismiss);
+    return () => {
+      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('keydown', dismiss);
+    };
+  }, [toolsOpen]);
   const {
     mapView,
+    basemap,
+    setBasemap,
     mapLayerState,
     setMapLayerState,
     regionalSelection,
@@ -108,18 +139,28 @@ export default function Home() {
     handleSelectActiveIncident,
     handleSelectWatchIncident,
   } = useMapWorkspace(activeIncidents);
-  const {
-    activePanel,
-    togglePanel,
-    closePanel,
-    openOperationsAt,
-    openSourceCatalog,
-    openGroundImagery,
-  } = useWorkspacePanels();
-  const assistantOpen = activePanel === 'assistant';
-  const operationsOpen = activePanel === 'operations';
-  const sourceCatalogOpen = activePanel === 'sources';
-  const groundImageryOpen = activePanel === 'imagery';
+
+  const openOperationsAt = useCallback(
+    (headingId?: string) => {
+      openSection(headingId === 'findings-center-heading' ? 'activity' : 'watches');
+    },
+    [openSection],
+  );
+  const openSourceCatalog = useCallback(() => navigate('sources'), [navigate]);
+  const selectIncident = useCallback(
+    (incidentId: string) => {
+      handleSelectActiveIncident(incidentId);
+      openPane('event', incidentId);
+    },
+    [handleSelectActiveIncident, openPane],
+  );
+  const selectWatchIncident = useCallback(
+    (incident: Parameters<typeof handleSelectWatchIncident>[0]) => {
+      handleSelectWatchIncident(incident);
+      openPane('event', incident.event_id);
+    },
+    [handleSelectWatchIncident, openPane],
+  );
   const areaOfInterest = useMemo(
     () => assistantMapAreaOfInterest(conversation.messages),
     [conversation.messages],
@@ -135,84 +176,86 @@ export default function Home() {
     .reverse()
     .find((message) => message.report?.decisionSupport?.evidence_state_version)?.report
     ?.decisionSupport?.evidence_state_version;
-  const displayedIncidents = useMemo(() => {
-    const snapshot = activeIncidents.snapshot;
-    return snapshot
-      ? filterIncidentsForDisplay(
-          snapshot.incidents,
-          snapshot.retrieved_at,
-          mapLayerState.timeWindow,
-        )
-      : [];
-  }, [activeIncidents.snapshot, mapLayerState.timeWindow]);
-  const timeFilteredCorrelations = useMemo(() => {
-    const snapshot = activeIncidents.snapshot;
-    return snapshot
-      ? filterCorrelationsForDisplay(
-          snapshot.correlations ?? [],
-          snapshot.incidents,
-          snapshot.retrieved_at,
-          mapLayerState.timeWindow,
-        )
-      : [];
-  }, [activeIncidents.snapshot, mapLayerState.timeWindow]);
+  const displayedIncidents = useMemo(
+    () =>
+      activeIncidents.snapshot
+        ? filterIncidentsForDisplay(
+            activeIncidents.snapshot.incidents,
+            activeIncidents.snapshot.retrieved_at,
+            mapLayerState.timeWindow,
+          )
+        : [],
+    [activeIncidents.snapshot, mapLayerState.timeWindow],
+  );
+  const timeFilteredCorrelations = useMemo(
+    () =>
+      activeIncidents.snapshot
+        ? filterCorrelationsForDisplay(
+            activeIncidents.snapshot.correlations ?? [],
+            activeIncidents.snapshot.incidents,
+            activeIncidents.snapshot.retrieved_at,
+            mapLayerState.timeWindow,
+          )
+        : [],
+    [activeIncidents.snapshot, mapLayerState.timeWindow],
+  );
   const displayedCorrelations = useMemo(
     () =>
       mapLayerState.visibility['compound-correlations'] ? timeFilteredCorrelations : [],
     [mapLayerState.visibility, timeFilteredCorrelations],
   );
-  const displayedSnapshot = useMemo(() => {
-    const snapshot = activeIncidents.snapshot;
-    return snapshot
-      ? {
-          ...snapshot,
-          incidents: displayedIncidents,
-          correlations: displayedCorrelations,
-        }
-      : undefined;
-  }, [activeIncidents.snapshot, displayedCorrelations, displayedIncidents]);
-  const mapIncidents = useMemo(() => {
-    if (!watchFocusIncident) return displayedIncidents;
-    return [
-      watchFocusIncident,
-      ...displayedIncidents.filter(
-        (incident) => incident.event_id !== watchFocusIncident.event_id,
-      ),
-    ];
-  }, [displayedIncidents, watchFocusIncident]);
+  const displayedSnapshot = useMemo(
+    () =>
+      activeIncidents.snapshot
+        ? {
+            ...activeIncidents.snapshot,
+            incidents: displayedIncidents,
+            correlations: displayedCorrelations,
+          }
+        : undefined,
+    [activeIncidents.snapshot, displayedIncidents, displayedCorrelations],
+  );
+  const mapIncidents = useMemo(
+    () =>
+      watchFocusIncident
+        ? [
+            watchFocusIncident,
+            ...displayedIncidents.filter(
+              (incident) => incident.event_id !== watchFocusIncident.event_id,
+            ),
+          ]
+        : displayedIncidents,
+    [watchFocusIncident, displayedIncidents],
+  );
   const selectedIncident = useMemo(
     () =>
       mapIncidents.find((incident) => incident.event_id === usableSelectedIncidentId),
     [mapIncidents, usableSelectedIncidentId],
   );
+
   const handleAssistantSubmit = useCallback(
     async (question: string) => {
-      const response = await submitAssistant(question, mapView);
-      if (!response) return;
+      const response = await conversation.submit(question, mapView);
+      if (!response) return false;
       const execution = executeAutomaticOperatorActions(
         response.operator_actions ?? [],
         mapLayerState,
       );
       setMapLayerState(execution.mapLayerState);
       for (const panel of execution.openPanels) {
-        if (panel === 'sources') {
-          openSourceCatalog();
-        } else if (panel === 'findings') {
-          openOperationsAt('findings-center-heading');
-        } else if (panel === 'watches') {
-          openOperationsAt('incident-watches-heading');
-        } else {
-          openOperationsAt();
-        }
+        if (panel === 'sources') openSourceCatalog();
+        else if (panel === 'findings') openOperationsAt('findings-center-heading');
+        else openOperationsAt();
       }
+      return true;
     },
     [
-      mapLayerState,
+      conversation,
       mapView,
-      openOperationsAt,
-      openSourceCatalog,
-      submitAssistant,
+      mapLayerState,
       setMapLayerState,
+      openSourceCatalog,
+      openOperationsAt,
     ],
   );
   const commands = useMemo(
@@ -221,7 +264,7 @@ export default function Home() {
         incidents: activeIncidents.snapshot?.incidents ?? [],
         layerState: mapLayerState,
         selectedIncidentId: usableSelectedIncidentId,
-        onSelectIncident: handleSelectActiveIncident,
+        onSelectIncident: selectIncident,
         onFocusSelectedIncident: () => setFocusRequestToken((current) => current + 1),
         onSelectRegion: handleSelectRegion,
         onLayerStateChange: setMapLayerState,
@@ -232,23 +275,55 @@ export default function Home() {
       } satisfies CommandRegistryContext),
     [
       activeIncidents.snapshot?.incidents,
-      handleSelectActiveIncident,
-      handleSelectRegion,
       mapLayerState,
+      usableSelectedIncidentId,
+      selectIncident,
+      setFocusRequestToken,
+      handleSelectRegion,
+      setMapLayerState,
       openOperationsAt,
       openSourceCatalog,
-      usableSelectedIncidentId,
-      setFocusRequestToken,
-      setMapLayerState,
     ],
   );
+
+  const explorePane = navigation.explorePane ?? (selectedIncident ? 'event' : null);
+  const eventPaneOpen = explorePane === 'event' && Boolean(selectedIncident);
+  const assistantOpen = explorePane === 'assistant';
+  const groundOpen = explorePane === 'ground' && Boolean(selectedIncident);
+  const closeEvent = () => {
+    clearSelectedIncident();
+    openPane(null, null);
+  };
+  const closeAssistant = () => openPane(selectedIncident ? 'event' : null);
+  const askAboutEvent = () => {
+    if (selectedIncident) {
+      setAssistantDraft(
+        `What do we know about the ${selectedIncident.disaster.replaceAll('_', ' ')} in ${selectedIncident.country?.name ?? selectedIncident.location}?`,
+      );
+      setAssistantFocusToken((current) => current + 1);
+    }
+    openPane('assistant');
+  };
+  const selectTool = (section: WorkspaceSection) => {
+    openSection(section);
+    setToolsOpen(false);
+  };
+  const operationsProps = {
+    evidenceStateVersion,
+    selectedIncidentId: selectedIncident?.event_id,
+    activeIncidentsSnapshot: activeIncidents.snapshot,
+    displayedIncidents,
+    displayedCorrelations,
+    onSelectWatchIncident: selectWatchIncident,
+    onClose: () => navigate('explore'),
+  };
 
   return (
     <main className="app-shell">
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
               <circle cx="24" cy="24" r="21" />
               <circle cx="24" cy="24" r="14" />
               <circle cx="24" cy="24" r="6" />
@@ -258,51 +333,77 @@ export default function Home() {
           </div>
           <div className="brand-copy">
             <h1>Disaster Monitor</h1>
-            <p>What&apos;s happening, clearly explained.</p>
           </div>
         </div>
-        <div className="header-actions">
-          <CommandPalette commands={commands} />
+        <nav className="desktop-nav" aria-label="Primary navigation">
           <button
             type="button"
-            aria-label="Source Catalog"
-            aria-expanded={sourceCatalogOpen}
-            aria-controls="source-catalog-panel"
-            onClick={() => togglePanel('sources')}
+            aria-current={navigation.destination === 'explore' ? 'page' : undefined}
+            onClick={() => navigate('explore')}
           >
-            <svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m4 7 8-4 8 4-8 4-8-4Zm0 5 8 4 8-4M4 17l8 4 8-4" />
-            </svg>
-            Sources
+            Explore
           </button>
           <button
             type="button"
-            aria-label={operationsOpen ? 'Close operations' : 'Evidence operations'}
-            aria-expanded={operationsOpen}
-            aria-controls="operations-panel"
-            onClick={() => togglePanel('operations')}
+            aria-current={navigation.destination === 'saved' ? 'page' : undefined}
+            onClick={() => navigate('saved', 'watches')}
           >
-            <EvidenceIcon className="button-icon" />
             Saved
           </button>
-          <WorkspaceHelp />
+          <button
+            type="button"
+            aria-current={navigation.destination === 'sources' ? 'page' : undefined}
+            onClick={() => navigate('sources')}
+          >
+            Sources
+          </button>
+          <div className="tools-menu-container" ref={toolsRef}>
+            <button
+              ref={toolsButtonRef}
+              type="button"
+              aria-expanded={toolsOpen}
+              onClick={() => setToolsOpen((current) => !current)}
+            >
+              Tools
+            </button>
+            {toolsOpen && (
+              <div className="tools-menu" role="menu">
+                {TOOL_SECTIONS.map((section) => (
+                  <button
+                    key={section}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => selectTool(section)}
+                  >
+                    {sectionLabel(section)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </nav>
+        <div className="header-actions">
+          <CommandPalette ref={commandPaletteRef} commands={commands} />
+          <WorkspaceHelp onSearchCommands={() => commandPaletteRef.current?.open()} />
           <button
             className="assistant-toggle"
             type="button"
-            aria-label={assistantOpen ? 'Close assistant' : 'Open assistant'}
+            aria-label="Ask a question"
             aria-expanded={assistantOpen}
             aria-controls="assistant-panel"
-            onClick={() => togglePanel('assistant')}
+            onClick={() => openPane('assistant')}
           >
             <AssistantIcon className="button-icon" />
-            Ask
+            Ask a question
           </button>
         </div>
       </header>
       <section
-        className={`workspace${assistantOpen ? ' workspace-assistant-open' : ''}${operationsOpen ? ' workspace-operations-open' : ''}${sourceCatalogOpen ? ' workspace-source-catalog-open' : ''}${groundImageryOpen ? ' workspace-ground-imagery-open' : ''}`}
+        className={`workspace observatory-explore${eventPaneOpen || assistantOpen ? ' observatory-reading-open' : ''}${eventPaneOpen ? ' observatory-event-open' : ''}${assistantOpen ? ' observatory-assistant-open' : ''}`}
+        hidden={navigation.destination !== 'explore' || groundOpen}
       >
         <ActiveIncidentsPanel
+          compact
           snapshot={displayedSnapshot}
           coverageSnapshot={activeIncidents.snapshot}
           status={activeIncidents.status}
@@ -321,7 +422,7 @@ export default function Home() {
           onOccurrenceEndChange={activeIncidents.setOccurrenceEnd}
           onLoadMore={activeIncidents.loadMore}
           loadingMore={activeIncidents.loadingMore}
-          onSelectIncident={handleSelectActiveIncident}
+          onSelectIncident={selectIncident}
           onRefresh={activeIncidents.refresh}
         />
         <div
@@ -336,7 +437,7 @@ export default function Home() {
           </div>
           <DisasterMap
             onViewChange={handleViewChange}
-            onSelectIncident={handleSelectActiveIncident}
+            onSelectIncident={selectIncident}
             commonOperationalPicture={commonOperationalPicture}
             areaOfInterest={areaOfInterest}
             activeIncidents={mapIncidents}
@@ -352,6 +453,8 @@ export default function Home() {
             onSatelliteStateChange={setSatelliteState}
             weatherAlerts={weatherAlerts.snapshot}
             focusRequestToken={focusRequestToken}
+            basemap={basemap}
+            onBasemapChange={setBasemap}
           />
           <details className="map-overlay">
             <summary>
@@ -359,7 +462,9 @@ export default function Home() {
               Map position
             </summary>
             <div role="status" aria-live="polite">
-              <span>OpenStreetMap base layer</span>
+              <span>
+                {basemap === 'atlas' ? 'Natural Earth atlas' : 'OpenStreetMap Streets'}
+              </span>
               <span aria-hidden="true">·</span>
               <span>
                 {mapView.centerLatitude.toFixed(2)},{' '}
@@ -369,28 +474,21 @@ export default function Home() {
               <span>zoom {mapView.zoom.toFixed(1)}</span>
             </div>
           </details>
-          <SelectedIncidentSummary
+        </div>
+        {eventPaneOpen && selectedIncident && (
+          <SelectedEventPane
+            key={selectedIncident.event_id}
             incident={selectedIncident}
-            onAsk={() => togglePanel('assistant')}
-            onGroundView={openGroundImagery}
-            onDismiss={clearSelectedIncident}
             snapshotRetrievedAt={
               activeIncidents.snapshot?.retrieved_at ??
-              selectedIncident?.source.retrieved_at ??
-              selectedIncident?.event_time ??
-              ''
+              selectedIncident.source.retrieved_at
             }
             warnings={weatherAlerts.snapshot}
+            onClose={closeEvent}
+            onAsk={askAboutEvent}
+            onGroundView={() => openPane('ground')}
           />
-        </div>
-        {activePanel ? (
-          <button
-            className="panel-scrim"
-            type="button"
-            onClick={closePanel}
-            aria-label="Close open panel"
-          />
-        ) : null}
+        )}
         {assistantOpen && (
           <AssistantPanel
             conversationId={conversation.conversationId}
@@ -399,66 +497,96 @@ export default function Home() {
             status={conversation.status}
             error={conversation.error}
             onSubmit={handleAssistantSubmit}
+            draft={assistantDraft}
+            onDraftChange={setAssistantDraft}
+            selectedEventContext={
+              selectedIncident?.country?.name ?? selectedIncident?.location
+            }
+            onReturnToEvent={selectedIncident ? () => openPane('event') : undefined}
+            focusToken={assistantFocusToken}
             onClear={conversation.clear}
             onNewConversation={conversation.startNewConversation}
             onSelectConversation={conversation.selectConversation}
             onDeleteConversation={conversation.deleteConversation}
             onWatchReady={() => openOperationsAt('incident-watches-heading')}
-            onClose={closePanel}
+            onClose={closeAssistant}
           />
         )}
-        {operationsOpen && (
-          <OperationsPanel
-            evidenceStateVersion={evidenceStateVersion}
-            selectedIncidentId={selectedIncident?.event_id}
-            activeIncidentsSnapshot={activeIncidents.snapshot}
-            displayedIncidents={displayedIncidents}
-            displayedCorrelations={displayedCorrelations}
-            onSelectWatchIncident={handleSelectWatchIncident}
-            onClose={closePanel}
-          />
-        )}
-        {sourceCatalogOpen && <SourceCatalog onClose={closePanel} />}
-        {groundImageryOpen && selectedIncident ? (
+      </section>
+      {groundOpen && selectedIncident && (
+        <div className="ground-workspace">
           <GroundImageryPanel
             incidentId={selectedIncident.event_id}
             incidentLabel={selectedIncident.country?.name ?? selectedIncident.location}
-            onClose={closePanel}
+            onClose={() => openPane('event')}
           />
-        ) : null}
-      </section>
-      <nav className="mobile-navigation" aria-label="Primary navigation">
-        <button type="button" className="mobile-navigation-active" onClick={closePanel}>
-          <PositionIcon className="button-icon" />
-          Explore
-        </button>
-        <button
-          type="button"
-          onClick={() => togglePanel('assistant')}
-          aria-pressed={assistantOpen}
+        </div>
+      )}
+      {navigation.destination === 'saved' && (
+        <section
+          className="secondary-workspace"
+          aria-label="Saved workspace"
+          data-workspace-scroll-key={workspaceScrollKey('saved', navigation.section)}
         >
-          <AssistantIcon className="button-icon" />
-          Ask
-        </button>
-        <button
-          type="button"
-          onClick={() => togglePanel('operations')}
-          aria-pressed={operationsOpen}
+          <div className="secondary-workspace-inner">
+            <nav className="workspace-subnav" aria-label="Saved sections">
+              {SAVED_SECTIONS.map((section) => (
+                <button
+                  key={section}
+                  type="button"
+                  aria-current={navigation.section === section ? 'page' : undefined}
+                  onClick={() => navigate('saved', section)}
+                >
+                  {sectionLabel(section)}
+                </button>
+              ))}
+            </nav>
+            <OperationsPanel
+              {...operationsProps}
+              section={
+                SAVED_SECTIONS.find((section) => section === navigation.section) ??
+                'watches'
+              }
+            />
+          </div>
+        </section>
+      )}
+      {navigation.destination === 'sources' && (
+        <section className="secondary-workspace" data-workspace-scroll-key="sources">
+          <div className="secondary-workspace-inner">
+            <SourceCatalog onClose={() => navigate('explore')} />
+          </div>
+        </section>
+      )}
+      {navigation.destination === 'tools' && (
+        <section
+          className="secondary-workspace"
+          aria-label="Tools workspace"
+          data-workspace-scroll-key={workspaceScrollKey('tools', navigation.section)}
         >
-          <EvidenceIcon className="button-icon" />
-          Saved
-        </button>
-        <button
-          type="button"
-          onClick={() => togglePanel('sources')}
-          aria-pressed={sourceCatalogOpen}
-        >
-          <svg className="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m4 7 8-4 8 4-8 4-8-4Zm0 5 8 4 8-4M4 17l8 4 8-4" />
-          </svg>
-          Sources
-        </button>
-      </nav>
+          <div className="secondary-workspace-inner">
+            <nav className="workspace-subnav" aria-label="Tools sections">
+              {TOOL_SECTIONS.map((section) => (
+                <button
+                  key={section}
+                  type="button"
+                  aria-current={navigation.section === section ? 'page' : undefined}
+                  onClick={() => navigate('tools', section)}
+                >
+                  {sectionLabel(section)}
+                </button>
+              ))}
+            </nav>
+            <OperationsPanel
+              {...operationsProps}
+              section={
+                TOOL_SECTIONS.find((section) => section === navigation.section) ??
+                'field-reports'
+              }
+            />
+          </div>
+        </section>
+      )}
     </main>
   );
 }

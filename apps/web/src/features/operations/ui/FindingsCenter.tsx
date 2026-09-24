@@ -237,7 +237,7 @@ export function FindingsCenter({
           Offline · read-only · stale findings cached {formatTime(offlineCachedAt)}.
         </p>
       ) : null}
-      {!loading && findings.length === 0 ? (
+      {!loading && !error && findings.length === 0 ? (
         <p className="findings-empty">No current findings match this view.</p>
       ) : null}
       <div className="findings-list">

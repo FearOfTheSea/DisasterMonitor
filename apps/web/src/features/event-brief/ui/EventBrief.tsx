@@ -72,10 +72,12 @@ export function EventBrief({
   incident,
   warnings,
   onGroundView,
+  presentation = 'tabs',
 }: {
   incident: EventBriefIncident;
   warnings?: EventBriefWarnings;
   onGroundView: () => void;
+  presentation?: 'tabs' | 'disclosures';
 }) {
   const [section, setSection] = useState<SectionId>('identity');
   const [earthquakeResult, setEarthquakeResult] = useState<{
@@ -98,6 +100,28 @@ export function EventBrief({
       .catch(() => setEarthquakeResult({ eventId: usgsEventId }));
     return () => controller.abort();
   }, [incident.disaster, usgsEventId]);
+
+  if (presentation === 'disclosures') {
+    return (
+      <section
+        className="event-brief event-brief-disclosures"
+        aria-label="Event evidence"
+      >
+        {SECTIONS.filter(([id]) => id !== 'timeline').map(([id, label]) => (
+          <details key={id} open={id === 'observations' ? true : undefined}>
+            <summary>{label}</summary>
+            <SectionContent
+              section={id}
+              incident={incident}
+              warnings={warnings}
+              earthquakeContext={earthquakeContext}
+              onGroundView={onGroundView}
+            />
+          </details>
+        ))}
+      </section>
+    );
+  }
 
   return (
     <section className="event-brief" aria-label="Event Brief">

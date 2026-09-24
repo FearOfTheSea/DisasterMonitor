@@ -27,6 +27,27 @@ import { FieldReportWorkbench } from '@/features/operations/ui/FieldReportWorkbe
 import { IncidentWatches } from '@/features/operations/ui/IncidentWatches';
 import { OperatorWorkspace } from '@/features/operations/ui/OperatorWorkspace';
 import { PanelCloseButton } from '@/shared/ui/PanelCloseButton';
+type OperationsSection =
+  | 'watches'
+  | 'bookmarks'
+  | 'activity'
+  | 'field-reports'
+  | 'workspace'
+  | 'source-health'
+  | 'evidence-history'
+  | 'maintenance';
+
+const SECTION_DESCRIPTIONS: Record<OperationsSection, string> = {
+  watches: 'Monitor places and events within each saved watch scope.',
+  bookmarks: 'Return to records you saved for later review.',
+  activity: 'Review findings and retained changes within their recorded scope.',
+  'field-reports':
+    'Create and review field observations with their verification status.',
+  workspace: 'Keep investigation notes and checklists separate from evidence.',
+  'source-health': 'Inspect provider freshness, failures, and coverage.',
+  'evidence-history': 'Review immutable snapshots and record bounded decisions.',
+  maintenance: 'Manage the country catalog and inspect provider budgets.',
+};
 
 type OperationsPanelProps = {
   evidenceStateVersion?: string;
@@ -36,6 +57,7 @@ type OperationsPanelProps = {
   activeIncidentsSnapshot?: ActiveIncidentsSnapshot;
   displayedIncidents?: readonly ActiveIncident[];
   displayedCorrelations?: readonly CompoundHazardCorrelation[];
+  section?: OperationsSection | 'all';
 };
 
 function formatTime(value: string | null) {
@@ -62,6 +84,7 @@ export function OperationsPanel({
   activeIncidentsSnapshot,
   displayedIncidents = [],
   displayedCorrelations = [],
+  section = 'all',
 }: OperationsPanelProps) {
   const [providers, setProviders] = useState<ProviderFreshness[]>([]);
   const [budgets, setBudgets] = useState<ProviderBudget[]>([]);
@@ -113,13 +136,15 @@ export function OperationsPanel({
   }, []);
 
   useEffect(() => {
+    if (!['all', 'source-health', 'evidence-history', 'maintenance'].includes(section))
+      return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => void refresh(controller.signal), 0);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [refresh]);
+  }, [refresh, section]);
 
   async function updateCountryCatalog() {
     setCatalogUpdating(true);
@@ -158,242 +183,279 @@ export function OperationsPanel({
     >
       <header className="operations-panel-header">
         <div>
-          <h2>Saved &amp; activity</h2>
-          <p>Follow places and review recent monitoring updates.</p>
+          <h2>
+            {section === 'all'
+              ? 'Saved & activity'
+              : section
+                  .replaceAll('-', ' ')
+                  .replace(/^./, (letter) => letter.toUpperCase())}
+          </h2>
+          <p>
+            {section === 'all'
+              ? 'Follow places and review recent monitoring updates.'
+              : SECTION_DESCRIPTIONS[section]}
+          </p>
         </div>
         <PanelCloseButton label="Close operations panel" onClick={onClose} />
       </header>
       <div className="operations-scroll">
-        <FindingsCenter
-          activeSnapshot={activeIncidentsSnapshot}
-          displayedIncidents={displayedIncidents}
-          displayedCorrelations={displayedCorrelations}
-          onSelectIncident={onSelectWatchIncident}
-          onWatchDataChange={handleWatchDataChange}
-          refreshToken={watchRefreshToken}
-        />
-        <IncidentWatches
-          onSelectIncident={onSelectWatchIncident}
-          onDataChange={handleWatchDataChange}
-          refreshToken={watchRefreshToken}
-        />
-        <FieldReportWorkbench selectedIncidentId={selectedIncidentId} />
-        <OperatorWorkspace selectedIncidentId={selectedIncidentId} />
-        {loading && (
-          <div className="operations-loading" role="status">
-            <span className="loading-indicator" aria-hidden="true" />
-            <span>Loading operational evidence…</span>
-          </div>
+        {(section === 'all' || section === 'activity') && (
+          <FindingsCenter
+            activeSnapshot={activeIncidentsSnapshot}
+            displayedIncidents={displayedIncidents}
+            displayedCorrelations={displayedCorrelations}
+            onSelectIncident={onSelectWatchIncident}
+            onWatchDataChange={handleWatchDataChange}
+            refreshToken={watchRefreshToken}
+          />
         )}
-        {error && (
-          <div className="assistant-error" role="alert">
-            {error}
-          </div>
+        {(section === 'all' || section === 'watches') && (
+          <IncidentWatches
+            onSelectIncident={onSelectWatchIncident}
+            onDataChange={handleWatchDataChange}
+            refreshToken={watchRefreshToken}
+          />
         )}
-        <section className="operations-section">
-          <div className="operations-heading">
-            <h3>Country catalog automation</h3>
-            <button
-              type="button"
-              onClick={() => void updateCountryCatalog()}
-              disabled={loading || catalogUpdating}
-            >
-              {catalogUpdating ? 'Updating countries…' : 'Update countries now'}
-            </button>
-          </div>
-          {countryCatalog ? (
-            <div className="catalog-status">
-              <div>
-                <strong>{countryCatalog.country_count} active countries</strong>
-                <span className={`freshness freshness-${countryCatalog.state}`}>
-                  {countryCatalog.state.replaceAll('_', ' ')}
-                </span>
-              </div>
-              <small>Version: {countryCatalog.active_version}</small>
-              <small>
-                Last successful update: {formatTime(countryCatalog.last_success_at)}
-              </small>
-              <small>
-                Next automatic attempt: {formatTime(countryCatalog.next_scheduled_at)}
-              </small>
-              <p role="status">{countryCatalog.message}</p>
-              {countryCatalog.failure_code && (
-                <small>Failure code: {countryCatalog.failure_code}</small>
-              )}
-              {countryCatalog.sources.map((source) => (
-                <small key={source.source_id}>
-                  {source.source_id}: {source.version}
-                </small>
-              ))}
-            </div>
-          ) : (
-            !loading && <p>Country catalog status is unavailable.</p>
-          )}
-        </section>
-        <section className="operations-section">
-          <div className="operations-heading">
-            <h3>Source health &amp; coverage</h3>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={loading}
-              aria-label="Refresh source health"
-            >
-              Refresh
-            </button>
-          </div>
-          {providers.length > 0 && (
-            <div className="provider-summary" aria-label="Source health summary">
-              <span>Sources {providers.length}</span>
-              <span className="summary-fresh">Fresh {providerCounts.fresh}</span>
-              <span className="summary-stale">Stale {providerCounts.stale}</span>
-              <span className="summary-unavailable">
-                Unavailable {providerCounts.unavailable}
-              </span>
-              <span className="summary-never">
-                Never ingested {providerCounts.never_ingested}
-              </span>
+        {(section === 'all' || section === 'field-reports') && (
+          <FieldReportWorkbench selectedIncidentId={selectedIncidentId} />
+        )}
+        {(section === 'all' || section === 'workspace' || section === 'bookmarks') && (
+          <OperatorWorkspace
+            selectedIncidentId={selectedIncidentId}
+            section={section === 'bookmarks' ? 'bookmarks' : 'workspace'}
+          />
+        )}
+        {loading &&
+          ['all', 'source-health', 'evidence-history', 'maintenance'].includes(
+            section,
+          ) && (
+            <div className="operations-loading" role="status">
+              <span className="loading-indicator" aria-hidden="true" />
+              <span>Loading operational evidence…</span>
             </div>
           )}
-          <div className="provider-grid">
-            {orderedProviders.map((provider) => (
-              <article key={provider.source_id} className="provider-status">
+        {error &&
+          ['all', 'source-health', 'evidence-history', 'maintenance'].includes(
+            section,
+          ) && (
+            <div className="assistant-error" role="alert">
+              {error}
+            </div>
+          )}
+        {(section === 'all' || section === 'maintenance') && (
+          <section className="operations-section">
+            <div className="operations-heading">
+              <h3>Country catalog automation</h3>
+              <button
+                type="button"
+                onClick={() => void updateCountryCatalog()}
+                disabled={loading || catalogUpdating}
+              >
+                {catalogUpdating ? 'Updating countries…' : 'Update countries now'}
+              </button>
+            </div>
+            {countryCatalog ? (
+              <div className="catalog-status">
                 <div>
-                  <strong data-testid="provider-source">{provider.source_id}</strong>
-                  <span className={`freshness freshness-${provider.state}`}>
-                    Status: {provider.state.replaceAll('_', ' ')}
+                  <strong>{countryCatalog.country_count} active countries</strong>
+                  <span className={`freshness freshness-${countryCatalog.state}`}>
+                    {countryCatalog.state.replaceAll('_', ' ')}
                   </span>
                 </div>
-                <small>Evidence time: {formatTime(provider.effective_at)}</small>
-                <small>Evidence age: {formatDuration(provider.age_seconds)}</small>
+                <small>Version: {countryCatalog.active_version}</small>
                 <small>
-                  Operational health:{' '}
-                  {(provider.health_state ?? provider.state).replaceAll('_', ' ')}
+                  Last successful update: {formatTime(countryCatalog.last_success_at)}
                 </small>
                 <small>
-                  Source publication age:{' '}
-                  {formatDuration(provider.source_publication_age_seconds ?? null)}
+                  Next automatic attempt: {formatTime(countryCatalog.next_scheduled_at)}
                 </small>
-                <small>
-                  Retrieval lag:{' '}
-                  {formatDuration(provider.retrieval_lag_seconds ?? null)}
-                </small>
-                <small>
-                  Parse/admission failures: {provider.parse_failures ?? 0}/
-                  {provider.admission_failures ?? 0}
-                </small>
-                <small>Truncated: {provider.truncated ? 'yes' : 'no'}</small>
-                {provider.stale_projection_age_seconds !== null &&
-                provider.stale_projection_age_seconds !== undefined ? (
-                  <small>
-                    Projection age:{' '}
-                    {formatDuration(provider.stale_projection_age_seconds)}
-                  </small>
-                ) : null}
-                {provider.hazard ? <small>Hazard: {provider.hazard}</small> : null}
-                <small>Last attempt: {formatTime(provider.last_attempt_at)}</small>
-                <small>Last success: {formatTime(provider.last_success_at)}</small>
-                <small>
-                  Expected interval:{' '}
-                  {formatDuration(provider.expected_freshness_seconds)}
-                </small>
-                <small>Consecutive failures: {provider.consecutive_failures}</small>
-                {provider.latest_error_code && (
-                  <small>Latest error: {provider.latest_error_code}</small>
+                <p role="status">{countryCatalog.message}</p>
+                {countryCatalog.failure_code && (
+                  <small>Failure code: {countryCatalog.failure_code}</small>
                 )}
-              </article>
-            ))}
-            {!loading && providers.length === 0 && (
-              <p className="provider-empty">
-                No provider freshness records are available.
-              </p>
+                {countryCatalog.sources.map((source) => (
+                  <small key={source.source_id}>
+                    {source.source_id}: {source.version}
+                  </small>
+                ))}
+              </div>
+            ) : (
+              !loading && <p>Country catalog status is unavailable.</p>
             )}
-          </div>
-        </section>
-        <section className="operations-section">
-          <div className="operations-heading">
-            <div>
-              <h3>Provider budget ledger</h3>
-              <p>Reserved work is visible before requests are sent upstream.</p>
+          </section>
+        )}
+        {(section === 'all' || section === 'source-health') && (
+          <section className="operations-section">
+            <div className="operations-heading">
+              <h3>Source health &amp; coverage</h3>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={loading}
+                aria-label="Refresh source health"
+              >
+                Refresh
+              </button>
             </div>
-          </div>
-          {budgets.length === 0 ? (
-            <p>No provider budget windows are active.</p>
-          ) : (
-            <div className="provider-budget-grid">
-              {budgets.map((budget) => (
-                <article
-                  key={`${budget.provider_id}:${budget.budget_window}`}
-                  className="provider-budget"
-                >
+            {providers.length > 0 && (
+              <div className="provider-summary" aria-label="Source health summary">
+                <span>Sources {providers.length}</span>
+                <span className="summary-fresh">Fresh {providerCounts.fresh}</span>
+                <span className="summary-stale">Stale {providerCounts.stale}</span>
+                <span className="summary-unavailable">
+                  Unavailable {providerCounts.unavailable}
+                </span>
+                <span className="summary-never">
+                  Never ingested {providerCounts.never_ingested}
+                </span>
+              </div>
+            )}
+            <div className="provider-grid">
+              {orderedProviders.map((provider) => (
+                <article key={provider.source_id} className="provider-status">
                   <div>
-                    <strong>{budget.provider_id}</strong>
-                    <span>{budget.budget_window} window</span>
-                  </div>
-                  <small>
-                    Remaining: {budget.remaining_units} / {budget.limit_units} units
-                  </small>
-                  <small>
-                    Reserved/settled/released: {budget.reserved_units}/
-                    {budget.settled_units}/{budget.released_units}
-                  </small>
-                  <small>Resets: {formatTime(budget.reset_at)}</small>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-        <section className="operations-section">
-          <h3>Latest immutable snapshots</h3>
-          {history.length === 0 ? (
-            <p>No source snapshots have been admitted in this runtime.</p>
-          ) : (
-            <div className="snapshot-list">
-              {history.map((snapshot) => (
-                <article key={snapshot.snapshot_id} className="snapshot-card">
-                  <div>
-                    <strong>{snapshot.source_id}</strong>
-                    <span>
-                      {snapshot.content_available ? 'Content retained' : 'Tombstone'}
+                    <strong data-testid="provider-source">{provider.source_id}</strong>
+                    <span className={`freshness freshness-${provider.state}`}>
+                      Status: {provider.state.replaceAll('_', ' ')}
                     </span>
                   </div>
-                  <small>{formatTime(snapshot.effective_at)}</small>
-                  <code>{snapshot.payload_sha256}</code>
-                  <small>Rights record: {snapshot.rights_id}</small>
-                  {snapshot.content_deletion_reason && (
-                    <small>Deletion reason: {snapshot.content_deletion_reason}</small>
+                  <small>Evidence time: {formatTime(provider.effective_at)}</small>
+                  <small>Evidence age: {formatDuration(provider.age_seconds)}</small>
+                  <small>
+                    Operational health:{' '}
+                    {(provider.health_state ?? provider.state).replaceAll('_', ' ')}
+                  </small>
+                  <small>
+                    Source publication age:{' '}
+                    {formatDuration(provider.source_publication_age_seconds ?? null)}
+                  </small>
+                  <small>
+                    Retrieval lag:{' '}
+                    {formatDuration(provider.retrieval_lag_seconds ?? null)}
+                  </small>
+                  <small>
+                    Parse/admission failures: {provider.parse_failures ?? 0}/
+                    {provider.admission_failures ?? 0}
+                  </small>
+                  <small>Truncated: {provider.truncated ? 'yes' : 'no'}</small>
+                  {provider.stale_projection_age_seconds !== null &&
+                  provider.stale_projection_age_seconds !== undefined ? (
+                    <small>
+                      Projection age:{' '}
+                      {formatDuration(provider.stale_projection_age_seconds)}
+                    </small>
+                  ) : null}
+                  {provider.hazard ? <small>Hazard: {provider.hazard}</small> : null}
+                  <small>Last attempt: {formatTime(provider.last_attempt_at)}</small>
+                  <small>Last success: {formatTime(provider.last_success_at)}</small>
+                  <small>
+                    Expected interval:{' '}
+                    {formatDuration(provider.expected_freshness_seconds)}
+                  </small>
+                  <small>Consecutive failures: {provider.consecutive_failures}</small>
+                  {provider.latest_error_code && (
+                    <small>Latest error: {provider.latest_error_code}</small>
                   )}
                 </article>
               ))}
+              {!loading && !error && providers.length === 0 && (
+                <p className="provider-empty">
+                  No provider freshness records are available.
+                </p>
+              )}
             </div>
-          )}
-        </section>
-        <section className="operations-section">
-          <h3>Record bounded review</h3>
-          <p>
-            This records that an evidence state was reviewed. It does not issue a public
-            warning or operational command.
-          </p>
-          {evidenceStateVersion ? (
-            <form className="review-form" onSubmit={submitReview}>
-              <small>State: {evidenceStateVersion}</small>
-              <textarea
-                aria-label="Review rationale"
-                value={rationale}
-                onChange={(event) => setRationale(event.target.value)}
-                maxLength={2000}
-                rows={3}
-                placeholder="Describe the evidence and freshness checked."
-              />
-              <button type="submit" disabled={!rationale.trim()}>
-                Record review
-              </button>
-            </form>
-          ) : (
-            <p>Run an evidence-backed investigation before recording a review.</p>
-          )}
-          {reviewStatus && <p role="status">{reviewStatus}</p>}
-        </section>
+          </section>
+        )}
+        {(section === 'all' || section === 'maintenance') && (
+          <section className="operations-section">
+            <div className="operations-heading">
+              <div>
+                <h3>Provider budget ledger</h3>
+                <p>Reserved work is visible before requests are sent upstream.</p>
+              </div>
+            </div>
+            {!loading && !error && budgets.length === 0 ? (
+              <p>No provider budget windows are active.</p>
+            ) : (
+              <div className="provider-budget-grid">
+                {budgets.map((budget) => (
+                  <article
+                    key={`${budget.provider_id}:${budget.budget_window}`}
+                    className="provider-budget"
+                  >
+                    <div>
+                      <strong>{budget.provider_id}</strong>
+                      <span>{budget.budget_window} window</span>
+                    </div>
+                    <small>
+                      Remaining: {budget.remaining_units} / {budget.limit_units} units
+                    </small>
+                    <small>
+                      Reserved/settled/released: {budget.reserved_units}/
+                      {budget.settled_units}/{budget.released_units}
+                    </small>
+                    <small>Resets: {formatTime(budget.reset_at)}</small>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+        {(section === 'all' || section === 'evidence-history') && (
+          <section className="operations-section">
+            <h3>Latest immutable snapshots</h3>
+            {!loading && !error && history.length === 0 ? (
+              <p>No source snapshots have been admitted in this runtime.</p>
+            ) : (
+              <div className="snapshot-list">
+                {history.map((snapshot) => (
+                  <article key={snapshot.snapshot_id} className="snapshot-card">
+                    <div>
+                      <strong>{snapshot.source_id}</strong>
+                      <span>
+                        {snapshot.content_available ? 'Content retained' : 'Tombstone'}
+                      </span>
+                    </div>
+                    <small>{formatTime(snapshot.effective_at)}</small>
+                    <code>{snapshot.payload_sha256}</code>
+                    <small>Rights record: {snapshot.rights_id}</small>
+                    {snapshot.content_deletion_reason && (
+                      <small>Deletion reason: {snapshot.content_deletion_reason}</small>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+        {(section === 'all' || section === 'evidence-history') && (
+          <section className="operations-section">
+            <h3>Record bounded review</h3>
+            <p>
+              This records that an evidence state was reviewed. It does not issue a
+              public warning or operational command.
+            </p>
+            {evidenceStateVersion ? (
+              <form className="review-form" onSubmit={submitReview}>
+                <small>State: {evidenceStateVersion}</small>
+                <textarea
+                  aria-label="Review rationale"
+                  value={rationale}
+                  onChange={(event) => setRationale(event.target.value)}
+                  maxLength={2000}
+                  rows={3}
+                  placeholder="Describe the evidence and freshness checked."
+                />
+                <button type="submit" disabled={!rationale.trim()}>
+                  Record review
+                </button>
+              </form>
+            ) : (
+              <p>Run an evidence-backed investigation before recording a review.</p>
+            )}
+            {reviewStatus && <p role="status">{reviewStatus}</p>}
+          </section>
+        )}
       </div>
     </aside>
   );

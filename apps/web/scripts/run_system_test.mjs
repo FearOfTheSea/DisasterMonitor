@@ -100,7 +100,29 @@ try {
     throw new Error('The rendered page identity did not match Disaster Monitor.');
   }
   await page.getByLabel('Active incidents monitoring').waitFor();
-  await page.getByText('View coverage', { exact: true }).click();
+  const mapViewport = await page.locator('.ol-viewport').elementHandle();
+  await page.getByRole('button', { name: 'Sources', exact: true }).click();
+  await page.locator('.source-catalog-card').first().waitFor();
+  const sourceScroll = page.locator('.source-catalog-scroll');
+  const savedScroll = await sourceScroll.evaluate((element) => {
+    element.scrollTop = 300;
+    return element.scrollTop;
+  });
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
+  if (!mapViewport || !(await mapViewport.evaluate((element) => element.isConnected))) {
+    throw new Error('Workspace navigation recreated the map.');
+  }
+  await page.getByRole('button', { name: 'Sources', exact: true }).click();
+  await page.locator('.source-catalog-card').first().waitFor();
+  if (savedScroll > 0) {
+    await page.waitForFunction(
+      (expected) =>
+        document.querySelector('.source-catalog-scroll')?.scrollTop === expected,
+      savedScroll,
+    );
+  }
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
+  await page.getByText('Coverage & limitations', { exact: true }).click();
   const incidentFixtures = [
     {
       coverageLabel: 'Earthquake',
@@ -155,7 +177,7 @@ try {
   await page
     .getByText('Flood fixture coverage is intentionally degraded.', { exact: true })
     .waitFor();
-  await page.getByText('View coverage', { exact: true }).click();
+  await page.getByText('Coverage & limitations', { exact: true }).click();
   await page.evaluate(() => {
     const rail = document.querySelector('.active-incidents-scroll');
     if (rail) rail.scrollTop = 0;
@@ -178,7 +200,7 @@ try {
   }
   const drawerScreenshotPath = process.env.SYSTEM_TEST_DRAWER_SCREENSHOT;
   if (drawerScreenshotPath) {
-    await page.getByRole('button', { name: 'Open assistant' }).click();
+    await page.getByRole('button', { name: 'Ask a question' }).click();
     await page.screenshot({ path: drawerScreenshotPath, fullPage: false });
     await page
       .getByRole('complementary', { name: 'Disaster Monitor assistant' })
@@ -203,7 +225,7 @@ try {
       throw new Error(`Incident selection did not remain on ${fixture.location}.`);
     }
   }
-  await page.getByRole('button', { name: 'Evidence operations' }).click();
+  await page.getByRole('button', { name: 'Saved', exact: true }).click();
   await page.getByRole('heading', { name: 'Incident watches' }).waitFor();
   await page.getByLabel('Watch disaster').selectOption('wildfire');
   await page.getByLabel('Watch scope').selectOption('worldwide');
@@ -254,11 +276,13 @@ try {
     .locator('.map-overlay')
     .getByText(/-10\.00,\s*-55\.00/)
     .waitFor();
+  await page.getByRole('button', { name: 'Saved', exact: true }).click();
+  await watchCard.getByRole('button', { name: 'Show timeline for Worldwide' }).click();
   await page.getByRole('button', { name: 'Mark timeline read' }).click();
   await watchCard.getByText('0 unread', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Close operations', exact: true }).click();
-  await page.getByRole('button', { name: 'Open assistant' }).click();
-  await page.getByLabel('Question').fill('Zoom into Japan.');
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
+  await page.getByRole('button', { name: 'Ask a question' }).click();
+  await page.getByRole('textbox', { name: 'Question' }).fill('Zoom into Japan.');
   const mapActionResponse = page.waitForResponse((response) =>
     response.url().endsWith('/api/v1/assistant'),
   );
@@ -280,7 +304,7 @@ try {
     .waitFor();
   await page.getByText(/138\.00/).waitFor();
   await page
-    .getByLabel('Question')
+    .getByRole('textbox', { name: 'Question' })
     .fill(
       'Please give me the latest information about the earthquake in Japan on August 5, 2026.',
     );
@@ -315,7 +339,7 @@ try {
     .first()
     .waitFor();
   await page
-    .getByLabel('Question')
+    .getByRole('textbox', { name: 'Question' })
     .fill(
       'How many fatalities were reported for the August 5, 2026 earthquake in Japan?',
     );
@@ -327,7 +351,7 @@ try {
     .waitFor();
   await page.getByRole('button', { name: 'New conversation' }).click();
   await page
-    .getByLabel('Question')
+    .getByRole('textbox', { name: 'Question' })
     .fill(
       'Show me the latest flood in Japan, show the last 24 hours, and monitor floods there every hour.',
     );
@@ -370,7 +394,7 @@ try {
   if (!(await page.getByRole('radio', { name: '24h' }).isChecked())) {
     throw new Error('The Operator Agent did not apply the 24-hour display window.');
   }
-  await page.getByRole('button', { name: 'Open assistant' }).click();
+  await page.getByRole('button', { name: 'Ask a question' }).click();
   const confirmWatchResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/v1/incident-watches') &&

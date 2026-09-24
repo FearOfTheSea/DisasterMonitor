@@ -81,8 +81,10 @@ function CoverageStatusIcon({ state }: { state: IncidentCoverageState }) {
 
 export function IncidentCoverageStatus({
   snapshot,
+  label = 'View coverage',
 }: {
   snapshot: ActiveIncidentsSnapshot;
+  label?: string;
 }) {
   const partial = snapshot.coverage.some(
     (item) => item.state === 'degraded' || item.state === 'unavailable',
@@ -96,7 +98,7 @@ export function IncidentCoverageStatus({
       <details className="coverage-disclosure">
         <summary>
           <span>{checkedNetworkCount} source networks checked</span>
-          <strong>View coverage</strong>
+          <strong>{label}</strong>
         </summary>
         <div className="coverage-heading-row">
           <div>

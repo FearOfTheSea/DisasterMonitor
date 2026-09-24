@@ -24,9 +24,24 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
     sensor,
     pair: comparisonForSensor(request, sensor),
   })).filter((value) => value.pair !== undefined);
-  if (comparisons.length === 0) return null;
+  if (comparisons.length === 0)
+    return (
+      <section
+        className="ground-imagery-section ground-imagery-comparisons"
+        aria-label="Ground comparisons"
+      >
+        <h3>Comparison stage</h3>
+        <p>
+          Validated before and after imagery is not available for this event yet.
+          Acquisition metadata and sensor status remain in the settings column.
+        </p>
+      </section>
+    );
   return (
-    <section className="ground-imagery-section" aria-label="Ground comparisons">
+    <section
+      className="ground-imagery-section ground-imagery-comparisons"
+      aria-label="Ground comparisons"
+    >
       <div className="ground-imagery-section-heading">
         <div>
           <h3>Matched before / after</h3>

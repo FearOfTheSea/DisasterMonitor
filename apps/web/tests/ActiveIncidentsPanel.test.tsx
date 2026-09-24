@@ -579,7 +579,9 @@ it('searches loaded locations and sources without changing provider coverage', a
       onRefresh={vi.fn()}
     />,
   );
-  const search = screen.getByRole('searchbox', { name: 'Search locations or sources' });
+  const search = screen.getByRole('searchbox', {
+    name: 'Search loaded events by location or source',
+  });
   await user.type(search, 'missing place');
   expect(
     screen.queryByRole('button', { name: 'Focus Japan on map' }),

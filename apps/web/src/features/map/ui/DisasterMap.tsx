@@ -14,8 +14,11 @@ import { cycloneMapLayers } from '@/features/map/model/cycloneMapLayers';
 import { DEFAULT_MAP_VIEW } from '@/features/map/model/mapView';
 import {
   createDefaultMapLayerState,
+  MAP_TIME_WINDOWS,
+  setMapTimeWindow,
   type MapLayerState,
 } from '@/features/map/model/mapLayerState';
+import { REGIONAL_PRESETS } from '@/features/map/model/regionalPresets';
 import { MapLayerControls } from '@/features/map/ui/MapLayerControls';
 import { fetchSatelliteImageryCatalog } from '@/features/map/api/satelliteImageryClient';
 import {
@@ -79,6 +82,8 @@ type DisasterMapProps = {
   onSatelliteStateChange?: (state: SatelliteMapState) => void;
   weatherAlerts?: WeatherAlertsSnapshot;
   focusRequestToken?: number;
+  basemap?: 'atlas' | 'streets';
+  onBasemapChange?: (basemap: 'atlas' | 'streets') => void;
 };
 
 export function DisasterMap({
@@ -99,10 +104,13 @@ export function DisasterMap({
   onSatelliteStateChange,
   weatherAlerts,
   focusRequestToken = 0,
+  basemap = 'atlas',
+  onBasemapChange,
 }: DisasterMapProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const adapter = useRef<OpenLayersMapAdapter | null>(null);
   const fittedAreaKey = useRef<string | undefined>(undefined);
+  const shouldFitInitialWorld = useRef(false);
   const [uncontrolledLayerState, setUncontrolledLayerState] = useState(
     createDefaultMapLayerState,
   );
@@ -110,6 +118,34 @@ export function DisasterMap({
   const changeLayerState = onLayerStateChange ?? setUncontrolledLayerState;
   const satelliteEnabled = layerState.visibility['satellite-imagery'];
   const [clusterIncidentIds, setClusterIncidentIds] = useState<string[]>([]);
+  const [atlasError, setAtlasError] = useState(false);
+  const [atlasLoading, setAtlasLoading] = useState(true);
+  const [regionsOpen, setRegionsOpen] = useState(false);
+  const regionsRef = useRef<HTMLDivElement>(null);
+  const regionsButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!regionsOpen) return;
+    const dismiss = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (event.key === 'Escape') {
+          setRegionsOpen(false);
+          regionsButtonRef.current?.focus();
+        }
+      } else if (
+        event.target instanceof Node &&
+        !regionsRef.current?.contains(event.target)
+      ) {
+        setRegionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('keydown', dismiss);
+    return () => {
+      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('keydown', dismiss);
+    };
+  }, [regionsOpen]);
   const [uncontrolledSatelliteState, setUncontrolledSatelliteState] =
     useState<SatelliteMapState>(() => {
       const source = SATELLITE_IMAGERY_SOURCES.find(
@@ -209,8 +245,22 @@ export function DisasterMap({
       onViewChange: handleViewChange,
       onSelectIncident,
       onSelectIncidentCluster: setClusterIncidentIds,
+      onAtlasError: () => {
+        setAtlasError(true);
+        setAtlasLoading(false);
+      },
+      onAtlasReady: () => setAtlasLoading(false),
     });
+    const parameters = new URLSearchParams(window.location.search);
+    shouldFitInitialWorld.current = !['c', 'z', 'r'].some((key) => parameters.has(key));
+    const fitTimer = window.setTimeout(() => {
+      if (shouldFitInitialWorld.current) {
+        adapter.current?.fitInitialWorld();
+        shouldFitInitialWorld.current = false;
+      }
+    }, 50);
     return () => {
+      window.clearTimeout(fitTimer);
       adapter.current?.destroy();
       adapter.current = null;
       fittedAreaKey.current = undefined;
@@ -222,7 +272,13 @@ export function DisasterMap({
     if (!target || typeof ResizeObserver === 'undefined') {
       return;
     }
-    const observer = new ResizeObserver(() => adapter.current?.updateSize());
+    const observer = new ResizeObserver(() => {
+      adapter.current?.updateSize();
+      if (shouldFitInitialWorld.current) {
+        adapter.current?.fitInitialWorld();
+        shouldFitInitialWorld.current = false;
+      }
+    });
     observer.observe(target);
     return () => observer.disconnect();
   }, []);
@@ -254,6 +310,10 @@ export function DisasterMap({
   useEffect(() => {
     adapter.current?.setLayerVisibility(layerState.visibility);
   }, [layerState.visibility]);
+
+  useEffect(() => {
+    adapter.current?.setBasemap(basemap);
+  }, [basemap]);
 
   useEffect(() => {
     adapter.current?.setSelectedIncident(selectedIncidentId);
@@ -371,12 +431,43 @@ export function DisasterMap({
   return (
     <>
       <div className="map-canvas" ref={mapElement} aria-label="Interactive map" />
+      <div className="map-top-controls">
+        <div className="map-region-control" ref={regionsRef}>
+          <button
+            ref={regionsButtonRef}
+            type="button"
+            aria-expanded={regionsOpen}
+            onClick={() => setRegionsOpen((current) => !current)}
+          >
+            Regions
+          </button>
+          {regionsOpen && (
+            <div className="map-region-menu" aria-label="Regions">
+              {REGIONAL_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  aria-pressed={regionalSelection === preset.id}
+                  onClick={() => {
+                    onRegionalSelectionChange?.(preset.id);
+                    setRegionsOpen(false);
+                  }}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
       <MapLayerControls
         state={layerState}
         onChange={changeLayerState}
         runtimeDetails={runtimeDetails}
-        regionalSelection={regionalSelection}
-        onRegionalSelectionChange={onRegionalSelectionChange}
+        showTimeControls={false}
+        basemap={basemap}
+        onBasemapChange={onBasemapChange}
+        atlasIsGeneralized={(view?.zoom ?? 0) > 5}
         supplemental={weatherAlertContext}
       >
         <SatelliteImageryControls
@@ -390,6 +481,45 @@ export function DisasterMap({
           onOpacityChange={setSatelliteOpacity}
         />
       </MapLayerControls>
+      {atlasError && basemap === 'atlas' ? (
+        <div className="atlas-error" role="alert">
+          Atlas geography could not load. Event records remain available.{' '}
+          <button type="button" onClick={() => onBasemapChange?.('streets')}>
+            Switch to Streets
+          </button>
+        </div>
+      ) : null}
+      {atlasLoading && basemap === 'atlas' ? (
+        <div className="atlas-loading" role="status">
+          Loading atlas geography…
+        </div>
+      ) : null}
+      {basemap === 'atlas' ? (
+        <a
+          className="atlas-attribution"
+          href="https://www.naturalearthdata.com/about/terms-of-use/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Made with Natural Earth
+        </a>
+      ) : null}
+      <fieldset className="map-display-time">
+        <legend>Display time</legend>
+        <div>
+          {MAP_TIME_WINDOWS.map((window) => (
+            <label key={window}>
+              <input
+                type="radio"
+                name="map-bottom-display-time"
+                checked={layerState.timeWindow === window}
+                onChange={() => changeLayerState(setMapTimeWindow(layerState, window))}
+              />
+              <span>{window}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <IncidentClusterPicker
         incidents={clusteredIncidents}
         onClose={() => setClusterIncidentIds([])}

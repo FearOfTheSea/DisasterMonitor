@@ -651,3 +651,26 @@
 .review-form button {
   justify-self: start;
 }
+.secondary-workspace .operations-heading h3 {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+.secondary-workspace .provider-grid,
+.secondary-workspace .provider-budget-grid,
+.secondary-workspace .snapshot-list {
+  display: grid;
+  gap: 0;
+}
+.secondary-workspace .provider-status,
+.secondary-workspace .provider-budget,
+.secondary-workspace .snapshot-card {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 16px 0;
+}
+.secondary-workspace .operations-panel button {
+  min-height: 36px;
+}

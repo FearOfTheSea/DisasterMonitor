@@ -212,3 +212,54 @@
 .incident-details[open] summary {
   color: var(--accent);
 }
+
+.observatory-explore .incident-data-status {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  margin: 0 16px 12px;
+  min-height: 48px;
+  padding: 6px 0;
+}
+.observatory-explore .incident-data-status strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+.observatory-explore .incident-data-status small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.observatory-explore .incident-data-status button {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--accent);
+  font-size: 11px;
+  min-height: 32px;
+  padding: 4px 8px;
+}
+.observatory-explore .incident-search {
+  margin: 0 16px 12px;
+}
+.observatory-explore .incident-search input {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  border-radius: 8px;
+  min-height: 40px;
+  padding-block: 8px;
+}
+.observatory-explore .incident-query-controls {
+  gap: 6px;
+  margin: 0 16px 12px;
+}
+.observatory-explore .incident-query-controls select {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  min-height: 36px;
+}
+.observatory-explore .incident-clear-filters {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--accent);
+}

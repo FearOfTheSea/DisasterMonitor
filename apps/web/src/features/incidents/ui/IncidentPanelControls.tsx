@@ -142,8 +142,8 @@ export function IncidentPanelControls({
         </svg>
         <input
           type="search"
-          aria-label="Search locations or sources"
-          placeholder="Search a place or event"
+          aria-label="Search loaded events by location or source"
+          placeholder="Search loaded events"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
         />

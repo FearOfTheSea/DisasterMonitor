@@ -41,7 +41,7 @@ services:
       - path: ./apps/api/.env
         required: false
     environment:
-      ALLOWED_ORIGINS: http://localhost:3000
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: qwen3:4b-instruct-2507-q4_K_M
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor

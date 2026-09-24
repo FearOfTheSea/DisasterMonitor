@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import {
   MAP_LAYER_REGISTRY,
@@ -39,6 +39,10 @@ type MapLayerControlsProps = {
   supplemental?: ReactNode;
   regionalSelection?: RegionalSelection;
   onRegionalSelectionChange?: (preset: RegionalPresetId) => void;
+  showTimeControls?: boolean;
+  basemap?: 'atlas' | 'streets';
+  onBasemapChange?: (basemap: 'atlas' | 'streets') => void;
+  atlasIsGeneralized?: boolean;
 };
 
 const PRESET_LABELS: Record<MapLayerPreset, string> = {
@@ -59,7 +63,13 @@ export function MapLayerControls({
   supplemental,
   regionalSelection = 'custom',
   onRegionalSelectionChange,
+  showTimeControls = true,
+  basemap = 'atlas',
+  onBasemapChange,
+  atlasIsGeneralized = false,
 }: MapLayerControlsProps) {
+  const controlRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [supplementalExpanded, setSupplementalExpanded] = useState(false);
   const [explainedLayerId, setExplainedLayerId] = useState<MapLayerId>();
@@ -70,12 +80,37 @@ export function MapLayerControls({
     ? runtimeDetails?.[explainedLayerId]
     : undefined;
 
+  useEffect(() => {
+    if (!expanded) return;
+    const dismiss = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (event.key === 'Escape') {
+          setExpanded(false);
+          triggerRef.current?.focus();
+        }
+      } else if (
+        event.target instanceof Node &&
+        !controlRef.current?.contains(event.target)
+      ) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('keydown', dismiss);
+    return () => {
+      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('keydown', dismiss);
+    };
+  }, [expanded]);
+
   return (
     <section
+      ref={controlRef}
       className={`map-layer-controls${expanded ? ' map-layer-controls-expanded' : ''}`}
       aria-label="Map layers and display time"
     >
       <button
+        ref={triggerRef}
         className="map-layer-toggle"
         type="button"
         aria-label="Layers"
@@ -93,7 +128,7 @@ export function MapLayerControls({
         >
           <path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
         </svg>
-        <span>Map options</span>
+        <span>Layers</span>
         <svg
           className="disclosure-chevron"
           viewBox="0 0 24 24"
@@ -114,6 +149,35 @@ export function MapLayerControls({
             </div>
             <output>{state.timeWindow}</output>
           </div>
+          {onBasemapChange ? (
+            <fieldset className="basemap-switcher">
+              <legend>Basemap</legend>
+              <div>
+                <button
+                  type="button"
+                  aria-pressed={basemap === 'atlas'}
+                  onClick={() => onBasemapChange('atlas')}
+                >
+                  Atlas
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={basemap === 'streets'}
+                  onClick={() => onBasemapChange('streets')}
+                >
+                  Streets
+                </button>
+              </div>
+              {basemap === 'atlas' && atlasIsGeneralized ? (
+                <small>
+                  Atlas geography is generalized at this scale.{' '}
+                  <button type="button" onClick={() => onBasemapChange('streets')}>
+                    Switch to Streets
+                  </button>
+                </small>
+              ) : null}
+            </fieldset>
+          ) : null}
           <div className="map-layer-presets" aria-label="Layer presets">
             {MAP_LAYER_PRESETS.map((preset) => (
               <button
@@ -148,26 +212,28 @@ export function MapLayerControls({
               </small>
             </fieldset>
           ) : null}
-          <fieldset className="map-time-filter">
-            <legend>Display time</legend>
-            <div>
-              {MAP_TIME_WINDOWS.map((window) => (
-                <label key={window}>
-                  <input
-                    type="radio"
-                    name="map-display-time"
-                    value={window}
-                    checked={state.timeWindow === window}
-                    onChange={() => onChange(setMapTimeWindow(state, window))}
-                  />
-                  <span>{window}</span>
-                </label>
-              ))}
-            </div>
-            <small>
-              Changes displayed records only; provider coverage is unchanged.
-            </small>
-          </fieldset>
+          {showTimeControls && (
+            <fieldset className="map-time-filter">
+              <legend>Display time</legend>
+              <div>
+                {MAP_TIME_WINDOWS.map((window) => (
+                  <label key={window}>
+                    <input
+                      type="radio"
+                      name="map-display-time"
+                      value={window}
+                      checked={state.timeWindow === window}
+                      onChange={() => onChange(setMapTimeWindow(state, window))}
+                    />
+                    <span>{window}</span>
+                  </label>
+                ))}
+              </div>
+              <small>
+                Changes displayed records only; provider coverage is unchanged.
+              </small>
+            </fieldset>
+          )}
           <div className="map-layer-list">
             {MAP_LAYER_REGISTRY.map((layer) => {
               const runtime = runtimeDetails?.[layer.id];

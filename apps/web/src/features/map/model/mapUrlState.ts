@@ -22,6 +22,7 @@ import type { MapView } from '@/shared/types/assistant';
 
 export type MapUrlState = {
   view: MapView;
+  basemap: 'atlas' | 'streets';
   regionalPreset: RegionalSelection;
   selectedIncidentId?: string;
   layerState: MapLayerState;
@@ -58,7 +59,7 @@ function validCenter(value: string | null): [number, number] | undefined {
 
 function validZoom(value: string | null): number | undefined {
   const zoom = Number(value);
-  return value !== null && Number.isFinite(zoom) && zoom >= 2 && zoom <= 18
+  return value !== null && Number.isFinite(zoom) && zoom >= 0 && zoom <= 18
     ? zoom
     : undefined;
 }
@@ -99,6 +100,7 @@ export function serializeMapUrlState(state: MapUrlState): string {
     `${fixed(state.view.centerLatitude, 4)},${fixed(state.view.centerLongitude, 4)}`,
   );
   parameters.set('z', fixed(state.view.zoom, 1));
+  if (state.basemap === 'streets') parameters.set('b', 'streets');
   parameters.set('r', state.regionalPreset);
   if (state.selectedIncidentId && INCIDENT_ID.test(state.selectedIncidentId)) {
     parameters.set('i', state.selectedIncidentId);
@@ -150,6 +152,7 @@ export function parseMapUrlState(search: string, defaults: MapUrlState): MapUrlS
       zoom: zoom ?? regionView.zoom,
     },
     regionalPreset: region,
+    basemap: parameters.get('b') === 'streets' ? 'streets' : 'atlas',
     selectedIncidentId:
       incidentId !== null && INCIDENT_ID.test(incidentId)
         ? incidentId
@@ -214,13 +217,20 @@ export function createMapUrlStateHistory(
         timer = undefined;
         pending = undefined;
         if (!next || !started) return;
-        const query = serializeMapUrlState(next);
+        const parameters = new URLSearchParams(targetWindow.location.search);
+        for (const key of ['c', 'z', 'b', 'r', 'i', 'l', 't', 's', 'o'])
+          parameters.delete(key);
+        for (const [key, value] of new URLSearchParams(serializeMapUrlState(next))) {
+          parameters.set(key, value);
+        }
+        const query = parameters.toString();
         if (query === targetWindow.location.search.replace(/^\?/, '')) return;
-        targetWindow.history.pushState(
-          null,
-          '',
-          `${targetWindow.location.pathname}?${query}${targetWindow.location.hash}`,
-        );
+        const url = `${targetWindow.location.pathname}?${query}${targetWindow.location.hash}`;
+        const mapHidden =
+          (parameters.get('w') !== null && parameters.get('w') !== 'explore') ||
+          parameters.get('pane') === 'ground';
+        if (mapHidden) targetWindow.history.replaceState(null, '', url);
+        else targetWindow.history.pushState(null, '', url);
       }, debounceMs);
     },
     stop() {

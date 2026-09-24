@@ -612,3 +612,47 @@
   height: 16px;
   width: 16px;
 }
+
+.observatory-explore .assistant-panel-header {
+  padding: 20px 24px;
+}
+.observatory-explore .assistant-panel-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
+}
+.observatory-explore .message-list {
+  background: var(--surface);
+}
+.observatory-explore .message-user {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.observatory-explore .assistant-form {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.observatory-explore .assistant-submit {
+  color: var(--ocean);
+}
+.assistant-event-context {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+}
+.assistant-event-context button {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font-size: 12px;
+  min-height: 28px;
+  padding: 2px;
+}

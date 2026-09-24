@@ -15,6 +15,19 @@ from disaster_monitor.domain.disaster import (
 )
 
 
+def _distance_direction(text: str, match: re.Match[str]) -> bool:
+    if match.group(0).upper() not in {"NE", "NW", "SE", "SW"}:
+        return False
+    return bool(
+        re.search(
+            r"\b(?:km|mi|miles|kilometres|kilometers)\s+$",
+            text[: match.start()],
+            re.I,
+        )
+        and re.match(r"\s+of\b", text[match.end() :], re.I)
+    )
+
+
 class StaticCountryCatalog:
     """Resolve aliases from packaged or atomically promoted versioned metadata."""
 
@@ -146,6 +159,8 @@ class StaticCountryCatalog:
         ]
         matches.sort(key=lambda match: (match.start(), -len(match.group(0))))
         for match in matches:
+            if _distance_direction(text, match):
+                continue
             for country in term_countries.get(match.group(0).casefold(), ()):
                 if country.alpha3_code not in found_codes:
                     found.append(country)

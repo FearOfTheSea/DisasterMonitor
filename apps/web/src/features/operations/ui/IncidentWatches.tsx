@@ -309,7 +309,7 @@ export function IncidentWatches({
           {error}
         </div>
       ) : null}
-      {!loading && watches.length === 0 ? (
+      {!loading && !error && watches.length === 0 ? (
         <div className="incident-watch-empty">
           <strong>No incident watches have been created.</strong>
           <p>Create one bounded monitoring scope to begin scheduled source checks.</p>

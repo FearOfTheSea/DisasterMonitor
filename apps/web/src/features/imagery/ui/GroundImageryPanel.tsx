@@ -22,7 +22,6 @@ import type {
 } from '@/shared/api/generated/assistant';
 import { API_BASE_URL } from '@/shared/config/runtime';
 import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
-import { PanelCloseButton } from '@/shared/ui/PanelCloseButton';
 
 type GroundImageryPanelProps = {
   incidentId: string;
@@ -62,214 +61,240 @@ export function GroundImageryPanel({
           <h2 id="ground-imagery-heading">Ground view</h2>
           <p>{incidentLabel}</p>
         </div>
-        <PanelCloseButton label="Close Ground view" onClick={onClose} />
+        <button type="button" className="ground-return-button" onClick={onClose}>
+          ← Return to event
+        </button>
       </header>
 
       <div className="ground-imagery-scroll">
-        {loadState === 'loading' ? (
-          <div className="ground-imagery-loading" role="status" aria-live="polite">
-            <span className="loading-indicator" />
-            <div>
-              <strong>Searching Sentinel acquisitions</strong>
-              <span>
-                Resolving event geography and checking radar and optical catalogs.
-              </span>
-              {searchIsSlow ? (
-                <p>
-                  Copernicus Data Space is taking longer than usual. Ground view will
-                  return separate partial sensor statuses if a bounded provider timeout
-                  is reached.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="ground-imagery-error" role="alert">
-            <strong>Ground view unavailable</strong>
-            <p>{error}</p>
-            <button type="button" onClick={() => void load()}>
-              Try again
-            </button>
-          </div>
-        ) : null}
-
-        {readiness ? (
-          <section className="ground-imagery-section ground-imagery-readiness">
-            <div className="ground-imagery-section-heading">
+        <div className="ground-settings">
+          {loadState === 'loading' ? (
+            <div className="ground-imagery-loading" role="status" aria-live="polite">
+              <span className="loading-indicator" />
               <div>
-                <h3>Availability</h3>
-                <p>{readiness.detail}</p>
+                <strong>Searching Sentinel acquisitions</strong>
+                <span>
+                  Resolving event geography and checking radar and optical catalogs.
+                </span>
+                {searchIsSlow ? (
+                  <p>
+                    Copernicus Data Space is taking longer than usual. Ground view will
+                    return separate partial sensor statuses if a bounded provider
+                    timeout is reached.
+                  </p>
+                ) : null}
               </div>
-              <span className={`ground-imagery-status ${statusClass(readiness.state)}`}>
-                {labelImageryState(readiness.state)}
-              </span>
             </div>
-            {readiness.state === 'credentials_required' ? (
-              <p className="ground-imagery-note">
-                Catalog discovery is public. Rendering a validated COG requires the
-                server’s CDSE processing credentials.
-              </p>
-            ) : null}
-          </section>
-        ) : null}
+          ) : null}
 
-        {request ? (
-          <>
-            <section className="ground-imagery-section">
+          {error ? (
+            <div className="ground-imagery-error" role="alert">
+              <strong>Ground view unavailable</strong>
+              <p>{error}</p>
+              <button type="button" onClick={() => void load()}>
+                Try again
+              </button>
+            </div>
+          ) : null}
+
+          {readiness ? (
+            <section className="ground-imagery-section ground-imagery-readiness">
               <div className="ground-imagery-section-heading">
                 <div>
-                  <h3>Region basis</h3>
-                  <p>Impact geography is separate from the satellite footprint.</p>
+                  <h3>Availability</h3>
+                  <p>{readiness.detail}</p>
                 </div>
                 <span
-                  className={`ground-imagery-status ${statusClass(request.region.state)}`}
+                  className={`ground-imagery-status ${statusClass(readiness.state)}`}
                 >
-                  {labelImageryState(request.region.state)}
+                  {labelImageryState(readiness.state)}
                 </span>
               </div>
-              {request.region.region ? (
+              {readiness.state === 'credentials_required' ? (
+                <p className="ground-imagery-note">
+                  Catalog discovery is public. Rendering a validated COG requires the
+                  server’s CDSE processing credentials.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
+          {request ? (
+            <>
+              <section className="ground-imagery-section">
+                <div className="ground-imagery-section-heading">
+                  <div>
+                    <h3>Region basis</h3>
+                    <p>Impact geography is separate from the satellite footprint.</p>
+                  </div>
+                  <span
+                    className={`ground-imagery-status ${statusClass(request.region.state)}`}
+                  >
+                    {labelImageryState(request.region.state)}
+                  </span>
+                </div>
+                {request.region.region ? (
+                  <dl className="ground-imagery-facts">
+                    <div>
+                      <dt>Association</dt>
+                      <dd>{request.region.region.association.replaceAll('_', ' ')}</dd>
+                    </div>
+                    <div>
+                      <dt>Region version</dt>
+                      <dd>
+                        {request.region.region.region_id} · v
+                        {request.region.region.version}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Source evidence</dt>
+                      <dd>
+                        {request.region.region.source_footprints.length > 0
+                          ? request.region.region.source_footprints
+                              .map((item) => String(item.source_kind ?? 'source'))
+                              .join(', ')
+                          : 'Not recorded'}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <div className="ground-imagery-empty">
+                    <strong>Choose an inspection region</strong>
+                    <p>
+                      {request.region.warnings?.[0] ??
+                        'There is not enough defensible event geography to search imagery.'}
+                    </p>
+                  </div>
+                )}
+                {request.region.warnings
+                  ?.slice(request.region.region ? 0 : 1)
+                  .map((warning) => (
+                    <p className="ground-imagery-note" key={warning}>
+                      {warning}
+                    </p>
+                  ))}
+              </section>
+
+              <section className="ground-imagery-section">
+                <div className="ground-imagery-section-heading">
+                  <div>
+                    <h3>Temporal basis</h3>
+                    <p>Exact sensing times remain visible beside operator labels.</p>
+                  </div>
+                  <span className="ground-imagery-status is-neutral">
+                    {request.temporal_plan.onset_precision
+                      ? request.temporal_plan.onset_precision.replaceAll('_', ' ')
+                      : 'Onset unknown'}
+                  </span>
+                </div>
                 <dl className="ground-imagery-facts">
                   <div>
-                    <dt>Association</dt>
-                    <dd>{request.region.region.association.replaceAll('_', ' ')}</dd>
+                    <dt>Reference</dt>
+                    <dd>{formatImageryTime(request.temporal_plan.reference_time)}</dd>
                   </div>
                   <div>
-                    <dt>Region version</dt>
+                    <dt>Impact onset</dt>
                     <dd>
-                      {request.region.region.region_id} · v
-                      {request.region.region.version}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Source evidence</dt>
-                    <dd>
-                      {request.region.region.source_footprints.length > 0
-                        ? request.region.region.source_footprints
-                            .map((item) => String(item.source_kind ?? 'source'))
-                            .join(', ')
-                        : 'Not recorded'}
+                      {request.temporal_plan.impact_start_earliest
+                        ? `${formatImageryTime(request.temporal_plan.impact_start_earliest)} → ${formatImageryTime(request.temporal_plan.impact_start_latest)}`
+                        : 'Unknown; roles are not labelled before or after impact.'}
                     </dd>
                   </div>
                 </dl>
-              ) : (
-                <div className="ground-imagery-empty">
-                  <strong>Choose an inspection region</strong>
-                  <p>
-                    {request.region.warnings?.[0] ??
-                      'There is not enough defensible event geography to search imagery.'}
-                  </p>
-                </div>
-              )}
-              {request.region.warnings
-                ?.slice(request.region.region ? 0 : 1)
-                .map((warning) => (
-                  <p className="ground-imagery-note" key={warning}>
-                    {warning}
-                  </p>
-                ))}
-            </section>
+              </section>
 
-            <section className="ground-imagery-section">
-              <div className="ground-imagery-section-heading">
-                <div>
-                  <h3>Temporal basis</h3>
-                  <p>Exact sensing times remain visible beside operator labels.</p>
-                </div>
-                <span className="ground-imagery-status is-neutral">
-                  {request.temporal_plan.onset_precision
-                    ? request.temporal_plan.onset_precision.replaceAll('_', ' ')
-                    : 'Onset unknown'}
-                </span>
-              </div>
-              <dl className="ground-imagery-facts">
-                <div>
-                  <dt>Reference</dt>
-                  <dd>{formatImageryTime(request.temporal_plan.reference_time)}</dd>
-                </div>
-                <div>
-                  <dt>Impact onset</dt>
-                  <dd>
-                    {request.temporal_plan.impact_start_earliest
-                      ? `${formatImageryTime(request.temporal_plan.impact_start_earliest)} → ${formatImageryTime(request.temporal_plan.impact_start_latest)}`
-                      : 'Unknown; roles are not labelled before or after impact.'}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-
-            <section className="ground-imagery-section ground-imagery-sensors">
-              <div className="ground-imagery-section-heading">
-                <div>
-                  <h3>Independent sensor views</h3>
-                  <p>Radar and optical availability are assessed separately.</p>
-                </div>
-                <span className={`ground-imagery-status ${statusClass(request.state)}`}>
-                  {labelImageryState(request.state)}
-                </span>
-              </div>
-              {DISPLAY_SENSORS.map((sensor) => (
-                <SensorCard
-                  key={sensor}
-                  sensor={sensor}
-                  request={request}
-                  renderingReady={readiness?.state === 'ready'}
-                  action={action}
-                  onPrepare={handlePrepare}
-                />
-              ))}
-            </section>
-
-            <GroundComparisons request={request} />
-
-            {request.jobs && request.jobs.length > 0 ? (
-              <section
-                className="ground-imagery-section"
-                aria-label="Ground preparation jobs"
-              >
+              <section className="ground-imagery-section ground-imagery-sensors">
                 <div className="ground-imagery-section-heading">
                   <div>
-                    <h3>Preparation jobs</h3>
-                    <p>Leased work, retries, and diagnostics remain visible.</p>
+                    <h3>Independent sensor views</h3>
+                    <p>Radar and optical availability are assessed separately.</p>
                   </div>
-                  <span className="ground-imagery-status is-neutral">
-                    {request.jobs.length} queued or retained
+                  <span
+                    className={`ground-imagery-status ${statusClass(request.state)}`}
+                  >
+                    {labelImageryState(request.state)}
                   </span>
                 </div>
-                <div className="ground-imagery-job-list">
-                  {request.jobs.map((job) => (
-                    <GroundPreparationJob key={job.job_id} job={job} />
-                  ))}
-                </div>
+                {DISPLAY_SENSORS.map((sensor) => (
+                  <SensorCard
+                    key={sensor}
+                    sensor={sensor}
+                    request={request}
+                    renderingReady={readiness?.state === 'ready'}
+                    action={action}
+                    onPrepare={handlePrepare}
+                  />
+                ))}
               </section>
-            ) : null}
 
-            <section className="ground-imagery-actions">
-              <button type="button" onClick={handleRefresh} disabled={Boolean(action)}>
-                {action === 'refresh' ? 'Refreshing…' : 'Refresh catalog'}
-              </button>
-              <button type="button" onClick={handleWatch} disabled={Boolean(action)}>
-                {action === 'watch'
-                  ? 'Saving…'
-                  : request.watch_enabled
-                    ? 'Stop watching'
-                    : 'Watch for new captures'}
-              </button>
-              {request.watch_enabled ? (
-                <p>Next check: {formatImageryTime(request.next_check_at)}</p>
+              {request.jobs && request.jobs.length > 0 ? (
+                <section
+                  className="ground-imagery-section"
+                  aria-label="Ground preparation jobs"
+                >
+                  <div className="ground-imagery-section-heading">
+                    <div>
+                      <h3>Preparation jobs</h3>
+                      <p>Leased work, retries, and diagnostics remain visible.</p>
+                    </div>
+                    <span className="ground-imagery-status is-neutral">
+                      {request.jobs.length} queued or retained
+                    </span>
+                  </div>
+                  <div className="ground-imagery-job-list">
+                    {request.jobs.map((job) => (
+                      <GroundPreparationJob key={job.job_id} job={job} />
+                    ))}
+                  </div>
+                </section>
               ) : null}
-            </section>
-          </>
-        ) : null}
 
-        <p className="ground-imagery-provenance">
-          Request {request?.request_id ?? incidentId} · version{' '}
-          {request?.request_version ?? '—'}
-          {request
-            ? ` · reference ${formatImageryTime(request.temporal_plan.reference_time)}`
-            : ''}
-        </p>
+              <section className="ground-imagery-actions">
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={Boolean(action)}
+                >
+                  {action === 'refresh' ? 'Refreshing…' : 'Refresh catalog'}
+                </button>
+                <button type="button" onClick={handleWatch} disabled={Boolean(action)}>
+                  {action === 'watch'
+                    ? 'Saving…'
+                    : request.watch_enabled
+                      ? 'Stop watching'
+                      : 'Watch for new captures'}
+                </button>
+                {request.watch_enabled ? (
+                  <p>Next check: {formatImageryTime(request.next_check_at)}</p>
+                ) : null}
+              </section>
+            </>
+          ) : null}
+
+          <p className="ground-imagery-provenance">
+            Request {request?.request_id ?? incidentId} · version{' '}
+            {request?.request_version ?? '—'}
+            {request
+              ? ` · reference ${formatImageryTime(request.temporal_plan.reference_time)}`
+              : ''}
+          </p>
+        </div>
+        <div className="ground-stage">
+          {request ? (
+            <GroundComparisons request={request} />
+          ) : (
+            <section
+              className="ground-imagery-section ground-imagery-comparisons"
+              aria-label="Ground comparisons"
+            >
+              <h3>Comparison stage</h3>
+              <p>
+                Acquisition metadata and imagery status will appear as the event
+                inspection becomes available.
+              </p>
+            </section>
+          )}
+        </div>
       </div>
     </aside>
   );

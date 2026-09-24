@@ -135,6 +135,8 @@ class BaseEventPolicy:
         candidates: tuple[DisasterEvent, ...],
         query: DisasterQuery,
         now: datetime,
+        *,
+        apply_place_filters: bool = True,
     ) -> list[DisasterEvent]:
         window_start, window_end = retrieval_time_bounds(
             query, now=now, end_margin=timedelta(minutes=5)
@@ -150,15 +152,15 @@ class BaseEventPolicy:
                 or event.has_provider_id(query.discriminator("event_id") or "")
             )
         ]
-        if query.prefecture:
+        if apply_place_filters and query.prefecture:
             filtered = [
                 event for event in filtered if location_matches(event, query.prefecture)
             ]
-        if query.city:
+        if apply_place_filters and query.city:
             filtered = [
                 event for event in filtered if location_matches(event, query.city)
             ]
-        if query.location_hint:
+        if apply_place_filters and query.location_hint:
             filtered = [
                 event
                 for event in filtered
@@ -190,11 +192,27 @@ class BaseEventPolicy:
             event_observation_key(identity.event): identity
             for identity in identity_result.physical_events
         }
+        place_filters = (query.prefecture, query.city, query.location_hint)
+        eligible = self._filtered(
+            tuple(identity.event for identity in identity_result.physical_events),
+            query,
+            now,
+            apply_place_filters=False,
+        )
         ranked = sorted(
-            self._filtered(
-                tuple(identity.event for identity in identity_result.physical_events),
-                query,
-                now,
+            (
+                event
+                for event in eligible
+                if all(
+                    value is None
+                    or any(
+                        location_matches(observation, value)
+                        for observation in identity_by_observation[
+                            event_observation_key(event)
+                        ].observations
+                    )
+                    for value in place_filters
+                )
             ),
             key=lambda item: (self.rank(item, query, now), event_observation_key(item)),
             reverse=True,

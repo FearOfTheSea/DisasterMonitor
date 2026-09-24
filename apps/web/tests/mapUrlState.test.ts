@@ -11,6 +11,7 @@ import { DEFAULT_MAP_VIEW } from '@/features/map/model/mapView';
 
 const DEFAULTS: MapUrlState = {
   view: DEFAULT_MAP_VIEW,
+  basemap: 'atlas',
   regionalPreset: 'custom',
   selectedIncidentId: undefined,
   layerState: createDefaultMapLayerState(),
@@ -27,6 +28,7 @@ describe('bounded map URL state', () => {
   it('round-trips every supported presentation field with stable parameters', () => {
     const state: MapUrlState = {
       view: { centerLatitude: 48.8566, centerLongitude: 2.3522, zoom: 5.5 },
+      basemap: 'atlas',
       regionalPreset: 'europe',
       selectedIncidentId: 'usgs:event-1',
       layerState: {
@@ -68,6 +70,21 @@ describe('bounded map URL state', () => {
     expect(parseMapUrlState('', DEFAULTS)).toEqual(DEFAULTS);
   });
 
+  it('restores Atlas by default and keeps workspace parameters during map changes', async () => {
+    vi.useFakeTimers();
+    expect(parseMapUrlState('?c=0,0&z=1.3', DEFAULTS).view.zoom).toBe(1.3);
+    expect(parseMapUrlState('?b=streets', DEFAULTS).basemap).toBe('streets');
+    expect(parseMapUrlState('?b=invalid', DEFAULTS).basemap).toBe('atlas');
+    window.history.replaceState(null, '', '/?w=sources&custom=retained');
+    const history = createMapUrlStateHistory(DEFAULTS, vi.fn(), window, 10);
+    history.start();
+    history.schedule({ ...DEFAULTS, basemap: 'atlas' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(new URLSearchParams(window.location.search).get('w')).toBe('sources');
+    expect(new URLSearchParams(window.location.search).get('custom')).toBe('retained');
+    history.stop();
+  });
+
   it('debounces history updates and restores parsed state on popstate', async () => {
     vi.useFakeTimers();
     const restored = vi.fn();
@@ -92,6 +109,20 @@ describe('bounded map URL state', () => {
     expect(restored).toHaveBeenLastCalledWith(
       expect.objectContaining({ regionalPreset: 'global' }),
     );
+    history.stop();
+  });
+
+  it('updates Ground map context without adding a second Ground history entry', async () => {
+    vi.useFakeTimers();
+    window.history.replaceState(null, '', '/?pane=ground&i=usgs:example');
+    const initialLength = window.history.length;
+    const history = createMapUrlStateHistory(DEFAULTS, vi.fn(), window, 10);
+    history.start();
+    history.schedule({ ...DEFAULTS, selectedIncidentId: 'usgs:example' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(window.history.length).toBe(initialLength);
+    expect(new URLSearchParams(window.location.search).get('pane')).toBe('ground');
+    expect(new URLSearchParams(window.location.search).get('i')).toBe('usgs:example');
     history.stop();
   });
 });

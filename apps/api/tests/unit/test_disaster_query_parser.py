@@ -84,11 +84,36 @@ def test_explicit_natural_date_uses_country_calendar_boundary() -> None:
     assert query.time_intent == "specified"
 
 
+def test_recent_month_and_day_without_year_use_most_recent_country_calendar_day() -> (
+    None
+):
+    query = PARSER.parse(
+        "What do we know about the September 22 earthquake near Uken, Japan?",
+        now=datetime(2026, 9, 23, tzinfo=UTC),
+    ).query
+
+    assert query is not None
+    assert query.date_from == datetime(2026, 9, 21, 15, 0, tzinfo=UTC)
+    assert query.date_to == datetime(2026, 9, 22, 15, 0, tzinfo=UTC)
+    assert query.location_hint == "Uken"
+    assert query.time_intent == "specified"
+
+
 def test_named_place_is_preserved_as_a_location_hint() -> None:
     query = PARSER.parse("Latest earthquake in Tokyo, Japan").query
 
     assert query is not None
     assert query.location_hint == "Tokyo"
+
+
+def test_near_the_named_islands_keeps_the_place_discriminator() -> None:
+    query = PARSER.parse(
+        "What happened near the Volcano Islands in Japan on September 22, 2026? "
+        "Was there an earthquake?"
+    ).query
+
+    assert query is not None
+    assert query.location_hint == "Volcano Islands"
 
 
 def test_named_place_explicit_date_has_bounded_timezone_tolerance() -> None:

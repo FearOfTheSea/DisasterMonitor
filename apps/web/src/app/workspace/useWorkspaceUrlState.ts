@@ -13,9 +13,21 @@ export function useWorkspaceUrlState(
   const mapUrlHistory = useRef<MapUrlStateHistory | undefined>(undefined);
   const skipNextUrlWrite = useRef(false);
   useEffect(() => {
+    let initialRestore = true;
     const history = createMapUrlStateHistory(
       defaultUrlState,
       (restored) => {
+        if (initialRestore) {
+          initialRestore = false;
+          const parameters = new URLSearchParams(window.location.search);
+          if (
+            !['c', 'z', 'b', 'r', 'i', 'l', 't', 's', 'o'].some((key) =>
+              parameters.has(key),
+            )
+          ) {
+            return;
+          }
+        }
         skipNextUrlWrite.current = true;
         onRestore(restored);
       },

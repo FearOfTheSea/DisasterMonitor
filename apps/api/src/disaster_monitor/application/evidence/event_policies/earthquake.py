@@ -177,8 +177,12 @@ class EarthquakeEventPolicy(BaseEventPolicy):
         candidates: tuple[DisasterEvent, ...],
         query: DisasterQuery,
         now: datetime,
+        *,
+        apply_place_filters: bool = True,
     ) -> list[DisasterEvent]:
-        filtered = super()._filtered(candidates, query, now)
+        filtered = super()._filtered(
+            candidates, query, now, apply_place_filters=apply_place_filters
+        )
         query_magnitude = query.discriminator("magnitude")
         if query_magnitude is not None:
             filtered = [

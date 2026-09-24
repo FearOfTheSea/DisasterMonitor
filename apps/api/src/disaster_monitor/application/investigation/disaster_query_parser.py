@@ -45,6 +45,17 @@ _DAY_MONTH_DATE = re.compile(
     r"November|December)\s*,?\s*(20\d{2})\b",
     re.IGNORECASE,
 )
+_MONTH_DAY = re.compile(
+    r"\b(January|February|March|April|May|June|July|August|September|October|"
+    r"November|December)\s+(\d{1,2})(?:st|nd|rd|th)?\b",
+    re.IGNORECASE,
+)
+_DAY_MONTH = re.compile(
+    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+"
+    r"(January|February|March|April|May|June|July|August|September|October|"
+    r"November|December)\b",
+    re.IGNORECASE,
+)
 _MONTHS = {
     name.lower(): index
     for index, name in enumerate(
@@ -69,8 +80,8 @@ _COORDINATES = re.compile(
     r"(?<![\w.])(-?\d{1,3}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)(?![\w.])"
 )
 _PLACE_AFTER_IN = re.compile(
-    r"\b(?:in|from|across|near|around|at)\s+"
-    r"([A-Z][A-Za-z .'-]{1,60}?)(?=[?.!,]|\s+(?:on|and)\b|$)"
+    r"\b(?:in|from|across|near|around|at)\s+(?:the\s+)?"
+    r"([A-Z][A-Za-z .'-]{1,60}?)(?=[?.!,]|\s+(?:on|and|in)\b|$)"
 )
 
 
@@ -119,8 +130,34 @@ def has_explicit_date(text: str) -> bool:
     """Recognize exactly the explicit date forms the parser attempts to normalize."""
     return any(
         pattern.search(text)
-        for pattern in (_ISO_DATE, _SLASH_DATE, _MONTH_DATE, _DAY_MONTH_DATE)
+        for pattern in (
+            _ISO_DATE,
+            _SLASH_DATE,
+            _MONTH_DATE,
+            _DAY_MONTH_DATE,
+            _MONTH_DAY,
+            _DAY_MONTH,
+        )
     )
+
+
+def _extract_yearless_day(text: str, today: date) -> date | None:
+    month_first = _MONTH_DAY.search(text)
+    day_first = _DAY_MONTH.search(text)
+    if month_first:
+        month, day = _MONTHS[month_first.group(1).lower()], int(month_first.group(2))
+    elif day_first:
+        month, day = _MONTHS[day_first.group(2).lower()], int(day_first.group(1))
+    else:
+        return None
+    for year in (today.year, today.year - 1):
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            return None
+        if candidate <= today:
+            return candidate
+    return None
 
 
 def _extract_day(text: str) -> date | None:
@@ -154,18 +191,22 @@ def _extract_day(text: str) -> date | None:
     return None
 
 
-def _calendar_range(day: date, timezone_name: str) -> tuple[datetime, datetime] | None:
-    local_timezone: tzinfo
+def _calendar_timezone(timezone_name: str) -> tzinfo | None:
     offset = re.fullmatch(r"UTC([+-])(\d{2}):(\d{2})", timezone_name)
     if offset:
         sign, hours, minutes = offset.groups()
         delta = timedelta(hours=int(hours), minutes=int(minutes))
-        local_timezone = timezone(delta if sign == "+" else -delta)
-    else:
-        try:
-            local_timezone = ZoneInfo(timezone_name)
-        except ZoneInfoNotFoundError:
-            return None
+        return timezone(delta if sign == "+" else -delta)
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        return None
+
+
+def _calendar_range(day: date, timezone_name: str) -> tuple[datetime, datetime] | None:
+    local_timezone = _calendar_timezone(timezone_name)
+    if local_timezone is None:
+        return None
     start = datetime.combine(day, time.min, tzinfo=local_timezone)
     return start.astimezone(UTC), (start + timedelta(days=1)).astimezone(UTC)
 
@@ -191,7 +232,9 @@ class DisasterQueryParser:
         self._country_catalog = country_catalog
         self._disaster_policies = disaster_policies or default_disaster_query_policies()
 
-    def parse(self, text: str) -> DisasterQueryParseResult:
+    def parse(
+        self, text: str, *, now: datetime | None = None
+    ) -> DisasterQueryParseResult:
         normalized = normalize_question(text)
         disasters = recognized_disasters(normalized)
         if not disasters:
@@ -211,6 +254,32 @@ class DisasterQueryParser:
             )
         country = countries[0]
         day = _extract_day(normalized)
+        if (
+            day is None
+            and not (
+                _MONTH_DATE.search(normalized) or _DAY_MONTH_DATE.search(normalized)
+            )
+            and (_MONTH_DAY.search(normalized) or _DAY_MONTH.search(normalized))
+        ):
+            if not country.default_timezone:
+                return DisasterQueryParseResult(
+                    QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
+                    detail=(
+                        f"No deterministic calendar timezone is configured for "
+                        f"{country.canonical_name}."
+                    ),
+                )
+            local_timezone = _calendar_timezone(country.default_timezone)
+            if local_timezone is None:
+                return DisasterQueryParseResult(
+                    QueryParseStatus.DATE_TIMEZONE_UNAVAILABLE,
+                    detail=(
+                        f"The configured calendar timezone for "
+                        f"{country.canonical_name} is unavailable."
+                    ),
+                )
+            local_today = (now or datetime.now(UTC)).astimezone(local_timezone).date()
+            day = _extract_yearless_day(normalized, local_today)
         if day is None and has_explicit_date(normalized):
             return DisasterQueryParseResult(
                 QueryParseStatus.INVALID_DATE,

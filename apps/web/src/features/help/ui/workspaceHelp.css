@@ -127,3 +127,27 @@
   font-size: 0.7rem;
   padding: 2px 5px;
 }
+.workspace-help-backdrop {
+  align-items: center;
+  background: rgba(1, 9, 13, 0.7);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 70;
+}
+.workspace-help-backdrop .workspace-help-dialog {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  position: static;
+  width: min(480px, calc(100vw - 32px));
+}
+.help-search-commands {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--accent);
+  justify-self: start;
+  min-height: 36px;
+  padding: 8px 12px;
+}

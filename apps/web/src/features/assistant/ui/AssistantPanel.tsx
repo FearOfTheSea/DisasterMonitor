@@ -17,13 +17,18 @@ type AssistantPanelProps = {
   messages: ConversationMessage[];
   status: ConversationStatus;
   error: string | null;
-  onSubmit: (question: string) => Promise<void>;
+  onSubmit: (question: string) => Promise<void | boolean>;
   onClear: () => void;
   onNewConversation?: () => void;
   onSelectConversation?: (conversationId: string | null) => void | Promise<void>;
   onDeleteConversation?: (conversationId: string) => void | Promise<void>;
   onWatchReady?: () => void;
   onClose?: () => void;
+  draft?: string;
+  onDraftChange?: (value: string) => void;
+  selectedEventContext?: string;
+  onReturnToEvent?: () => void;
+  focusToken?: number;
 };
 
 export function AssistantPanel({
@@ -39,11 +44,33 @@ export function AssistantPanel({
   onDeleteConversation,
   onWatchReady,
   onClose,
+  draft,
+  onDraftChange,
+  selectedEventContext,
+  onReturnToEvent,
+  focusToken,
 }: AssistantPanelProps) {
-  const [question, setQuestion] = useState('');
+  const [localQuestion, setLocalQuestion] = useState('');
+  const question = draft ?? localQuestion;
+  const setQuestion = onDraftChange ?? setLocalQuestion;
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const previousConversationId = useRef(conversationId);
   const isLoading = status === 'loading';
+
+  useEffect(() => {
+    if (!isLoading) return;
+    const startedAt = Date.now();
+    const timer = window.setInterval(
+      () => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (focusToken) composerRef.current?.focus();
+  }, [focusToken]);
 
   useEffect(() => {
     if (previousConversationId.current && conversationId === null) {
@@ -59,8 +86,8 @@ export function AssistantPanel({
       return;
     }
     const submittedQuestion = question;
-    setQuestion('');
-    await onSubmit(submittedQuestion);
+    const completed = await onSubmit(submittedQuestion);
+    if (completed !== false) setQuestion('');
   }
 
   return (
@@ -71,6 +98,16 @@ export function AssistantPanel({
     >
       <header className="assistant-panel-header">
         <div className="panel-heading">
+          {selectedEventContext ? (
+            <div className="assistant-event-context">
+              <span>Selected event · {selectedEventContext}</span>
+              {onReturnToEvent ? (
+                <button type="button" onClick={onReturnToEvent}>
+                  Return to event
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <h2>Ask Disaster Monitor</h2>
           <p>Get a clear summary or ask about a place or event.</p>
         </div>
@@ -186,7 +223,7 @@ export function AssistantPanel({
           <div className="message message-assistant message-loading" role="status">
             <span className="loading-indicator" aria-hidden="true" />
             <span className="message-label">Assistant</span>
-            Thinking locally…
+            Thinking locally… {elapsedSeconds}s elapsed
           </div>
         )}
       </div>

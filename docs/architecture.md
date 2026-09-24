@@ -258,8 +258,12 @@ disaster providers and Ollama are backend concerns.
 The application root composes map, operations, source, and weather surfaces.
 `app/workspace/useMapWorkspace` owns map selection and presentation state;
 `useWorkspaceUrlState` owns browser-history synchronization and cleanup;
-`useWorkspacePanels` owns a single exclusive panel state and requested heading focus.
-The page renders those states and coordinates feature actions.
+`useWorkspaceNavigation` owns the destination, subsection, and Explore reading pane
+through independent URL parameters. The page renders those states and coordinates
+feature actions. The persistent Explore subtree keeps the OpenLayers instance and
+incident filters when another workspace is visible. Natural Earth atlas rendering
+and Streets basemap selection belong to the map adapters; local geographic assets
+and provenance live under `apps/web/public/atlas`.
 
 Cross-feature imports use explicit `public.ts` contracts. A public contract exports
 only capabilities consumed by other features; it does not re-export a feature's

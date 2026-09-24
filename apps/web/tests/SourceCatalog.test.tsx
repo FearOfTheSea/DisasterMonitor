@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchSourceCatalog } from '@/features/sources/api/sourceCatalogClient';
@@ -52,7 +53,12 @@ describe('SourceCatalog', () => {
       expect(screen.getByText('NWS active weather alerts')).toBeVisible(),
     );
     expect(screen.getByText('NOAA/National Weather Service')).toBeVisible();
-    expect(screen.getByText(/official warning/i)).toBeVisible();
+    expect(
+      screen.getByText(/official warning.*United States land areas/i),
+    ).toBeVisible();
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'View provenance and limitations' }));
     expect(screen.getByText(/No physical disaster type/i)).toBeVisible();
     expect(screen.getByText(/Stale threshold: unspecified/i)).toBeVisible();
     expect(screen.getByText(/public.*noaa-nws-public-domain/i)).toBeVisible();

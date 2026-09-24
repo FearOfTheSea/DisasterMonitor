@@ -2,6 +2,7 @@
 
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  useImperativeHandle,
   useEffect,
   useMemo,
   useRef,
@@ -12,13 +13,16 @@ import type { OperatorCommand } from '@/features/commands/model/commandRegistry'
 
 type CommandPaletteProps = {
   commands: readonly OperatorCommand[];
+  ref?: React.Ref<CommandPaletteHandle>;
 };
+
+export type CommandPaletteHandle = { open: () => void };
 
 function normalized(value: string): string {
   return value.trim().toLocaleLowerCase();
 }
 
-export function CommandPalette({ commands }: CommandPaletteProps) {
+export function CommandPalette({ commands, ref }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -40,6 +44,8 @@ export function CommandPalette({ commands }: CommandPaletteProps) {
     setActiveIndex(0);
     setOpen(true);
   }
+
+  useImperativeHandle(ref, () => ({ open: show }));
 
   function close() {
     setOpen(false);

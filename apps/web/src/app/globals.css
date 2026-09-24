@@ -15,42 +15,43 @@
 }
 
 :root {
-  color-scheme: light;
-  --ink: #0d1b3e;
-  --ink-soft: #34415f;
-  --muted: #667085;
-  --muted-light: #8992a5;
-  --line: #e2e7ec;
-  --line-strong: #cbd3dc;
-  --surface: #ffffff;
-  --surface-soft: #f5f8fa;
-  --surface-raised: #f9fbfc;
-  --accent: #087f8c;
-  --accent-hover: #066873;
-  --accent-soft: #eaf7f8;
-  --focus: #087f78;
-  --danger: #b4232c;
-  --danger-soft: #fff1f2;
-  --warning: #975a00;
-  --warning-icon: #d68a00;
-  --warning-soft: #fff8e7;
-  --success: #137848;
-  --success-soft: #eaf7f0;
-  --earthquake: #9f1239;
-  --flood: #0369a1;
-  --wildfire: #d4471d;
-  --landslide: #8a5a11;
-  --drought: #a16207;
-  --cyclone: #6141a5;
-  --volcano: #8b2933;
-  --header-height: 72px;
-  --incident-rail: 400px;
-  --assistant-rail: 540px;
-  --operations-rail: 560px;
+  color-scheme: dark;
+  --ocean: #08151d;
+  --ink: #edf3f4;
+  --ink-soft: #d8e5e8;
+  --muted: #a7bbc5;
+  --muted-light: #8399a5;
+  --line: #2b414e;
+  --line-strong: #49616d;
+  --surface: #101f29;
+  --surface-soft: #162a35;
+  --surface-raised: #1b303b;
+  --accent: #79e4d0;
+  --accent-hover: #9cf1df;
+  --accent-soft: #173d3c;
+  --focus: #79e4d0;
+  --danger: #ff929a;
+  --danger-soft: #432832;
+  --warning: #f0c477;
+  --warning-icon: #f0c477;
+  --warning-soft: #3c332a;
+  --success: #91e7be;
+  --success-soft: #183a34;
+  --earthquake: #ff9baf;
+  --flood: #8acaf6;
+  --wildfire: #f5a580;
+  --landslide: #e7c18a;
+  --drought: #e6c97e;
+  --cyclone: #c3b3fa;
+  --volcano: #f29b9b;
+  --header-height: 64px;
+  --incident-rail: 352px;
+  --assistant-rail: 440px;
+  --operations-rail: 1280px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 14px;
-  --shadow-overlay: 0 14px 38px rgba(13, 27, 62, 0.14);
+  --shadow-overlay: 0 14px 38px rgba(0, 0, 0, 0.3);
   --font-ui:
     'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system,
     BlinkMacSystemFont, sans-serif;
@@ -67,10 +68,10 @@ body {
 }
 
 body {
-  background: var(--surface);
+  background: var(--ocean);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 14px;
   overflow: hidden;
 }
 
@@ -100,12 +101,12 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 3px solid rgba(23, 105, 210, 0.38);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: #cfe1fb;
+  background: var(--accent-soft);
   color: var(--ink);
 }
 
@@ -116,13 +117,13 @@ summary:focus-visible {
 
 .app-header {
   align-items: center;
-  background: #ffffff;
+  background: var(--surface);
   color: var(--ink);
   border-bottom: 1px solid var(--line);
   display: flex;
   height: var(--header-height);
   justify-content: space-between;
-  padding: 0 28px;
+  padding: 0 24px;
   position: relative;
   z-index: 30;
 }
@@ -137,8 +138,8 @@ summary:focus-visible {
 .brand-mark {
   color: var(--accent);
   flex: 0 0 40px;
-  height: 40px;
-  width: 40px;
+  height: 36px;
+  width: 36px;
 }
 
 .brand-mark svg {
@@ -158,7 +159,7 @@ summary:focus-visible {
 }
 
 .brand h1 {
-  font-size: 1.3rem;
+  font-size: 18px;
   font-weight: 720;
   letter-spacing: -0.01em;
   line-height: 1.25;
@@ -187,8 +188,8 @@ summary:focus-visible {
   font-weight: 650;
   gap: 7px;
   justify-content: center;
-  min-height: 44px;
-  padding: 10px 14px;
+  min-height: 36px;
+  padding: 8px 12px;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
@@ -211,7 +212,7 @@ summary:focus-visible {
 .assistant-submit {
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #ffffff;
+  color: #08151d;
 }
 
 .assistant-toggle:hover,
@@ -249,7 +250,7 @@ summary:focus-visible {
 }
 
 .map-region {
-  background: #e7f2f6;
+  background: var(--ocean);
   grid-column: 2;
   grid-row: 1;
   height: 100%;
