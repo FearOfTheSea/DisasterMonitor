@@ -9,7 +9,7 @@ import {
   type IncidentMapRecord,
 } from '@/features/incidents/model/activeIncidents';
 import { DisasterIcon } from './DisasterIcon';
-import { disasterLabel } from './incidentPresentation';
+import { disasterLabel, relatedInvestigation } from './incidentPresentation';
 import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 
 type Tab = 'overview' | 'evidence' | 'timeline';
@@ -42,6 +42,8 @@ export function SelectedEventPane({
     heading.current?.focus();
   }, [incident.event_id]);
   const context = displayActiveIncidentContext(incident);
+  const hazardLabel = disasterLabel(incident.disaster).toLowerCase();
+  const hazardArticle = /^[aeiou]/.test(hazardLabel) ? 'an' : 'a';
   const sources = incident.evidence_sources?.length
     ? incident.evidence_sources
     : [incident.source];
@@ -131,9 +133,8 @@ export function SelectedEventPane({
             <section>
               <h3>What is known</h3>
               <p>
-                {incident.source.publisher} reports a{' '}
-                {disasterLabel(incident.disaster).toLowerCase()} at {incident.location}.
-                The source records the event time above.
+                {incident.source.publisher} reports {hazardArticle} {hazardLabel} at{' '}
+                {incident.location}. The source records the event time above.
               </p>
               {incident.measurements.length > 0 ? (
                 <dl className="event-measurements">
@@ -181,7 +182,7 @@ export function SelectedEventPane({
             </section>
             <div className="event-actions">
               <button type="button" onClick={onAsk}>
-                Ask about this event
+                {relatedInvestigation(incident).label}
               </button>
               <button type="button" onClick={onGroundView}>
                 Open Ground view

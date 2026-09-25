@@ -254,6 +254,18 @@
     padding-inline: 10px;
   }
 }
+@media (min-width: 851px) and (max-width: 1000px) {
+  .app-header {
+    gap: 12px;
+    padding-inline: 16px;
+  }
+  .brand {
+    flex-basis: 208px;
+  }
+  .command-palette-trigger kbd {
+    display: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -232,16 +232,17 @@ def _distance_to_segment_km(
 
     reference_latitude = radians(latitude)
 
-    def project(point_latitude: float, point_longitude: float) -> tuple[float, float]:
-        longitude_delta = (point_longitude - longitude + 180) % 360 - 180
-        return (
-            radians(longitude_delta) * cos(reference_latitude),
-            radians(point_latitude - latitude),
-        )
-
     point_x, point_y = 0.0, 0.0
-    start_x, start_y = project(start_latitude, start_longitude)
-    end_x, end_y = project(end_latitude, end_longitude)
+    start_longitude_delta = (start_longitude - longitude + 180) % 360 - 180
+    # Unwrap both endpoints as one segment; wrapping each against the query
+    # separately can make a distant boundary cross the query at the dateline.
+    segment_longitude_delta = (end_longitude - start_longitude + 180) % 360 - 180
+    start_x = radians(start_longitude_delta) * cos(reference_latitude)
+    end_x = radians(start_longitude_delta + segment_longitude_delta) * cos(
+        reference_latitude
+    )
+    start_y = radians(start_latitude - latitude)
+    end_y = radians(end_latitude - latitude)
     segment_x = end_x - start_x
     segment_y = end_y - start_y
     segment_length_squared = segment_x * segment_x + segment_y * segment_y

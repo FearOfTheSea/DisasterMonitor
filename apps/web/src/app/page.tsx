@@ -16,6 +16,7 @@ import {
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
 import { SelectedEventPane } from '@/features/incidents/ui/SelectedEventPane';
+import { relatedInvestigation } from '@/features/incidents/ui/incidentPresentation';
 import { GroundImageryPanel } from '@/features/imagery/ui/GroundImageryPanel';
 import { WorkspaceHelp } from '@/features/help/ui/WorkspaceHelp';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
@@ -101,6 +102,7 @@ export default function Home() {
   const toolsButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!toolsOpen) return;
+    toolsRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
     const dismiss = (event: MouseEvent | KeyboardEvent) => {
       if (event instanceof KeyboardEvent) {
         if (event.key === 'Escape') {
@@ -297,9 +299,7 @@ export default function Home() {
   const closeAssistant = () => openPane(selectedIncident ? 'event' : null);
   const askAboutEvent = () => {
     if (selectedIncident) {
-      setAssistantDraft(
-        `What do we know about the ${selectedIncident.disaster.replaceAll('_', ' ')} in ${selectedIncident.country?.name ?? selectedIncident.location}?`,
-      );
+      setAssistantDraft(relatedInvestigation(selectedIncident).question);
       setAssistantFocusToken((current) => current + 1);
     }
     openPane('assistant');
@@ -361,13 +361,46 @@ export default function Home() {
             <button
               ref={toolsButtonRef}
               type="button"
+              aria-haspopup="menu"
+              aria-controls="tools-menu"
               aria-expanded={toolsOpen}
               onClick={() => setToolsOpen((current) => !current)}
             >
               Tools
             </button>
             {toolsOpen && (
-              <div className="tools-menu" role="menu">
+              <div
+                id="tools-menu"
+                className="tools-menu"
+                role="menu"
+                onKeyDown={(event) => {
+                  if (event.key === 'Tab') {
+                    setToolsOpen(false);
+                    return;
+                  }
+                  const items = Array.from(
+                    event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                      '[role="menuitem"]',
+                    ),
+                  );
+                  const current = items.indexOf(
+                    document.activeElement as HTMLButtonElement,
+                  );
+                  const next =
+                    event.key === 'ArrowDown'
+                      ? (current + 1) % items.length
+                      : event.key === 'ArrowUp'
+                        ? (current - 1 + items.length) % items.length
+                        : event.key === 'Home'
+                          ? 0
+                          : event.key === 'End'
+                            ? items.length - 1
+                            : -1;
+                  if (next < 0) return;
+                  event.preventDefault();
+                  items[next]?.focus();
+                }}
+              >
                 {TOOL_SECTIONS.map((section) => (
                   <button
                     key={section}

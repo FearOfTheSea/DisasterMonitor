@@ -100,6 +100,50 @@ try {
     throw new Error('The rendered page identity did not match Disaster Monitor.');
   }
   await page.getByLabel('Active incidents monitoring').waitFor();
+  await page.getByRole('button', { name: 'Layers', exact: true }).click();
+  await page.getByRole('button', { name: 'Layers', exact: true }).click();
+  if (
+    (await page
+      .getByRole('button', { name: 'Layers', exact: true })
+      .getAttribute('aria-expanded')) !== 'false'
+  ) {
+    throw new Error(
+      'The expanded Layers control could not be dismissed by clicking it.',
+    );
+  }
+  await page.setViewportSize({ width: 900, height: 768 });
+  const headerAction = page.getByRole('button', { name: 'Ask a question' });
+  const headerActionBox = await headerAction.boundingBox();
+  if (!headerActionBox || headerActionBox.x + headerActionBox.width > 900) {
+    throw new Error(
+      'The assistant header action was clipped at a desktop width of 900px.',
+    );
+  }
+  await page.getByText('Map position', { exact: true }).click();
+  const mapPositionBox = await page.locator('.map-overlay').boundingBox();
+  const displayTimeBox = await page.locator('.map-display-time').boundingBox();
+  if (
+    mapPositionBox &&
+    displayTimeBox &&
+    mapPositionBox.x < displayTimeBox.x + displayTimeBox.width &&
+    displayTimeBox.x < mapPositionBox.x + mapPositionBox.width &&
+    mapPositionBox.y < displayTimeBox.y + displayTimeBox.height &&
+    displayTimeBox.y < mapPositionBox.y + mapPositionBox.height
+  ) {
+    throw new Error('Map position obscured the display-time controls at 900px.');
+  }
+  await page.getByText('Map position', { exact: true }).click();
+  await page.setViewportSize({ width: 1536, height: 1024 });
+  await page.getByRole('button', { name: 'Tools', exact: true }).click();
+  await page.keyboard.press('ArrowDown');
+  if (
+    !(await page
+      .getByRole('menuitem', { name: 'Workspace' })
+      .evaluate((element) => element === document.activeElement))
+  ) {
+    throw new Error('The Tools menu did not move focus with ArrowDown.');
+  }
+  await page.keyboard.press('Escape');
   const mapViewport = await page.locator('.ol-viewport').elementHandle();
   await page.getByRole('button', { name: 'Sources', exact: true }).click();
   await page.locator('.source-catalog-card').first().waitFor();
@@ -225,6 +269,19 @@ try {
       throw new Error(`Incident selection did not remain on ${fixture.location}.`);
     }
   }
+  await page
+    .getByRole('button', { name: 'Ask about volcanic eruptions in Tanzania' })
+    .click();
+  if (
+    (await page.getByRole('textbox', { name: 'Question' }).inputValue()) !==
+    'What are the latest volcanic eruptions in Tanzania?'
+  ) {
+    throw new Error('The event handoff did not describe the supported country scope.');
+  }
+  await page
+    .getByRole('complementary', { name: 'Disaster Monitor assistant' })
+    .getByRole('button', { name: 'Close assistant' })
+    .click();
   await page.getByRole('button', { name: 'Saved', exact: true }).click();
   await page.getByRole('heading', { name: 'Incident watches' }).waitFor();
   await page.getByLabel('Watch disaster').selectOption('wildfire');

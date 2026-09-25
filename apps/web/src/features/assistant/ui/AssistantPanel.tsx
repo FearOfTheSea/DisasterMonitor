@@ -109,7 +109,7 @@ export function AssistantPanel({
             </div>
           ) : null}
           <h2>Ask Disaster Monitor</h2>
-          <p>Get a clear summary or ask about a place or event.</p>
+          <p>Ask about current hazards, places, or the map.</p>
         </div>
         {onClose ? (
           <PanelCloseButton label="Close assistant" onClick={onClose} />

@@ -89,15 +89,18 @@ export function IncidentCoverageStatus({
   const partial = snapshot.coverage.some(
     (item) => item.state === 'degraded' || item.state === 'unavailable',
   );
-  const checkedNetworkCount = snapshot.coverage.filter(
-    (item) => item.providers.length > 0,
-  ).length;
+  const checkedProviderCount = new Set(
+    snapshot.coverage.flatMap((item) => item.providers),
+  ).size;
 
   return (
     <section className="incident-coverage-status" aria-labelledby="coverage-heading">
       <details className="coverage-disclosure">
         <summary>
-          <span>{checkedNetworkCount} source networks checked</span>
+          <span>
+            {checkedProviderCount} source provider
+            {checkedProviderCount === 1 ? '' : 's'} checked
+          </span>
           <strong>{label}</strong>
         </summary>
         <div className="coverage-heading-row">

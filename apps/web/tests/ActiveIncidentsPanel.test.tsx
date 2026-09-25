@@ -93,6 +93,26 @@ describe('ActiveIncidentsPanel', () => {
     ).toBeVisible();
   });
 
+  it('describes a successful response without claiming its records are live', () => {
+    render(
+      <ActiveIncidentsPanel
+        snapshot={snapshot()}
+        status="success"
+        search=""
+        onSearchChange={vi.fn()}
+        onSelectIncident={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Incident data status')).toHaveTextContent(
+      'Snapshot received',
+    );
+    expect(
+      screen.getByRole('searchbox', { name: 'Search incidents by location or source' }),
+    ).toHaveAttribute('placeholder', 'Search incidents');
+  });
+
   it('labels provisional news incidents and exposes the detection clock', async () => {
     const user = userEvent.setup();
     const provisional: ActiveIncident = {
@@ -207,7 +227,7 @@ describe('ActiveIncidentsPanel', () => {
       />,
     );
 
-    expect(screen.getByText('6 source networks checked')).toBeVisible();
+    expect(screen.getByText('1 source provider checked')).toBeVisible();
     expect(screen.getByText('View coverage')).toBeVisible();
     expect(screen.getAllByTestId('incident-coverage')[0]).not.toBeVisible();
 
@@ -453,7 +473,7 @@ describe('ActiveIncidentsPanel', () => {
 
     const status = screen.getByRole('status', { name: 'Incident data status' });
     expect(status).toHaveTextContent('Offline snapshot');
-    expect(status).toHaveTextContent('Last updated');
+    expect(status).toHaveTextContent('Last checked');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     await user.click(within(status).getByRole('button', { name: 'Try again' }));

@@ -45,6 +45,7 @@ describe('selected event reading pane', () => {
       />,
     );
     expect(screen.getByRole('heading', { name: /Earthquake/ })).toHaveFocus();
+    expect(screen.getByText(/reports an earthquake at Fixture location/)).toBeVisible();
     expect(screen.getByText('6.2')).toBeVisible();
     expect(screen.getByRole('link', { name: /Fixture publisher/ })).toHaveAttribute(
       'href',
@@ -58,7 +59,7 @@ describe('selected event reading pane', () => {
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Overview' }));
     await userEvent
       .setup()
-      .click(screen.getByRole('button', { name: 'Ask about this event' }));
+      .click(screen.getByRole('button', { name: 'Ask about worldwide earthquakes' }));
     expect(onAsk).toHaveBeenCalledOnce();
   });
 

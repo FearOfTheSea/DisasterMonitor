@@ -1,6 +1,7 @@
 import type {
   ActiveIncident,
   DisasterType,
+  IncidentMapRecord,
   IncidentSourceAuthority,
 } from '@/features/incidents/model/activeIncidents';
 
@@ -23,6 +24,21 @@ export const AUTHORITY_LABELS: Record<IncidentSourceAuthority, string> = {
 
 export function disasterLabel(disaster: DisasterType): string {
   return HAZARD_OPTIONS.find((item) => item.value === disaster)?.label ?? disaster;
+}
+
+export function relatedInvestigation(
+  incident: Pick<IncidentMapRecord, 'disaster' | 'country'>,
+): { label: string; question: string } {
+  const hazard = `${disasterLabel(incident.disaster).toLowerCase()}s`;
+  const scope = incident.country
+    ? `${hazard} in ${incident.country.name}`
+    : `worldwide ${hazard}`;
+  return {
+    label: `Ask about ${scope}`,
+    question: incident.country
+      ? `What are the latest ${scope}?`
+      : `What are the latest ${hazard} worldwide?`,
+  };
 }
 
 export function activityStatusLabel(status: ActiveIncident['activity_status']): string {

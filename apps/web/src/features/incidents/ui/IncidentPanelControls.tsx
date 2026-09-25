@@ -13,6 +13,7 @@ type IncidentPanelControlsProps = {
   status: ActiveIncidentsStatus;
   error?: string;
   search: string;
+  serverSearch?: boolean;
   onSearchChange: (value: string) => void;
   view: IncidentView;
   onViewChange?: (value: IncidentView) => void;
@@ -68,6 +69,7 @@ export function IncidentPanelControls({
   status,
   error,
   search,
+  serverSearch = false,
   onSearchChange,
   view,
   onViewChange,
@@ -93,12 +95,12 @@ export function IncidentPanelControls({
         ? snapshot
           ? 'Updating snapshot'
           : 'Loading active incidents…'
-        : 'Live snapshot';
+        : 'Snapshot received';
   const statusDetail = unavailable
     ? (error ?? 'Incident providers could not be reached.')
     : loading && !snapshot
       ? 'Checking trusted source networks…'
-      : `${snapshot && !loading ? 'Last updated' : 'Keeping data from'} ${formatSnapshotTime(snapshot)}`;
+      : `${snapshot && !loading ? 'Last checked' : 'Keeping data from'} ${formatSnapshotTime(snapshot)}`;
   const statusRole = unavailable ? 'alert' : 'status';
 
   function clearFilters() {
@@ -142,8 +144,12 @@ export function IncidentPanelControls({
         </svg>
         <input
           type="search"
-          aria-label="Search loaded events by location or source"
-          placeholder="Search loaded events"
+          aria-label={
+            serverSearch
+              ? 'Search incidents by location or source'
+              : 'Search loaded events by location or source'
+          }
+          placeholder={serverSearch ? 'Search incidents' : 'Search loaded events'}
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
         />

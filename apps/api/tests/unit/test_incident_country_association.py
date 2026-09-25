@@ -163,3 +163,28 @@ def test_uses_only_bounded_nearby_country_associations() -> None:
     assert nearby.basis is CountryAssociationBasis.NEARBY_BOUNDARY
     assert nearby.distance_km is not None and nearby.distance_km < 100
     assert unresolved is None
+
+
+def test_nearby_country_does_not_jump_across_the_opposite_meridian() -> None:
+    brazil = _country("BRA", "Brazil", (1.7, 1.9, -54.0, -53.0))
+    indonesia = _country("IDN", "Indonesia", (1.5, 2.0, 127.0, 128.0))
+    resolver = IncidentCountryResolver(FakeCountryCatalog((brazil, indonesia)))
+
+    association = resolver.resolve(_event("Molucca Sea", 1.78, 126.55))
+
+    assert association is not None
+    assert association.country_code == "IDN"
+    assert association.basis is CountryAssociationBasis.NEARBY_BOUNDARY
+    assert association.distance_km is not None and association.distance_km < 100
+
+
+def test_nearby_country_keeps_short_segments_across_the_antimeridian() -> None:
+    dateline_area = GeographicArea(
+        -1.0,
+        1.0,
+        -180.0,
+        180.0,
+        polygons=(((0.0, 179.0), (0.0, -179.0), (1.0, -179.0)),),
+    )
+
+    assert dateline_area.distance_to_boundary_km(0.1, 179.8) < 100

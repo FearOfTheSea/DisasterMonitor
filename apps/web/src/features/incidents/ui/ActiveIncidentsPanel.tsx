@@ -198,6 +198,7 @@ export function ActiveIncidentsPanel({
         status={status}
         error={error}
         search={currentSearch}
+        serverSearch={isServerSearch}
         onSearchChange={updateSearch}
         view={view}
         onViewChange={onViewChange}

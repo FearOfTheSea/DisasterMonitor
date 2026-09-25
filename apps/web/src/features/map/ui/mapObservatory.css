@@ -14,6 +14,7 @@
 }
 .observatory-explore .map-layer-controls-expanded {
   width: min(380px, calc(100% - 48px));
+  z-index: 8;
 }
 .observatory-explore .map-layer-toggle {
   background: var(--surface);
@@ -118,6 +119,14 @@
 }
 .observatory-explore .map-region-selection-active .map-overlay {
   bottom: 24px;
+}
+.observatory-explore.observatory-reading-open .map-overlay[open] {
+  bottom: 88px;
+}
+@media (min-width: 851px) and (max-width: 1199px) {
+  .observatory-explore .map-overlay[open] {
+    bottom: 88px;
+  }
 }
 .observatory-explore .ol-control button {
   background: var(--surface);

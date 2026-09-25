@@ -73,7 +73,7 @@ describe('IncidentCoverageStatus', () => {
     const user = userEvent.setup();
     render(<IncidentCoverageStatus snapshot={snapshot()} />);
 
-    expect(screen.getByText('6 source networks checked')).toBeVisible();
+    expect(screen.getByText('7 source providers checked')).toBeVisible();
     expect(screen.getAllByTestId('incident-coverage')[0]).not.toBeVisible();
     await user.click(screen.getByText('View coverage'));
     expect(screen.getByText(/Last checked:/)).toHaveTextContent(
@@ -96,5 +96,17 @@ describe('IncidentCoverageStatus', () => {
       screen.getByText('A fixture provider returned a partial response.'),
     ).toBeInTheDocument();
     expect(screen.getByText(/not disaster claims/i)).toBeInTheDocument();
+  });
+
+  it('counts a provider once when it covers several hazards', () => {
+    const sharedProvider = snapshot();
+    sharedProvider.coverage = sharedProvider.coverage.map((item) => ({
+      ...item,
+      providers: item.providers.length ? ['shared-provider'] : [],
+    }));
+
+    render(<IncidentCoverageStatus snapshot={sharedProvider} />);
+
+    expect(screen.getByText('1 source provider checked')).toBeVisible();
   });
 });
