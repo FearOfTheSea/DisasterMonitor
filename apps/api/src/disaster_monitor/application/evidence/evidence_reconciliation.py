@@ -149,17 +149,18 @@ def build_evidence_packet(
     for (status, publisher), count in correlation_warning_counts.items():
         article = "report" if count == 1 else "reports"
         quantity = "A" if count == 1 else str(count)
+        exclusion_verb = "was" if count == 1 else "were"
         if status == CorrelationStatus.POSSIBLE:
             correlation_warnings.append(
                 f"{quantity} {publisher} {article} may describe a different "
                 f"{query.disaster.value} event in {query.country.canonical_name} "
-                "and was excluded from event facts."
+                f"and {exclusion_verb} excluded from event facts."
             )
         else:
             correlation_warnings.append(
                 f"{quantity} {publisher} {article} did not match the selected "
                 f"{query.disaster.value} event in {query.country.canonical_name} "
-                "and was excluded."
+                f"and {exclusion_verb} excluded."
             )
     normalized_reports: list[SituationReport] = []
     for report in correlated_reports:

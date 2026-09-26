@@ -13,7 +13,10 @@ from disaster_monitor.application.agent.task_normalization import (
     validate_disaster_task,
     worldwide_disaster_query,
 )
-from disaster_monitor.application.disaster import WorldwideSelectionIntent
+from disaster_monitor.application.disaster import (
+    GeographicScope,
+    WorldwideSelectionIntent,
+)
 from disaster_monitor.application.investigation.disaster_query_parser import (
     DisasterQueryParser,
 )
@@ -244,6 +247,91 @@ def test_canonical_country_must_not_override_conflicting_explicit_country() -> N
             current_or_event_specific=True,
             task_kind=TaskKind.INVESTIGATION,
             disaster=Disaster.EARTHQUAKE,
+            country_code="JPN",
+            country_name="Japan",
+            canonical=True,
+        ),
+    )
+
+    assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
+    assert task.query is None
+
+
+def test_named_country_repairs_model_worldwide_scope_without_losing_evidence_path() -> (
+    None
+):
+    question = "What happened with the tropical cyclone near Japan this week?"
+    task = validate(
+        question,
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.TROPICAL_CYCLONE,
+            geographic_scope=GeographicScope.WORLDWIDE,
+            country_code="JPN",
+            country_name="Japan",
+            place_mentions=("Japan",),
+            canonical=True,
+        ),
+    )
+
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.query is not None
+    assert task.query.country.alpha3_code == "JPN"
+    assert task.query.location_hint is None
+    assert task.worldwide_query is None
+
+
+def test_named_storm_does_not_turn_model_storm_title_into_a_place() -> None:
+    task = validate(
+        "What happened with Tropical Cyclone Polo near Japan this week?",
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.TROPICAL_CYCLONE,
+            geographic_scope=GeographicScope.COUNTRY,
+            country_code="JPN",
+            country_name="Japan",
+            place_mentions=("Tropical Cyclone Polo", "Japan"),
+            canonical=True,
+        ),
+    )
+
+    assert task.validation_status is ValidationStatus.VALID
+    assert task.query is not None
+    assert task.query.location_hint is None
+
+
+def test_named_country_does_not_repair_conflicting_model_country() -> None:
+    task = validate(
+        "What happened with the tropical cyclone near Japan this week?",
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.TROPICAL_CYCLONE,
+            geographic_scope=GeographicScope.WORLDWIDE,
+            country_code="VNM",
+            country_name="Vietnam",
+            canonical=True,
+        ),
+    )
+
+    assert task.validation_status is ValidationStatus.CLARIFICATION_REQUIRED
+    assert task.query is None
+
+
+def test_explicit_worldwide_wording_does_not_repair_country_scope() -> None:
+    task = validate(
+        "What tropical cyclones occurred worldwide, including Japan, this week?",
+        DisasterTaskDraft(
+            disaster_related=True,
+            current_or_event_specific=True,
+            task_kind=TaskKind.INVESTIGATION,
+            disaster=Disaster.TROPICAL_CYCLONE,
+            geographic_scope=GeographicScope.WORLDWIDE,
             country_code="JPN",
             country_name="Japan",
             canonical=True,

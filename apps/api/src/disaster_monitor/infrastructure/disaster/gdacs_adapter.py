@@ -1,7 +1,6 @@
 """Country-neutral GDACS event-discovery adapters."""
 
 from datetime import datetime, timedelta
-from math import isfinite
 from urllib.parse import urlencode
 
 import httpx
@@ -26,7 +25,6 @@ from disaster_monitor.domain.disaster import (
     EventGeometry,
     EventMeasurement,
     IncidentActivityStatus,
-    MeasurementKind,
     SourceAuthority,
     SourceReference,
     point_event_geometry,
@@ -35,6 +33,11 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
     DisasterProviderResponseError,
 )
+from disaster_monitor.infrastructure.disaster.gdacs_measurements import (
+    alert_measurements,
+    cyclone_measurements,
+    earthquake_measurements,
+)
 from disaster_monitor.infrastructure.disaster.gdacs_place_verification import (
     verify_gdacs_flood_places,
 )
@@ -42,11 +45,10 @@ from disaster_monitor.infrastructure.disaster.http import (
     SourcePayloadRecorder,
     build_snapshot_capture,
     get_json,
-    validate_network_target,
 )
 
 GDACS_SEARCH_URL = "https://www.gdacs.org/gdacsapi/api/Events/geteventlist/SEARCH"
-GDACS_EVENT_DATA_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventdata"
+GDACS_EVENT_REPORT_URL = "https://www.gdacs.org/report.aspx"
 _GDACS_MAX_PAGE_SIZE = 100
 _GDACS_MAX_PAGES = 5
 _GDACS_MAX_RECORDS = _GDACS_MAX_PAGE_SIZE * _GDACS_MAX_PAGES
@@ -71,16 +73,6 @@ def _identifier(value: object) -> str:
     if isinstance(value, int):
         return str(value)
     return _text(value)
-
-
-def _number(value: object) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    try:
-        parsed = float(value)
-    except (OverflowError, ValueError):
-        return None
-    return parsed if isfinite(parsed) else None
 
 
 def _iso3_code(value: object) -> str:
@@ -309,22 +301,14 @@ class _GdacsEventAdapter:
         properties: dict[object, object],
         source: SourceReference,
     ) -> tuple[EventMeasurement, ...]:
-        severity = _text(properties.get("alertlevel"))
-        return (
-            (EventMeasurement(MeasurementKind.SEVERITY, severity, source=source),)
-            if severity
-            else ()
-        )
+        return alert_measurements(properties, source)
 
     def _event_url(self, properties: dict[object, object], event_id: str) -> str:
-        urls = properties.get("url")
-        details = urls.get("details") if isinstance(urls, dict) else None
-        try:
-            validate_network_target(_text(details), self.allowed_hosts)
-        except DisasterProviderResponseError:
-            params = urlencode({"eventtype": self.event_type, "eventid": event_id})
-            return f"{GDACS_EVENT_DATA_URL}?{params}"
-        return _text(details)
+        parameters = {"eventtype": self.event_type, "eventid": event_id}
+        episode_id = _identifier(properties.get("episodeid"))
+        if episode_id:
+            parameters["episodeid"] = episode_id
+        return f"{GDACS_EVENT_REPORT_URL}?{urlencode(parameters)}"
 
     def _point_geometry(
         self,
@@ -555,22 +539,7 @@ class GdacsEarthquakeAdapter(_GdacsEventAdapter):
         properties: dict[object, object],
         source: SourceReference,
     ) -> tuple[EventMeasurement, ...]:
-        measurements = list(super()._measurements(properties, source))
-        severity_data = properties.get("severitydata")
-        magnitude = (
-            _number(severity_data.get("severity"))
-            if isinstance(severity_data, dict)
-            else None
-        )
-        if magnitude is not None:
-            measurements.append(
-                EventMeasurement(
-                    MeasurementKind.MAGNITUDE,
-                    magnitude,
-                    source=source,
-                )
-            )
-        return tuple(measurements)
+        return earthquake_measurements(properties, source)
 
 
 class GdacsTropicalCycloneAdapter(_GdacsEventAdapter):
@@ -580,6 +549,13 @@ class GdacsTropicalCycloneAdapter(_GdacsEventAdapter):
     source_id = "gdacs-tropical-cyclones"
     disaster = Disaster.TROPICAL_CYCLONE
     event_type = "TC"
+
+    def _measurements(
+        self,
+        properties: dict[object, object],
+        source: SourceReference,
+    ) -> tuple[EventMeasurement, ...]:
+        return cyclone_measurements(properties, source)
 
 
 class GdacsFloodAdapter(_GdacsEventAdapter):

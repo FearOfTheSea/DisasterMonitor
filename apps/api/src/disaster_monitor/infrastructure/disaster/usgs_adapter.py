@@ -45,6 +45,8 @@ from disaster_monitor.infrastructure.disaster.http import (
 
 USGS_QUERY_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 _MAX_OFFSHORE_ASSOCIATION_DISTANCE_KM = 100.0
+_MAX_NAMED_PLACE_OFFSHORE_DISTANCE_KM = 500.0
+_NAMED_PLACE_SEARCH_MARGIN_DEGREES = 5.0
 _US_SUBNATIONAL_PLACE_TERMS = frozenset(
     {
         "Alabama",
@@ -127,6 +129,12 @@ def _place_mentions_country(place: str, country: Country) -> bool:
     )
 
 
+def _place_mentions_named_location(place: str, location_hint: str) -> bool:
+    return bool(
+        re.search(rf"(?<!\w){re.escape(location_hint)}(?!\w)", place, re.IGNORECASE)
+    )
+
+
 def build_usgs_params(
     query: DisasterQuery, *, now: datetime
 ) -> dict[str, str | int | float | bool | None]:
@@ -157,6 +165,11 @@ def build_usgs_params(
     max_latitude = area.max_latitude
     min_longitude = area.min_longitude
     max_longitude = area.max_longitude
+    if regional_event_query:
+        min_latitude = max(-90.0, min_latitude - _NAMED_PLACE_SEARCH_MARGIN_DEGREES)
+        max_latitude = min(90.0, max_latitude + _NAMED_PLACE_SEARCH_MARGIN_DEGREES)
+        min_longitude = max(-180.0, min_longitude - _NAMED_PLACE_SEARCH_MARGIN_DEGREES)
+        max_longitude = min(180.0, max_longitude + _NAMED_PLACE_SEARCH_MARGIN_DEGREES)
     if query.latitude is not None and query.longitude is not None:
         min_latitude = max(min_latitude, query.latitude - 2)
         max_latitude = min(max_latitude, query.latitude + 2)
@@ -265,9 +278,20 @@ class UsgsEarthquakeAdapter:
             distance_km = query.country.geographic_area.distance_to_boundary_km(
                 latitude, longitude
             )
+            named_place_offshore = bool(
+                query.location_hint
+                and query.date_from is not None
+                and query.date_to is not None
+                and distance_km is not None
+                and distance_km <= _MAX_NAMED_PLACE_OFFSHORE_DISTANCE_KM
+                and _place_mentions_named_location(place, query.location_hint)
+            )
             if (
                 distance_km is None
-                or distance_km > _MAX_OFFSHORE_ASSOCIATION_DISTANCE_KM
+                or (
+                    distance_km > _MAX_OFFSHORE_ASSOCIATION_DISTANCE_KM
+                    and not named_place_offshore
+                )
                 or not _place_mentions_country(place, query.country)
             ):
                 return None, ProviderIssue(

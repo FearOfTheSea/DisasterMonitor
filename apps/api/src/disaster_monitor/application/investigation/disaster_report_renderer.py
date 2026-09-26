@@ -6,11 +6,18 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from disaster_monitor.application.disaster import EvidencePacket, ReportSection
+from disaster_monitor.application.disaster_aliases import recognized_disasters
 from disaster_monitor.application.investigation.report_profiles import (
     ReportProfile,
     report_profile_for,
 )
-from disaster_monitor.domain.disaster import FactStatus, ReportedFact, SourceReference
+from disaster_monitor.domain.disaster import (
+    EventMeasurement,
+    FactStatus,
+    MeasurementKind,
+    ReportedFact,
+    SourceReference,
+)
 
 
 def _format_timestamp(value: datetime | None) -> str:
@@ -54,9 +61,7 @@ def _place_core(value: str, country: str) -> str:
     return re.sub(r" (?:province|district|city|ward)$", "", folded)
 
 
-def _fact_matches_named_place(
-    fact: ReportedFact, *, place: str, country: str
-) -> bool:
+def _fact_matches_named_place(fact: ReportedFact, *, place: str, country: str) -> bool:
     if fact.reported_location is None:
         return True
     wanted = _place_core(place, country)
@@ -80,11 +85,15 @@ def _scoped_facts(
     visible: list[ReportedFact] = []
     omitted: list[ReportedFact] = []
     for fact in packet.facts:
-        (visible if _fact_matches_named_place(
-            fact,
-            place=packet.query.location_hint,
-            country=packet.query.country.canonical_name,
-        ) else omitted).append(fact)
+        (
+            visible
+            if _fact_matches_named_place(
+                fact,
+                place=packet.query.location_hint,
+                country=packet.query.country.canonical_name,
+            )
+            else omitted
+        ).append(fact)
     return tuple(visible), tuple(omitted)
 
 
@@ -92,7 +101,8 @@ def _measurement_details(packet: EvidencePacket) -> tuple[str, ...]:
     details: list[str] = []
     seen: set[str] = set()
     for measurement in packet.event.measurements:
-        detail = f"{measurement.kind.value} {measurement.value}"
+        label = _measurement_label(measurement.kind, measurement.source)
+        detail = f"{label} {measurement.value}"
         if measurement.unit:
             detail = f"{detail} {measurement.unit}"
         if detail not in seen:
@@ -101,13 +111,114 @@ def _measurement_details(packet: EvidencePacket) -> tuple[str, ...]:
     return tuple(details)
 
 
+def _measurement_label(kind: MeasurementKind, source: SourceReference) -> str:
+    if kind is MeasurementKind.SEVERITY and source.source_id.startswith("gdacs-"):
+        return "GDACS alert level"
+    if kind is MeasurementKind.MAXIMUM_WIND_SPEED and source.source_id.startswith(
+        "gdacs-"
+    ):
+        return "GDACS maximum wind-speed estimate"
+    return kind.value.replace("_", " ")
+
+
+def _situation_summary(
+    packet: EvidencePacket,
+    visible_facts: tuple[ReportedFact, ...],
+    profile: ReportProfile,
+) -> str:
+    title = " ".join(packet.event.source.title.split())
+    named_hazard = recognized_disasters(title) == (packet.query.disaster,)
+    if not named_hazard and not (
+        packet.query.disaster.value == "volcanic_eruption"
+        and "eruption" in title.casefold()
+    ):
+        title = f"{packet.query.disaster.value.replace('_', ' ').capitalize()}: {title}"
+    event_location = " ".join(packet.event.location.split())
+    location = event_location
+    country = packet.query.country.canonical_name
+    if country.casefold() not in location.casefold():
+        location = f"{location}, {country}"
+    if _fold_place(event_location) in _fold_place(title):
+        if _fold_place(country) not in _fold_place(title):
+            title = f"{title}, {country}"
+    else:
+        title = f"{title} — {location}"
+    event_time = packet.event.event_time.astimezone(UTC)
+    parts = [f"{title}; {event_time.day} {event_time:%b %Y, %H:%M} UTC."]
+    measurements_by_kind: dict[MeasurementKind, EventMeasurement] = {}
+    for measurement in packet.event.measurements:
+        if measurement.kind not in {
+            MeasurementKind.MAGNITUDE,
+            MeasurementKind.MAXIMUM_WIND_SPEED,
+            MeasurementKind.DEPTH,
+            MeasurementKind.INTENSITY,
+            MeasurementKind.SEVERITY,
+        }:
+            continue
+        current = measurements_by_kind.get(measurement.kind)
+        if current is not None and (
+            current.source.source_id == packet.event.source.source_id
+            or measurement.source.source_id != packet.event.source.source_id
+        ):
+            continue
+        measurements_by_kind[measurement.kind] = measurement
+    measurements = []
+    for kind in (
+        MeasurementKind.MAGNITUDE,
+        MeasurementKind.MAXIMUM_WIND_SPEED,
+        MeasurementKind.DEPTH,
+        MeasurementKind.INTENSITY,
+        MeasurementKind.SEVERITY,
+    ):
+        selected = measurements_by_kind.get(kind)
+        if selected is None:
+            continue
+        label = _measurement_label(selected.kind, selected.source)
+        value = f"{label} {selected.value}"
+        if selected.unit:
+            value += f" {selected.unit}"
+        measurements.append(value)
+        if len(measurements) == 3:
+            break
+    if measurements:
+        parts.append("Reported measurements: " + "; ".join(measurements) + ".")
+    ash_facts = [fact for fact in visible_facts if fact.category == "ash_observation"]
+    if ash_facts:
+        ash_fact = ash_facts[0]
+        status = (
+            ""
+            if ash_fact.status is FactStatus.CONFIRMED
+            else f" ({ash_fact.status.value})"
+        )
+        parts.append(f"Ash advisory: {ash_fact.value}{status}.")
+    impact_categories = profile.human_categories | profile.physical_categories
+    impact_facts = [
+        fact for fact in visible_facts if fact.category in impact_categories
+    ]
+    if impact_facts:
+        facts = []
+        for fact in impact_facts[:2]:
+            status = (
+                "" if fact.status is FactStatus.CONFIRMED else f" ({fact.status.value})"
+            )
+            facts.append(f"{fact.label}: {fact.value}{status}")
+        parts.append("Reported impacts: " + "; ".join(facts) + ".")
+    else:
+        parts.append(
+            "The retrieved sources contain no event-specific human-impact or damage "
+            "figures; this is not evidence of no impact."
+        )
+    return " ".join(parts)
+
+
 def _event_summary(packet: EvidencePacket) -> str:
     event = packet.event
     country_name = packet.query.country.canonical_name
+    event_location = " ".join(event.location.split())
     location = (
-        event.location
-        if country_name.lower() in event.location.lower()
-        else f"{event.location}, {country_name}"
+        event_location
+        if country_name.lower() in event_location.lower()
+        else f"{event_location}, {country_name}"
     )
     location_citation = (
         f" Location source: {_citation(event.location_source)}."
@@ -138,9 +249,7 @@ class DisasterReportRenderer:
 
         def scoped_lines(categories: frozenset[str], missing: str) -> str:
             lines = _fact_lines(visible_facts, categories)
-            omitted_count = sum(
-                fact.category in categories for fact in omitted_facts
-            )
+            omitted_count = sum(fact.category in categories for fact in omitted_facts)
             content = "\n".join(lines) if lines else missing
             if omitted_count:
                 content += (
@@ -150,12 +259,7 @@ class DisasterReportRenderer:
             return content
 
         narrative_lines = [f"- {narrative}" for narrative in packet.narratives]
-        summary = (
-            f"The selected source-backed {packet.query.disaster.value} event is "
-            f"{packet.event.event_id}. Retrieved evidence covers "
-            f"{_event_summary(packet)}. The report separates confirmed, preliminary, "
-            "estimated, disputed, and unavailable information."
-        )
+        summary = _situation_summary(packet, visible_facts, profile)
         sections: list[ReportSection] = [
             ReportSection("Situation summary", summary),
             ReportSection("Event details", _event_summary(packet)),

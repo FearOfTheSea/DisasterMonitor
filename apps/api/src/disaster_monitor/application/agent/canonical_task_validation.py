@@ -1,6 +1,7 @@
 """Validation and bounded repair of canonical model-produced tasks."""
 
 import re
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from disaster_monitor.application.agent.models import (
@@ -13,6 +14,7 @@ from disaster_monitor.application.agent.models import (
 )
 from disaster_monitor.application.agent.task_classification import (
     _CURRENT_EVENT_MARKERS,
+    _WORLDWIDE_MARKERS,
     _information_needs,
     _output_modalities,
 )
@@ -108,6 +110,21 @@ def _validate_canonical_task(
             response_language_explicit=draft.response_language_explicit,
         )
     scope = draft.geographic_scope or GeographicScope.COUNTRY
+    if scope is GeographicScope.WORLDWIDE and not _WORLDWIDE_MARKERS.search(question):
+        stated_countries = country_catalog.find_mentions(question)
+        if len(stated_countries) == 1:
+            stated_country = stated_countries[0]
+            has_country_proposal = bool(draft.country_code or draft.country_name)
+            proposed_country = _resolve_canonical_country(draft, country_catalog)
+            if not has_country_proposal or proposed_country == stated_country:
+                draft = replace(
+                    draft,
+                    geographic_scope=GeographicScope.COUNTRY,
+                    country_code=stated_country.alpha3_code,
+                    country_name=stated_country.canonical_name,
+                )
+                scope = GeographicScope.COUNTRY
+    assert isinstance(draft.disaster, Disaster)
     country = None
     if scope is GeographicScope.COUNTRY:
         country = _resolve_canonical_country(draft, country_catalog)

@@ -1,0 +1,30 @@
+{
+  "schema_version": "local-assistant-cases.v1",
+  "verified_on": "2026-09-26",
+  "cases": [
+    {
+      "id": "2026-09-polo-mexico",
+      "question": "What happened with Tropical Cyclone Polo near Mexico this week? Were any impacts reported?",
+      "expected_event_id": "gdacs:tc:1001325",
+      "requested_place": "Mexico",
+      "source_url_contains": "1001325",
+      "independent_source_url": "https://www.gdacs.org/report.aspx?eventid=1001325&episodeid=20&eventtype=TC"
+    },
+    {
+      "id": "2026-09-23-surigae-japan-cyclone",
+      "question": "What happened with Tropical Cyclone Surigae near Japan on September 23, 2026? Were any impacts reported?",
+      "expected_event_id": "gdacs:tc:1001327",
+      "requested_place": "Japan",
+      "source_url_contains": "1001327",
+      "independent_source_url": "https://www.gdacs.org/report.aspx?episodeid=5&eventid=1001327&eventtype=TC"
+    },
+    {
+      "id": "2026-09-nolo-united-states-cyclone",
+      "question": "What happened with Tropical Cyclone Nolo in the United States this week? How strong was it?",
+      "expected_event_id": "gdacs:tc:1001321",
+      "requested_place": "United States",
+      "source_url_contains": "1001321",
+      "independent_source_url": "https://www.nhc.noaa.gov/archive/2026/NOLO.shtml"
+    }
+  ]
+}

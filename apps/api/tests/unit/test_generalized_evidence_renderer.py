@@ -172,7 +172,7 @@ def test_generic_renderer_uses_selected_disaster_and_country_without_japan_prose
 
     message, sections = DisasterReportRenderer().render(packet)
 
-    assert "flood" in message
+    assert "flood" in message.casefold()
     assert "Venezuela" in message
     assert "Japan" not in message
     assert "earthquake" not in message
@@ -212,3 +212,38 @@ def test_renderer_deduplicates_corroborating_measurement_values() -> None:
     )
     assert event_details.count("magnitude 6.2") == 1
     assert len(packet.event.measurements) == 2
+
+
+def test_summary_prioritizes_magnitude_and_one_depth_for_merged_quake() -> None:
+    event = _event()
+    secondary = _source("EMSC", SourceAuthority.SCIENTIFIC_AUTHORITY)
+    event = replace(
+        event,
+        measurements=(
+            EventMeasurement(
+                MeasurementKind.DEPTH, 10.0, unit="km", source=event.source
+            ),
+            EventMeasurement(MeasurementKind.DEPTH, 12.1, unit="km", source=secondary),
+            EventMeasurement(MeasurementKind.INTENSITY, "MMI 6.7", source=event.source),
+            EventMeasurement(MeasurementKind.MAGNITUDE, 6.2, source=secondary),
+            *event.measurements,
+        ),
+    )
+    packet = EvidencePacket(
+        DisasterQuery(Disaster.EARTHQUAKE, VENEZUELA, "recent", ("latest",)),
+        event,
+        (),
+        (),
+        (event.source, secondary),
+        (),
+        (),
+        NOW,
+        False,
+    )
+
+    _, sections = DisasterReportRenderer().render(packet)
+
+    summary = sections[0].content
+    assert "magnitude 6.2; depth 10.0 km; intensity MMI 6.7" in summary
+    assert "depth 12.1" not in summary
+    assert "depth 12.1" in sections[1].content

@@ -63,5 +63,28 @@ coverage.
    attributed corroboration; do not imply that a blocked WVAR fetch verified an
    eruption.
 
+On 2026-09-25, a second standalone-backend run used the six questions in
+`evaluation/local_assistant_quality_cases.2026-09-25.json`. The recorded outcomes
+are in `evaluation/local_assistant_quality_results.2026-09-25.json`: Polo,
+Hihifo/Tonga, Chikurachki, Ruteng, Krakatau, and Surigae each selected the verified
+event and a direct event source. The original Polo run required a country-scope
+repair; a later run exposed a storm title incorrectly interpreted as a place.
+The final run selected Polo after both repairs. Northern Tonga needed a bounded
+named-place offshore USGS search. Chikurachki and Krakatau now show GDACS ash
+advisory wording as preliminary evidence, separately from human impact. The
+summaries lead with source-backed event details and explicitly avoid treating
+missing impact reports as proof of no impact. Provider gaps remain visible in the
+response, including the WVAR configuration rejection for Krakatau.
+
+On 2026-09-26, a focused repeat run used
+`evaluation/local_assistant_quality_cases.2026-09-26.json` after adding GDACS
+maximum wind-speed estimates to cyclone reports. Its Polo, Surigae, and unrelated
+Nolo cases all selected the expected event and showed a source-linked wind value;
+the outcomes are in `evaluation/local_assistant_quality_results.2026-09-26.json`.
+The wording identifies these values as estimates, not local damage observations
+or necessarily current sustained winds. GDACS changed Polo's latest alert from
+Orange to Green between the two live runs, and the answer followed the current
+provider record.
+
 The standalone backend on port 8002 has degraded durable-monitoring readiness, so
 these results validate the live request path rather than scheduler continuity.

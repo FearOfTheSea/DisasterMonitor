@@ -52,10 +52,20 @@ EARTHQUAKE_REPORT_PROFILE = ReportProfile(
         "reports. A warning or advisory alone would not establish damage."
     ),
 )
+VOLCANIC_ERUPTION_REPORT_PROFILE = ReportProfile(
+    _HUMAN,
+    _PHYSICAL,
+    _RESPONSE,
+    secondary_title="Ash and eruption observations",
+    secondary_categories=frozenset({"ash_observation"}),
+    secondary_missing="No source-backed ash observation was retrieved for this event.",
+)
 
 
 def report_profile_for(disaster: Disaster) -> ReportProfile:
     """Return a dedicated profile or the conservative generic profile."""
     if disaster == Disaster.EARTHQUAKE:
         return EARTHQUAKE_REPORT_PROFILE
+    if disaster == Disaster.VOLCANIC_ERUPTION:
+        return VOLCANIC_ERUPTION_REPORT_PROFILE
     return GENERIC_REPORT_PROFILE

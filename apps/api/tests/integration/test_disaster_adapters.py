@@ -23,7 +23,10 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
     DisasterProviderResponseError,
 )
-from disaster_monitor.infrastructure.disaster.usgs_adapter import UsgsEarthquakeAdapter
+from disaster_monitor.infrastructure.disaster.usgs_adapter import (
+    UsgsEarthquakeAdapter,
+    build_usgs_params,
+)
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -65,6 +68,26 @@ UNITED_STATES = Country(
         max_longitude=-168.0,
         validation_quality=BoundaryValidationQuality.POLYGON,
         polygons=(((52.0, -170.0), (52.0, -169.0), (53.0, -169.0), (53.0, -170.0)),),
+    ),
+)
+TONGA = Country(
+    alpha3_code="TON",
+    canonical_name="Tonga",
+    aliases=(),
+    geographic_area=GeographicArea(
+        min_latitude=-21.45,
+        max_latitude=-18.56,
+        min_longitude=-175.36,
+        max_longitude=-173.92,
+        validation_quality=BoundaryValidationQuality.POLYGON,
+        polygons=(
+            (
+                (-21.45, -175.36),
+                (-21.45, -173.92),
+                (-18.56, -173.92),
+                (-18.56, -175.36),
+            ),
+        ),
     ),
 )
 QUERY = DisasterQuery(
@@ -362,6 +385,64 @@ async def test_usgs_accepts_near_shore_alaska_event_for_united_states() -> None:
     assert result.records[0].geography_status is (
         EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
     )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_named_island_can_be_outside_country_polygon() -> None:
+    payload = usgs_payload()
+    feature = payload["features"][0]  # type: ignore[index]
+    feature["id"] = "us6000tx3m"
+    feature["properties"]["place"] = "180 km NW of Hihifo, Tonga"  # type: ignore[index]
+    feature["geometry"]["coordinates"] = [-175.1114, -14.9369, 10.0]  # type: ignore[index]
+    query = DisasterQuery(
+        Disaster.EARTHQUAKE,
+        TONGA,
+        "specified",
+        ("event overview",),
+        date_from=datetime(2026, 9, 22, 11, tzinfo=UTC),
+        date_to=datetime(2026, 9, 23, 11, tzinfo=UTC),
+        location_hint="Hihifo",
+    )
+    params = build_usgs_params(query, now=datetime(2026, 9, 25, tzinfo=UTC))
+    assert float(params["maxlatitude"]) >= -14.9369
+    client = client_for(payload)
+    result = await UsgsEarthquakeAdapter(
+        geography=CATALOG, client=client
+    ).find_recent_events(query, now=datetime(2026, 9, 25, tzinfo=UTC))
+
+    assert [event.event_id for event in result.records] == ["usgs:us6000tx3m"]
+    assert result.records[0].geography_status is (
+        EventGeographyStatus.COUNTRY_ASSOCIATED_OFFSHORE
+    )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_usgs_distant_island_event_needs_exact_requested_place_in_source() -> (
+    None
+):
+    payload = usgs_payload()
+    feature = payload["features"][0]  # type: ignore[index]
+    feature["properties"]["place"] = "180 km NW of Nuku'alofa, Tonga"  # type: ignore[index]
+    feature["geometry"]["coordinates"] = [-175.1114, -14.9369, 10.0]  # type: ignore[index]
+    query = DisasterQuery(
+        Disaster.EARTHQUAKE,
+        TONGA,
+        "specified",
+        (),
+        date_from=datetime(2026, 9, 22, 11, tzinfo=UTC),
+        date_to=datetime(2026, 9, 23, 11, tzinfo=UTC),
+        location_hint="Hihifo",
+    )
+
+    client = client_for(payload)
+    result = await UsgsEarthquakeAdapter(
+        geography=CATALOG, client=client
+    ).find_recent_events(query, now=datetime(2026, 9, 25, tzinfo=UTC))
+
+    assert result.records == ()
+    assert result.issues[0].reason_code == "country_mismatch"
     await client.aclose()
 
 

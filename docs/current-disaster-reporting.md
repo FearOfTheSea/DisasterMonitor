@@ -43,6 +43,10 @@ to this path.
 Explicit worldwide requests use the same normalized-task and capability-selection
 path as named-country requests. They do not invent a country.
 
+Named-country requests retain explicit place hints only when they identify a place.
+A storm or other hazard title returned as a model place mention is discarded so it
+cannot incorrectly reject a matching event whose source location is a country.
+
 Worldwide ranking and wording come from the selected disaster policy. The result
 provides event discovery, not global impact coverage.
 
@@ -101,8 +105,15 @@ See [noaa-nws-weather-alerts.md](sources/noaa-nws-weather-alerts.md).
 - EMSC SeismicPortal, GDACS, and USGS provide bounded named-country and worldwide
   earthquake discovery. GDACS retains NEIC/USGS lineage; EMSC can also share an
   originating network with USGS. Agreement is not automatically independent
-  confirmation.
+  confirmation. For dated, named-place USGS queries, the search rectangle extends
+  beyond the country polygon to cover nearby offshore events. Such events are
+  admitted only when the source place names the requested place and country and the
+  coordinate is within 500 km of the country polygon. Generic country searches
+  retain the narrower geographic rule.
 - GDACS provides bounded named-country and worldwide tropical-cyclone discovery.
+  Its event-listed maximum wind-speed estimate is shown with its GDACS source and units
+  when the structured value is plausible; it remains distinct from observed
+  local damage or casualties.
 - NOAA IBTrACS can reconcile one active track after GDACS selects a cyclone. It
   requires a unique non-generic name, onset, and track-proximity match. It remains
   provisional and is not an independent live-event authority because agency inputs

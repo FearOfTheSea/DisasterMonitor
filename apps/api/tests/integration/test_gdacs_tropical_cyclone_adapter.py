@@ -141,11 +141,34 @@ async def test_gdacs_translates_fixed_search_fixture_with_provenance() -> None:
     assert event.geometry.coordinates[0].latitude == 20.4
     assert event.geometry.coordinates[0].longitude == -166.1
     assert [(item.kind, item.value) for item in event.measurements] == [
-        (MeasurementKind.SEVERITY, "Green")
+        (MeasurementKind.SEVERITY, "Green"),
+        (MeasurementKind.MAXIMUM_WIND_SPEED, 157),
     ]
+    assert event.measurements[1].unit == "km/h"
     assert not hasattr(event, "country")
     assert len(snapshots) == 1
     assert snapshots[0].rights_id == "gdacs-terms-of-use"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_rejects_implausible_maximum_wind_speed() -> None:
+    payload = gdacs_payload()
+    for feature in payload["features"]:
+        feature["properties"]["severitydata"]["severity"] = 10_000
+    requests: list[httpx.Request] = []
+    client = client_for(payload, requests)
+    adapter = GdacsTropicalCycloneAdapter(client=client)
+
+    result = await adapter.find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
+    )
+
+    assert all(
+        measurement.kind is not MeasurementKind.MAXIMUM_WIND_SPEED
+        for event in result.records
+        for measurement in event.measurements
+    )
     await client.aclose()
 
 
@@ -414,8 +437,32 @@ async def test_gdacs_replaces_untrusted_event_url_with_approved_source_url() -> 
     )
 
     assert result.records[0].source.canonical_url == (
-        "https://www.gdacs.org/gdacsapi/api/events/geteventdata?"
-        "eventtype=TC&eventid=1001303"
+        "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001303&episodeid=24"
+    )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_gdacs_homepage_detail_url_still_cites_exact_event_report() -> None:
+    payload = gdacs_payload()
+    features = payload["features"]
+    assert isinstance(features, list)
+    first = features[0]
+    assert isinstance(first, dict)
+    properties = first["properties"]
+    assert isinstance(properties, dict)
+    urls = properties["url"]
+    assert isinstance(urls, dict)
+    urls["details"] = "https://www.gdacs.org"
+    urls["report"] = "https://evil.example/other-event"
+    client = client_for(payload, [])
+
+    result = await GdacsTropicalCycloneAdapter(client=client).find_worldwide_events(
+        WorldwideDisasterQuery(Disaster.TROPICAL_CYCLONE), now=NOW
+    )
+
+    assert result.records[0].source.canonical_url == (
+        "https://www.gdacs.org/report.aspx?eventtype=TC&eventid=1001303&episodeid=24"
     )
     await client.aclose()
 

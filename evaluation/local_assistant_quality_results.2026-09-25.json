@@ -1,0 +1,80 @@
+{
+  "schema_version": "local-assistant-quality-results.v1",
+  "verified_on": "2026-09-25",
+  "backend_url": "http://127.0.0.1:8002",
+  "model": "source-backed-agent",
+  "cases": [
+    {
+      "id": "2026-09-polo-mexico",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "gdacs:tc:1001325",
+      "summary": "Tropical Cyclone POLO-26 — Mexico; 21 Sep 2026, 03:00 UTC. Reported measurements: GDACS alert level Orange. The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "ash_observation": null,
+      "source_url_verified": true,
+      "event_scan_complete": true,
+      "event_issue_codes": []
+    },
+    {
+      "id": "2026-09-23-hihifo-tonga-earthquake",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "usgs:us6000tx3m",
+      "summary": "Earthquake: M 5.7 - 180 km NW of Hihifo, Tonga; 23 Sep 2026, 14:41 UTC. Reported measurements: magnitude 5.7; depth 10.0 km; intensity MMI 3.962. The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "ash_observation": null,
+      "source_url_verified": true,
+      "event_scan_complete": true,
+      "event_issue_codes": [
+        "empty_result"
+      ]
+    },
+    {
+      "id": "2026-09-21-chikurachki-russia-volcano",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "gdacs:vo:1000149",
+      "summary": "Eruption Chikurachki, Russian Federation; 21 Sep 2026, 00:00 UTC. Reported measurements: GDACS alert level Green. Ash advisory: Volcanic ash emissions continuing. (preliminary). The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "ash_observation": "- Volcanic ash advisory: Volcanic ash emissions continuing. (preliminary). Source: GDACS; source: TOKYO — Volcanic ash advisory summary (https://www.gdacs.org/gts.aspx?eventtype=VO&eventid=1000149)",
+      "source_url_verified": true,
+      "event_scan_complete": true,
+      "event_issue_codes": [
+        "empty_result"
+      ]
+    },
+    {
+      "id": "2026-09-21-ruteng-indonesia-earthquake",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "usgs:us7000tiur",
+      "summary": "Earthquake: M 5.5 - 35 km NNE of Ruteng, Indonesia; 21 Sep 2026, 01:41 UTC. Reported measurements: magnitude 5.5; depth 10.0 km; intensity MMI 6.701. The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "ash_observation": null,
+      "source_url_verified": true,
+      "event_scan_complete": true,
+      "event_issue_codes": []
+    },
+    {
+      "id": "2026-09-04-krakatau-indonesia-volcano",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "gdacs:vo:1000148",
+      "summary": "Eruption Krakatau, Indonesia; 4 Sep 2026, 21:00 UTC. Reported measurements: GDACS alert level Orange. Ash advisory: Volcanic ash to flight level 500 (15000m) move w, volcanic ash to flight level 200 (6000m) move s, volcanic ash to flight level 180 (5400m) move ese. (preliminary). The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "ash_observation": "- Volcanic ash advisory: Volcanic ash to flight level 500 (15000m) move w, volcanic ash to flight level 200 (6000m) move s, volcanic ash to flight level 180 (5400m) move ese. (preliminary). Source: GDACS; source: DARWIN — Volcanic ash advisory summary (https://www.gdacs.org/gts.aspx?eventtype=VO&eventid=1000148)",
+      "source_url_verified": true,
+      "event_scan_complete": true,
+      "event_issue_codes": [
+        "configuration_rejected"
+      ]
+    },
+    {
+      "id": "2026-09-23-surigae-japan-cyclone",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "gdacs:tc:1001327",
+      "summary": "Tropical Cyclone SURIGAE-26 — Japan; 23 Sep 2026, 06:00 UTC. Reported measurements: GDACS alert level Green. The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "ash_observation": null,
+      "source_url_verified": true,
+      "event_scan_complete": true,
+      "event_issue_codes": []
+    }
+  ]
+}

@@ -12,6 +12,9 @@ from disaster_monitor.application.disaster import DisasterQuery
 from disaster_monitor.application.evidence.evidence_reconciliation import (
     build_evidence_packet,
 )
+from disaster_monitor.application.investigation.disaster_report_renderer import (
+    DisasterReportRenderer,
+)
 from disaster_monitor.domain.disaster import (
     Country,
     Disaster,
@@ -293,3 +296,86 @@ async def test_malformed_report_page_after_detail_outage_remains_unavailable():
             await GdacsSituationAdapter(client=client).get_situation_reports(
                 event, query, now=NOW
             )
+
+
+@pytest.mark.asyncio
+async def test_volcano_detail_admits_preliminary_ash_text_without_impact_claim() -> (
+    None
+):
+    country = Country(
+        "RUS", "Russian Federation", ("Russia",), GeographicArea(41, 82, -180, 180)
+    )
+    query = DisasterQuery(
+        Disaster.VOLCANIC_ERUPTION,
+        country,
+        "specified",
+        (),
+        location_hint="Chikurachki",
+    )
+    event_source = SourceReference(
+        "gdacs-volcanic-eruptions",
+        "GDACS",
+        "Eruption Chikurachki",
+        "https://www.gdacs.org/report.aspx?eventtype=VO&eventid=1000149",
+        None,
+        None,
+        NOW,
+    )
+    event = DisasterEvent(
+        "gdacs:vo:1000149",
+        Disaster.VOLCANIC_ERUPTION,
+        "Eruption Chikurachki",
+        country,
+        NOW,
+        event_source,
+        provider_ids=("gdacs:vo:1000149:1",),
+    )
+    payload = {
+        "type": "Feature",
+        "properties": {
+            "eventtype": "VO",
+            "eventid": 1000149,
+            "episodeid": 1,
+            "iso3": "RUS",
+            "name": "Eruption Chikurachki",
+            "source": "TOKYO",
+            "fromdate": "2026-09-21T00:00:00",
+            "datemodified": "2026-09-21T12:48:15",
+            "additionalinfos": {
+                "eruptiondetails": "Volcanic ash emissions continuing."
+            },
+        },
+    }
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload))
+    ) as client:
+        batch = await GdacsSituationAdapter(client=client).get_situation_reports(
+            event, query, now=NOW
+        )
+
+    assert len(batch.records) == 1
+    assert [fact.category for fact in batch.records[0].facts] == ["ash_observation"]
+    assert batch.records[0].facts[0].status is FactStatus.PRELIMINARY
+    assert batch.records[0].facts[0].value == "Volcanic ash emissions continuing."
+    assert "gts.aspx?eventtype=VO&eventid=1000149" in (
+        batch.records[0].source.canonical_url
+    )
+    assert any(issue.reason_code == "invalid_payload" for issue in batch.issues)
+    packet = build_evidence_packet(
+        query,
+        event,
+        batch.records,
+        warnings=tuple(issue.message for issue in batch.issues),
+        retrieved_at=NOW,
+    )
+    _, sections = DisasterReportRenderer().render(packet)
+    ash_section = next(
+        section.content
+        for section in sections
+        if section.title == "Ash and eruption observations"
+    )
+    assert "Volcanic ash emissions continuing." in ash_section
+    assert "(preliminary)" in ash_section
+    assert "Volcanic ash emissions continuing" in sections[0].content
+    assert "ash fall" not in sections[0].content.lower()

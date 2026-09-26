@@ -1,0 +1,58 @@
+{
+  "schema_version": "local-assistant-quality-results.v1",
+  "verified_on": "2026-09-26",
+  "backend_url": "http://127.0.0.1:8002",
+  "cases": [
+    {
+      "id": "2026-09-polo-mexico",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "gdacs:tc:1001325",
+      "summary": "Tropical Cyclone POLO-26 — Mexico; 21 Sep 2026, 03:00 UTC. Reported measurements: GDACS maximum wind-speed estimate 287 km/h; GDACS alert level Green. The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "wind_measurements": [
+        {
+          "kind": "maximum_wind_speed",
+          "value": 287.0,
+          "unit": "km/h",
+          "source_id": "gdacs-tropical-cyclones"
+        }
+      ],
+      "event_scan_complete": true,
+      "event_issue_codes": []
+    },
+    {
+      "id": "2026-09-23-surigae-japan-cyclone",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "gdacs:tc:1001327",
+      "summary": "Tropical Cyclone SURIGAE-26 — Japan; 23 Sep 2026, 06:00 UTC. Reported measurements: GDACS maximum wind-speed estimate 176 km/h; GDACS alert level Green. The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "wind_measurements": [
+        {
+          "kind": "maximum_wind_speed",
+          "value": 176.0,
+          "unit": "km/h",
+          "source_id": "gdacs-tropical-cyclones"
+        }
+      ],
+      "event_scan_complete": true,
+      "event_issue_codes": []
+    },
+    {
+      "id": "2026-09-nolo-united-states-cyclone",
+      "verdict": "verified_event",
+      "response_type": "current_disaster",
+      "selected_event_id": "gdacs:tc:1001321",
+      "summary": "Tropical Cyclone NOLO-26 — United States; 13 Sep 2026, 21:00 UTC. Reported measurements: GDACS maximum wind-speed estimate 222 km/h; GDACS alert level Green. The retrieved sources contain no event-specific human-impact or damage figures; this is not evidence of no impact.",
+      "wind_measurements": [
+        {
+          "kind": "maximum_wind_speed",
+          "value": 222.0,
+          "unit": "km/h",
+          "source_id": "gdacs-tropical-cyclones"
+        }
+      ],
+      "event_scan_complete": true,
+      "event_issue_codes": []
+    }
+  ]
+}

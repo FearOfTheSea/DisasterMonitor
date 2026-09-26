@@ -85,6 +85,11 @@ _PLACE_AFTER_IN = re.compile(
     r"\b(?:in|from|across|near|around|at)\s+(?:the\s+)?"
     r"([A-Z][A-Za-z .'-]{1,60}?)(?=[?.!,]|\s+(?:on|and|in)\b|$)"
 )
+_RELATIVE_TIME_SUFFIX = re.compile(
+    r"\s*(?:(?:this|last|next)\s+(?:week|month|year)|today|yesterday|"
+    r"tonight|now|recently)$",
+    re.IGNORECASE,
+)
 
 
 def location_hint_from_text(text: str, country_catalog: CountryCatalog) -> str | None:
@@ -108,8 +113,10 @@ def location_hint_from_mentions(
 
 
 def _clean_location_hint(value: str, country_catalog: CountryCatalog) -> str | None:
-    candidate = value.strip(" ,")
+    candidate = _RELATIVE_TIME_SUFFIX.sub("", value.strip(" ,")).strip(" ,")
     if not candidate:
+        return None
+    if recognized_disasters(candidate):
         return None
     country_matches = country_catalog.find_mentions(candidate)
     if len(country_matches) == 1:

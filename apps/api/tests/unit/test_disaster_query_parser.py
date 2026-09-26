@@ -133,11 +133,30 @@ def test_country_only_place_does_not_become_a_location_hint() -> None:
     assert query.location_hint is None
 
 
+def test_country_followed_by_relative_time_does_not_create_a_place_hint() -> None:
+    query = PARSER.parse("What happened with the cyclone near Japan this week?").query
+
+    assert query is not None
+    assert query.location_hint is None
+    assert (
+        location_hint_from_mentions(("Japan this week",), StaticCountryCatalog())
+        is None
+    )
+
+
 def test_canonical_place_mentions_can_supply_a_location_hint() -> None:
     catalog = StaticCountryCatalog()
 
     assert location_hint_from_mentions(("Kamchatka", "Russia"), catalog) == (
         "Kamchatka"
+    )
+
+
+def test_storm_name_is_not_a_place_hint() -> None:
+    catalog = StaticCountryCatalog()
+
+    assert (
+        location_hint_from_mentions(("Tropical Cyclone Polo", "Japan"), catalog) is None
     )
 
 

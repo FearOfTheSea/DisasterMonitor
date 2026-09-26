@@ -31,6 +31,9 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderError,
     DisasterProviderResponseError,
 )
+from disaster_monitor.infrastructure.disaster.gdacs_eruption_observations import (
+    eruption_ash_report,
+)
 from disaster_monitor.infrastructure.disaster.gdacs_situation_parsing import (
     GdacsReportObservation,
     GdacsReportPageData,
@@ -211,12 +214,25 @@ class GdacsSituationAdapter:
                 "invalid_payload",
                 "Event details did not match the selected event and country.",
             )
+        ash_report = eruption_ash_report(
+            properties,
+            event,
+            query,
+            event_identifier=identifier,
+            source_id=self.source_id,
+            snapshot_id=(
+                capture.snapshot.snapshot_id if capture and capture.snapshot else None
+            ),
+            now=now,
+        )
+        ash_records = (ash_report,) if ash_report is not None else ()
         rows = properties.get("sendai")
         if not isinstance(rows, list):
-            return self._issue(
+            issue = self._issue(
                 "invalid_payload",
                 "The event detail response omitted the observed-impact list.",
             )
+            return ProviderBatch(records=ash_records, issues=issue.issues)
         source = SourceReference(
             source_id=self.source_id,
             publisher="GDACS; source: "
@@ -242,11 +258,12 @@ class GdacsSituationAdapter:
             if (fact := _observation(row, source, event, query, now)) is not None
         )
         if not facts:
-            return self._issue(
+            issue = self._issue(
                 "empty_result",
                 "No usable observed impacts were returned for this event; "
                 "missing figures are unknown.",
             )
+            return ProviderBatch(records=ash_records, issues=issue.issues)
         issues: tuple[ProviderIssue, ...] = ()
         if len(facts) != len(rows):
             issues = (
@@ -271,7 +288,7 @@ class GdacsSituationAdapter:
             country_codes=(query.country.alpha3_code,),
             disaster=query.disaster,
         )
-        return ProviderBatch(records=(report,), issues=issues)
+        return ProviderBatch(records=(report, *ash_records), issues=issues)
 
     async def _get_report_page(
         self,

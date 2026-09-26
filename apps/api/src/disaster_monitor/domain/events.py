@@ -30,6 +30,7 @@ class MeasurementKind(StrEnum):
     MAGNITUDE = "magnitude"
     INTENSITY = "intensity"
     DEPTH = "depth"
+    MAXIMUM_WIND_SPEED = "maximum_wind_speed"
     PROVIDER_SIGNIFICANCE = "provider_significance"
     CONFIDENCE = "confidence"
     FIRE_RADIATIVE_POWER = "fire_radiative_power"

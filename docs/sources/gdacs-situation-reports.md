@@ -3,6 +3,11 @@
 The GDACS event-detail endpoint provides structured `sendai` observations alongside
 modelled risk/exposure products. The adapter reads only allowlisted Sendai indicators:
 death, injured, missing, displaced, rescued, houses damaged, and houses destroyed.
+For volcanic events, an exact-event `additionalinfos.eruptiondetails` field with
+explicit ash wording is also retained as a preliminary ash advisory observation.
+It is linked to the GDACS volcanic advisory page and shown separately from human
+impact and damage. Advisory text does not establish ground ash fall or casualties.
+The missing Sendai list still produces a coverage warning when ash text is present.
 
 Primary endpoint: https://www.gdacs.org/gdacsapi/api/events/geteventdata
 Contract: https://www.gdacs.org/gdacsapi/swagger/v1/swagger.json

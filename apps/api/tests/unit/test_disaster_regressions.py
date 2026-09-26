@@ -442,3 +442,26 @@ async def test_event_without_situation_records_is_explicitly_partial() -> None:
     assert result.selected_event is not None
     assert result.partial is True
     assert any("does not mean" in warning for warning in result.warnings)
+
+
+def test_multiple_unmatched_reports_use_plural_warning() -> None:
+    event = _event("usgs:verified")
+    reports = tuple(
+        SituationReport(
+            _source("ReliefWeb", f"unrelated-{index}"),
+            "Unrelated event update.",
+            event_id=f"usgs:other-{index}",
+            country_codes=("JPN",),
+            disaster=Disaster.EARTHQUAKE,
+        )
+        for index in (1, 2)
+    )
+
+    packet = build_evidence_packet(
+        _query(), event, reports, warnings=(), retrieved_at=NOW
+    )
+
+    assert any(
+        "2 ReliefWeb reports did not match" in warning and "were excluded" in warning
+        for warning in packet.warnings
+    )
