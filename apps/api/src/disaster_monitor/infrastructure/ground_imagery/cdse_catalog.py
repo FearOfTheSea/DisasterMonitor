@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
 import httpx
@@ -24,6 +27,7 @@ from disaster_monitor.domain.imagery.regions import polygon_from_geojson
 DEFAULT_CDSE_STAC_URL = "https://stac.dataspace.copernicus.eu/v1/search"
 _ALLOWED_HOST = "stac.dataspace.copernicus.eu"
 _MAX_PAGE_BYTES = 8 * 1024 * 1024
+_MAX_RETRY_DELAY_SECONDS = 15.0
 
 
 class CDSEStacCatalog:
@@ -36,6 +40,7 @@ class CDSEStacCatalog:
         client: httpx.AsyncClient | None = None,
         timeout_seconds: float = 30,
         maximum_response_bytes: int = _MAX_PAGE_BYTES,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         _validate_endpoint(endpoint)
         if not 10_000 <= maximum_response_bytes <= _MAX_PAGE_BYTES:
@@ -44,6 +49,7 @@ class CDSEStacCatalog:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._maximum_response_bytes = maximum_response_bytes
+        self._sleep = sleep
 
     async def search(
         self, query: GroundImageryCatalogQuery
@@ -79,13 +85,13 @@ class CDSEStacCatalog:
             observations = tuple(
                 _observation_from_feature(feature, query.sensor) for feature in features
             )
+            next_cursor = _next_cursor(document, self._endpoint)
         except (ValueError, TypeError, KeyError) as error:
             raise CatalogSearchError(
                 "The CDSE catalog returned an unsupported STAC schema.",
                 reason_code="catalog_schema_invalid",
                 retryable=False,
             ) from error
-        next_cursor = _next_cursor(document)
         context = document.get("context")
         matched = (
             context.get("matched")
@@ -111,10 +117,13 @@ class CDSEStacCatalog:
         self, payload: dict[str, object], cursor: str | None
     ) -> httpx.Response:
         for attempt in range(3):
-            if cursor is None:
+            if cursor is None or not cursor.startswith("https://"):
+                next_payload = (
+                    payload if cursor is None else {**payload, "token": cursor}
+                )
                 response = await self._client.post(
                     self._endpoint,
-                    json=payload,
+                    json=next_payload,
                     headers={"Accept": "application/geo+json, application/json"},
                     follow_redirects=False,
                 )
@@ -125,8 +134,11 @@ class CDSEStacCatalog:
                     headers={"Accept": "application/geo+json, application/json"},
                     follow_redirects=False,
                 )
-            if response.status_code >= 500 and attempt < 2:
-                continue
+            if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+                delay = _retry_delay_seconds(response, attempt)
+                if delay is not None:
+                    await self._sleep(delay)
+                    continue
             if response.status_code == 429:
                 raise CatalogSearchError(
                     "The CDSE catalog rate limit deferred this search.",
@@ -281,14 +293,35 @@ def _link_href(links: object, relation: str) -> str | None:
     return None
 
 
-def _next_cursor(document: object) -> str | None:
+def _next_cursor(document: object, endpoint: str) -> str | None:
     if not isinstance(document, dict):
         return None
-    cursor = _link_href(document.get("links"), "next")
-    if cursor is None:
+    links = document.get("links")
+    if not isinstance(links, list):
         return None
-    _validate_endpoint(cursor)
-    return cursor
+    for link in links:
+        if not isinstance(link, dict) or link.get("rel") != "next":
+            continue
+        href = link.get("href")
+        if not isinstance(href, str):
+            raise ValueError("A STAC next link has no URL.")
+        _validate_endpoint(href)
+        method = link.get("method", "GET")
+        if method == "GET":
+            return href
+        if method != "POST" or href != endpoint:
+            raise ValueError("A STAC next link has an unsupported continuation.")
+        body = link.get("body")
+        token = body.get("token") if isinstance(body, dict) else None
+        if (
+            not isinstance(token, str)
+            or not token
+            or len(token) > 512
+            or not token.isprintable()
+        ):
+            raise ValueError("A STAC POST continuation has no bounded token.")
+        return token
+    return None
 
 
 def _first_string(properties: dict[str, object], *names: str) -> str | None:
@@ -327,6 +360,23 @@ def _cloud_fraction(value: object) -> float | None:
 
 def _utc_text(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _retry_delay_seconds(response: httpx.Response, attempt: int) -> float | None:
+    retry_after = response.headers.get("retry-after")
+    if retry_after is not None:
+        try:
+            delay = float(retry_after)
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(retry_after)
+                if retry_at.tzinfo is None:
+                    return None
+                delay = (retry_at - datetime.now(UTC)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                return None
+        return max(0.0, delay) if delay <= _MAX_RETRY_DELAY_SECONDS else None
+    return float((1.0 if response.status_code == 429 else 0.25) * 2**attempt)
 
 
 def _validate_endpoint(value: str) -> None:

@@ -437,11 +437,21 @@ def render_decision_support(artifact: DecisionSupportArtifact) -> str:
         f"{fact.statement}"
         for fact in artifact.facts
     )
-    lines.extend(
-        f"- DM analytical estimate [{estimate.statement_type.value}; inferred]: "
-        f"{estimate.proposition} Probability {estimate.probability:.2f}."
-        for estimate in artifact.estimates
-    )
+    for estimate in artifact.estimates:
+        if (
+            "ew.hypothesis.no_decisive_current_observation"
+            in estimate.rationale_rule_ids
+        ):
+            lines.append(
+                "- Human impact unresolved: No event-specific human-impact "
+                "probability is supported by current observations."
+            )
+        else:
+            lines.append(
+                f"- DM analytical estimate [{estimate.statement_type.value}; "
+                f"inferred]: {estimate.proposition} "
+                f"Probability {estimate.probability:.2f}."
+            )
     for option in artifact.options:
         approval = (
             " Human approval is required."

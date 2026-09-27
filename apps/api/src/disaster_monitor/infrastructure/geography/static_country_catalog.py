@@ -28,6 +28,12 @@ def _distance_direction(text: str, match: re.Match[str]) -> bool:
     )
 
 
+def _gdacs_event_type(text: str, match: re.Match[str]) -> bool:
+    if match.group(0).upper() not in {"WF", "EQ", "FL", "TC", "VO", "DR"}:
+        return False
+    return bool(re.search(r"\bGDACS\s+$", text[: match.start()], re.I))
+
+
 class StaticCountryCatalog:
     """Resolve aliases from packaged or atomically promoted versioned metadata."""
 
@@ -159,7 +165,7 @@ class StaticCountryCatalog:
         ]
         matches.sort(key=lambda match: (match.start(), -len(match.group(0))))
         for match in matches:
-            if _distance_direction(text, match):
+            if _distance_direction(text, match) or _gdacs_event_type(text, match):
                 continue
             for country in term_countries.get(match.group(0).casefold(), ()):
                 if country.alpha3_code not in found_codes:

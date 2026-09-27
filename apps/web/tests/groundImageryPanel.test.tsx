@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -239,6 +239,7 @@ describe('GroundImageryPanel', () => {
       <GroundImageryPanel
         incidentId="incident-1"
         incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
     );
@@ -256,22 +257,29 @@ describe('GroundImageryPanel', () => {
   });
 
   it('shows the region, temporal uncertainty, and independent sensor states', async () => {
-    render(
+    const { container } = render(
       <GroundImageryPanel
         incidentId="incident-1"
-        incidentLabel="River basin"
+        incidentLabel="Flood · River basin"
+        incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
     );
 
     expect(await screen.findByText('Credentials required')).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Ground view' })).toBeVisible();
-    expect(screen.getByText('River basin')).toBeVisible();
+    expect(screen.getByText('Flood · River basin')).toBeVisible();
+    expect(
+      container.querySelector('time[datetime="2024-05-19T12:00:00Z"]'),
+    ).toBeVisible();
     expect(screen.getByText('Credentials required')).toBeVisible();
-    expect(screen.getByText('Sentinel-1 radar')).toBeVisible();
-    expect(screen.getByText('Sentinel-2 optical')).toBeVisible();
     expect(screen.getByText('Onset unknown')).toBeVisible();
     expect(screen.getByText('No recent observation')).toBeVisible();
+    const stage = screen.getByRole('region', { name: 'Ground comparisons' });
+    expect(within(stage).getByText('Sentinel-1 radar')).toBeVisible();
+    expect(within(stage).getByText('No recent radar capture was found.')).toBeVisible();
+    expect(within(stage).getByText('Sentinel-2 optical')).toBeVisible();
+    expect(within(stage).getByText('No role result returned.')).toBeVisible();
     expect(
       screen.getByText('The reported-place boundary lookup was unavailable.'),
     ).toBeVisible();
@@ -285,6 +293,7 @@ describe('GroundImageryPanel', () => {
       <GroundImageryPanel
         incidentId="incident-1"
         incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
     );
@@ -301,6 +310,7 @@ describe('GroundImageryPanel', () => {
       <GroundImageryPanel
         incidentId="incident-2"
         incidentLabel="Coastal earthquake"
+        incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
     );
@@ -317,6 +327,7 @@ describe('GroundImageryPanel', () => {
       <GroundImageryPanel
         incidentId="incident-1"
         incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
     );
@@ -336,6 +347,7 @@ describe('GroundImageryPanel', () => {
       <GroundImageryPanel
         incidentId="incident-1"
         incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
     );

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -124,6 +125,29 @@ def test_named_place_explicit_date_has_bounded_timezone_tolerance() -> None:
     assert start == datetime(2026, 8, 4, 1, 0, tzinfo=UTC)
     assert end == datetime(2026, 8, 6, 5, 0, tzinfo=UTC)
     assert query.selection_intent is WorldwideSelectionIntent.STRONGEST
+
+
+def test_distance_bearing_of_named_place_preserves_dated_event_tolerance() -> None:
+    parser = DisasterQueryParser(StaticCountryCatalog(Path("data/geography")))
+    query = parser.parse(
+        "For the 26 September 2026 magnitude 5.6 earthquake 74 km ESE of "
+        "Kokopo, Papua New Guinea, show available satellite observations."
+    ).query
+
+    assert query is not None
+    assert query.location_hint == "Kokopo"
+    start, end = retrieval_time_bounds(query, now=datetime(2026, 9, 27, tzinfo=UTC))
+    assert start < datetime(2026, 9, 26, 14, 8, tzinfo=UTC) < end
+
+
+def test_gdacs_wildfire_identifier_targets_one_reported_fire() -> None:
+    parser = DisasterQueryParser(StaticCountryCatalog(Path("data/geography")))
+    query = parser.parse(
+        "Show the 24 September 2026 forest fire in Angola, GDACS WF 1032415."
+    ).query
+
+    assert query is not None
+    assert query.discriminator("event_id") == "gdacs:wf:1032415"
 
 
 def test_country_only_place_does_not_become_a_location_hint() -> None:

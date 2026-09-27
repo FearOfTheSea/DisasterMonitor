@@ -84,7 +84,14 @@ def validate_event_temporality(
     ):
         raise ValueError("A day-precision event requires a UTC calendar date.")
     if event_time_end is not None:
-        raise ValueError("Only week-precision events may carry an end date.")
+        if event_time_precision is not EventTimePrecision.EXACT:
+            raise ValueError(
+                "Only exact or week-precision events may carry an end date."
+            )
+        if not _is_aware(event_time) or not _is_aware(event_time_end):
+            raise ValueError("An exact event interval must be timezone-aware.")
+        if event_time_end < event_time:
+            raise ValueError("An exact event interval cannot end before it starts.")
     if observation_kind is ObservationKind.PRELIMINARY_EVENT:
         raise ValueError("A preliminary event requires week temporal precision.")
 
@@ -104,6 +111,8 @@ def event_temporality_overlaps(
             event_time.date() <= interval_end.date()
             and event_time_end.date() >= interval_start.date()
         )
+    if event_time_end is not None:
+        return event_time <= interval_end and event_time_end >= interval_start
     return interval_start <= event_time <= interval_end
 
 

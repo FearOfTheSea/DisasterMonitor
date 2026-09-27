@@ -69,3 +69,22 @@ def cyclone_measurements(
                 )
             )
     return tuple(measurements)
+
+
+def wildfire_measurements(
+    properties: dict[object, object], source: SourceReference
+) -> tuple[EventMeasurement, ...]:
+    measurements = list(alert_measurements(properties, source))
+    severity_data = properties.get("severitydata")
+    if isinstance(severity_data, dict) and severity_data.get("severityunit") == "ha":
+        area = _number(severity_data.get("severity"))
+        if area is not None and area > 0:
+            measurements.append(
+                EventMeasurement(
+                    MeasurementKind.BURNED_AREA,
+                    int(area) if area.is_integer() else area,
+                    unit="ha",
+                    source=source,
+                )
+            )
+    return tuple(measurements)

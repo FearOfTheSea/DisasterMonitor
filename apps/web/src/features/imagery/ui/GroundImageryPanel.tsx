@@ -26,6 +26,7 @@ import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 type GroundImageryPanelProps = {
   incidentId: string;
   incidentLabel: string;
+  incidentTime: string;
   onClose: () => void;
 };
 
@@ -34,6 +35,7 @@ const DISPLAY_SENSORS: Sensor[] = ['sentinel-1', 'sentinel-2'];
 export function GroundImageryPanel({
   incidentId,
   incidentLabel,
+  incidentTime,
   onClose,
 }: GroundImageryPanelProps) {
   const {
@@ -60,6 +62,10 @@ export function GroundImageryPanel({
           <span className="ground-imagery-kicker">Event-focused inspection</span>
           <h2 id="ground-imagery-heading">Ground view</h2>
           <p>{incidentLabel}</p>
+          <p>
+            Event onset:{' '}
+            <time dateTime={incidentTime}>{formatImageryTime(incidentTime)}</time>
+          </p>
         </div>
         <button type="button" className="ground-return-button" onClick={onClose}>
           ← Return to event

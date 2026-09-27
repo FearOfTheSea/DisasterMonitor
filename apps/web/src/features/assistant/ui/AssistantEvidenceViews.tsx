@@ -210,24 +210,35 @@ function DecisionEvidenceView({ artifact }: { artifact: DecisionSupportArtifact 
           <small>Sources: {fact.source_ids.join(', ')}</small>
         </article>
       ))}
-      {artifact.estimates.map((estimate) => (
-        <article className="visual-observation" key={estimate.estimate_id}>
-          <div className="evidence-badges">
-            <span>DM analytical estimate</span>
-            <span>Inferred</span>
-          </div>
-          <p>{estimate.proposition}</p>
-          <strong>
-            {Math.round(estimate.probability * 100)}% estimated probability
-          </strong>
-          {estimate.uncertain_evidence_ids.length > 0 && (
-            <small>
-              Includes uncertain source evidence:{' '}
-              {estimate.uncertain_evidence_ids.join(', ')}
-            </small>
-          )}
-        </article>
-      ))}
+      {artifact.estimates.map((estimate) => {
+        const unresolved = estimate.rationale_rule_ids.includes(
+          'ew.hypothesis.no_decisive_current_observation',
+        );
+        return (
+          <article className="visual-observation" key={estimate.estimate_id}>
+            <div className="evidence-badges">
+              <span>{unresolved ? 'Evidence gap' : 'DM analytical estimate'}</span>
+              {!unresolved && <span>Inferred</span>}
+            </div>
+            {unresolved ? (
+              <p>Human impact remains unresolved.</p>
+            ) : (
+              <>
+                <p>{estimate.proposition}</p>
+                <strong>
+                  {Math.round(estimate.probability * 100)}% estimated probability
+                </strong>
+              </>
+            )}
+            {estimate.uncertain_evidence_ids.length > 0 && (
+              <small>
+                Includes uncertain source evidence:{' '}
+                {estimate.uncertain_evidence_ids.join(', ')}
+              </small>
+            )}
+          </article>
+        );
+      })}
       <small>
         Scenario: {artifact.scenario_mode.replaceAll('_', ' ')} · Recommendation:{' '}
         {artifact.recommendation_status.replaceAll('_', ' ')} · Advisory only

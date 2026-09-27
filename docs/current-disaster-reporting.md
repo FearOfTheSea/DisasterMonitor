@@ -129,6 +129,12 @@ See [noaa-nws-weather-alerts.md](sources/noaa-nws-weather-alerts.md).
   and overlap the Copernicus/EC-JRC family used by GFM. Wildfire records retain GWIS
   lineage and are downstream of FIRMS. Volcano records retain their VAAC label and
   are downstream of VAA/Smithsonian reporting.
+- GDACS flood reports retain their reported start-to-end interval for dated event
+  selection. The Recent onset incident view still uses the original start time;
+  a later reported end does not make an older flood a new onset. Reports state the
+  source date range and explain that an event-list point is not observed flood extent.
+- GDACS/GWIS wildfire area is retained as a source-reported burned-area estimate
+  in hectares when the provider supplies a positive numeric value with that unit.
 - Agreement within those source families is not independent corroboration.
   GFM/GDACS floods, EONET/GDACS wildfires, and Smithsonian-USGS/GDACS eruptions use
   exact maintained source-pair rules with conservative time and point-distance gates.

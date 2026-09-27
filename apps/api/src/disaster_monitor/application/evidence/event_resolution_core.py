@@ -25,6 +25,7 @@ from disaster_monitor.domain.disaster import (
     PhysicalEventIdentity,
     PhysicalEventIdentityResult,
 )
+from disaster_monitor.domain.disaster_types import event_temporality_overlaps
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,8 +105,16 @@ class BaseEventPolicy:
     def _matches_time_window(
         self, event: DisasterEvent, window_start: datetime, window_end: datetime
     ) -> bool:
-        if window_start <= event.event_time <= window_end:
+        if event_temporality_overlaps(
+            event.event_time,
+            event.event_time_end,
+            event.event_time_precision,
+            window_start,
+            window_end,
+        ):
             return True
+        if event.event_time_end is not None:
+            return False
         source_update = event.source.updated_at or event.source.published_at
         return (
             event.activity_status is IncidentActivityStatus.ONGOING

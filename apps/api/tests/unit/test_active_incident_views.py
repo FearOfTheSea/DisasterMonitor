@@ -97,6 +97,37 @@ async def test_lifecycle_views_keep_onset_and_update_time_separate() -> None:
 
 
 @pytest.mark.asyncio
+async def test_recent_onset_excludes_older_flood_with_recent_reported_end() -> None:
+    flood = replace(
+        _event(
+            "view-source",
+            Disaster.FLOOD,
+            "older-flood",
+            NOW - timedelta(days=12),
+        ),
+        event_time_end=NOW - timedelta(days=1),
+    )
+    provider = FakeWorldwideProvider("view-source", ProviderBatch((flood,)))
+    service = ActiveIncidentsService(
+        ProviderRegistry((_registration("View source", provider, Disaster.FLOOD),)),
+        country_catalog=StaticCountryCatalog(),
+        clock=lambda: NOW,
+    )
+
+    recent = await service.execute(ActiveIncidentsQuery(time_window_days=7))
+    historical = await service.execute(
+        ActiveIncidentsQuery(
+            view=IncidentView.HISTORICAL,
+            occurrence_start=NOW - timedelta(days=2),
+            occurrence_end=NOW,
+        )
+    )
+
+    assert recent.incidents == ()
+    assert [item.event_id for item in historical.incidents] == ["older-flood"]
+
+
+@pytest.mark.asyncio
 async def test_cursor_pagination_is_bound_to_one_snapshot_and_query() -> None:
     events = tuple(
         _event(

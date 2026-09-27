@@ -34,6 +34,18 @@ class EarthquakeQueryPolicy(DefaultDisasterQueryPolicy):
         return tuple(values)
 
 
+class WildfireQueryPolicy(DefaultDisasterQueryPolicy):
+    _GDACS_EVENT_ID = re.compile(r"\bGDACS\s+WF\s+(\d{5,})\b", re.I)
+
+    def discriminators(self, text: str) -> tuple[EventDiscriminator, ...]:
+        match = self._GDACS_EVENT_ID.search(text)
+        return (
+            (EventDiscriminator("event_id", f"gdacs:wf:{match.group(1)}"),)
+            if match
+            else ()
+        )
+
+
 class DisasterQueryPolicyRegistry:
     def __init__(self, policies: dict[Disaster, DisasterQueryPolicy]) -> None:
         self._policies = dict(policies)
@@ -59,4 +71,9 @@ def selection_intent_for(text: str) -> WorldwideSelectionIntent:
 
 
 def default_disaster_query_policies() -> DisasterQueryPolicyRegistry:
-    return DisasterQueryPolicyRegistry({Disaster.EARTHQUAKE: EarthquakeQueryPolicy()})
+    return DisasterQueryPolicyRegistry(
+        {
+            Disaster.EARTHQUAKE: EarthquakeQueryPolicy(),
+            Disaster.WILDFIRE: WildfireQueryPolicy(),
+        }
+    )

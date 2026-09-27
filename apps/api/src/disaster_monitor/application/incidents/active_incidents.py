@@ -55,7 +55,10 @@ from disaster_monitor.domain.disaster import (
     IncidentWatch,
     IncidentWatchObservation,
 )
-from disaster_monitor.domain.disaster_types import event_temporality_overlaps
+from disaster_monitor.domain.disaster_types import (
+    EventTimePrecision,
+    event_temporality_overlaps,
+)
 
 
 def _now_utc() -> datetime:
@@ -491,6 +494,8 @@ def _matches_query(
             historical_start,
             historical_end,
         )
+    if incident.event_time_precision is EventTimePrecision.EXACT:
+        return start <= incident.event_time <= reference
     return event_temporality_overlaps(
         incident.event_time,
         incident.event_time_end,

@@ -34,6 +34,7 @@ class MeasurementKind(StrEnum):
     PROVIDER_SIGNIFICANCE = "provider_significance"
     CONFIDENCE = "confidence"
     FIRE_RADIATIVE_POWER = "fire_radiative_power"
+    BURNED_AREA = "burned_area"
     SEVERITY = "severity"
 
 

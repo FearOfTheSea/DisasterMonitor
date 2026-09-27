@@ -175,7 +175,13 @@ def test_ds_epistemic_status_truth_table_and_hypothesis_policy() -> None:
         rendered = render_decision_support(artifact)
         for status, statement_type in expected_fact_types.items():
             assert f"[{statement_type}; status={status}]" in rendered
-        assert "DM analytical estimate [estimate; inferred]" in rendered
+        if any(
+            feature.rule_id == "ew.hypothesis.no_decisive_current_observation"
+            for feature in hypothesis.rationale_features
+        ):
+            assert "No event-specific human-impact probability is supported" in rendered
+        else:
+            assert "DM analytical estimate [estimate; inferred]" in rendered
         assert all(
             estimate.statement_type == DecisionStatementType.ESTIMATE
             for estimate in artifact.estimates
@@ -183,6 +189,21 @@ def test_ds_epistemic_status_truth_table_and_hypothesis_policy() -> None:
         if "estimated" in expected_fact_types:
             assert actual_fact_types["estimated"] == "source_estimate"
             assert artifact.estimates[0].statement_type.value == "estimate"
+
+
+def test_decision_report_does_not_present_neutral_prior_as_event_probability() -> None:
+    fixture = json.loads(
+        (DECISION_SUPPORT_FIXTURES / "epistemic_status_cases.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    case = next(item for item in fixture["cases"] if item["id"] == "missing-evidence")
+    artifact = build_decision_products(case)[-1]
+
+    rendered = render_decision_support(artifact)
+
+    assert "Probability 0.50" not in rendered
+    assert "No event-specific human-impact probability is supported" in rendered
 
 
 def test_ds_domain_rejects_source_status_promotion_to_verified_fact() -> None:

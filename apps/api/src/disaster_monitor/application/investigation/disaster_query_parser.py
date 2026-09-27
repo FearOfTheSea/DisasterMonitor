@@ -85,6 +85,11 @@ _PLACE_AFTER_IN = re.compile(
     r"\b(?:in|from|across|near|around|at)\s+(?:the\s+)?"
     r"([A-Z][A-Za-z .'-]{1,60}?)(?=[?.!,]|\s+(?:on|and|in)\b|$)"
 )
+_PLACE_AFTER_DISTANCE_BEARING = re.compile(
+    r"\b\d+(?:\.\d+)?\s*(?i:km|mi|miles|kilometres|kilometers)\s+"
+    r"(?i:[NSEW]{1,3}|north(?:east|west)?|south(?:east|west)?|east|west)\s+of\s+"
+    r"([A-Z][A-Za-z .'-]{1,60}?)(?=[?.!,]|\s+(?:on|and|in)\b|$)"
+)
 _RELATIVE_TIME_SUFFIX = re.compile(
     r"\s*(?:(?:this|last|next)\s+(?:week|month|year)|today|yesterday|"
     r"tonight|now|recently)$",
@@ -94,10 +99,11 @@ _RELATIVE_TIME_SUFFIX = re.compile(
 
 def location_hint_from_text(text: str, country_catalog: CountryCatalog) -> str | None:
     """Extract a bounded named place without treating it as country identity."""
-    for match in _PLACE_AFTER_IN.finditer(text):
-        candidate = _clean_location_hint(match.group(1), country_catalog)
-        if candidate is not None:
-            return candidate
+    for pattern in (_PLACE_AFTER_DISTANCE_BEARING, _PLACE_AFTER_IN):
+        for match in pattern.finditer(text):
+            candidate = _clean_location_hint(match.group(1), country_catalog)
+            if candidate is not None:
+                return candidate
     return None
 
 

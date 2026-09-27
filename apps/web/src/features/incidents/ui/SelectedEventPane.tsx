@@ -20,6 +20,28 @@ function dateTime(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function groupedMeasurements(measurements: IncidentMapRecord['measurements']) {
+  const groups = new Map<
+    string,
+    {
+      measurement: IncidentMapRecord['measurements'][number];
+      sourceIds: string[];
+    }
+  >();
+  for (const measurement of measurements) {
+    const key = JSON.stringify([measurement.kind, measurement.value, measurement.unit]);
+    const group = groups.get(key);
+    if (group) {
+      if (!group.sourceIds.includes(measurement.source_id)) {
+        group.sourceIds.push(measurement.source_id);
+      }
+    } else {
+      groups.set(key, { measurement, sourceIds: [measurement.source_id] });
+    }
+  }
+  return [...groups.values()];
+}
+
 export function SelectedEventPane({
   incident,
   snapshotRetrievedAt,
@@ -138,14 +160,27 @@ export function SelectedEventPane({
               </p>
               {incident.measurements.length > 0 ? (
                 <dl className="event-measurements">
-                  {incident.measurements.map((measurement, index) => (
-                    <div key={`${measurement.source_id}:${measurement.kind}:${index}`}>
-                      <dt>{measurement.kind.replaceAll('_', ' ')}</dt>
-                      <dd>
-                        {measurement.value} {measurement.unit ?? ''}
-                      </dd>
-                    </div>
-                  ))}
+                  {groupedMeasurements(incident.measurements).map(
+                    ({ measurement, sourceIds }) => (
+                      <div
+                        key={JSON.stringify([
+                          measurement.kind,
+                          measurement.value,
+                          measurement.unit,
+                        ])}
+                      >
+                        <dt>{measurement.kind.replaceAll('_', ' ')}</dt>
+                        <dd>
+                          {measurement.value} {measurement.unit ?? ''}
+                          <small>
+                            {sourceIds.length}{' '}
+                            {sourceIds.length === 1 ? 'source' : 'sources'}:{' '}
+                            {sourceIds.join(', ')}
+                          </small>
+                        </dd>
+                      </div>
+                    ),
+                  )}
                 </dl>
               ) : (
                 <p>No source-backed measurements are available for this record.</p>

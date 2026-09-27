@@ -12,6 +12,7 @@ from disaster_monitor.application.investigation.report_profiles import (
     report_profile_for,
 )
 from disaster_monitor.domain.disaster import (
+    EventGeometryKind,
     EventMeasurement,
     FactStatus,
     MeasurementKind,
@@ -114,6 +115,8 @@ def _measurement_details(packet: EvidencePacket) -> tuple[str, ...]:
 def _measurement_label(kind: MeasurementKind, source: SourceReference) -> str:
     if kind is MeasurementKind.SEVERITY and source.source_id.startswith("gdacs-"):
         return "GDACS alert level"
+    if kind is MeasurementKind.BURNED_AREA and source.source_id == "gdacs-wildfires":
+        return "GDACS/GWIS burned-area estimate"
     if kind is MeasurementKind.MAXIMUM_WIND_SPEED and source.source_id.startswith(
         "gdacs-"
     ):
@@ -145,6 +148,12 @@ def _situation_summary(
         title = f"{title} — {location}"
     event_time = packet.event.event_time.astimezone(UTC)
     parts = [f"{title}; {event_time.day} {event_time:%b %Y, %H:%M} UTC."]
+    if packet.event.event_time_end:
+        parts.append(
+            "The source-reported event window extends through "
+            f"{_format_timestamp(packet.event.event_time_end)}; this date range "
+            "does not establish flooding at every location."
+        )
     measurements_by_kind: dict[MeasurementKind, EventMeasurement] = {}
     for measurement in packet.event.measurements:
         if measurement.kind not in {
@@ -152,6 +161,7 @@ def _situation_summary(
             MeasurementKind.MAXIMUM_WIND_SPEED,
             MeasurementKind.DEPTH,
             MeasurementKind.INTENSITY,
+            MeasurementKind.BURNED_AREA,
             MeasurementKind.SEVERITY,
         }:
             continue
@@ -168,6 +178,7 @@ def _situation_summary(
         MeasurementKind.MAXIMUM_WIND_SPEED,
         MeasurementKind.DEPTH,
         MeasurementKind.INTENSITY,
+        MeasurementKind.BURNED_AREA,
         MeasurementKind.SEVERITY,
     ):
         selected = measurements_by_kind.get(kind)
@@ -182,6 +193,23 @@ def _situation_summary(
             break
     if measurements:
         parts.append("Reported measurements: " + "; ".join(measurements) + ".")
+    depth_by_source = {
+        measurement.source.source_id: measurement
+        for measurement in packet.event.measurements
+        if measurement.kind is MeasurementKind.DEPTH
+        and measurement.unit == "km"
+        and not isinstance(measurement.value, bool)
+        and isinstance(measurement.value, (int, float))
+    }
+    depths = sorted(depth_by_source.values(), key=lambda item: float(item.value))
+    if len(depths) >= 2 and float(depths[-1].value) - float(depths[0].value) >= 5:
+        values = "; ".join(
+            f"{float(item.value):g} km ({item.source.publisher})" for item in depths
+        )
+        parts.append(
+            f"Reported depths differ across sources: {values}; these estimates "
+            "are not reconciled."
+        )
     ash_facts = [fact for fact in visible_facts if fact.category == "ash_observation"]
     if ash_facts:
         ash_fact = ash_facts[0]
@@ -211,7 +239,7 @@ def _situation_summary(
     return " ".join(parts)
 
 
-def _event_summary(packet: EvidencePacket) -> str:
+def _event_summary(packet: EvidencePacket, profile: ReportProfile) -> str:
     event = packet.event
     country_name = packet.query.country.canonical_name
     event_location = " ".join(event.location.split())
@@ -232,6 +260,12 @@ def _event_summary(packet: EvidencePacket) -> str:
     measurements = _measurement_details(packet)
     if measurements:
         summary += ". Measurements: " + "; ".join(measurements)
+    if (
+        profile.point_location_caveat
+        and event.geometry is not None
+        and event.geometry.kind is EventGeometryKind.POINT
+    ):
+        summary += f". {profile.point_location_caveat}"
     return summary + "."
 
 
@@ -262,7 +296,7 @@ class DisasterReportRenderer:
         summary = _situation_summary(packet, visible_facts, profile)
         sections: list[ReportSection] = [
             ReportSection("Situation summary", summary),
-            ReportSection("Event details", _event_summary(packet)),
+            ReportSection("Event details", _event_summary(packet, profile)),
             ReportSection(
                 "Human impact",
                 scoped_lines(

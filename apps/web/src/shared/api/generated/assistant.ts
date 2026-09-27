@@ -3310,9 +3310,11 @@ const apiSchemas = {
       'magnitude',
       'intensity',
       'depth',
+      'maximum_wind_speed',
       'provider_significance',
       'confidence',
       'fire_radiative_power',
+      'burned_area',
       'severity',
     ],
     type: 'string',
@@ -5780,9 +5782,11 @@ export type MeasurementKind =
   | 'magnitude'
   | 'intensity'
   | 'depth'
+  | 'maximum_wind_speed'
   | 'provider_significance'
   | 'confidence'
   | 'fire_radiative_power'
+  | 'burned_area'
   | 'severity';
 
 export type MonitoringReadinessResponse = {

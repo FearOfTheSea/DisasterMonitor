@@ -37,6 +37,7 @@ from disaster_monitor.infrastructure.disaster.gdacs_measurements import (
     alert_measurements,
     cyclone_measurements,
     earthquake_measurements,
+    wildfire_measurements,
 )
 from disaster_monitor.infrastructure.disaster.gdacs_place_verification import (
     verify_gdacs_flood_places,
@@ -184,7 +185,11 @@ class _GdacsEventAdapter:
                 return None, ()
             raw_event_id = _identifier(properties.get("eventid"))
             event_time = normalize_timestamp(properties.get("fromdate"))
-            end_time = normalize_timestamp(properties.get("todate"))
+            end_time = (
+                normalize_timestamp(properties.get("todate"))
+                if self.disaster is Disaster.FLOOD
+                else None
+            )
             name = (
                 _text(properties.get("name"))
                 or _text(properties.get("eventname"))
@@ -198,7 +203,11 @@ class _GdacsEventAdapter:
             )
             if not raw_event_id or event_time is None or not location:
                 raise ValueError("event identifier, time, or location is missing")
-            if properties.get("todate") is not None and end_time is None:
+            if (
+                self.disaster is Disaster.FLOOD
+                and properties.get("todate") is not None
+                and end_time is None
+            ):
                 raise ValueError("event end time is invalid")
             if end_time is not None and end_time < event_time:
                 raise ValueError("event interval ends before it starts")
@@ -246,6 +255,7 @@ class _GdacsEventAdapter:
                 disaster=self.disaster,
                 location=location,
                 event_time=event_time,
+                event_time_end=end_time if self.disaster is Disaster.FLOOD else None,
                 source=source,
                 geometry=geometry,
                 measurements=measurements,
@@ -287,6 +297,7 @@ class _GdacsEventAdapter:
                 location=location,
                 country=country_query.country,
                 event_time=event_time,
+                event_time_end=end_time if self.disaster is Disaster.FLOOD else None,
                 source=source,
                 geometry=geometry,
                 measurements=measurements,
@@ -574,6 +585,13 @@ class GdacsWildfireAdapter(_GdacsEventAdapter):
     source_id = "gdacs-wildfires"
     disaster = Disaster.WILDFIRE
     event_type = "WF"
+
+    def _measurements(
+        self,
+        properties: dict[object, object],
+        source: SourceReference,
+    ) -> tuple[EventMeasurement, ...]:
+        return wildfire_measurements(properties, source)
 
 
 class GdacsVolcanicEruptionAdapter(_GdacsEventAdapter):

@@ -85,4 +85,30 @@ describe('selected event reading pane', () => {
     expect(timeline).toHaveFocus();
     expect(screen.getByText('Source publication')).toBeVisible();
   });
+
+  it('groups equal measurements while keeping differing source values visible', () => {
+    render(
+      <SelectedEventPane
+        incident={{
+          ...INCIDENT,
+          measurements: [
+            { kind: 'magnitude', value: 5.6, unit: null, source_id: 'usgs' },
+            { kind: 'magnitude', value: 5.6, unit: null, source_id: 'emsc' },
+            { kind: 'magnitude', value: 5.6, unit: null, source_id: 'gdacs' },
+            { kind: 'depth', value: 10, unit: 'km', source_id: 'emsc' },
+            { kind: 'depth', value: 57.78, unit: 'km', source_id: 'usgs' },
+          ],
+        }}
+        snapshotRetrievedAt="2026-09-23T05:00:00Z"
+        onClose={vi.fn()}
+        onAsk={vi.fn()}
+        onGroundView={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText('magnitude')).toHaveLength(1);
+    expect(screen.getByText(/3 sources: usgs, emsc, gdacs/)).toBeInTheDocument();
+    expect(screen.getByText(/10 km/)).toBeInTheDocument();
+    expect(screen.getByText(/57.78 km/)).toBeInTheDocument();
+  });
 });

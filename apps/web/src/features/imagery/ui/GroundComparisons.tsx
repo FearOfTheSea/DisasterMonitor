@@ -11,6 +11,7 @@ import {
 import {
   comparisonForSensor,
   formatImageryTime,
+  sensorStatus,
   SENSOR_LABELS,
   type GroundImageryPanelRequest,
 } from '@/features/imagery/model/groundImagery';
@@ -32,9 +33,38 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
       >
         <h3>Comparison stage</h3>
         <p>
-          Validated before and after imagery is not available for this event yet.
-          Acquisition metadata and sensor status remain in the settings column.
+          A validated before and after image pair is not available yet. These are
+          catalog outcomes, not evidence of damage or safety outside observed areas.
         </p>
+        <div className="ground-comparison-status-grid">
+          {DISPLAY_SENSORS.map((sensor) => {
+            const status = sensorStatus(request, sensor);
+            const after =
+              status?.selections.find(
+                (selection) => selection.role === 'first_useful_after_onset',
+              ) ??
+              status?.selections.find(
+                (selection) => selection.role === 'latest_useful',
+              );
+            return (
+              <article key={sensor} className="ground-comparison-status-card">
+                <strong>{SENSOR_LABELS[sensor]}</strong>
+                <small>
+                  {status
+                    ? `${status.scanned_count} acquisitions scanned · ${status.scan_complete ? 'scan complete' : 'scan incomplete'}`
+                    : 'Catalog status unavailable'}
+                </small>
+                <p>
+                  {after?.observation
+                    ? `After-onset capture catalogued at ${formatImageryTime(after.observation.captured_start)}; no validated comparison artifact yet.`
+                    : (after?.explanation ??
+                      status?.failure_detail ??
+                      'No role result returned.')}
+                </p>
+              </article>
+            );
+          })}
+        </div>
       </section>
     );
   return (

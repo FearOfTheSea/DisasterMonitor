@@ -28,7 +28,14 @@ describe('AssistantClient evidence responses', () => {
               description: null,
               source_id: 'global-catalog-rolling-earthquakes',
             },
-            measurements: [],
+            measurements: [
+              {
+                kind: 'burned_area',
+                value: 7065,
+                unit: 'ha',
+                source_id: 'gdacs-wildfires',
+              },
+            ],
             geography_status: 'in_country',
             source: {
               source_id: 'global-catalog-rolling-earthquakes',
@@ -117,6 +124,7 @@ describe('AssistantClient evidence responses', () => {
           kind: 'point',
           coordinates: [{ latitude: 37, longitude: 137 }],
         },
+        measurements: [{ kind: 'burned_area', value: 7065, unit: 'ha' }],
       },
       investigation: { status: 'partial' },
     });

@@ -64,6 +64,39 @@ def test_direction_abbreviation_does_not_override_country_mention() -> None:
     ) == ("NER",)
 
 
+def test_gdacs_event_type_code_does_not_create_a_country_mention() -> None:
+    catalog = StaticCountryCatalog()
+    catalog.activate_payload(
+        {
+            "metadata": {},
+            "countries": [
+                {
+                    "alpha3": "AGO",
+                    "name": "Angola",
+                    "aliases": ["AO"],
+                    "bounds": [-19, -4, 11, 24],
+                    "polygons": [],
+                },
+                {
+                    "alpha3": "WLF",
+                    "name": "Wallis and Futuna Islands",
+                    "aliases": ["WF"],
+                    "bounds": [-15, -13, -179, -175],
+                    "polygons": [],
+                },
+            ],
+        }
+    )
+
+    assert tuple(
+        country.alpha3_code
+        for country in catalog.find_mentions("Forest fire in Angola (GDACS WF 1032415)")
+    ) == ("AGO",)
+    assert tuple(
+        country.alpha3_code for country in catalog.find_mentions("Wildfire in WF")
+    ) == ("WLF",)
+
+
 class FakeSource:
     def __init__(self, snapshot: CountryCatalogSourceSnapshot) -> None:
         self.snapshot = snapshot

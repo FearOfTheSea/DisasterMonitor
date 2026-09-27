@@ -16,7 +16,10 @@ import {
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
 import { SelectedEventPane } from '@/features/incidents/ui/SelectedEventPane';
-import { relatedInvestigation } from '@/features/incidents/ui/incidentPresentation';
+import {
+  disasterLabel,
+  relatedInvestigation,
+} from '@/features/incidents/ui/incidentPresentation';
 import { GroundImageryPanel } from '@/features/imagery/ui/GroundImageryPanel';
 import { WorkspaceHelp } from '@/features/help/ui/WorkspaceHelp';
 import { assistantMapAreaOfInterest } from '@/features/map/model/assistantMapFocus';
@@ -550,7 +553,8 @@ export default function Home() {
         <div className="ground-workspace">
           <GroundImageryPanel
             incidentId={selectedIncident.event_id}
-            incidentLabel={selectedIncident.country?.name ?? selectedIncident.location}
+            incidentLabel={`${disasterLabel(selectedIncident.disaster)} · ${selectedIncident.location}`}
+            incidentTime={selectedIncident.event_time}
             onClose={() => openPane('event')}
           />
         </div>

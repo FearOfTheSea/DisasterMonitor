@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from disaster_monitor.application.disaster import DisasterQuery
+from disaster_monitor.application.disaster import DisasterQuery, EventDiscriminator
 from disaster_monitor.application.evidence.event_resolution import (
     DefaultEventPolicy,
     EarthquakeEventPolicy,
@@ -75,6 +75,23 @@ def _generic_event(event_id: str, **changes: object) -> DisasterEvent:
         measurements=(EventMeasurement(MeasurementKind.MAGNITUDE, 6.1, source=SOURCE),),
         provider_ids=(event_id,),
     )
+
+
+def test_wildfire_provider_identifier_selects_one_of_same_day_events() -> None:
+    query = DisasterQuery(
+        disaster=Disaster.WILDFIRE,
+        country=JAPAN,
+        time_intent="recent",
+        focus=(),
+        event_discriminators=(EventDiscriminator("event_id", "gdacs:wf:1032415"),),
+    )
+    selected = _generic_event("gdacs:wf:1032415", disaster=Disaster.WILDFIRE)
+    other = _generic_event("gdacs:wf:1032416", disaster=Disaster.WILDFIRE)
+
+    resolution = DefaultEventPolicy().resolve((selected, other), query, now=NOW)
+
+    assert resolution.selected is not None
+    assert resolution.selected.event_id == "gdacs:wf:1032415"
 
 
 def _provider_event(
@@ -322,6 +339,42 @@ def test_ended_event_with_old_onset_does_not_match_recent_query() -> None:
     resolution = DefaultEventPolicy().resolve((event,), query, now=NOW)
 
     assert resolution.selected is None
+
+
+def test_dated_flood_matches_source_reported_interval_without_changing_onset() -> None:
+    start = datetime(2026, 9, 3, 1, tzinfo=UTC)
+    end = datetime(2026, 9, 24, 1, tzinfo=UTC)
+    event = replace(
+        _generic_event("gdacs:fl:1104141", country=VIETNAM, event_time=start),
+        event_time_end=end,
+        activity_status=IncidentActivityStatus.ENDED,
+    )
+    query = DisasterQuery(
+        Disaster.FLOOD,
+        VIETNAM,
+        "dated",
+        ("event_overview",),
+        date_from=datetime(2026, 9, 24, tzinfo=UTC),
+        date_to=datetime(2026, 9, 24, 23, 59, tzinfo=UTC),
+    )
+
+    resolution = DefaultEventPolicy().resolve(
+        (event,), query, now=end + timedelta(days=3)
+    )
+
+    assert resolution.selected == event
+    assert resolution.selected.event_time == start
+    after = replace(
+        query,
+        date_from=datetime(2026, 9, 26, tzinfo=UTC),
+        date_to=datetime(2026, 9, 26, 23, 59, tzinfo=UTC),
+    )
+    assert (
+        DefaultEventPolicy()
+        .resolve((event,), after, now=end + timedelta(days=3))
+        .selected
+        is None
+    )
 
 
 def test_volcanic_policy_accepts_current_wvar_observation_of_ongoing_eruption() -> None:

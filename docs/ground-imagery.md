@@ -19,8 +19,8 @@ The current vertical slice provides:
 - explicit exact or interval onset, unknown-onset behavior, pre-event/first-useful/
   latest-useful role windows, age classes, and a versioned temporal policy;
 - independent public CDSE STAC searches for Sentinel-1 GRD and Sentinel-2 L2A,
-  bounded pagination, deduplication, source-product identity, and per-sensor
-  incomplete/failure status;
+  bounded GET or POST-token pagination, bounded rate-limit and server-error retry,
+  deduplication, source-product identity, and per-sensor incomplete/failure status;
 - deterministic quality-aware selection with separate sensor outcomes, radar
   compatibility metadata, and reason codes for no acquisition, stale/obscured/
   partial coverage, incomplete scans, and missing comparison baselines;
@@ -32,7 +32,8 @@ The current vertical slice provides:
   credential-free provenance manifests;
 - typed HTTP resources under `/api/v1/ground-imagery` and a desktop Ground panel
   with independent radar/optical status, capture dates, roles, quality explanations,
-  readiness messaging, refresh/watch controls, artifact download, and manifest links;
+  readiness messaging, a comparison-stage summary for each sensor when no pair is
+  renderable, refresh/watch controls, artifact download, and manifest links;
 - PostgreSQL JSONB request persistence, stale-version protection, and durable
   selection lookup when the operational database is configured;
 - PostgreSQL-backed leased preparation jobs with fencing tokens, bounded retry/backoff,
