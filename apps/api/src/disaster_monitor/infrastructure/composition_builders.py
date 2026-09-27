@@ -29,6 +29,9 @@ from disaster_monitor.application.evidence.source_evidence_policy import (
     validate_event_evidence,
     validate_situation_evidence,
 )
+from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRequestLimiter,
+)
 from disaster_monitor.application.ground_imagery.resolve_region import (
     GroundImageryRegionResolver,
 )
@@ -503,6 +506,8 @@ def build_ground_imagery_service(
         tile_renderer=RasterioStoredArtifactTileRenderer(artifact_store),
         enabled=settings.ground_imagery_enabled,
         job_queue=job_queue,
+        rate_limiter=GroundImageryRequestLimiter(),
+        authenticated_processing_available=remote_renderer is not None,
     )
 
 

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from disaster_monitor.application.ground_imagery.select_observations import (
@@ -103,6 +104,84 @@ def test_latest_prefers_newest_useful_scene_over_newer_cloudy_scene() -> None:
     latest = result.for_sensor(Sensor.SENTINEL_2).for_role("latest_useful")
     assert latest.observation is clear
     assert latest.reason is SelectionReason.SELECTED
+
+
+def test_catalog_product_without_core_quality_is_provisionally_preparable() -> None:
+    onset = ImpactOnset.exact(datetime(2024, 5, 5, tzinfo=UTC), source_id="event")
+    plan = build_temporal_plan(
+        onset=onset,
+        reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+        disaster=Disaster.FLOOD,
+        activity_status=IncidentActivityStatus.ONGOING,
+    )
+    product = replace(
+        _observation(
+            "s2-unassessed",
+            Sensor.SENTINEL_2,
+            datetime(2024, 5, 19, tzinfo=UTC),
+            usable=0.9,
+        ),
+        quality=None,
+        cloud_cover_fraction=1.0,
+    )
+
+    selection = (
+        select_observations(plan, {Sensor.SENTINEL_2: (product,)})
+        .for_sensor(Sensor.SENTINEL_2)
+        .for_role("latest_useful")
+    )
+
+    assert selection.observation is product
+    assert selection.reason is SelectionReason.QUALITY_UNASSESSED
+    assert "not been assessed" in selection.explanation.lower()
+
+
+def test_unassessed_selection_prefers_core_coverage_over_a_newer_edge_scene() -> None:
+    onset = ImpactOnset.exact(datetime(2024, 5, 5, tzinfo=UTC), source_id="event")
+    plan = build_temporal_plan(
+        onset=onset,
+        reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+        disaster=Disaster.FLOOD,
+        activity_status=IncidentActivityStatus.ONGOING,
+    )
+    full = replace(
+        _observation(
+            "full",
+            Sensor.SENTINEL_2,
+            datetime(2024, 5, 18, tzinfo=UTC),
+            usable=0.9,
+        ),
+        quality=None,
+    )
+    edge = replace(
+        _observation(
+            "edge",
+            Sensor.SENTINEL_2,
+            datetime(2024, 5, 19, tzinfo=UTC),
+            usable=0.9,
+        ),
+        footprint=polygon_from_geojson(
+            {
+                "type": "Polygon",
+                "coordinates": [
+                    [[10.9, 1], [11.9, 1], [11.9, 2], [10.9, 2], [10.9, 1]]
+                ],
+            }
+        ),
+        quality=None,
+    )
+
+    selection = (
+        select_observations(
+            plan,
+            {Sensor.SENTINEL_2: (edge, full)},
+            target_region=_footprint(),
+        )
+        .for_sensor(Sensor.SENTINEL_2)
+        .for_role("latest_useful")
+    )
+
+    assert selection.observation is full
 
 
 def test_sensors_select_independently_when_one_has_no_usable_result() -> None:

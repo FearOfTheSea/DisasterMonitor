@@ -41,6 +41,7 @@ const STATE_LABELS: Record<string, string> = {
   obscured: 'Obscured or uncertain',
   partial_coverage: 'Partial coverage',
   not_renderable_yet: 'Catalogued; rendering pending',
+  quality_unassessed: 'Quality unassessed',
   no_comparable_baseline: 'No comparable baseline',
   onset_unknown: 'Onset unknown',
   queued: 'Queued',
@@ -95,6 +96,30 @@ export function artifactForSelection(
   return artifacts?.find((artifact) => artifact.selection_id === selectionId);
 }
 
+export function automaticPreviewSelection(
+  request: GroundImageryPanelRequest,
+): GroundImagerySelectionResponse | undefined {
+  if (
+    request.state === 'queued' ||
+    request.artifacts?.length ||
+    request.jobs?.some((job) => ['queued', 'running', 'retryable'].includes(job.status))
+  )
+    return undefined;
+  for (const role of [
+    'first_useful_after_onset',
+    'latest_useful',
+    'pre_event_reference',
+  ]) {
+    for (const sensor of ['sentinel-1', 'sentinel-2'] as const) {
+      const selection = sensorStatus(request, sensor)?.selections.find(
+        (item) => item.role === role && item.observation,
+      );
+      if (selection) return selection;
+    }
+  }
+  return undefined;
+}
+
 export type GroundComparisonPair = {
   before: GroundImageryArtifactResponse;
   after: GroundImageryArtifactResponse;
@@ -144,6 +169,7 @@ export function statusClass(state: string): string {
   if (
     state === 'partial' ||
     state === 'partial_coverage' ||
+    state === 'quality_unassessed' ||
     state === 'needs_region' ||
     state === 'credentials_required' ||
     state === 'queued' ||

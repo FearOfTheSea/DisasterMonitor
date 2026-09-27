@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
+from shapely.geometry import shape
+
 from disaster_monitor.application.ground_imagery.temporal_policy import (
     AgeClass,
     RoleWindow,
@@ -20,6 +22,7 @@ from disaster_monitor.domain.imagery.observations import (
     TemporalRole,
     radar_comparison_compatibility,
 )
+from disaster_monitor.domain.imagery.regions import MultiPolygon
 
 
 class SelectionReason(StrEnum):
@@ -32,6 +35,7 @@ class SelectionReason(StrEnum):
     PARTIAL_COVERAGE = "partial_coverage"
     CATALOG_SCAN_TRUNCATED = "catalog_scan_truncated"
     QUALITY_SEARCH_INCOMPLETE = "quality_search_incomplete"
+    QUALITY_UNASSESSED = "quality_unassessed"
     NOT_RENDERABLE_YET = "not_renderable_yet"
     NO_COMPARABLE_BASELINE = "no_comparable_baseline"
     ONSET_UNKNOWN = "onset_unknown"
@@ -97,6 +101,7 @@ def select_observations(
     *,
     disaster: Disaster | None = None,
     scan_complete: Mapping[tuple[Sensor, TemporalRole], bool] | None = None,
+    target_region: MultiPolygon | None = None,
 ) -> SelectionResult:
     """Select baseline/first/latest roles from bounded provider candidates.
 
@@ -116,6 +121,7 @@ def select_observations(
                 candidates,
                 disaster=disaster,
                 scan_complete=(scan_complete or {}).get((sensor, role), True),
+                target_region=target_region,
             )
             for role in roles
         ]
@@ -150,6 +156,7 @@ def _select_role(
     *,
     disaster: Disaster | None,
     scan_complete: bool,
+    target_region: MultiPolygon | None,
 ) -> GroundImagerySelection:
     window = plan.window_for(role, sensor=sensor)
     expanded = plan.window_for(role, sensor=sensor, expanded=True)
@@ -197,13 +204,19 @@ def _select_role(
 
     with_quality = tuple(item for item in renderable if item.quality is not None)
     if not with_quality:
-        reason = (
-            SelectionReason.QUALITY_SEARCH_INCOMPLETE
-            if not scan_complete
-            else SelectionReason.OBSCURED
-        )
+        if not scan_complete:
+            reason = SelectionReason.QUALITY_SEARCH_INCOMPLETE
+            return GroundImagerySelection(
+                role, None, reason, _explanation(reason), alternatives=renderable
+            )
+        chosen = _rank_unassessed(renderable, role, target_region)
         return GroundImagerySelection(
-            role, None, reason, _explanation(reason), alternatives=renderable
+            role,
+            chosen,
+            SelectionReason.QUALITY_UNASSESSED,
+            _explanation(SelectionReason.QUALITY_UNASSESSED),
+            age_class=_age_class(chosen, plan, disaster),
+            alternatives=tuple(item for item in renderable if item is not chosen),
         )
     useful = tuple(item for item in with_quality if _is_useful(item))
     if not useful:
@@ -341,6 +354,41 @@ def _rank_partial(
     )
 
 
+def _rank_unassessed(
+    candidates: tuple[Observation, ...],
+    role: TemporalRole,
+    target_region: MultiPolygon | None,
+) -> Observation:
+    if target_region is not None:
+        target = shape(target_region.as_geojson())
+
+        def overlap(item: Observation) -> float:
+            return float(shape(item.footprint.as_geojson()).intersection(target).area)
+
+        if role is TemporalRole.FIRST_USEFUL_AFTER_ONSET:
+            return min(
+                candidates,
+                key=lambda item: (
+                    -overlap(item),
+                    item.capture.start,
+                    _stable_identity(item),
+                ),
+            )
+        return max(
+            candidates,
+            key=lambda item: (
+                overlap(item),
+                item.capture.end,
+                _stable_identity(item),
+            ),
+        )
+    if role is TemporalRole.FIRST_USEFUL_AFTER_ONSET:
+        return min(
+            candidates, key=lambda item: (item.capture.start, _stable_identity(item))
+        )
+    return max(candidates, key=lambda item: (item.capture.end, _stable_identity(item)))
+
+
 def _apply_radar_baseline_compatibility(
     selections: list[GroundImagerySelection],
 ) -> list[GroundImagerySelection]:
@@ -442,6 +490,10 @@ def _explanation(reason: SelectionReason) -> str:
         SelectionReason.QUALITY_SEARCH_INCOMPLETE: (
             "Quality assessment is incomplete; this is not evidence that imagery "
             "is absent."
+        ),
+        SelectionReason.QUALITY_UNASSESSED: (
+            "This acquisition can be prepared for inspection, but usable coverage "
+            "and cloud quality have not been assessed for the incident region."
         ),
         SelectionReason.NOT_RENDERABLE_YET: (
             "The acquisition is catalogued but not currently renderable."

@@ -5,10 +5,6 @@
 import { useState } from 'react';
 
 import {
-  comparisonTile,
-  type TileCoordinate,
-} from '@/features/imagery/model/comparisonTile';
-import {
   comparisonForSensor,
   formatImageryTime,
   sensorStatus,
@@ -25,17 +21,61 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
     sensor,
     pair: comparisonForSensor(request, sensor),
   })).filter((value) => value.pair !== undefined);
+  const prepared = request.artifacts
+    ?.map((artifact) => ({
+      artifact,
+      selection: request.sensors
+        .flatMap((sensor) => sensor.selections)
+        .find((selection) => selection.selection_id === artifact.selection_id),
+    }))
+    .filter((item) => item.selection?.observation)
+    .sort(
+      (a, b) => previewPriority(a.artifact.role) - previewPriority(b.artifact.role),
+    )[0];
   if (comparisons.length === 0)
     return (
       <section
         className="ground-imagery-section ground-imagery-comparisons"
         aria-label="Ground comparisons"
       >
-        <h3>Comparison stage</h3>
-        <p>
-          A validated before and after image pair is not available yet. These are
-          catalog outcomes, not evidence of damage or safety outside observed areas.
-        </p>
+        {prepared?.selection ? (
+          <>
+            <div className="ground-imagery-section-heading">
+              <div>
+                <h3>Prepared observation</h3>
+                <p>
+                  {SENSOR_LABELS[prepared.artifact.sensor]} ·{' '}
+                  {formatImageryTime(prepared.selection.observation?.captured_start)}
+                </p>
+              </div>
+              <span className="ground-imagery-status is-positive">Image ready</span>
+            </div>
+            <figure className="ground-single-preview">
+              <img
+                src={previewUrl(prepared.artifact.artifact_id)}
+                alt={`${SENSOR_LABELS[prepared.artifact.sensor]} ${prepared.artifact.role === 'pre_event_reference' ? 'before' : 'after'} capture`}
+              />
+              <figcaption>
+                {prepared.artifact.role === 'pre_event_reference' ? 'Before' : 'After'}{' '}
+                · {formatImageryTime(prepared.selection.observation?.captured_start)}
+              </figcaption>
+            </figure>
+            <p>
+              This single capture provides visual context. It does not establish damage
+              or safety. The patterned area has no pixels from this capture. Regional
+              image quality has not been assessed unless stated in the selection
+              details.
+            </p>
+          </>
+        ) : (
+          <>
+            <h3>Comparison stage</h3>
+            <p>
+              A validated before and after image pair is not available yet. These are
+              catalog outcomes, not evidence of damage or safety outside observed areas.
+            </p>
+          </>
+        )}
         <div className="ground-comparison-status-grid">
           {DISPLAY_SENSORS.map((sensor) => {
             const status = sensorStatus(request, sensor);
@@ -80,31 +120,29 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
         <span className="ground-imagery-status is-positive">Comparable</span>
       </div>
       {comparisons.map(({ sensor, pair }) => (
-        <GroundComparisonCard
-          key={sensor}
-          sensor={sensor}
-          pair={pair!}
-          region={request.region.region?.inspection}
-        />
+        <GroundComparisonCard key={sensor} sensor={sensor} pair={pair!} />
       ))}
     </section>
   );
 }
 
+function previewPriority(role: string): number {
+  if (role === 'first_useful_after_onset') return 0;
+  if (role === 'latest_useful') return 1;
+  return 2;
+}
+
 function GroundComparisonCard({
   sensor,
   pair,
-  region,
 }: {
   sensor: Sensor;
   pair: NonNullable<ReturnType<typeof comparisonForSensor>>;
-  region: unknown;
 }) {
   const [mode, setMode] = useState<'side-by-side' | 'swipe'>('side-by-side');
   const [position, setPosition] = useState(50);
-  const tile = comparisonTile(region);
-  const beforeUrl = tileUrl(pair.before.artifact_id, tile);
-  const afterUrl = tileUrl(pair.after.artifact_id, tile);
+  const beforeUrl = previewUrl(pair.before.artifact_id);
+  const afterUrl = previewUrl(pair.after.artifact_id);
   return (
     <article className="ground-comparison-card">
       <header>
@@ -173,6 +211,6 @@ function GroundComparisonCard({
   );
 }
 
-function tileUrl(artifactId: string, tile: TileCoordinate): string {
-  return `${API_BASE_URL}/ground-imagery/artifacts/${encodeURIComponent(artifactId)}/tiles/${tile.zoom}/${tile.x}/${tile.y}.png`;
+function previewUrl(artifactId: string): string {
+  return `${API_BASE_URL}/ground-imagery/artifacts/${encodeURIComponent(artifactId)}/preview.png`;
 }

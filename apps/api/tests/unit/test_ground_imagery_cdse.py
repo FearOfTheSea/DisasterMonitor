@@ -8,7 +8,11 @@ from disaster_monitor.application.ports.ground_imagery.catalog import (
     CatalogSearchError,
     GroundImageryCatalogQuery,
 )
-from disaster_monitor.domain.imagery.observations import Sensor, TemporalRole
+from disaster_monitor.domain.imagery.observations import (
+    ObservationReadiness,
+    Sensor,
+    TemporalRole,
+)
 from disaster_monitor.domain.imagery.regions import polygon_from_geojson
 from disaster_monitor.infrastructure.ground_imagery.cdse_catalog import (
     CDSEStacCatalog,
@@ -93,6 +97,7 @@ async def test_cdse_stac_search_maps_metadata_and_keeps_assets_as_metadata() -> 
     assert observation.identity.product_id == "S2B_TEST"
     assert observation.cloud_cover_fraction == 1
     assert observation.identity.processing_version == "05.10"
+    assert observation.readiness is ObservationReadiness.RENDERABLE
     assert observation.assets == (
         (
             "B02",

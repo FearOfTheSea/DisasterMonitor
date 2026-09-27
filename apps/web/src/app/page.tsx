@@ -155,14 +155,14 @@ export default function Home() {
   const selectIncident = useCallback(
     (incidentId: string) => {
       handleSelectActiveIncident(incidentId);
-      openPane('event', incidentId);
+      openPane('ground', incidentId);
     },
     [handleSelectActiveIncident, openPane],
   );
   const selectWatchIncident = useCallback(
     (incident: Parameters<typeof handleSelectWatchIncident>[0]) => {
       handleSelectWatchIncident(incident);
-      openPane('event', incident.event_id);
+      openPane('ground', incident.event_id);
     },
     [handleSelectWatchIncident, openPane],
   );
@@ -291,7 +291,7 @@ export default function Home() {
     ],
   );
 
-  const explorePane = navigation.explorePane ?? (selectedIncident ? 'event' : null);
+  const explorePane = navigation.explorePane ?? (selectedIncident ? 'ground' : null);
   const eventPaneOpen = explorePane === 'event' && Boolean(selectedIncident);
   const assistantOpen = explorePane === 'assistant';
   const groundOpen = explorePane === 'ground' && Boolean(selectedIncident);

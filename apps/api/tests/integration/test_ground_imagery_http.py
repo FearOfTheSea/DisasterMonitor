@@ -9,6 +9,10 @@ from rasterio.io import MemoryFile
 from rasterio.transform import from_bounds
 
 from disaster_monitor.application.ground_imagery.models import GroundImageryRequestInput
+from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRateLimitExceeded,
+    GroundImageryRequestLimiter,
+)
 from disaster_monitor.application.ground_imagery.resolve_region import (
     GroundImageryRegionResolver,
 )
@@ -162,6 +166,7 @@ def _service(
     artifact_root: Path | None = None,
     *,
     job_queue: InMemoryGroundImageryJobQueue | None = None,
+    rate_limiter: GroundImageryRequestLimiter | None = None,
 ) -> GroundImageryService:
     source = RegionSource(
         source_id="fixture:impact",
@@ -210,6 +215,7 @@ def _service(
             else RasterioStoredArtifactTileRenderer(artifact_store)
         ),
         job_queue=job_queue,
+        rate_limiter=rate_limiter,
     )
 
 
@@ -253,6 +259,38 @@ async def test_ground_request_stays_queued_until_all_enqueued_artifacts_exist(
 
     assert updated.state.value == "queued"
     assert len(updated.artifacts) == 1
+
+
+@pytest.mark.asyncio
+async def test_preparing_existing_artifact_does_not_spend_another_limit_slot(
+    tmp_path: Path,
+) -> None:
+    limiter = GroundImageryRequestLimiter(
+        clock=lambda: datetime(2024, 5, 20, tzinfo=UTC)
+    )
+    service = _service(tmp_path, rate_limiter=limiter)
+    request = await service.create_request(
+        GroundImageryRequestInput(
+            incident_id="incident-1",
+            reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+        )
+    )
+    first = await service.prepare_selection(
+        request.request_id,
+        sensor=Sensor.SENTINEL_2,
+        role="first_useful_after_onset",
+    )
+    repeated = await service.prepare_selection(
+        request.request_id,
+        sensor=Sensor.SENTINEL_2,
+        role="first_useful_after_onset",
+    )
+
+    assert repeated.artifacts == first.artifacts
+    for _ in range(3):
+        await limiter.claim_preparation()
+    with pytest.raises(GroundImageryRateLimitExceeded):
+        await limiter.claim_preparation()
 
 
 @pytest.mark.asyncio
@@ -343,6 +381,37 @@ async def test_ground_imagery_http_preserves_needs_region_without_catalog_search
 
 
 @pytest.mark.asyncio
+async def test_ground_imagery_http_reuses_request_without_refresh_quota() -> None:
+    now = datetime(2024, 5, 20, tzinfo=UTC)
+    service = _service(rate_limiter=GroundImageryRequestLimiter(clock=lambda: now))
+    app = create_app(overrides=AppDependencyOverrides(ground_imagery_service=service))
+    payload = {
+        "incident_id": "incident-1",
+        "reference_time": "2024-05-20T00:00:00Z",
+        "idempotency_key": "same-view",
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        created = await client.post("/api/v1/ground-imagery/requests", json=payload)
+        duplicate = await client.post("/api/v1/ground-imagery/requests", json=payload)
+        request_id = created.json()["request_id"]
+        limited = await client.post(
+            f"/api/v1/ground-imagery/requests/{request_id}/refresh"
+        )
+        now += timedelta(hours=1)
+        refreshed = await client.post(
+            f"/api/v1/ground-imagery/requests/{request_id}/refresh"
+        )
+
+    assert created.status_code == duplicate.status_code == 202
+    assert duplicate.json()["request_id"] == request_id
+    assert limited.status_code == 429
+    assert limited.headers["retry-after"] == "3600"
+    assert refreshed.status_code == 202
+
+
+@pytest.mark.asyncio
 async def test_ground_imagery_http_publishes_validated_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -380,6 +449,9 @@ async def test_ground_imagery_http_publishes_validated_artifacts(
         tile = await client.get(
             f"/api/v1/ground-imagery/artifacts/{artifact_id}/tiles/0/0/0.png"
         )
+        preview = await client.get(
+            f"/api/v1/ground-imagery/artifacts/{artifact_id}/preview.png"
+        )
         selection_manifest = await client.get(
             f"/api/v1/ground-imagery/selections/{selected['selection_id']}/manifest"
         )
@@ -395,6 +467,8 @@ async def test_ground_imagery_http_publishes_validated_artifacts(
     assert download.headers["content-type"] == "image/tiff"
     assert tile.status_code == 200
     assert tile.content.startswith(b"\x89PNG\r\n\x1a\n")
+    assert preview.status_code == 200
+    assert preview.content.startswith(b"\x89PNG\r\n\x1a\n")
     assert selection_manifest.status_code == 200
     assert stac.status_code == 200
     assert stac.json()["items"][0]["assets"]["data"]["href"].endswith(

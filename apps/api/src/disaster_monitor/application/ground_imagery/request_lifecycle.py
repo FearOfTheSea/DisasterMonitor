@@ -26,6 +26,9 @@ from disaster_monitor.application.ground_imagery.models import (
 from disaster_monitor.application.ground_imagery.request_indexes import (
     GroundImageryRequestIndexes,
 )
+from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRequestLimiter,
+)
 from disaster_monitor.application.ground_imagery.resolve_region import (
     GroundImageryRegionResolver,
     RegionResolutionState,
@@ -62,6 +65,7 @@ class GroundImageryRequestLifecycle:
         indexes: GroundImageryRequestIndexes,
         clock: Callable[[], datetime],
         enabled: bool,
+        rate_limiter: GroundImageryRequestLimiter | None = None,
     ) -> None:
         self._context_reader = context_reader
         self._region_resolver = region_resolver
@@ -70,6 +74,7 @@ class GroundImageryRequestLifecycle:
         self._indexes = indexes
         self._clock = clock
         self._enabled = enabled
+        self._rate_limiter = rate_limiter
 
     async def create_request(
         self,
@@ -154,6 +159,8 @@ class GroundImageryRequestLifecycle:
             self._indexes.index(request)
             return request
 
+        if self._rate_limiter is not None:
+            await self._rate_limiter.claim_catalog_search(context.incident_id)
         search = await self._catalog_searcher.search(
             region.region.inspection,
             plan,
@@ -166,6 +173,7 @@ class GroundImageryRequestLifecycle:
             plan,
             candidates_by_sensor,
             disaster=context.disaster,
+            target_region=region.region.core,
             scan_complete={
                 (status.sensor, role): status.scan_complete
                 for status in statuses

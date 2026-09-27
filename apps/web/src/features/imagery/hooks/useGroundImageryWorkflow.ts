@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createGroundImageryRequest,
   fetchGroundImageryReadiness,
+  fetchGroundImageryRequest,
   prepareGroundImagerySelection,
   refreshGroundImageryRequest,
   setGroundImageryWatch,
@@ -13,10 +14,12 @@ import type {
   GroundImageryPanelReadiness,
   GroundImageryPanelRequest,
 } from '@/features/imagery/model/groundImagery';
+import { automaticPreviewSelection } from '@/features/imagery/model/groundImagery';
 import type { GroundImagerySelectionResponse } from '@/shared/api/generated/assistant';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 const SLOW_SEARCH_DELAY_MS = 8_000;
+const PREPARATION_POLL_MS = 3_000;
 
 export function useGroundImageryWorkflow(incidentId: string) {
   const [request, setRequest] = useState<GroundImageryPanelRequest>();
@@ -26,6 +29,7 @@ export function useGroundImageryWorkflow(incidentId: string) {
   const [error, setError] = useState<string>();
   const [action, setAction] = useState<string>();
   const requestVersion = useRef(0);
+  const attemptedPreviews = useRef(new Set<string>());
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -75,6 +79,32 @@ export function useGroundImageryWorkflow(incidentId: string) {
     return () => window.clearTimeout(timer);
   }, [loadState]);
 
+  useEffect(() => {
+    if (!request || request.state !== 'queued') return;
+    const controller = new AbortController();
+    const version = requestVersion.current;
+    let timer: number;
+    const poll = async () => {
+      try {
+        const nextRequest = await fetchGroundImageryRequest(
+          request.request_id,
+          controller.signal,
+        );
+        if (controller.signal.aborted || version !== requestVersion.current) return;
+        setRequest(nextRequest);
+      } catch {
+        if (!controller.signal.aborted && version === requestVersion.current) {
+          timer = window.setTimeout(() => void poll(), PREPARATION_POLL_MS);
+        }
+      }
+    };
+    timer = window.setTimeout(() => void poll(), PREPARATION_POLL_MS);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [request]);
+
   const runAction = useCallback(
     async (name: string, operation: () => Promise<GroundImageryPanelRequest>) => {
       const version = requestVersion.current;
@@ -97,6 +127,22 @@ export function useGroundImageryWorkflow(incidentId: string) {
     },
     [],
   );
+
+  useEffect(() => {
+    if (!request || readiness?.state !== 'ready' || action) return;
+    const selection = automaticPreviewSelection(request);
+    if (!selection) return;
+    const attemptKey = `${request.request_id}:${request.request_version}:${selection.selection_id}`;
+    if (attemptedPreviews.current.has(attemptKey)) return;
+    attemptedPreviews.current.add(attemptKey);
+    void runAction(`prepare:${selection.selection_id}`, () =>
+      prepareGroundImagerySelection(request.request_id, {
+        sensor: selection.sensor,
+        role: selection.role,
+        overview: true,
+      }),
+    );
+  }, [action, readiness?.state, request, runAction]);
 
   const handleRefresh = () => {
     if (!request) return;

@@ -19,6 +19,9 @@ from disaster_monitor.application.ground_imagery.models import (
     GroundImageryRequest,
     GroundImageryRequestInput,
 )
+from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRateLimitExceeded,
+)
 from disaster_monitor.application.ground_imagery.service import (
     GroundImageryService,
 )
@@ -51,6 +54,14 @@ def get_ground_imagery_service(request: Request) -> GroundImageryService:
     return cast(GroundImageryService, request.app.state.dependencies.ground_imagery)
 
 
+def _rate_limit_error(error: GroundImageryRateLimitExceeded) -> HTTPException:
+    return HTTPException(
+        status_code=429,
+        detail=str(error),
+        headers={"Retry-After": str(error.retry_after_seconds)},
+    )
+
+
 @router.post(
     "/requests",
     response_model=GroundImageryRequestResponse,
@@ -74,6 +85,8 @@ async def create_ground_imagery_request(
                 onset_override=_onset_override(payload),
             )
         )
+    except GroundImageryRateLimitExceeded as error:
+        raise _rate_limit_error(error) from error
     except GroundImageryIncidentNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -149,6 +162,8 @@ async def replace_ground_imagery_region(
             region,
             context_margin_km=payload.context_margin_km,
         )
+    except GroundImageryRateLimitExceeded as error:
+        raise _rate_limit_error(error) from error
     except GroundImageryRequestNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -244,6 +259,8 @@ async def prepare_ground_imagery_selection(
             overview=payload.overview,
             output_kind=payload.output_kind,
         )
+    except GroundImageryRateLimitExceeded as error:
+        raise _rate_limit_error(error) from error
     except GroundImageryRequestNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -264,6 +281,8 @@ async def refresh_ground_imagery_request(
 ) -> GroundImageryRequestResponse:
     try:
         request = await service.refresh(request_id)
+    except GroundImageryRateLimitExceeded as error:
+        raise _rate_limit_error(error) from error
     except GroundImageryRequestNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -381,6 +400,26 @@ async def ground_imagery_tile(
 ) -> Response:
     try:
         content = await service.render_tile(artifact_id, zoom, x, y)
+    except GroundImageryArtifactNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except GroundImageryError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return Response(
+        content=content,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+@router.get("/artifacts/{artifact_id}/preview.png")
+async def ground_imagery_preview(
+    artifact_id: str,
+    service: Annotated[GroundImageryService, Depends(get_ground_imagery_service)],
+) -> Response:
+    try:
+        content = await service.render_preview(artifact_id)
     except GroundImageryArtifactNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:

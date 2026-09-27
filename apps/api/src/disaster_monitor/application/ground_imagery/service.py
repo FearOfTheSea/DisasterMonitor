@@ -26,6 +26,9 @@ from disaster_monitor.application.ground_imagery.request_indexes import (
 from disaster_monitor.application.ground_imagery.request_lifecycle import (
     GroundImageryRequestLifecycle,
 )
+from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRequestLimiter,
+)
 from disaster_monitor.application.ground_imagery.resolve_region import (
     GroundImageryRegionResolver,
 )
@@ -83,6 +86,8 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         tile_renderer: GroundImageryTileRenderer | None = None,
         enabled: bool = True,
         job_queue: GroundImageryJobQueue | None = None,
+        rate_limiter: GroundImageryRequestLimiter | None = None,
+        authenticated_processing_available: bool = True,
     ) -> None:
         self._catalog = catalog
         super().__init__(
@@ -95,6 +100,7 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             GroundImageryRequestIndexes(),
             clock,
             enabled,
+            rate_limiter,
         )
         self._artifact_workflow = GroundImageryArtifactWorkflow(
             region_resolver,
@@ -103,6 +109,7 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             raster_validator=raster_validator,
             artifact_store=artifact_store,
             tile_renderer=tile_renderer,
+            authenticated_processing_available=authenticated_processing_available,
         )
         self._job_queue = job_queue
         self._artifact_access = GroundImageryArtifactAccess(
@@ -207,8 +214,26 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         temporal_role = TemporalRole(role)
         if request.selection is None:
             raise ValueError("This imagery request has no catalog selection.")
-        if request.selected_observation(sensor, temporal_role) is None:
+        observation = request.selected_observation(sensor, temporal_role)
+        if observation is None:
             raise ValueError("The requested imagery role has no selected observation.")
+        region = request.region_resolution.region
+        if region is None:
+            raise ValueError("An imagery region must be resolved before rendering.")
+        selection_id = _identifiers.selection_id(
+            request.request_id, sensor, temporal_role, observation
+        )
+        grid = self._region_resolver.plan_grid(
+            region.inspection, sensor, overview=overview
+        )
+        kind = output_kind or _identifiers.default_output_kind(sensor)
+        if any(
+            artifact.selection_id == selection_id
+            and artifact.grid == grid
+            and artifact.output_kind == kind
+            for artifact in request.artifacts
+        ):
+            return request
         if self._job_queue is not None:
             now = self._clock()
             job = preparation_job(
@@ -220,6 +245,19 @@ class GroundImageryService(GroundImageryRequestLifecycle):
                 output_kind=output_kind,
                 now=now,
             )
+            if any(
+                existing.job_id == job.job_id
+                and existing.status
+                in {
+                    GroundImageryJobStatus.QUEUED,
+                    GroundImageryJobStatus.RUNNING,
+                    GroundImageryJobStatus.RETRY_WAIT,
+                }
+                for existing in await self._job_queue.jobs_for_request(request_id)
+            ):
+                return request
+            if self._rate_limiter is not None:
+                await self._rate_limiter.claim_preparation()
             await self._job_queue.enqueue(job)
             queued = replace(
                 request,
@@ -231,6 +269,8 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             )
             await self._store.save_request(queued)
             return queued
+        if self._rate_limiter is not None:
+            await self._rate_limiter.claim_preparation()
         return await self._prepare_selection_now(
             request,
             sensor=sensor,
@@ -338,6 +378,9 @@ class GroundImageryService(GroundImageryRequestLifecycle):
 
     async def render_tile(self, artifact_id: str, zoom: int, x: int, y: int) -> bytes:
         return await self._artifact_access.render_tile(artifact_id, zoom, x, y)
+
+    async def render_preview(self, artifact_id: str) -> bytes:
+        return await self._artifact_access.render_preview(artifact_id)
 
     def readiness(self) -> dict[str, object]:
         """Return actionable provider/artifact readiness without probing upstream."""

@@ -7,8 +7,11 @@ acquisition.
 
 from __future__ import annotations
 
+import io
+import json
+import tarfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from time import monotonic
 from typing import cast
 from urllib.parse import urlparse
@@ -33,11 +36,7 @@ DEFAULT_TOKEN_URL = (
 )
 _PROCESS_HOST = "sh.dataspace.copernicus.eu"
 _TOKEN_HOST = "identity.dataspace.copernicus.eu"
-_RASTER_TYPES = {
-    "image/tiff",
-    "image/geotiff",
-    "application/octet-stream",
-}
+_ARCHIVE_TYPES = {"application/x-tar", "application/tar"}
 
 
 class ProcessRenderingError(GroundImageryRenderError):
@@ -94,7 +93,7 @@ class CopernicusDataSpaceProcessRenderer(GroundImageryRenderer):
                     self._process_url,
                     json=payload,
                     headers={
-                        "Accept": "image/tiff, image/geotiff, application/octet-stream",
+                        "Accept": "application/x-tar",
                         "Authorization": f"Bearer {token}",
                         "Content-Type": "application/json",
                     },
@@ -146,9 +145,9 @@ class CopernicusDataSpaceProcessRenderer(GroundImageryRenderer):
                 .strip()
                 .lower()
             )
-            if media_type not in _RASTER_TYPES:
+            if media_type not in _ARCHIVE_TYPES:
                 raise ProcessRenderingError(
-                    "Copernicus Data Space returned a non-raster response.",
+                    "Copernicus Data Space returned an unsupported artifact bundle.",
                     reason_code="unexpected_content_type",
                     retryable=False,
                 )
@@ -158,17 +157,10 @@ class CopernicusDataSpaceProcessRenderer(GroundImageryRenderer):
                     reason_code="response_too_large",
                     retryable=False,
                 )
-            source_ids = _response_source_ids(response)
-            if source_ids != (request.observation.identity.product_id,):
-                raise ProcessRenderingError(
-                    "Copernicus Data Space did not prove the selected "
-                    "source-product identity.",
-                    reason_code="source_identity_unverified",
-                    retryable=False,
-                )
+            raster_bytes, source_ids = _verified_response_raster(response, request)
             return RenderedRaster(
-                content=response.content,
-                media_type=media_type,
+                content=raster_bytes,
+                media_type="image/tiff",
                 source_product_ids=source_ids,
                 provider_metadata=(
                     ("source_identity", source_ids[0]),
@@ -255,7 +247,7 @@ def build_process_request(request: RenderRequest) -> dict[str, object]:
     evalscript = (
         _sentinel_1_evalscript(observation, request.output_kind)
         if observation.sensor is Sensor.SENTINEL_1
-        else _sentinel_2_evalscript(request.output_kind)
+        else _sentinel_2_evalscript(observation, request.output_kind)
     )
     return {
         "input": {
@@ -268,11 +260,18 @@ def build_process_request(request: RenderRequest) -> dict[str, object]:
                     "type": collection,
                     "dataFilter": {
                         "timeRange": {
-                            "from": _utc_text(observation.capture.start),
-                            "to": _utc_text(observation.capture.end),
+                            "from": _utc_text(
+                                observation.capture.start - timedelta(hours=1)
+                            ),
+                            "to": _utc_text(
+                                observation.capture.end + timedelta(hours=1)
+                            ),
                         },
-                        "ids": [observation.identity.product_id],
-                        "mosaickingOrder": "leastCC",
+                        "mosaickingOrder": (
+                            "mostRecent"
+                            if observation.sensor is Sensor.SENTINEL_1
+                            else "leastCC"
+                        ),
                     },
                     "processing": {
                         "orthorectify": observation.sensor is Sensor.SENTINEL_1,
@@ -292,44 +291,67 @@ def build_process_request(request: RenderRequest) -> dict[str, object]:
                 {
                     "identifier": "default",
                     "format": {"type": "image/tiff"},
-                }
+                },
+                {"identifier": "userdata", "format": {"type": "application/json"}},
             ],
         },
         "evalscript": evalscript,
-        "metadata": {
-            "request_id": observation.identity.stable_key,
-            "recipe_version": request.recipe_version,
-            "output_kind": request.output_kind,
-        },
     }
 
 
-def _sentinel_2_evalscript(output_kind: str) -> str:
+def _sentinel_2_evalscript(observation: Observation, output_kind: str) -> str:
     del output_kind
-    return """//VERSION=3
+    script = """//VERSION=3
 function setup() {
   return {
     input: [{ bands: ['B04', 'B03', 'B02', 'SCL', 'dataMask'] }],
+    mosaicking: Mosaicking.TILE,
     output: { bands: 5, sampleType: 'FLOAT32' }
   };
 }
-function evaluatePixel(sample) {
+function evaluatePixel(samples) {
+  const sample = samples.find(item => item.dataMask === 1) || samples[0];
+  if (!sample) return [0, 0, 0, 0, 0];
   return [sample.B04, sample.B03, sample.B02, sample.SCL, sample.dataMask];
 }"""
+    return script + _source_scene_script(observation.identity.product_id)
 
 
 def _sentinel_1_evalscript(observation: Observation, output_kind: str) -> str:
-    del observation, output_kind
-    return """//VERSION=3
+    del output_kind
+    script = """//VERSION=3
 function setup() {
   return {
     input: [{ bands: ['VV', 'VH', 'dataMask'] }],
+    mosaicking: Mosaicking.TILE,
     output: { bands: 3, sampleType: 'FLOAT32' }
   };
 }
-function evaluatePixel(sample) {
+function evaluatePixel(samples) {
+  const sample = samples.find(item => item.dataMask === 1) || samples[0];
+  if (!sample) return [0, 0, 0];
   return [sample.VV, sample.VH, sample.dataMask];
 }"""
+    return script + _source_scene_script(observation.identity.product_id)
+
+
+def _source_scene_script(product_id: str) -> str:
+    product_literal = json.dumps(product_id + ".SAFE")
+    return f"""
+function sourceId(tile) {{
+  return tile.productId || tile.sentinel1ProductId || tile.sentinel2ProductId;
+}}
+function preProcessScenes(collections) {{
+  collections.scenes.tiles = collections.scenes.tiles.filter(
+    tile => sourceId(tile) === {product_literal}
+  );
+  return collections;
+}}
+function updateOutputMetadata(scenes, inputMetadata, outputMetadata) {{
+  outputMetadata.userData = {{
+    productIds: scenes.tiles.map(sourceId).filter(Boolean)
+  }};
+}}"""
 
 
 def _project_region(request: RenderRequest) -> dict[str, object]:
@@ -352,12 +374,46 @@ def _crs_uri(value: str) -> str:
     return f"http://www.opengis.net/def/crs/EPSG/0/{epsg}"
 
 
-def _response_source_ids(response: httpx.Response) -> tuple[str, ...]:
-    for header in ("x-sentinelhub-source-product", "x-source-product-id"):
-        value = response.headers.get(header)
-        if value:
-            return tuple(item.strip() for item in value.split(",") if item.strip())
-    return ()
+def _verified_response_raster(
+    response: httpx.Response, request: RenderRequest
+) -> tuple[bytes, tuple[str, ...]]:
+    try:
+        with tarfile.open(fileobj=io.BytesIO(response.content), mode="r:") as archive:
+            if set(archive.getnames()) != {"default.tif", "userdata.json"}:
+                raise ValueError("Unexpected Process bundle members.")
+            image = archive.extractfile("default.tif")
+            metadata = archive.extractfile("userdata.json")
+            if image is None or metadata is None:
+                raise ValueError("Missing Process bundle data.")
+            raster_bytes = image.read()
+            if not raster_bytes or len(raster_bytes) > 128 * 1024 * 1024:
+                raise ValueError("Process raster size is invalid.")
+            if archive.getmember("userdata.json").size > 1_000_000:
+                raise ValueError("Process metadata exceeds its bound.")
+            document = json.load(metadata)
+            source_ids = document.get("productIds")
+            if not isinstance(source_ids, list) or not all(
+                isinstance(value, str) for value in source_ids
+            ):
+                raise ValueError("Process source identity is missing.")
+    except (tarfile.TarError, OSError, ValueError, TypeError) as error:
+        raise ProcessRenderingError(
+            "Copernicus Data Space returned an invalid artifact bundle.",
+            reason_code="processing_response_invalid",
+            retryable=False,
+        ) from error
+    normalized = tuple(
+        dict.fromkeys(
+            value[:-5] if value.endswith(".SAFE") else value for value in source_ids
+        )
+    )
+    if normalized != (request.observation.identity.product_id,):
+        raise ProcessRenderingError(
+            "Copernicus Data Space did not prove the selected source-product identity.",
+            reason_code="source_identity_unverified",
+            retryable=False,
+        )
+    return raster_bytes, normalized
 
 
 def _utc_text(value: datetime) -> str:

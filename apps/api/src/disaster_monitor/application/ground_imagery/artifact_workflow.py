@@ -45,6 +45,7 @@ class GroundImageryArtifactWorkflow:
         raster_validator: GroundImageryRasterValidator | None = None,
         artifact_store: ImageryArtifactStore | None = None,
         tile_renderer: GroundImageryTileRenderer | None = None,
+        authenticated_processing_available: bool = True,
     ) -> None:
         self._region_resolver = region_resolver
         self._clock = clock
@@ -52,6 +53,7 @@ class GroundImageryArtifactWorkflow:
         self._raster_validator = raster_validator
         self._artifact_store = artifact_store
         self._tile_renderer = tile_renderer
+        self._authenticated_processing_available = authenticated_processing_available
 
     async def prepare(
         self,
@@ -202,8 +204,32 @@ class GroundImageryArtifactWorkflow:
                 "The stored imagery artifact could not be rendered."
             ) from error
 
+    async def render_preview(self, artifact_id: str) -> bytes:
+        _identifiers.validate_artifact_id(artifact_id)
+        if self._tile_renderer is None:
+            raise GroundImageryError(
+                "Stored imagery preview rendering is not configured."
+            )
+        if self._artifact_store is not None:
+            try:
+                stored = await self._artifact_store.read(artifact_id)
+            except ImageryArtifactStoreError as error:
+                raise GroundImageryError(str(error)) from error
+            if stored is None:
+                raise GroundImageryArtifactNotFound(
+                    "The imagery artifact was not found."
+                )
+        try:
+            return await self._tile_renderer.preview(artifact_id)
+        except ImageryArtifactStoreError as error:
+            raise GroundImageryError(str(error)) from error
+        except ValueError as error:
+            raise GroundImageryError(
+                "The stored imagery artifact could not be previewed."
+            ) from error
+
     def readiness(self) -> dict[str, object]:
-        if self._renderer is None:
+        if self._renderer is None or not self._authenticated_processing_available:
             return {
                 "state": "credentials_required",
                 "detail": (

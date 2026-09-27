@@ -238,7 +238,7 @@ def _observation_from_feature(feature: object, sensor: Sensor) -> Observation:
         ),
         capture=CaptureInterval(start, end),
         footprint=item_geometry,
-        readiness=ObservationReadiness.CATALOGUED,
+        readiness=ObservationReadiness.RENDERABLE,
         acquisition_group_id=datatake or product_id,
         mode=_first_string(properties, "sar:instrument_mode", "s1:instrument_mode"),
         relative_orbit=_integer(

@@ -23,17 +23,23 @@ The current vertical slice provides:
   deduplication, source-product identity, and per-sensor incomplete/failure status;
 - deterministic quality-aware selection with separate sensor outcomes, radar
   compatibility metadata, and reason codes for no acquisition, stale/obscured/
-  partial coverage, incomplete scans, and missing comparison baselines;
+  partial coverage, incomplete scans, and missing comparison baselines. A
+  catalogued renderable product without regional quality assessment is selected
+  provisionally, with `quality_unassessed` shown explicitly; its footprint
+  overlap with the incident core takes priority over recency;
 - authenticated Copernicus Data Space Process requests constrained to the selected
-  product, metric region grid, fixed S1/S2 recipe identities, and bounded response
-  sizes;
+  product by scene filtering and verified response metadata, a metric region grid,
+  fixed S1/S2 recipe identities, and bounded response sizes;
 - staged, checksummed, atomically published local artifacts; strict GeoTIFF/COG
   validation; transparent XYZ tiles generated only from stored artifacts; and
   credential-free provenance manifests;
 - typed HTTP resources under `/api/v1/ground-imagery` and a desktop Ground panel
   with independent radar/optical status, capture dates, roles, quality explanations,
-  readiness messaging, a comparison-stage summary for each sensor when no pair is
-  renderable, refresh/watch controls, artifact download, and manifest links;
+  readiness messaging, a full-artifact preview when one observation is prepared,
+  a comparison-stage summary for each sensor when no pair is renderable,
+  refresh/watch controls, artifact download, and manifest links. Selecting an
+  incident opens Ground view; it prepares one post-event image automatically when
+  available, or a pre-event reference otherwise, and polls queued work;
 - PostgreSQL JSONB request persistence, stale-version protection, and durable
   selection lookup when the operational database is configured;
 - PostgreSQL-backed leased preparation jobs with fencing tokens, bounded retry/backoff,
@@ -56,6 +62,23 @@ expected safe state: the Ground panel can still display the catalog and selectio
 context, but it does not offer a misleading download action. Credentials are never
 returned in request payloads, manifests, logs, or frontend configuration.
 
+CDSE catalog metadata alone cannot establish image quality or guarantee that a
+product is already available to the Process API. A selected product may still fail
+rendering or cover only part of the incident region. Ground view preserves those
+states and does not claim that every disaster has a post-event image.
+
+## Request limits
+
+Until the API has a trusted user identity and shared rate-limit storage, limits
+apply to the whole running API process. It admits at most six new catalog searches
+per rolling hour and 24 per rolling day, with one new search per incident per hour.
+It admits at most four image preparations per rolling hour and 12 per rolling day.
+Reopening an idempotent request, preparing an existing artifact, or observing an
+already queued job does not use another slot. Exceeding a limit returns HTTP 429
+with `Retry-After`. Counters reset when the API process restarts; multiple API
+replicas do not share them. These limits control request frequency, not actual
+Copernicus processing units, which also depend on area, resolution, and recipe.
+
 ## Wire resources
 
 The implementation exposes these bounded resources:
@@ -74,6 +97,7 @@ The implementation exposes these bounded resources:
 | `GET` | `/api/v1/ground-imagery/selections/{id}/manifest` | Read the manifest for a stable selection |
 | `GET` | `/api/v1/ground-imagery/artifacts/{id}/download` | Download a validated COG |
 | `GET` | `/api/v1/ground-imagery/artifacts/{id}/tiles/{z}/{x}/{y}.png` | Render a tile from a stored artifact |
+| `GET` | `/api/v1/ground-imagery/artifacts/{id}/preview.png` | Render a bounded full-artifact preview PNG |
 
 Request and selection schemas are included in the generated frontend API contract.
 Artifact IDs are allowlisted and provider URLs are never accepted by tile or download

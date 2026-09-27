@@ -54,7 +54,7 @@ class RasterioCogValidator(GroundImageryRasterValidator):
             try:
                 with source_memory.open() as source:
                     self._validate_dataset(source, grid, raster.provider_metadata)
-                    converted = _write_cog(source)
+                    converted = _write_cog(source, raster.provider_metadata)
             except (rasterio.errors.RasterioIOError, ValueError) as error:
                 if isinstance(error, RasterValidationError):
                     raise
@@ -156,7 +156,7 @@ def _validate_sensor_semantics(
         )
 
 
-def _write_cog(source: Any) -> bytes:
+def _write_cog(source: Any, provider_metadata: tuple[tuple[str, str], ...]) -> bytes:
     profile = source.profile.copy()
     profile.update(
         driver="COG",
@@ -169,6 +169,9 @@ def _write_cog(source: Any) -> bytes:
         with destination_memory.open(**profile) as destination:
             for _, window in source.block_windows(1):
                 destination.write(source.read(window=window), window=window)
+            tags = dict(provider_metadata)
+            if tags.get("sensor"):
+                destination.update_tags(sensor=tags["sensor"])
         return cast(bytes, destination_memory.read())
 
 
@@ -202,6 +205,28 @@ class RasterioStoredArtifactTileRenderer:
                     "The stored imagery artifact is not a readable COG."
                 ) from error
 
+    async def preview(self, artifact_id: str) -> bytes:
+        stored = await self._artifacts.read(artifact_id)
+        if stored is None:
+            raise RasterValidationError("The imagery artifact was not found.")
+        _, content = stored
+        with MemoryFile(content) as memory:
+            try:
+                with memory.open() as dataset:
+                    scale = min(1.0, 1024 / max(dataset.width, dataset.height))
+                    width = max(1, round(dataset.width * scale))
+                    height = max(1, round(dataset.height * scale))
+                    values = dataset.read(
+                        out_shape=(dataset.count, height, width),
+                        masked=True,
+                        resampling=Resampling.nearest,
+                    )
+                    return _image_bytes(values, _dataset_sensor(dataset))
+            except rasterio.errors.RasterioIOError as error:
+                raise RasterValidationError(
+                    "The stored imagery artifact is not a readable COG."
+                ) from error
+
 
 def _tile_bytes(dataset: Any, zoom: int, x: int, y: int) -> bytes:
     left, bottom, right, top = _xyz_bounds(zoom, x, y)
@@ -220,13 +245,35 @@ def _tile_bytes(dataset: Any, zoom: int, x: int, y: int) -> bytes:
         masked=True,
         resampling=Resampling.nearest,
     )
+    return _image_bytes(values, _dataset_sensor(dataset))
+
+
+def _dataset_sensor(dataset: Any) -> str | None:
+    return dataset.tags().get("sensor") or (
+        "sentinel-2" if dataset.count == 5 else None
+    )
+
+
+def _image_bytes(values: Any, sensor: str | None) -> bytes:
+    height, width = values.shape[1:]
+    rgba = np.zeros((4, height, width), dtype=np.uint8)
+    if sensor == "sentinel-1" and values.shape[0] >= 3:
+        vv = np.ma.array(values[0], dtype=np.float32).filled(0)
+        valid_vv = np.isfinite(vv)
+        decibels = 10 * np.log10(np.maximum(np.where(valid_vv, vv, 0), 1e-8))
+        gray = np.clip((decibels + 25) * (255 / 25), 0, 255).astype(np.uint8)
+        rgba[:3] = gray
+        rgba[3] = _to_byte(values[2])
+        rgba[3][np.ma.getmaskarray(values[0]) | ~valid_vv] = 0
+        return _png_bytes(rgba)
     if values.shape[0] == 1:
         channels = np.repeat(values[:1], 3, axis=0)
     else:
         channels = values[:3]
-    rgba = np.zeros((4, _TILE_SIZE, _TILE_SIZE), dtype=np.uint8)
     for index in range(3):
-        rgba[index] = _to_byte(channels[index])
+        rgba[index] = _to_byte(
+            channels[index] * (2.5 * 255) if sensor == "sentinel-2" else channels[index]
+        )
     mask = np.ma.getmaskarray(channels[0])
     if values.shape[0] >= 5:
         # Sentinel-2 display responses carry SCL before dataMask.  The
@@ -268,11 +315,12 @@ def _to_byte(values: Any) -> np.ndarray:
 
 
 def _png_bytes(rgba: np.ndarray) -> bytes:
+    height, width = rgba.shape[1:]
     with MemoryFile() as memory:
         with memory.open(
             driver="PNG",
-            width=_TILE_SIZE,
-            height=_TILE_SIZE,
+            width=width,
+            height=height,
             count=4,
             dtype="uint8",
         ) as dataset:

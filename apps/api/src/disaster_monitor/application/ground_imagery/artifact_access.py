@@ -64,6 +64,9 @@ class GroundImageryArtifactAccess:
     async def render_tile(self, artifact_id: str, zoom: int, x: int, y: int) -> bytes:
         return await self._workflow.render_tile(artifact_id, zoom, x, y)
 
+    async def render_preview(self, artifact_id: str) -> bytes:
+        return await self._workflow.render_preview(artifact_id)
+
     def readiness(self) -> dict[str, object]:
         return self._workflow.readiness()
 

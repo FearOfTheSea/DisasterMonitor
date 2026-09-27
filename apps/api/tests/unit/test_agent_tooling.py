@@ -32,6 +32,7 @@ from disaster_monitor.application.agent.tooling import (
 from disaster_monitor.application.agent.tools.source_tools import (
     FindDisasterEventTool,
     SourceToolDependencies,
+    _coverage_gap_for_role,
 )
 from disaster_monitor.application.conversations.memory_recall import MemoryRecallService
 from disaster_monitor.application.disaster import (
@@ -89,6 +90,14 @@ from disaster_monitor.infrastructure.sources.static_source_catalog import (
 )
 
 NOW = datetime(2026, 8, 5, 12, tzinfo=UTC)
+
+
+def test_imagery_coverage_gap_directs_user_to_ground_view() -> None:
+    gap = _coverage_gap_for_role(SourceInformationRole.IMAGERY.value)
+
+    assert "Ground view" in gap
+    assert "may be unavailable" in gap
+    assert "No maintained executable source supports role imagery" not in gap
 
 
 class DummyTool:

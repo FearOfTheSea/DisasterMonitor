@@ -133,3 +133,47 @@ async def test_sentinel_2_data_mask_controls_tile_alpha(tmp_path: Path) -> None:
             alpha = dataset.read(4)
     assert np.any(alpha == 0)
     assert np.any(alpha == 255)
+
+
+@pytest.mark.asyncio
+async def test_radar_preview_uses_grayscale_and_data_mask(tmp_path: Path) -> None:
+    values = np.zeros((3, 256, 256), dtype="float32")
+    values[0] = 0.1
+    values[1] = 0.05
+    values[2] = 1
+    values[2, :128, :128] = 0
+    values[0, -10, -10] = np.nan
+    with MemoryFile() as memory:
+        with memory.open(
+            driver="GTiff",
+            width=256,
+            height=256,
+            count=3,
+            dtype="float32",
+            crs="EPSG:3857",
+            transform=from_bounds(0, 0, 256, 256, 256, 256),
+        ) as dataset:
+            dataset.write(values)
+            dataset.update_tags(sensor="sentinel-1")
+        content = memory.read()
+    store = FilesystemImageryArtifactStore(tmp_path)
+    await store.put_bytes(
+        artifact_id="artifact:radar-preview",
+        content_type="image/tiff",
+        content=content,
+        maximum_bytes=128 * 1024 * 1024,
+    )
+
+    with np.errstate(invalid="raise"):
+        preview = await RasterioStoredArtifactTileRenderer(store).preview(
+            "artifact:radar-preview"
+        )
+
+    with MemoryFile(preview) as memory:
+        with memory.open() as dataset:
+            channels = dataset.read()
+    assert np.array_equal(channels[0], channels[1])
+    assert np.array_equal(channels[1], channels[2])
+    assert channels[3, 0, 0] == 0
+    assert channels[3, -1, -1] == 255
+    assert channels[3, -10, -10] == 0

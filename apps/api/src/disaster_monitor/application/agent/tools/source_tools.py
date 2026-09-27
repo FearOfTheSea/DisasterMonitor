@@ -118,7 +118,7 @@ class ListSourcesForTaskTool(_BaseTool):
         if not event_selection.registrations:
             gaps.append("No event-discovery source is executable for this task.")
         for role in unsupported:
-            gaps.append(f"No maintained executable source supports role {role}.")
+            gaps.append(_coverage_gap_for_role(role))
         state.workspace.source_selection = SourceSelectionSummary(
             configured_source_ids=tuple(configured),
             unconfigured_source_ids=tuple(unconfigured),
@@ -133,6 +133,16 @@ class ListSourcesForTaskTool(_BaseTool):
             f"Selected {len(configured)} configured source registrations; "
             f"{len(unconfigured)} suitable registrations require configuration."
         )
+
+
+def _coverage_gap_for_role(role: str) -> str:
+    if role == SourceInformationRole.IMAGERY.value:
+        return (
+            "No imagery was attached to this assistant answer. Open Ground view "
+            "for event-focused Sentinel observations; a suitable capture may be "
+            "unavailable."
+        )
+    return f"No maintained executable source supports role {role}."
 
 
 class FindDisasterEventTool(_BaseTool):

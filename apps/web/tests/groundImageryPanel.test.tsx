@@ -11,6 +11,7 @@ import type {
 const api = vi.hoisted(() => ({
   createGroundImageryRequest: vi.fn(),
   fetchGroundImageryReadiness: vi.fn(),
+  fetchGroundImageryRequest: vi.fn(),
   prepareGroundImagerySelection: vi.fn(),
   refreshGroundImageryRequest: vi.fn(),
   setGroundImageryWatch: vi.fn(),
@@ -360,5 +361,86 @@ describe('GroundImageryPanel', () => {
     ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Swipe' }));
     expect(screen.getByRole('slider', { name: 'Reveal position' })).toBeVisible();
+  });
+
+  it('shows a prepared post-event image even before a comparison pair exists', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      artifacts: [comparisonRequest.artifacts![1]],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Prepared observation')).toBeVisible();
+    expect(screen.getByAltText('Sentinel-1 radar after capture')).toBeVisible();
+    expect(screen.getByText(/does not establish damage or safety/i)).toBeVisible();
+  });
+
+  it('prepares one selected post-event capture automatically when rendering is ready', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      artifacts: [],
+    });
+    api.fetchGroundImageryReadiness.mockResolvedValue({
+      state: 'ready',
+      detail: 'Authenticated rendering is available.',
+    });
+    api.prepareGroundImagerySelection.mockResolvedValue({
+      ...comparisonRequest,
+      artifacts: [comparisonRequest.artifacts![1]],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Prepared observation')).toBeVisible();
+    expect(api.prepareGroundImagerySelection).toHaveBeenCalledTimes(1);
+    expect(api.prepareGroundImagerySelection).toHaveBeenCalledWith('ground-imagery:1', {
+      sensor: 'sentinel-1',
+      role: 'first_useful_after_onset',
+      overview: true,
+    });
+  });
+
+  it('refreshes a queued preparation until its image is available', async () => {
+    vi.useFakeTimers();
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      state: 'queued',
+      artifacts: [],
+    });
+    api.fetchGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      state: 'ready',
+      artifacts: [comparisonRequest.artifacts![1]],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+
+    expect(api.fetchGroundImageryRequest).toHaveBeenCalledWith(
+      'ground-imagery:1',
+      expect.any(AbortSignal),
+    );
+    expect(screen.getByText('Prepared observation')).toBeVisible();
   });
 });
