@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any, cast
 
 from disaster_monitor.application.ground_imagery.models import (
@@ -132,9 +133,7 @@ def request_to_document(request: GroundImageryRequest) -> dict[str, Any]:
         "next_check_at": (
             None if request.next_check_at is None else request.next_check_at.isoformat()
         ),
-        "artifacts": [
-            _codec_artifacts.artifact_document(item) for item in request.artifacts
-        ],
+        "artifacts": [_artifact_document(item) for item in request.artifacts],
     }
 
 
@@ -193,11 +192,32 @@ def request_from_document(document: Mapping[str, Any]) -> GroundImageryRequest:
             else _datetime(document, "next_check_at")
         ),
         artifacts=tuple(
-            _codec_artifacts.artifact_from_document(item)
+            _artifact_from_document(item)
             for item in (
                 _list(document, "artifacts") if "artifacts" in document else []
             )
         ),
+    )
+
+
+def _artifact_document(artifact: Any) -> dict[str, Any]:
+    document = _codec_artifacts.artifact_document(artifact)
+    document["observation"] = (
+        None
+        if artifact.observation is None
+        else _observation_document(artifact.observation)
+    )
+    return document
+
+
+def _artifact_from_document(document: object) -> Any:
+    value = _mapping_value(document)
+    artifact = _codec_artifacts.artifact_from_document(value)
+    observation = value.get("observation")
+    return (
+        artifact
+        if observation is None
+        else replace(artifact, observation=_observation_from_document(observation))
     )
 
 

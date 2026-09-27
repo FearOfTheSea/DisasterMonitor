@@ -18,6 +18,9 @@ from disaster_monitor.application.ground_imagery.models import (
 from disaster_monitor.application.ground_imagery.resolve_region import (
     GroundImageryRegionResolver,
 )
+from disaster_monitor.application.ground_imagery.select_observations import (
+    SelectionReason,
+)
 from disaster_monitor.application.ports.ground_imagery.artifacts import (
     ImageryArtifactStore,
     ImageryArtifactStoreError,
@@ -30,7 +33,12 @@ from disaster_monitor.application.ports.ground_imagery.rendering import (
     GroundImageryTileRenderer,
     RenderRequest,
 )
-from disaster_monitor.domain.imagery.observations import Sensor, TemporalRole
+from disaster_monitor.domain.imagery.observations import (
+    ObservationQuality,
+    QualityState,
+    Sensor,
+    TemporalRole,
+)
 
 
 class GroundImageryArtifactWorkflow:
@@ -106,6 +114,9 @@ class GroundImageryArtifactWorkflow:
             grid=grid,
             source_product_id=observation.identity.product_id,
         )
+        assessed_quality = self._raster_validator.assess_core_quality(
+            normalized, region.core, sensor
+        )
         current_selection_id = _identifiers.selection_id(
             request.request_id, sensor, temporal_role, observation
         )
@@ -140,9 +151,21 @@ class GroundImageryArtifactWorkflow:
             source_product_ids=normalized.source_product_ids,
             grid=grid,
             created_at=self._clock(),
+            observation=(
+                replace(observation, quality=assessed_quality)
+                if assessed_quality is not None
+                else observation
+            ),
+        )
+        updated_request = (
+            _with_prepared_quality(
+                request, observation.observation_id, assessed_quality
+            )
+            if assessed_quality is not None
+            else request
         )
         return replace(
-            request,
+            updated_request,
             artifacts=tuple(
                 item for item in request.artifacts if item.artifact_id != artifact_id
             )
@@ -257,3 +280,50 @@ class GroundImageryArtifactWorkflow:
 
 
 __all__ = ["GroundImageryArtifactWorkflow"]
+
+
+def _with_prepared_quality(
+    request: GroundImageryRequest,
+    observation_id: str,
+    quality: ObservationQuality,
+) -> GroundImageryRequest:
+    """Replace catalog estimates with measured quality from the published raster."""
+    candidates = tuple(
+        replace(item, quality=quality)
+        if item.observation_id == observation_id
+        else item
+        for item in request.candidates
+    )
+    if request.selection is None:
+        return replace(request, candidates=candidates)
+    sensors = []
+    for sensor in request.selection.sensors:
+        outcomes = []
+        for outcome in sensor.selections:
+            observation = outcome.observation
+            if observation is not None and observation.observation_id == observation_id:
+                reason = {
+                    QualityState.USEFUL: SelectionReason.SELECTED,
+                    QualityState.PARTIAL: SelectionReason.PARTIAL_COVERAGE,
+                    QualityState.OBSCURED: SelectionReason.OBSCURED,
+                    QualityState.UNCOVERED: SelectionReason.PARTIAL_COVERAGE,
+                    QualityState.UNCERTAIN: SelectionReason.QUALITY_UNASSESSED,
+                }[quality.quality_state]
+                outcome = replace(
+                    outcome,
+                    observation=replace(observation, quality=quality),
+                    reason=reason,
+                    explanation=(
+                        "Rendered core assessment: "
+                        f"{quality.usable_fraction:.0%} usable, "
+                        f"{quality.obscured_fraction:.0%} obscured, "
+                        f"{quality.uncovered_fraction:.0%} uncovered."
+                    ),
+                )
+            outcomes.append(outcome)
+        sensors.append(replace(sensor, selections=tuple(outcomes)))
+    return replace(
+        request,
+        candidates=candidates,
+        selection=replace(request.selection, sensors=tuple(sensors)),
+    )

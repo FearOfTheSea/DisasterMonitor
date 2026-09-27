@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from disaster_monitor.domain.imagery.observations import Observation
+from disaster_monitor.domain.imagery.observations import (
+    Observation,
+    ObservationQuality,
+    Sensor,
+)
 from disaster_monitor.domain.imagery.regions import MultiPolygon
 
 
@@ -99,6 +103,10 @@ class GroundImageryRasterValidator(Protocol):
     def normalize(
         self, raster: RenderedRaster, *, grid: ImageryGrid, source_product_id: str
     ) -> RenderedRaster: ...
+
+    def assess_core_quality(
+        self, raster: RenderedRaster, core: MultiPolygon, sensor: Sensor
+    ) -> ObservationQuality | None: ...
 
 
 class GroundImageryTileRenderer(Protocol):

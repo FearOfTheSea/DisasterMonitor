@@ -4,6 +4,7 @@ import type {
   GroundImageryReadinessResponse,
   GroundImageryRequestResponse,
   GroundImageryPrepareRequest,
+  GroundImageryRegionRequest,
   GroundImageryWatchRequest,
 } from '@/shared/api/generated/assistant';
 import { matchesApiSchema } from '@/shared/api/generated/assistant';
@@ -22,8 +23,8 @@ export async function createGroundImageryRequest(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         incident_id: incidentId,
-        reference_time: new Date().toISOString(),
         idempotency_key: `ground-view:${incidentId}`,
+        refresh_if_stale: true,
       }),
       signal,
     },
@@ -61,13 +62,28 @@ export async function refreshGroundImageryRequest(
   );
 }
 
+export async function replaceGroundImageryRegion(
+  requestId: string,
+  region: GroundImageryRegionRequest['region'],
+): Promise<GroundImageryRequestResponse> {
+  return requestJson<GroundImageryRequestResponse>(
+    'GroundImageryRequestResponse',
+    requestPath(requestId, '/regions'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ region }),
+    },
+  );
+}
+
 export async function setGroundImageryWatch(
   requestId: string,
   enabled: boolean,
 ): Promise<GroundImageryRequestResponse> {
   const payload: GroundImageryWatchRequest = {
     enabled,
-    interval_seconds: enabled ? 21_600 : null,
+    interval_seconds: null,
   };
   return requestJson<GroundImageryRequestResponse>(
     'GroundImageryRequestResponse',

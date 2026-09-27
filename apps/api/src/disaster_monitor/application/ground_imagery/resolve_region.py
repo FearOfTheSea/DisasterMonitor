@@ -77,6 +77,10 @@ class GroundImageryRegionResolver:
         self._place_lookup = place_lookup
         self._context_margin_km = context_margin_km
 
+    @property
+    def geometry_engine(self) -> RegionGeometryEngine:
+        return self._geometry
+
     async def resolve_async(
         self,
         context: IncidentImageryContext,

@@ -104,7 +104,10 @@ class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
                 )
         elif geometry is not None and geometry.kind is EventGeometryKind.POINT:
             coordinate = geometry.coordinates[0]
-            if not geometry.estimated:
+            if not geometry.estimated and not (
+                incident.disaster is Disaster.FLOOD
+                and incident.source.source_id == "gdacs-floods"
+            ):
                 verified_point = Coordinate(coordinate.latitude, coordinate.longitude)
 
         onset = None

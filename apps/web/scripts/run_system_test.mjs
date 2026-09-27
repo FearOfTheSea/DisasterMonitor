@@ -1,3 +1,4 @@
+import { exerciseGroundImagery } from './system_ground_imagery.mjs';
 import { spawn } from 'node:child_process';
 
 import { chromium } from '@playwright/test';
@@ -93,6 +94,14 @@ try {
     browserErrors.push(`page: ${error.message}`);
   });
   await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+  await page.route('**/api/v1/ground-imagery/**', async (route) => {
+    if (route.request().url().endsWith('/readiness')) {
+      return route.fulfill({
+        json: { state: 'credentials_required', detail: 'System fixture' },
+      });
+    }
+    return route.fulfill({ json: {} });
+  });
   if (
     page.url() !== 'http://127.0.0.1:4173/' ||
     (await page.title()) !== 'Disaster Monitor'
@@ -227,6 +236,8 @@ try {
     if (rail) rail.scrollTop = 0;
   });
   await page.getByRole('button', { name: 'Focus United States on map' }).click();
+  await page.getByRole('button', { name: 'Return to event' }).click();
+  await page.getByRole('button', { name: 'Back to events' }).click();
   const initialScreenshotPath = process.env.SYSTEM_TEST_INITIAL_SCREENSHOT;
   if (initialScreenshotPath) {
     await page.screenshot({ path: initialScreenshotPath, fullPage: false });
@@ -264,10 +275,12 @@ try {
       name: `Focus ${fixture.country} on map`,
     });
     await button.click();
-    await page.locator('.map-overlay').getByText(fixture.focusedCoordinate).waitFor();
-    if ((await button.getAttribute('aria-pressed')) !== 'true') {
-      throw new Error(`Incident selection did not remain on ${fixture.location}.`);
+    await page.getByRole('heading', { name: 'Ground view' }).waitFor();
+    await page.getByRole('button', { name: 'Return to event' }).click();
+    if (fixture !== incidentFixtures.at(-1)) {
+      await page.getByRole('button', { name: 'Back to events' }).click();
     }
+    await page.locator('.map-overlay').getByText(fixture.focusedCoordinate).waitFor();
   }
   await page
     .getByRole('button', { name: 'Ask about volcanic eruptions in Tanzania' })
@@ -329,6 +342,9 @@ try {
       name: 'Focus Equatorial wildfire perimeter fixture on map',
     })
     .click();
+  await page.getByRole('heading', { name: 'Ground view' }).waitFor();
+  await page.getByRole('button', { name: 'Return to event' }).click();
+  await page.getByRole('button', { name: 'Back to events' }).click();
   await page
     .locator('.map-overlay')
     .getByText(/-10\.00,\s*-55\.00/)
@@ -478,6 +494,7 @@ try {
       'The Operator Agent did not create exactly one bounded flood watch.',
     );
   }
+  await exerciseGroundImagery(page);
   const screenshotPath = process.env.SYSTEM_TEST_SCREENSHOT;
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -491,7 +508,7 @@ try {
     throw new Error(`Browser errors detected:\n${browserErrors.join('\n')}`);
   }
   console.log(
-    'System test passed: all six Active Incidents hazards focused their own geometry, a scheduled Incident Watch refresh produced a visible source-backed timeline alert, the existing assistant workflow rendered, and Operator Agent v1 applied a 24-hour window while confirmation-gating one flood watch.',
+    'System test passed: Active Incidents geometry, Incident Watch alert, Ground imagery coverage and opacity, assistant workflow, and Operator Agent v1 confirmation flow.',
   );
 } finally {
   await browser?.close();

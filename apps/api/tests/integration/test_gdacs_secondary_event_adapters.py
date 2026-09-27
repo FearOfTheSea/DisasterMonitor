@@ -199,6 +199,7 @@ async def test_gdacs_flood_place_is_verified_by_its_event_report_headline() -> N
     )
 
     assert result.records[0].location == "Nghe An Province, Vietnam"
+    assert result.records[0].geometry is None
     assert result.records[0].location_source is not None
     assert "/report.aspx" in result.records[0].location_source.canonical_url
     assert "eventid=1104141" in result.records[0].location_source.canonical_url
@@ -277,6 +278,33 @@ def test_gdacs_place_verifier_accepts_country_suffix_in_place_hint() -> None:
         "Nghe An Province, Vietnam, Mid September 2026",
         "Nghe An Province",
     )
+
+
+def test_gdacs_place_verifier_accepts_exact_place_in_event_description() -> None:
+    html = (
+        '<div id="item_description"><span class="news_title">'
+        'Flood in Nepal, August 2026</span><span class="news_text">'
+        "Authorities reported flooding near the Rasuwagadhi border crossing in Nepal."
+        "</span></div>"
+    )
+
+    assert _matching_headline(html, place="Rasuwagadhi", country="Nepal") == (
+        "Flood in Nepal, August 2026",
+        "near Rasuwagadhi",
+    )
+
+
+def test_gdacs_place_verifier_does_not_pair_unrelated_story_text() -> None:
+    html = (
+        '<div id="item_description"><span class="news_title">'
+        'Flood in Nepal, August 2026</span><span class="news_text">'
+        "Reports from Kathmandu.</span></div>"
+        '<div id="item_description"><span class="news_title">'
+        'Flood in India, August 2026</span><span class="news_text">'
+        "Reports from Rasuwagadhi.</span></div>"
+    )
+
+    assert _matching_headline(html, place="Rasuwagadhi", country="Nepal") is None
 
 
 @pytest.mark.asyncio

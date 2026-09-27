@@ -122,6 +122,7 @@ def test_request_codec_round_trips_versioned_regions_selections_and_artifacts() 
         source_product_ids=("product-1",),
         grid=ImageryGrid("EPSG:32632", 0, 0, 100, 100, 10, 10, 10, "native-10m"),
         created_at=datetime(2024, 5, 20, tzinfo=UTC),
+        observation=observation,
     )
     request = GroundImageryRequest(
         request_id="ground-imagery:1",

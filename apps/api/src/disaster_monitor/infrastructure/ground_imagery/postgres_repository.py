@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from typing import Any
 
 import psycopg
@@ -309,6 +310,69 @@ class PostgresGroundImageryRequestStore(GroundImageryRequestStore):
                             artifact.created_at,
                         ),
                     )
+
+                await cursor.execute(
+                    """
+                    INSERT INTO imagery_watches(
+                        watch_id, request_id, enabled, interval_seconds,
+                        next_check_at, end_policy, created_at, updated_at
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (request_id) DO UPDATE SET
+                        enabled=EXCLUDED.enabled,
+                        interval_seconds=EXCLUDED.interval_seconds,
+                        next_check_at=EXCLUDED.next_check_at,
+                        updated_at=EXCLUDED.updated_at
+                    """,
+                    (
+                        request.request_id,
+                        request.request_id,
+                        request.watch_enabled,
+                        request.watch_interval_seconds or 3_600,
+                        request.next_check_at,
+                        "source_reported_end",
+                        request.created_at,
+                        request.updated_at,
+                    ),
+                )
+
+    async def claim_due_watch(self, *, now: datetime) -> str | None:
+        """Advance one due watch atomically across worker processes."""
+        async with await self._connection() as connection:
+            async with connection.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    """
+                    SELECT request_id, interval_seconds
+                    FROM imagery_watches
+                    WHERE enabled = true AND next_check_at <= %s
+                    ORDER BY next_check_at, watch_id
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                    """,
+                    (now,),
+                )
+                row: dict[str, Any] | None = await cursor.fetchone()
+                if row is None:
+                    return None
+                request_id = str(row["request_id"])
+                next_check = now + timedelta(seconds=int(row["interval_seconds"]))
+                await cursor.execute(
+                    """
+                    UPDATE imagery_watches
+                    SET next_check_at = %s, last_checked_at = %s, updated_at = %s
+                    WHERE request_id = %s
+                    """,
+                    (next_check, now, now, request_id),
+                )
+                await cursor.execute(
+                    """
+                    UPDATE imagery_requests
+                    SET payload = jsonb_set(payload, '{next_check_at}', %s::jsonb),
+                        updated_at = %s
+                    WHERE request_id = %s
+                    """,
+                    (json.dumps(next_check.isoformat()), now, request_id),
+                )
+                return request_id
 
     async def aclose(self) -> None:
         return None

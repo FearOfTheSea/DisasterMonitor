@@ -82,6 +82,7 @@ async def create_ground_imagery_request(
                 fallback_radius_km=payload.fallback_radius_km,
                 owner_scope=payload.owner_scope,
                 idempotency_key=payload.idempotency_key,
+                refresh_if_stale=payload.refresh_if_stale,
                 onset_override=_onset_override(payload),
             )
         )

@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
   fetchGroundImageryReadiness: vi.fn(),
   fetchGroundImageryRequest: vi.fn(),
   prepareGroundImagerySelection: vi.fn(),
+  replaceGroundImageryRegion: vi.fn(),
   refreshGroundImageryRequest: vi.fn(),
   setGroundImageryWatch: vi.fn(),
 }));
@@ -215,6 +216,14 @@ const comparisonRequest: GroundImageryRequestResponse = {
 describe('GroundImageryPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
     api.createGroundImageryRequest.mockResolvedValue(request);
     api.fetchGroundImageryReadiness.mockResolvedValue(readiness);
     api.refreshGroundImageryRequest.mockResolvedValue(request);
@@ -228,6 +237,87 @@ describe('GroundImageryPanel', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps a prepared capture visible after a refresh changes the selection', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...request,
+      request_version: 2,
+      artifacts: [
+        {
+          ...comparisonRequest.artifacts![1],
+          observation: observation('S1-after', '2024-05-21T00:00:00Z'),
+        },
+      ],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Prepared observation')).toBeVisible();
+    expect(screen.getByAltText('Sentinel-1 radar after capture')).toBeVisible();
+  });
+
+  it('previews a usable radar capture ahead of a newer obscured optical capture', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...request,
+      artifacts: [
+        {
+          ...comparisonRequest.artifacts![1],
+          selection_id: 'radar-prepared',
+          observation: {
+            ...observation('S1-clear', '2024-05-22T00:00:00Z'),
+            quality: {
+              covered_fraction: 1,
+              usable_fraction: 1,
+              obscured_fraction: 0,
+              uncertain_fraction: 0,
+              uncovered_fraction: 0,
+              component_usable_fractions: { 'component-1': 1 },
+              quality_state: 'useful',
+              mask_definition: 's1-core-datamask-v1',
+            },
+          },
+        },
+        {
+          ...comparisonRequest.artifacts![1],
+          artifact_id: 'artifact:clouded',
+          selection_id: 'optical-prepared',
+          sensor: 'sentinel-2',
+          observation: {
+            ...observation('S2-clouded', '2024-05-23T00:00:00Z'),
+            sensor: 'sentinel-2',
+            quality: {
+              covered_fraction: 1,
+              usable_fraction: 0,
+              obscured_fraction: 1,
+              uncertain_fraction: 0,
+              uncovered_fraction: 0,
+              component_usable_fractions: { 'component-1': 0 },
+              quality_state: 'obscured',
+              mask_definition: 's2-core-scl-datamask-v1',
+            },
+          },
+        },
+      ],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByAltText('Sentinel-1 radar after capture')).toBeVisible();
+    expect(screen.queryByAltText('Sentinel-2 optical after capture')).toBeNull();
   });
 
   it('shows readiness and slow-provider guidance while catalog search continues', async () => {
@@ -287,6 +377,108 @@ describe('GroundImageryPanel', () => {
     expect(
       screen.getByText('The region is a point-derived inspection buffer.'),
     ).toBeVisible();
+  });
+
+  it('does not call an obscured capture useful after the raster is assessed', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...request,
+      sensors: [
+        {
+          ...request.sensors[0],
+          selections: [
+            {
+              ...request.sensors[0].selections[0],
+              role: 'latest_useful',
+              observation: observation('S1-clouded', '2024-05-21T00:00:00Z'),
+              reason: 'obscured',
+            },
+          ],
+        },
+        request.sensors[1],
+      ],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('Latest capture')).toBeVisible();
+    expect(screen.queryByText('Latest useful view')).not.toBeInTheDocument();
+    expect(screen.getByText('Obscured or uncertain')).toBeVisible();
+  });
+
+  it('lets an operator search a selected area when event geometry is insufficient', async () => {
+    const user = userEvent.setup();
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...request,
+      state: 'needs_region',
+      region: {
+        state: 'needs_region',
+        region: null,
+        alternatives: [],
+        warnings: ['The event point is only a locator.'],
+        reason_code: 'needs_region',
+      },
+    });
+    api.replaceGroundImageryRegion.mockResolvedValue({
+      ...request,
+      request_version: 2,
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="Flood · broad region"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('The event point is only a locator.')).toBeVisible();
+    await user.type(screen.getByLabelText('Center latitude'), '35.1');
+    await user.type(screen.getByLabelText('Center longitude'), '136.9');
+    await user.click(screen.getByRole('button', { name: 'Search this area' }));
+
+    expect(api.replaceGroundImageryRegion).toHaveBeenCalledOnce();
+    const [requestId, region] = api.replaceGroundImageryRegion.mock.calls[0];
+    expect(requestId).toBe('ground-imagery:1');
+    expect(region.type).toBe('MultiPolygon');
+    expect(region.coordinates[0][0]).toHaveLength(65);
+    const longitudes = region.coordinates[0][0].map((point: number[]) => point[0]);
+    const latitudes = region.coordinates[0][0].map((point: number[]) => point[1]);
+    expect(Math.min(...longitudes)).toBeGreaterThan(136);
+    expect(Math.max(...longitudes)).toBeLessThan(138);
+    expect(Math.min(...latitudes)).toBeGreaterThan(34);
+    expect(Math.max(...latitudes)).toBeLessThan(36);
+    expect(screen.getByText('Request ground-imagery:1 · version 2')).toBeVisible();
+  });
+
+  it('rejects an inspection circle that crosses the unsupported date line', async () => {
+    const user = userEvent.setup();
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...request,
+      state: 'needs_region',
+      region: { ...request.region, state: 'needs_region', region: null },
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="Coastal flood"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.type(await screen.findByLabelText('Center latitude'), '35');
+    await user.type(screen.getByLabelText('Center longitude'), '179.99');
+    await user.selectOptions(screen.getByLabelText('Radius'), '30');
+    await user.click(screen.getByRole('button', { name: 'Search this area' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('date line');
+    expect(api.replaceGroundImageryRegion).not.toHaveBeenCalled();
   });
 
   it('clears the previous incident while the next ground view loads', async () => {
@@ -380,6 +572,12 @@ describe('GroundImageryPanel', () => {
     expect(await screen.findByText('Prepared observation')).toBeVisible();
     expect(screen.getByAltText('Sentinel-1 radar after capture')).toBeVisible();
     expect(screen.getByText(/does not establish damage or safety/i)).toBeVisible();
+    expect(
+      screen.getByRole('region', { name: 'Observation coverage map' }),
+    ).toBeVisible();
+    expect(screen.getByText(/Transparent pixels have no data/)).toBeVisible();
+    expect(screen.getByText(/Search window as of/)).toBeVisible();
+    expect(screen.getAllByText(/Sensed through/)).toHaveLength(2);
   });
 
   it('prepares one selected post-event capture automatically when rendering is ready', async () => {
@@ -413,6 +611,46 @@ describe('GroundImageryPanel', () => {
     });
   });
 
+  it('prepares a newer useful capture even when an older artifact exists', async () => {
+    const latest = {
+      ...comparisonRequest.sensors[0].selections[1],
+      selection_id: 'selection:latest',
+      role: 'latest_useful',
+      observation: observation('S1-latest', '2024-05-23T00:00:00Z'),
+    };
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      sensors: [
+        {
+          ...comparisonRequest.sensors[0],
+          selections: [...comparisonRequest.sensors[0].selections, latest],
+        },
+        comparisonRequest.sensors[1],
+      ],
+      artifacts: [comparisonRequest.artifacts![1]],
+    });
+    api.fetchGroundImageryReadiness.mockResolvedValue({
+      state: 'ready',
+      detail: 'Authenticated rendering is available.',
+    });
+    api.prepareGroundImagerySelection.mockResolvedValue(comparisonRequest);
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByText('Latest useful view');
+    expect(api.prepareGroundImagerySelection).toHaveBeenCalledWith('ground-imagery:1', {
+      sensor: 'sentinel-1',
+      role: 'latest_useful',
+      overview: true,
+    });
+  });
+
   it('refreshes a queued preparation until its image is available', async () => {
     vi.useFakeTimers();
     api.createGroundImageryRequest.mockResolvedValue({
@@ -442,5 +680,36 @@ describe('GroundImageryPanel', () => {
       expect.any(AbortSignal),
     );
     expect(screen.getByText('Prepared observation')).toBeVisible();
+  });
+
+  it('polls a watched request after preparation is complete', async () => {
+    vi.useFakeTimers();
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      watch_enabled: true,
+      next_check_at: '2024-05-21T01:00:00Z',
+    });
+    api.fetchGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      request_version: 2,
+      watch_enabled: true,
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+
+    expect(api.fetchGroundImageryRequest).toHaveBeenCalledWith(
+      'ground-imagery:1',
+      expect.any(AbortSignal),
+    );
+    expect(screen.getByText(/Request ground-imagery:1 · version 2/)).toBeVisible();
   });
 });

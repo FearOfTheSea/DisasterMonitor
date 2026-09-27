@@ -21,16 +21,19 @@ from disaster_monitor.application.ground_imagery.models import (
     GroundImageryRequest,
     GroundImageryRequestInput,
     GroundImageryRequestState,
+    ImageryArtifactReference,
     SensorSearchStatus,
 )
 from disaster_monitor.application.ground_imagery.request_indexes import (
     GroundImageryRequestIndexes,
 )
 from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRateLimitExceeded,
     GroundImageryRequestLimiter,
 )
 from disaster_monitor.application.ground_imagery.resolve_region import (
     GroundImageryRegionResolver,
+    RegionResolution,
     RegionResolutionState,
 )
 from disaster_monitor.application.ground_imagery.select_observations import (
@@ -82,6 +85,9 @@ class GroundImageryRequestLifecycle:
         *,
         request_id_override: str | None = None,
         request_version: int = 1,
+        resolved_region: RegionResolution | None = None,
+        previous_request: GroundImageryRequest | None = None,
+        historical_artifacts: tuple[ImageryArtifactReference, ...] = (),
     ) -> GroundImageryRequest:
         if not self._enabled:
             raise GroundImageryError(
@@ -95,13 +101,21 @@ class GroundImageryRequestLifecycle:
                 existing = await self._store.get_request(existing_id)
                 if existing is not None:
                     self._indexes.index(existing)
-                    return existing
+                    return (
+                        await self._refresh_stale_request(existing)
+                        if request_input.refresh_if_stale
+                        else existing
+                    )
             durable_id = _identifiers.request_id(request_input)
             existing = await self._store.get_request(durable_id)
             if existing is not None:
                 self._indexes.remember(request_input, durable_id)
                 self._indexes.index(existing)
-                return existing
+                return (
+                    await self._refresh_stale_request(existing)
+                    if request_input.refresh_if_stale
+                    else existing
+                )
 
         context = await self._context_reader.get_imagery_context(
             request_input.incident_id
@@ -111,7 +125,7 @@ class GroundImageryRequestLifecycle:
                 "The selected incident is no longer available for imagery planning."
             )
         now = self._clock()
-        region = await self._region_resolver.resolve_async(
+        region = resolved_region or await self._region_resolver.resolve_async(
             context,
             user_region=request_input.user_region,
             context_margin_km=request_input.context_margin_km,
@@ -153,6 +167,18 @@ class GroundImageryRequestLifecycle:
                 created_at=now,
                 updated_at=now,
                 owner_scope=request_input.owner_scope,
+                watch_enabled=previous_request.watch_enabled
+                if previous_request
+                else False,
+                watch_interval_seconds=(
+                    previous_request.watch_interval_seconds
+                    if previous_request
+                    else None
+                ),
+                next_check_at=previous_request.next_check_at
+                if previous_request
+                else None,
+                artifacts=historical_artifacts,
             )
             await self._store.save_request(request)
             self._indexes.remember(request_input, request_id)
@@ -174,6 +200,7 @@ class GroundImageryRequestLifecycle:
             candidates_by_sensor,
             disaster=context.disaster,
             target_region=region.region.core,
+            geometry_engine=self._region_resolver.geometry_engine,
             scan_complete={
                 (status.sensor, role): status.scan_complete
                 for status in statuses
@@ -224,11 +251,28 @@ class GroundImageryRequestLifecycle:
             created_at=now,
             updated_at=now,
             owner_scope=request_input.owner_scope,
+            watch_enabled=previous_request.watch_enabled if previous_request else False,
+            watch_interval_seconds=(
+                previous_request.watch_interval_seconds if previous_request else None
+            ),
+            next_check_at=previous_request.next_check_at if previous_request else None,
+            artifacts=historical_artifacts,
         )
         await self._store.save_request(request)
         self._indexes.remember(request_input, request_id)
         self._indexes.index(request)
         return request
+
+    async def _refresh_stale_request(
+        self, request: GroundImageryRequest
+    ) -> GroundImageryRequest:
+        """Reopen an old request without turning a quota denial into a blank panel."""
+        if self._clock() - request.reference_time < timedelta(hours=1):
+            return request
+        try:
+            return await self.refresh(request.request_id)
+        except GroundImageryRateLimitExceeded:
+            return request
 
     async def get_request(self, request_id: str) -> GroundImageryRequest:
         request = await self._store.get_request(request_id)
@@ -331,7 +375,7 @@ class GroundImageryRequestLifecycle:
         refreshed = await self.create_request(
             GroundImageryRequestInput(
                 incident_id=current.incident_id,
-                reference_time=current.reference_time,
+                reference_time=self._clock(),
                 sensors=current.requested_sensors,
                 user_region=region,
                 context_margin_km=context_margin_km,
@@ -340,6 +384,7 @@ class GroundImageryRequestLifecycle:
             ),
             request_id_override=current.request_id,
             request_version=current.request_version + 1,
+            previous_request=current,
         )
         old_region = current.region_resolution.region
         new_region = refreshed.region_resolution.region
@@ -373,16 +418,8 @@ class GroundImageryRequestLifecycle:
             )
         input_value = GroundImageryRequestInput(
             incident_id=current.incident_id,
-            reference_time=current.reference_time,
+            reference_time=self._clock(),
             sensors=current.requested_sensors,
-            user_region=(
-                current.region_resolution.region.inspection
-                if current.region_resolution.region is not None
-                else None
-            ),
-            context_margin_km=(
-                0 if current.region_resolution.region is not None else None
-            ),
             owner_scope=current.owner_scope,
             onset_override=current.temporal_plan.onset,
         )
@@ -390,18 +427,18 @@ class GroundImageryRequestLifecycle:
             input_value,
             request_id_override=current.request_id,
             request_version=current.request_version + 1,
+            resolved_region=current.region_resolution,
+            previous_request=current,
+            historical_artifacts=current.artifacts,
         )
-        refreshed = replace(
-            refreshed,
-            region_resolution=(
-                current.region_resolution
-                if current.region_resolution.region is not None
-                else refreshed.region_resolution
-            ),
-            watch_enabled=current.watch_enabled,
-            watch_interval_seconds=current.watch_interval_seconds,
-            next_check_at=current.next_check_at,
-        )
-        await self._store.save_request(refreshed)
-        self._indexes.index(refreshed)
         return refreshed
+
+    async def refresh_next_due_watch(self) -> GroundImageryRequest | None:
+        """Claim one scheduled search and retain its next check on failure."""
+        request_id = await self._store.claim_due_watch(now=self._clock())
+        if request_id is None:
+            return None
+        try:
+            return await self.refresh(request_id)
+        except GroundImageryRateLimitExceeded:
+            return await self.get_request(request_id)

@@ -1,12 +1,16 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { useGroundImageryWorkflow } from '@/features/imagery/hooks/useGroundImageryWorkflow';
 import { GroundComparisons } from '@/features/imagery/ui/GroundComparisons';
+import { GroundRegionPicker } from '@/features/imagery/ui/GroundRegionPicker';
 import {
   artifactForSelection,
   formatFraction,
   formatImageryTime,
   labelImageryRole,
+  labelImagerySelection,
   labelImageryState,
   roleOutcomes,
   SENSOR_LABELS,
@@ -47,6 +51,7 @@ export function GroundImageryPanel({
     action,
     load,
     handleRefresh,
+    handleRegion,
     handleWatch,
     handlePrepare,
   } = useGroundImageryWorkflow(incidentId);
@@ -179,6 +184,20 @@ export function GroundImageryPanel({
                       {warning}
                     </p>
                   ))}
+                {request.region.region ? (
+                  <details className="ground-region-change">
+                    <summary>Choose another inspection area</summary>
+                    <GroundRegionPicker
+                      busy={action === 'region'}
+                      onChoose={handleRegion}
+                    />
+                  </details>
+                ) : (
+                  <GroundRegionPicker
+                    busy={action === 'region'}
+                    onChoose={handleRegion}
+                  />
+                )}
               </section>
 
               <section className="ground-imagery-section">
@@ -195,7 +214,7 @@ export function GroundImageryPanel({
                 </div>
                 <dl className="ground-imagery-facts">
                   <div>
-                    <dt>Reference</dt>
+                    <dt>Search window as of</dt>
                     <dd>{formatImageryTime(request.temporal_plan.reference_time)}</dd>
                   </div>
                   <div>
@@ -280,9 +299,6 @@ export function GroundImageryPanel({
           <p className="ground-imagery-provenance">
             Request {request?.request_id ?? incidentId} · version{' '}
             {request?.request_version ?? '—'}
-            {request
-              ? ` · reference ${formatImageryTime(request.temporal_plan.reference_time)}`
-              : ''}
           </p>
         </div>
         <div className="ground-stage">
@@ -375,10 +391,19 @@ function SelectionOutcome({
   action?: string;
   onPrepare: (selection: GroundImagerySelectionResponse) => void;
 }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const initial = window.setTimeout(() => setNow(Date.now()), 0);
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
+  }, []);
   return (
     <div className="ground-imagery-outcome">
       <div className="ground-imagery-outcome-heading">
-        <strong>{labelImageryRole(selection.role)}</strong>
+        <strong>{labelImagerySelection(selection)}</strong>
         <span className={`ground-imagery-status ${statusClass(selection.reason)}`}>
           {labelImageryState(selection.reason)}
         </span>
@@ -386,12 +411,17 @@ function SelectionOutcome({
       {selection.observation ? (
         <>
           <p className="ground-imagery-observation-time">
-            Sensed {formatImageryTime(selection.observation.captured_start)} ·{' '}
+            Sensed through {formatImageryTime(selection.observation.captured_end)} ·{' '}
             {selection.observation.product_id}
           </p>
           <DataAgeBadge
             kind="imagery_capture"
-            timestamp={selection.observation.captured_start}
+            timestamp={selection.observation.captured_end}
+            ageSeconds={
+              now === null
+                ? undefined
+                : (now - new Date(selection.observation.captured_end).getTime()) / 1000
+            }
           />
           {selection.observation.quality ? (
             <p className="ground-imagery-quality">
@@ -406,11 +436,16 @@ function SelectionOutcome({
           )}
           <div className="ground-imagery-outcome-actions">
             {artifact ? (
-              <a
-                href={`${API_BASE_URL}/ground-imagery/artifacts/${encodeURIComponent(artifact.artifact_id)}/download`}
-              >
-                Download validated COG
-              </a>
+              <>
+                <a
+                  href={`${API_BASE_URL}/ground-imagery/artifacts/${encodeURIComponent(artifact.artifact_id)}/download`}
+                >
+                  Download validated COG
+                </a>
+                <span className="ground-imagery-note">
+                  Prepared {formatImageryTime(artifact.created_at)}
+                </span>
+              </>
             ) : renderingReady ? (
               <button
                 type="button"

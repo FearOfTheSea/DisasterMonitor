@@ -1791,6 +1791,16 @@ const apiSchemas = {
       grid: {
         $ref: '#/components/schemas/GroundImageryGridResponse',
       },
+      observation: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/GroundImageryObservationResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       output_kind: {
         type: 'string',
       },
@@ -5316,6 +5326,7 @@ export type GroundImageryArtifactResponse = {
   content_type: string;
   created_at: string;
   grid: GroundImageryGridResponse;
+  observation?: GroundImageryObservationResponse | null;
   output_kind: string;
   role: string;
   selection_id: string;
@@ -5335,6 +5346,7 @@ export type GroundImageryCreateRequest = {
   onset_source_id?: string | null;
   owner_scope?: string;
   reference_time?: string | null;
+  refresh_if_stale?: boolean;
   region?: {
     [key: string]: unknown;
   } | null;

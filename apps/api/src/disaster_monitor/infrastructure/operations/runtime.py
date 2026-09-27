@@ -160,10 +160,15 @@ async def _worker(settings: Settings, *, once: bool) -> None:
                 if ground_worker is not None
                 else None
             )
+            try:
+                ground_watch = await ground_imagery.refresh_next_due_watch()
+            except Exception:
+                _LOGGER.exception("Ground imagery watch refresh failed.")
+                ground_watch = None
             job = await worker.run_once(worker_id)
             if once:
                 return
-            if job is None and ground_job is None:
+            if job is None and ground_job is None and ground_watch is None:
                 await asyncio.sleep(2)
     finally:
         await ground_imagery.aclose()

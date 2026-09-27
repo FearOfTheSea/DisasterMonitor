@@ -93,6 +93,11 @@ def build_manifest(request: GroundImageryRequest) -> dict[str, object]:
                     "resolution_label": item.grid.resolution_label,
                 },
                 "created_at": item.created_at.isoformat(),
+                "observation": (
+                    None
+                    if item.observation is None
+                    else _observation_document(item.observation)
+                ),
             }
             for item in request.artifacts
         ],

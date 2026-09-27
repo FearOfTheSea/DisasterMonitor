@@ -19,6 +19,7 @@ import '../features/assistant/ui/assistant.css';
 import '../features/assistant/ui/assistantEvidence.css';
 import '../features/operations/ui/operations.css';
 import '../features/imagery/ui/groundImagery.css';
+import '../features/imagery/ui/groundRegionPicker.css';
 import '../shared/ui/dataAge.css';
 import './responsive.css';
 import './observatory.css';

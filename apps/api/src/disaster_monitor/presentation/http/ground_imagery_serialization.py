@@ -248,6 +248,11 @@ def _artifact_response(
             resolution_label=grid.resolution_label,
         ),
         created_at=artifact.created_at,
+        observation=(
+            None
+            if artifact.observation is None
+            else observation_response(artifact.observation)
+        ),
     )
 
 

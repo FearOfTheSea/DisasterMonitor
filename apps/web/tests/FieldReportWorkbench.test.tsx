@@ -151,6 +151,7 @@ describe('FieldReportWorkbench', () => {
       reason: 'not_configured',
     });
     render(<FieldReportWorkbench selectedIncidentId="event-1" />);
+    await screen.findByText('Water is covering the road beside the bridge.');
     expect(await screen.findByText(/Review is unavailable until/)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Record field report review' }),

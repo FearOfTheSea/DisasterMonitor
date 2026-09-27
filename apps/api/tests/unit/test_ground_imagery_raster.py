@@ -9,6 +9,8 @@ from disaster_monitor.application.ports.ground_imagery.rendering import (
     ImageryGrid,
     RenderedRaster,
 )
+from disaster_monitor.domain.imagery.observations import QualityState, Sensor
+from disaster_monitor.domain.imagery.regions import polygon_from_geojson
 from disaster_monitor.infrastructure.ground_imagery.artifact_store import (
     FilesystemImageryArtifactStore,
 )
@@ -92,6 +94,47 @@ def test_cog_validator_requires_selected_grid_bounds() -> None:
         RasterioCogValidator().normalize(
             raster, grid=mismatched_grid, source_product_id="product-1"
         )
+
+
+def test_prepared_optical_quality_uses_core_pixels_and_cloud_classes() -> None:
+    values = np.ones((5, 10, 10), dtype="float32")
+    values[3] = 4  # Sentinel-2 vegetation class
+    values[3, :2, :] = 9  # High-probability cloud
+    values[4, 9, :] = 0  # No source pixels
+    with MemoryFile() as memory:
+        with memory.open(
+            driver="GTiff",
+            width=10,
+            height=10,
+            count=5,
+            dtype="float32",
+            crs="EPSG:4326",
+            transform=from_bounds(0, 0, 1, 1, 10, 10),
+        ) as dataset:
+            dataset.write(values)
+        raster = RenderedRaster(
+            memory.read(),
+            "image/tiff",
+            ("s2-product",),
+            provider_metadata=(("sensor", "sentinel-2"),),
+        )
+    core = polygon_from_geojson(
+        {
+            "type": "Polygon",
+            "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+        }
+    )
+
+    quality = RasterioCogValidator().assess_core_quality(
+        raster, core, Sensor.SENTINEL_2
+    )
+
+    assert quality is not None
+    assert quality.covered_fraction == pytest.approx(0.9)
+    assert quality.usable_fraction == pytest.approx(0.7)
+    assert quality.obscured_fraction == pytest.approx(0.2)
+    assert quality.uncovered_fraction == pytest.approx(0.1)
+    assert quality.quality_state is QualityState.PARTIAL
 
 
 @pytest.mark.asyncio

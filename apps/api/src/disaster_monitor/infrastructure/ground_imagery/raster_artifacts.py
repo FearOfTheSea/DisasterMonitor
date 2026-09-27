@@ -7,8 +7,9 @@ from typing import Any, cast
 import numpy as np
 import rasterio
 from rasterio.enums import Resampling
+from rasterio.features import geometry_mask
 from rasterio.io import MemoryFile
-from rasterio.warp import transform_bounds
+from rasterio.warp import transform_bounds, transform_geom
 from rasterio.windows import Window
 from rasterio.windows import from_bounds as window_from_bounds
 
@@ -20,6 +21,12 @@ from disaster_monitor.application.ports.ground_imagery.rendering import (
     ImageryGrid,
     RenderedRaster,
 )
+from disaster_monitor.domain.imagery.observations import (
+    ObservationQuality,
+    QualityState,
+    Sensor,
+)
+from disaster_monitor.domain.imagery.regions import MultiPolygon
 from disaster_monitor.infrastructure.ground_imagery.raster_quality import (
     RasterQualityRequirements,
     assess_raster_quality,
@@ -71,6 +78,94 @@ class RasterioCogValidator(GroundImageryRasterValidator):
             source_product_ids=raster.source_product_ids,
             provider_metadata=(*raster.provider_metadata, ("format", "COG")),
         )
+
+    def assess_core_quality(
+        self, raster: RenderedRaster, core: MultiPolygon, sensor: Sensor
+    ) -> ObservationQuality | None:
+        if dict(raster.provider_metadata).get("sensor") != sensor.value:
+            return None
+        with MemoryFile(raster.content) as memory, memory.open() as dataset:
+            mask_band = 5 if sensor is Sensor.SENTINEL_2 else 3
+            if dataset.count < mask_band or dataset.crs is None:
+                return None
+            components = []
+            for polygon in core.polygons:
+                geometry = transform_geom(
+                    "EPSG:4326",
+                    dataset.crs,
+                    {"type": "Polygon", "coordinates": polygon.as_geojson()},
+                )
+                components.append(
+                    geometry_mask(
+                        [geometry],
+                        out_shape=(dataset.height, dataset.width),
+                        transform=dataset.transform,
+                        invert=True,
+                    )
+                )
+            core_mask = np.logical_or.reduce(components)
+            pixel_count = int(np.count_nonzero(core_mask))
+            if pixel_count == 0:
+                return None
+            covered = (dataset.read(mask_band) == 1) & (dataset.dataset_mask() > 0)
+            if sensor is Sensor.SENTINEL_2:
+                scl = dataset.read(4)
+                covered &= scl != 0
+                usable = covered & np.isin(scl, (4, 5, 6))
+                obscured = covered & np.isin(scl, (3, 8, 9, 10))
+                definition = "s2-core-scl-datamask-v1"
+            else:
+                usable = covered
+                obscured = np.zeros_like(covered)
+                definition = "s1-core-datamask-v1"
+            covered_count = int(np.count_nonzero(core_mask & covered))
+            usable_count = int(np.count_nonzero(core_mask & usable))
+            obscured_count = int(np.count_nonzero(core_mask & obscured))
+            component_fractions = tuple(
+                (
+                    f"component-{index + 1}",
+                    float(
+                        np.count_nonzero(component & usable)
+                        / np.count_nonzero(component)
+                    ),
+                )
+                for index, component in enumerate(components)
+                if np.count_nonzero(component)
+            )
+            covered_fraction = covered_count / pixel_count
+            usable_fraction = usable_count / pixel_count
+            obscured_fraction = obscured_count / pixel_count
+            uncovered_fraction = 1 - covered_fraction
+            uncertain_fraction = max(
+                0.0, covered_fraction - usable_fraction - obscured_fraction
+            )
+            minimum_component = min(
+                (fraction for _, fraction in component_fractions), default=0.0
+            )
+            if (
+                covered_fraction >= 0.95
+                and usable_fraction >= 0.8
+                and minimum_component >= 0.6
+            ):
+                state = QualityState.USEFUL
+            elif usable_fraction >= 0.2:
+                state = QualityState.PARTIAL
+            elif covered_fraction < 0.2:
+                state = QualityState.UNCOVERED
+            elif obscured_fraction >= 0.5:
+                state = QualityState.OBSCURED
+            else:
+                state = QualityState.UNCERTAIN
+            return ObservationQuality(
+                covered_fraction=covered_fraction,
+                usable_fraction=usable_fraction,
+                obscured_fraction=obscured_fraction,
+                uncertain_fraction=uncertain_fraction,
+                uncovered_fraction=uncovered_fraction,
+                component_usable_fractions=component_fractions,
+                quality_state=state,
+                mask_definition=definition,
+            )
 
     @staticmethod
     def _validate_dataset(

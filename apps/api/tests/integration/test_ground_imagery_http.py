@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 import numpy as np
@@ -60,9 +61,15 @@ from disaster_monitor.infrastructure.ground_imagery.memory_jobs import (
 from disaster_monitor.infrastructure.ground_imagery.memory_repository import (
     InMemoryGroundImageryRequestStore,
 )
+from disaster_monitor.infrastructure.ground_imagery.postgres_repository import (
+    PostgresGroundImageryRequestStore,
+)
 from disaster_monitor.infrastructure.ground_imagery.raster_artifacts import (
     RasterioCogValidator,
     RasterioStoredArtifactTileRenderer,
+)
+from disaster_monitor.infrastructure.operations.postgres_repository import (
+    PostgresOperationalRepository,
 )
 from disaster_monitor.main import create_app
 
@@ -167,6 +174,8 @@ def _service(
     *,
     job_queue: InMemoryGroundImageryJobQueue | None = None,
     rate_limiter: GroundImageryRequestLimiter | None = None,
+    catalog: FakeCatalog | None = None,
+    clock=None,
 ) -> GroundImageryService:
     source = RegionSource(
         source_id="fixture:impact",
@@ -198,14 +207,15 @@ def _service(
     return GroundImageryService(
         FakeIncidentReader(context),
         GroundImageryRegionResolver(GeodesicGeometryEngine()),
-        FakeCatalog(
+        catalog
+        or FakeCatalog(
             (
                 _observation(Sensor.SENTINEL_1, "s1-1"),
                 _observation(Sensor.SENTINEL_2, "s2-1"),
             )
         ),
         InMemoryGroundImageryRequestStore(),
-        clock=lambda: datetime(2024, 5, 20, tzinfo=UTC),
+        clock=clock or (lambda: datetime(2024, 5, 20, tzinfo=UTC)),
         renderer=None if artifact_store is None else FakeRenderer(),
         raster_validator=None if artifact_store is None else RasterioCogValidator(),
         artifact_store=artifact_store,
@@ -217,6 +227,155 @@ def _service(
         job_queue=job_queue,
         rate_limiter=rate_limiter,
     )
+
+
+@pytest.mark.asyncio
+async def test_refresh_and_reopen_discover_captures_after_the_original_search() -> None:
+    first_search = datetime(2024, 5, 20, tzinfo=UTC)
+    now = [first_search]
+    original = _observation(Sensor.SENTINEL_2, "s2-original")
+    later_capture = datetime(2024, 5, 22, tzinfo=UTC)
+    newer = replace(
+        _observation(Sensor.SENTINEL_2, "s2-new"),
+        capture=CaptureInterval(later_capture, later_capture + timedelta(minutes=5)),
+    )
+    catalog = FakeCatalog((original,))
+    service = _service(catalog=catalog, clock=lambda: now[0])
+    request_input = GroundImageryRequestInput(
+        incident_id="incident-1",
+        reference_time=first_search,
+        idempotency_key="ground-view:incident-1",
+    )
+    first = await service.create_request(request_input)
+
+    now[0] = datetime(2024, 5, 23, tzinfo=UTC)
+    catalog.observations = (original, newer)
+    refreshed = await service.refresh(first.request_id)
+
+    assert refreshed.request_version == 2
+    assert refreshed.reference_time == now[0]
+    assert refreshed.temporal_plan.reference_time == now[0]
+    assert refreshed.region_resolution.region == first.region_resolution.region
+    assert refreshed.selection is not None
+    latest = refreshed.selection.for_sensor(Sensor.SENTINEL_2).for_role("latest_useful")
+    assert latest.observation is not None
+    assert latest.observation.identity.product_id == "s2-new"
+    assert catalog.queries[-1].end == now[0]
+    assert catalog.queries[-1].geometry == first.region_resolution.region.inspection
+
+    reopened = await service.create_request(
+        replace(request_input, reference_time=now[0])
+    )
+    assert reopened.request_id == first.request_id
+    assert reopened.request_version == refreshed.request_version
+
+
+@pytest.mark.asyncio
+async def test_reopening_stale_ground_view_refreshes_only_with_explicit_flag() -> None:
+    now = [datetime(2024, 5, 20, tzinfo=UTC)]
+    catalog = FakeCatalog((_observation(Sensor.SENTINEL_2, "s2-original"),))
+    service = _service(catalog=catalog, clock=lambda: now[0])
+    input_value = GroundImageryRequestInput(
+        incident_id="incident-1",
+        reference_time=now[0],
+        idempotency_key="stable-request",
+    )
+    first = await service.create_request(input_value)
+    now[0] += timedelta(hours=2)
+
+    unchanged = await service.create_request(
+        replace(input_value, reference_time=now[0])
+    )
+    assert unchanged.request_version == 1
+
+    updated = await service.create_request(
+        replace(input_value, reference_time=now[0], refresh_if_stale=True)
+    )
+    assert updated.request_id == first.request_id
+    assert updated.request_version == 2
+    assert updated.reference_time == now[0]
+
+
+@pytest.mark.asyncio
+async def test_selecting_a_region_searches_through_the_current_time() -> None:
+    now = [datetime(2024, 5, 20, tzinfo=UTC)]
+    catalog = FakeCatalog((_observation(Sensor.SENTINEL_2, "s2-original"),))
+    service = _service(catalog=catalog, clock=lambda: now[0])
+    first = await service.create_request(
+        GroundImageryRequestInput(incident_id="incident-1", reference_time=now[0])
+    )
+    await service.set_watch(first.request_id, enabled=True)
+    now[0] += timedelta(days=2)
+
+    replaced = await service.replace_region(first.request_id, GEOMETRY)
+
+    assert replaced.request_version == 2
+    assert replaced.reference_time == now[0]
+    assert catalog.queries[-1].end == now[0]
+    assert replaced.watch_enabled is True
+
+
+@pytest.mark.asyncio
+async def test_due_watch_discovers_a_new_capture_and_moves_its_next_check() -> None:
+    now = [datetime(2024, 5, 20, tzinfo=UTC)]
+    catalog = FakeCatalog((_observation(Sensor.SENTINEL_2, "s2-original"),))
+    service = _service(catalog=catalog, clock=lambda: now[0])
+    first = await service.create_request(
+        GroundImageryRequestInput(incident_id="incident-1", reference_time=now[0])
+    )
+    watched = await service.set_watch(first.request_id, enabled=True)
+    assert watched.next_check_at == now[0] + timedelta(hours=1)
+    assert await service.refresh_next_due_watch() is None
+
+    now[0] += timedelta(hours=1)
+    newer = replace(
+        _observation(Sensor.SENTINEL_2, "s2-new"),
+        capture=CaptureInterval(
+            now[0] - timedelta(minutes=10), now[0] - timedelta(minutes=5)
+        ),
+    )
+    catalog.observations = (*catalog.observations, newer)
+    refreshed = await service.refresh_next_due_watch()
+
+    assert refreshed is not None
+    assert refreshed.request_version == 2
+    assert refreshed.reference_time == now[0]
+    assert refreshed.next_check_at == now[0] + timedelta(hours=1)
+    assert refreshed.selection is not None
+    latest = refreshed.selection.for_sensor(Sensor.SENTINEL_2).for_role("latest_useful")
+    assert latest.observation is not None
+    assert latest.observation.identity.product_id == "s2-new"
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgres
+async def test_postgres_watch_claim_is_durable_and_single_use(
+    postgres_dsn: str,
+) -> None:
+    await PostgresOperationalRepository(postgres_dsn).migrate()
+    store = PostgresGroundImageryRequestStore(postgres_dsn)
+    request = await _service().create_request(
+        GroundImageryRequestInput(
+            incident_id="incident-1",
+            reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+        )
+    )
+    now = datetime(2024, 5, 20, 1, tzinfo=UTC)
+    request = replace(
+        request,
+        request_id=f"ground-imagery:{uuid4().hex}",
+        watch_enabled=True,
+        watch_interval_seconds=3_600,
+        next_check_at=now,
+    )
+    await store.save_request(request)
+
+    assert await store.claim_due_watch(now=now) == request.request_id
+    assert await store.claim_due_watch(now=now) is None
+    claimed = await store.get_request(request.request_id)
+    assert claimed is not None
+    assert claimed.watch_enabled is True
+    assert claimed.next_check_at == now + timedelta(hours=1)
 
 
 @pytest.mark.asyncio
@@ -415,7 +574,13 @@ async def test_ground_imagery_http_reuses_request_without_refresh_quota() -> Non
 async def test_ground_imagery_http_publishes_validated_artifacts(
     tmp_path: Path,
 ) -> None:
-    service = _service(tmp_path)
+    catalog = FakeCatalog(
+        (
+            _observation(Sensor.SENTINEL_1, "s1-1"),
+            _observation(Sensor.SENTINEL_2, "s2-1"),
+        )
+    )
+    service = _service(tmp_path, catalog=catalog)
     app = create_app(overrides=AppDependencyOverrides(ground_imagery_service=service))
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -459,6 +624,22 @@ async def test_ground_imagery_http_publishes_validated_artifacts(
             f"/api/v1/ground-imagery/requests/{body['request_id']}/stac"
         )
         readiness = await client.get("/api/v1/ground-imagery/readiness")
+        catalog.observations = (
+            replace(
+                _observation(Sensor.SENTINEL_1, "s1-new"),
+                capture=CaptureInterval(
+                    datetime(2024, 5, 19, tzinfo=UTC),
+                    datetime(2024, 5, 19, 0, 5, tzinfo=UTC),
+                ),
+            ),
+            _observation(Sensor.SENTINEL_2, "s2-1"),
+        )
+        refreshed = await client.post(
+            f"/api/v1/ground-imagery/requests/{body['request_id']}/refresh"
+        )
+        historical_manifest = await client.get(
+            f"/api/v1/ground-imagery/selections/{selected['selection_id']}/manifest"
+        )
 
     assert created.status_code == 202
     assert prepared.status_code == 202
@@ -475,3 +656,23 @@ async def test_ground_imagery_http_publishes_validated_artifacts(
         f"/{artifact_id}/download"
     )
     assert readiness.json()["state"] == "ready"
+    assert any(
+        item["observation"]["product_id"] == "s1-1"
+        for item in prepared.json()["artifacts"]
+    ), (
+        selected["observation"]["product_id"],
+        [
+            (item["sensor"], item["observation"]["product_id"])
+            for item in prepared.json()["artifacts"]
+        ],
+    )
+    assert refreshed.status_code == 202
+    assert any(
+        item["observation"]["product_id"] == "s1-1"
+        for item in refreshed.json()["artifacts"]
+    )
+    assert historical_manifest.status_code == 200
+    assert any(
+        item["observation"]["product_id"] == "s1-1"
+        for item in historical_manifest.json()["artifacts"]
+    )

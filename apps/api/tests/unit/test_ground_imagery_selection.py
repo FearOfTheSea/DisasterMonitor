@@ -20,6 +20,9 @@ from disaster_monitor.domain.imagery.observations import (
     Sensor,
 )
 from disaster_monitor.domain.imagery.regions import polygon_from_geojson
+from disaster_monitor.infrastructure.ground_imagery.geometry import (
+    GeodesicGeometryEngine,
+)
 
 
 def _footprint():
@@ -176,6 +179,7 @@ def test_unassessed_selection_prefers_core_coverage_over_a_newer_edge_scene() ->
             plan,
             {Sensor.SENTINEL_2: (edge, full)},
             target_region=_footprint(),
+            geometry_engine=GeodesicGeometryEngine(),
         )
         .for_sensor(Sensor.SENTINEL_2)
         .for_role("latest_useful")

@@ -28,6 +28,7 @@ class GroundImageryCreateRequest(BaseModel):
     onset_source_id: str | None = Field(default=None, min_length=1, max_length=200)
     owner_scope: str = Field(default="local", min_length=1, max_length=200)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=200)
+    refresh_if_stale: bool = False
 
 
 class GroundImageryRegionRequest(BaseModel):
@@ -171,6 +172,7 @@ class GroundImageryArtifactResponse(BaseModel):
     source_product_ids: list[str]
     grid: GroundImageryGridResponse
     created_at: datetime
+    observation: GroundImageryObservationResponse | None = None
 
 
 class GroundImageryJobResponse(BaseModel):

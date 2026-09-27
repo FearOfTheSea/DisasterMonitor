@@ -7,6 +7,7 @@ import {
   fetchGroundImageryReadiness,
   fetchGroundImageryRequest,
   prepareGroundImagerySelection,
+  replaceGroundImageryRegion,
   refreshGroundImageryRequest,
   setGroundImageryWatch,
 } from '@/features/imagery/api/groundImageryClient';
@@ -15,11 +16,15 @@ import type {
   GroundImageryPanelRequest,
 } from '@/features/imagery/model/groundImagery';
 import { automaticPreviewSelection } from '@/features/imagery/model/groundImagery';
-import type { GroundImagerySelectionResponse } from '@/shared/api/generated/assistant';
+import type {
+  GroundImageryRegionRequest,
+  GroundImagerySelectionResponse,
+} from '@/shared/api/generated/assistant';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 const SLOW_SEARCH_DELAY_MS = 8_000;
 const PREPARATION_POLL_MS = 3_000;
+const WATCH_POLL_MS = 30_000;
 
 export function useGroundImageryWorkflow(incidentId: string) {
   const [request, setRequest] = useState<GroundImageryPanelRequest>();
@@ -80,9 +85,11 @@ export function useGroundImageryWorkflow(incidentId: string) {
   }, [loadState]);
 
   useEffect(() => {
-    if (!request || request.state !== 'queued') return;
+    if (!request || (request.state !== 'queued' && !request.watch_enabled)) return;
     const controller = new AbortController();
     const version = requestVersion.current;
+    const pollInterval =
+      request.state === 'queued' ? PREPARATION_POLL_MS : WATCH_POLL_MS;
     let timer: number;
     const poll = async () => {
       try {
@@ -94,11 +101,11 @@ export function useGroundImageryWorkflow(incidentId: string) {
         setRequest(nextRequest);
       } catch {
         if (!controller.signal.aborted && version === requestVersion.current) {
-          timer = window.setTimeout(() => void poll(), PREPARATION_POLL_MS);
+          timer = window.setTimeout(() => void poll(), pollInterval);
         }
       }
     };
-    timer = window.setTimeout(() => void poll(), PREPARATION_POLL_MS);
+    timer = window.setTimeout(() => void poll(), pollInterval);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
@@ -149,6 +156,13 @@ export function useGroundImageryWorkflow(incidentId: string) {
     void runAction('refresh', () => refreshGroundImageryRequest(request.request_id));
   };
 
+  const handleRegion = (region: GroundImageryRegionRequest['region']) => {
+    if (!request) return;
+    void runAction('region', () =>
+      replaceGroundImageryRegion(request.request_id, region),
+    );
+  };
+
   const handleWatch = () => {
     if (!request) return;
     void runAction('watch', () =>
@@ -176,6 +190,7 @@ export function useGroundImageryWorkflow(incidentId: string) {
     action,
     load,
     handleRefresh,
+    handleRegion,
     handleWatch,
     handlePrepare,
   };

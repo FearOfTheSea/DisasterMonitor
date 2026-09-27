@@ -55,6 +55,7 @@ class GroundImageryRequestInput:
     fallback_radius_km: float | None = None
     owner_scope: str = "local"
     idempotency_key: str | None = None
+    refresh_if_stale: bool = False
     onset_override: ImpactOnset | None = None
 
     def __post_init__(self) -> None:
@@ -105,6 +106,7 @@ class ImageryArtifactReference:
     source_product_ids: tuple[str, ...]
     grid: ImageryGrid
     created_at: datetime
+    observation: Observation | None = None
 
     def __post_init__(self) -> None:
         if (

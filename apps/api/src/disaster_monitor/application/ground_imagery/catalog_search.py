@@ -210,7 +210,9 @@ class GroundImageryCatalogSearcher:
                     cursor,
                     (error.reason_code, str(error)),
                 )
-            observations.extend(page.observations)
+            observations.extend(
+                item for item in page.observations if item.sensor is sensor
+            )
             scanned += max(page.scanned_count, len(page.observations))
             if page.next_cursor is None:
                 return tuple(observations), scanned, page.scan_complete, None, None

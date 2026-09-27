@@ -6,13 +6,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
-from shapely.geometry import shape
-
 from disaster_monitor.application.ground_imagery.temporal_policy import (
     AgeClass,
     RoleWindow,
     TemporalPlan,
     classify_freshness,
+)
+from disaster_monitor.application.ports.ground_imagery.geometry import (
+    RegionGeometryEngine,
 )
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.domain.imagery.observations import (
@@ -102,6 +103,7 @@ def select_observations(
     disaster: Disaster | None = None,
     scan_complete: Mapping[tuple[Sensor, TemporalRole], bool] | None = None,
     target_region: MultiPolygon | None = None,
+    geometry_engine: RegionGeometryEngine | None = None,
 ) -> SelectionResult:
     """Select baseline/first/latest roles from bounded provider candidates.
 
@@ -109,6 +111,8 @@ def select_observations(
     useful scene must carry regional quality calculated against the complete
     requested core; a missing quality record is therefore not silently useful.
     """
+    if target_region is not None and geometry_engine is None:
+        raise ValueError("Core coverage ranking requires a geometry engine.")
     selected: list[SensorSelection] = []
     for sensor in Sensor:
         candidates = _deduplicate(candidates_by_sensor.get(sensor, ()))
@@ -122,6 +126,7 @@ def select_observations(
                 disaster=disaster,
                 scan_complete=(scan_complete or {}).get((sensor, role), True),
                 target_region=target_region,
+                geometry_engine=geometry_engine,
             )
             for role in roles
         ]
@@ -157,6 +162,7 @@ def _select_role(
     disaster: Disaster | None,
     scan_complete: bool,
     target_region: MultiPolygon | None,
+    geometry_engine: RegionGeometryEngine | None,
 ) -> GroundImagerySelection:
     window = plan.window_for(role, sensor=sensor)
     expanded = plan.window_for(role, sensor=sensor, expanded=True)
@@ -209,7 +215,7 @@ def _select_role(
             return GroundImagerySelection(
                 role, None, reason, _explanation(reason), alternatives=renderable
             )
-        chosen = _rank_unassessed(renderable, role, target_region)
+        chosen = _rank_unassessed(renderable, role, target_region, geometry_engine)
         return GroundImagerySelection(
             role,
             chosen,
@@ -358,12 +364,13 @@ def _rank_unassessed(
     candidates: tuple[Observation, ...],
     role: TemporalRole,
     target_region: MultiPolygon | None,
+    geometry_engine: RegionGeometryEngine | None,
 ) -> Observation:
     if target_region is not None:
-        target = shape(target_region.as_geojson())
+        assert geometry_engine is not None
 
         def overlap(item: Observation) -> float:
-            return float(shape(item.footprint.as_geojson()).intersection(target).area)
+            return geometry_engine.intersection_area_km2(item.footprint, target_region)
 
         if role is TemporalRole.FIRST_USEFUL_AFTER_ONSET:
             return min(

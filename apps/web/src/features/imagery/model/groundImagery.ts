@@ -57,6 +57,17 @@ export function labelImageryRole(role: string): string {
   return ROLE_LABELS[role] ?? role.replaceAll('_', ' ');
 }
 
+export function labelImagerySelection(
+  selection: GroundImagerySelectionResponse,
+): string {
+  if (selection.reason !== 'selected') {
+    if (selection.role === 'latest_useful') return 'Latest capture';
+    if (selection.role === 'first_useful_after_onset')
+      return 'First after-onset capture';
+  }
+  return labelImageryRole(selection.role);
+}
+
 export function labelImageryState(state: string): string {
   return STATE_LABELS[state] ?? state.replaceAll('_', ' ');
 }
@@ -101,21 +112,32 @@ export function automaticPreviewSelection(
 ): GroundImagerySelectionResponse | undefined {
   if (
     request.state === 'queued' ||
-    request.artifacts?.length ||
-    request.jobs?.some((job) => ['queued', 'running', 'retryable'].includes(job.status))
+    request.jobs?.some(
+      (job) =>
+        job.request_version === request.request_version &&
+        ['queued', 'running', 'retryable'].includes(job.status),
+    )
   )
     return undefined;
-  for (const role of [
-    'first_useful_after_onset',
-    'latest_useful',
-    'pre_event_reference',
-  ]) {
+  for (const role of ['latest_useful', 'first_useful_after_onset']) {
     for (const sensor of ['sentinel-1', 'sentinel-2'] as const) {
       const selection = sensorStatus(request, sensor)?.selections.find(
         (item) => item.role === role && item.observation,
       );
-      if (selection) return selection;
+      if (selection)
+        return artifactForSelection(request.artifacts, selection.selection_id)
+          ? undefined
+          : selection;
     }
+  }
+  for (const sensor of ['sentinel-1', 'sentinel-2'] as const) {
+    const selection = sensorStatus(request, sensor)?.selections.find(
+      (item) => item.role === 'pre_event_reference' && item.observation,
+    );
+    if (selection)
+      return artifactForSelection(request.artifacts, selection.selection_id)
+        ? undefined
+        : selection;
   }
   return undefined;
 }

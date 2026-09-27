@@ -1,5 +1,9 @@
 """Deterministic request metadata store used by local composition and tests."""
 
+import asyncio
+from dataclasses import replace
+from datetime import datetime, timedelta
+
 from disaster_monitor.application.ground_imagery.models import GroundImageryRequest
 from disaster_monitor.application.ports.ground_imagery.selection_identity import (
     stable_selection_id,
@@ -13,6 +17,7 @@ class InMemoryGroundImageryRequestStore:
 
     def __init__(self) -> None:
         self.requests: dict[str, GroundImageryRequest] = {}
+        self._watch_lock = asyncio.Lock()
 
     async def get_request(self, request_id: str) -> GroundImageryRequest | None:
         return self.requests.get(request_id)
@@ -40,6 +45,30 @@ class InMemoryGroundImageryRequestStore:
         current = self.requests.get(request.request_id)
         if current is None or request.request_version >= current.request_version:
             self.requests[request.request_id] = request
+
+    async def claim_due_watch(self, *, now: datetime) -> str | None:
+        async with self._watch_lock:
+            due = sorted(
+                (
+                    request
+                    for request in self.requests.values()
+                    if request.watch_enabled
+                    and request.next_check_at is not None
+                    and request.next_check_at <= now
+                    and request.watch_interval_seconds is not None
+                ),
+                key=lambda request: (request.next_check_at, request.request_id),
+            )
+            if not due:
+                return None
+            request = due[0]
+            assert request.watch_interval_seconds is not None
+            self.requests[request.request_id] = replace(
+                request,
+                next_check_at=now + timedelta(seconds=request.watch_interval_seconds),
+                updated_at=now,
+            )
+            return request.request_id
 
 
 def _request_has_selection(request: GroundImageryRequest, selection_key: str) -> bool:

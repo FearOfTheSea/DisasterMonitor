@@ -390,6 +390,58 @@
   right: 0;
 }
 
+.ground-coverage-map {
+  display: grid;
+  gap: 7px;
+  margin: 4px 0 14px;
+}
+
+.ground-coverage-map-canvas {
+  background: #233441;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  height: 360px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.ground-coverage-map p {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.ground-coverage-opacity {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.72rem;
+  gap: 12px;
+}
+
+.ground-coverage-opacity input {
+  flex: 1;
+}
+
+.ground-map-key {
+  border: 2px solid;
+  display: inline-block;
+  height: 11px;
+  vertical-align: -1px;
+  width: 16px;
+}
+
+.ground-map-key.is-core {
+  border-color: #fefefe;
+}
+.ground-map-key.is-inspection {
+  border-color: #f8c45a;
+}
+.ground-map-key.is-footprint {
+  border-color: #55d9cd;
+}
+
 .ground-comparison-images.is-swipe {
   display: block;
   position: relative;

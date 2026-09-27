@@ -1,5 +1,6 @@
 """Narrow request metadata persistence port."""
 
+from datetime import datetime
 from typing import Protocol
 
 from disaster_monitor.application.ground_imagery.models import GroundImageryRequest
@@ -15,3 +16,5 @@ class GroundImageryRequestStore(Protocol):
     ) -> GroundImageryRequest | None: ...
 
     async def save_request(self, request: GroundImageryRequest) -> None: ...
+
+    async def claim_due_watch(self, *, now: datetime) -> str | None: ...

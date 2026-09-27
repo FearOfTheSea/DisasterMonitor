@@ -1,0 +1,49 @@
+.ground-region-change {
+  margin-top: 12px;
+}
+
+.ground-region-change summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ground-region-picker {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ground-region-picker p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ground-region-picker-fields {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ground-region-picker-fields label {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.ground-region-picker-fields input,
+.ground-region-picker-fields select {
+  background: var(--surface-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  min-width: 0;
+  padding: 7px;
+}
+
+.ground-region-picker button {
+  justify-self: start;
+}

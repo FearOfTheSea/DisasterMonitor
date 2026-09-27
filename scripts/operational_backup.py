@@ -92,7 +92,9 @@ def create_backup(
         try:
             with tarfile.open(temporary_archive, "w:gz") as archive:
                 for path in sorted(staging.rglob("*")):
-                    archive.add(path, arcname=path.relative_to(staging), recursive=False)
+                    archive.add(
+                        path, arcname=path.relative_to(staging), recursive=False
+                    )
             temporary_archive.replace(backup_path)
         finally:
             temporary_archive.unlink(missing_ok=True)
@@ -344,7 +346,9 @@ def _extract_archive(archive_path: Path, target: Path) -> None:
                 raise BackupError(
                     "Backup archive path escaped its restore staging root."
                 )
-        for member in sorted(members.values(), key=lambda item: (not item.isdir(), item.name)):
+        for member in sorted(
+            members.values(), key=lambda item: (not item.isdir(), item.name)
+        ):
             destination = target / member.name
             if member.isdir():
                 destination.mkdir(parents=True, exist_ok=True)

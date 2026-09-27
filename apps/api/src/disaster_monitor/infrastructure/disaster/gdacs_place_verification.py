@@ -24,14 +24,17 @@ from disaster_monitor.infrastructure.disaster.http import (
 
 _REPORT_URL = "https://www.gdacs.org/report.aspx"
 _MAX_LOOKUPS = 3
-_MAX_EPISODES_PER_EVENT = 3
+_MAX_EPISODES_PER_EVENT = 6
 
 
-class _Headlines(HTMLParser):
+class _ReportItems(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.headlines: list[str] = []
+        self.items: list[tuple[str, str]] = []
+        self._item_headline = ""
+        self._item_description = ""
         self._parts: list[str] | None = None
+        self._description_parts: list[str] | None = None
         self._description_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -41,6 +44,8 @@ class _Headlines(HTMLParser):
                 self._description_depth += 1
             elif attributes.get("id") == "item_description":
                 self._description_depth = 1
+                self._item_headline = ""
+                self._item_description = ""
         classes = attributes.get("class") or ""
         if (
             self._description_depth
@@ -48,19 +53,30 @@ class _Headlines(HTMLParser):
             and "news_title" in classes.split()
         ):
             self._parts = []
+        if self._description_depth and tag == "span" and "news_text" in classes.split():
+            self._description_parts = []
 
     def handle_data(self, data: str) -> None:
         if self._parts is not None:
             self._parts.append(data)
+        if self._description_parts is not None:
+            self._description_parts.append(data)
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "span" and self._parts is not None:
             headline = " ".join(" ".join(self._parts).split())
             if headline:
-                self.headlines.append(headline)
+                self._item_headline = headline
             self._parts = None
+        if tag == "span" and self._description_parts is not None:
+            description = " ".join(" ".join(self._description_parts).split())
+            if description:
+                self._item_description = description
+            self._description_parts = None
         if tag == "div" and self._description_depth:
             self._description_depth -= 1
+            if self._description_depth == 0 and self._item_headline:
+                self.items.append((self._item_headline, self._item_description))
 
 
 def _fold(value: str) -> str:
@@ -92,10 +108,10 @@ def _region_hint(place: str, country: str) -> str:
 def _matching_headline(
     html: str, *, place: str, country: str
 ) -> tuple[str, str] | None:
-    parser = _Headlines()
+    parser = _ReportItems()
     parser.feed(html)
     country_name = _fold(country)
-    for headline in parser.headlines:
+    for headline, _ in parser.items:
         folded = _fold(headline)
         region = headline.split(",", 1)[0].strip()
         if (
@@ -104,6 +120,13 @@ def _matching_headline(
             and region
         ):
             return headline, region
+    for headline, description in parser.items:
+        if country_name not in _fold(headline):
+            continue
+        if not _contains_place(description, _region_hint(place, country)):
+            continue
+        place_name = place.split(",", 1)[0].strip()
+        return headline, f"near {place_name}"
     return None
 
 
@@ -212,6 +235,7 @@ async def verify_gdacs_flood_places(
                 event,
                 location=f"{region}, {query.country.canonical_name}",
                 location_source=source,
+                geometry=None,
             )
             break
     return ProviderBatch(
