@@ -33,6 +33,32 @@ from disaster_monitor.infrastructure.geography.static_country_catalog import (
 PARSER = DisasterQueryParser(StaticCountryCatalog())
 
 
+def _named_event_catalog(tmp_path: Path) -> StaticCountryCatalog:
+    catalog = StaticCountryCatalog(tmp_path)
+    catalog.activate_payload(
+        {
+            "metadata": {"version": "named-event-test"},
+            "countries": [
+                {
+                    "alpha3": "PNG",
+                    "name": "Papua New Guinea",
+                    "aliases": [],
+                    "timezone": "UTC+10:00",
+                    "bounds": [-12, 0, 140, 156],
+                },
+                {
+                    "alpha3": "AGO",
+                    "name": "Angola",
+                    "aliases": [],
+                    "timezone": "UTC+01:00",
+                    "bounds": [-19, -4, 11, 25],
+                },
+            ],
+        }
+    )
+    return catalog
+
+
 @pytest.mark.parametrize(
     ("text", "disaster", "country_code"),
     [
@@ -127,8 +153,10 @@ def test_named_place_explicit_date_has_bounded_timezone_tolerance() -> None:
     assert query.selection_intent is WorldwideSelectionIntent.STRONGEST
 
 
-def test_distance_bearing_of_named_place_preserves_dated_event_tolerance() -> None:
-    parser = DisasterQueryParser(StaticCountryCatalog(Path("data/geography")))
+def test_distance_bearing_of_named_place_preserves_dated_event_tolerance(
+    tmp_path: Path,
+) -> None:
+    parser = DisasterQueryParser(_named_event_catalog(tmp_path))
     query = parser.parse(
         "For the 26 September 2026 magnitude 5.6 earthquake 74 km ESE of "
         "Kokopo, Papua New Guinea, show available satellite observations."
@@ -140,8 +168,8 @@ def test_distance_bearing_of_named_place_preserves_dated_event_tolerance() -> No
     assert start < datetime(2026, 9, 26, 14, 8, tzinfo=UTC) < end
 
 
-def test_gdacs_wildfire_identifier_targets_one_reported_fire() -> None:
-    parser = DisasterQueryParser(StaticCountryCatalog(Path("data/geography")))
+def test_gdacs_wildfire_identifier_targets_one_reported_fire(tmp_path: Path) -> None:
+    parser = DisasterQueryParser(_named_event_catalog(tmp_path))
     query = parser.parse(
         "Show the 24 September 2026 forest fire in Angola, GDACS WF 1032415."
     ).query

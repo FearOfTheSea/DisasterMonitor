@@ -54,6 +54,9 @@ Invoke-WebRequest http://localhost:8001/api/v1/metrics
 ```
 
 Wait for the migration service to finish before the API, scheduler, and worker start.
+The long-running services restart after a Docker daemon restart. If PostgreSQL was
+stopped explicitly, run `docker compose up -d` to start it and restore the stack;
+the restart policy does not override an explicit stop.
 
 The queue uses at-least-once delivery, `SKIP LOCKED`, bounded exponential retry, and a
 dead-letter state.

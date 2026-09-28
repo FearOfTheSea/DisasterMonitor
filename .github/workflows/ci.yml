@@ -14,14 +14,7 @@ jobs:
         with:
           version: 0.11.32
       - run: uv sync --project apps/api --frozen
-      - run: uv run --directory apps/api ruff format --check src tests scripts ../../scripts
-      - run: uv run --directory apps/api ruff check src tests scripts ../../scripts
-      - run: uv run --directory apps/api mypy
-      - run: uv run --directory apps/api mypy scripts ../../scripts
-      - run: uv run --directory apps/api python scripts/check_provider_rights.py
-      - run: uv run --directory apps/api python scripts/replay_provider_corpus.py
-      - run: uv run --directory apps/api python scripts/check_ground_acceptance.py
-      - run: uv run --directory apps/api pytest -q
+      - run: sh scripts/check_backend.sh
 
   postgres-persistence:
     runs-on: ubuntu-latest
@@ -69,18 +62,7 @@ jobs:
           version: 0.11.32
       - run: npm ci
         working-directory: apps/web
-      - run: npm run check:api-contract
-        working-directory: apps/web
-      - run: npm run format:check
-        working-directory: apps/web
-      - run: npm run lint
-        working-directory: apps/web
-      - run: npm run typecheck
-        working-directory: apps/web
-      - run: npm test
-        working-directory: apps/web
-      - run: npm run build
-        working-directory: apps/web
+      - run: sh scripts/check_frontend.sh
 
   containers:
     runs-on: ubuntu-latest

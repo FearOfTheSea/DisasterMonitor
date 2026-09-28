@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repository_root"
+
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+  printf '%s\n' 'Pre-push checks require a clean working tree so they test the commit being pushed.' >&2
+  exit 1
+fi
+
+snapshot_root=$(mktemp -d)
+trap 'rm -rf "$snapshot_root"' EXIT HUP INT TERM
+git archive --format=tar HEAD > "$snapshot_root/source.tar"
+tar -xf "$snapshot_root/source.tar" -C "$snapshot_root"
+rm "$snapshot_root/source.tar"
+
+cd "$snapshot_root"
+uv sync --project apps/api --frozen
+sh scripts/check_backend.sh
+(cd apps/web && npm ci)
+sh scripts/check_frontend.sh
+
+cd "$repository_root"
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+  printf '%s\n' 'Pre-push checks changed the working tree; review and commit those changes before pushing.' >&2
+  exit 1
+fi

@@ -53,3 +53,15 @@ OSM access context are described in
 ```powershell
 docker compose up --build
 ```
+
+## Before pushing
+
+Enable the repository's local CI gate once per clone:
+
+```sh
+git config --local core.hooksPath .githooks
+```
+
+The pre-push hook checks the committed tree in a temporary directory using the same
+backend and frontend commands as CI. See [testing](docs/testing.md#ci) for the
+commands and remaining CI jobs.

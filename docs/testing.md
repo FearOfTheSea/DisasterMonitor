@@ -193,6 +193,14 @@ change, run relevant static checks and affected suites.
 
 CI remains the full repository gate.
 
+The backend and frontend CI jobs run `sh scripts/check_backend.sh` and
+`sh scripts/check_frontend.sh`. Run these same commands locally before publishing.
+To enable the repository's pre-push hook for a clone, run
+`git config --local core.hooksPath .githooks` once. The hook requires a clean working
+tree, extracts the commit into a temporary directory, installs frozen dependencies,
+then runs both scripts there. This keeps ignored local data and uncommitted fixes out
+of the checks. Container, PostgreSQL, and browser system jobs still run in CI.
+
 ## CI
 
 CI runs backend and frontend checks independently. It runs the system test after both

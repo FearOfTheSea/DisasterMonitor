@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgis/postgis:17-3.5
+    restart: unless-stopped
     environment:
       POSTGRES_DB: disastermonitor
       POSTGRES_USER: disastermonitor
@@ -147,6 +148,7 @@ services:
       context: ./apps/web
       args:
         NEXT_PUBLIC_API_BASE_URL: http://localhost:8001/api/v1
+    restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8001/api/v1
     depends_on:
