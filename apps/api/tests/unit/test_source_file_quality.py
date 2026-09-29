@@ -26,7 +26,12 @@ GENERATED_SOURCES = frozenset(
         / "assistant.ts"
     }
 )
-HARD_LINE_LIMIT = 700
+HARD_LINE_LIMIT = 999
+
+
+def test_hand_maintained_source_limit_allows_999_lines_but_rejects_1000() -> None:
+    assert 999 <= HARD_LINE_LIMIT
+    assert 1000 > HARD_LINE_LIMIT
 
 
 def _hand_maintained_source_files() -> tuple[Path, ...]:

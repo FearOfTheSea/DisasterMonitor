@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from disaster_monitor.application.disaster import (
@@ -60,6 +61,18 @@ from disaster_monitor.domain.operations import ProviderAttempt, ProviderAttemptO
 
 def _now_utc() -> datetime:
     return datetime.now(UTC)
+
+
+@dataclass(frozen=True, slots=True)
+class _ProviderRetrievalResult:
+    incidents: tuple[ActiveIncident, ...]
+    observations: tuple[ActiveIncident, ...]
+    warnings: tuple[str, ...]
+    degraded: bool
+    retryable: bool
+    scan_complete: bool
+    records_seen: int
+    attempt: ProviderAttempt
 
 
 class IncidentRetrieval:
@@ -251,24 +264,15 @@ class IncidentRetrieval:
                 for registration in selection.registrations
             )
         )
-        for (
-            records,
-            provider_observations,
-            provider_warnings,
-            provider_degraded,
-            provider_retryable,
-            provider_scan_complete,
-            provider_records_seen,
-            provider_attempt,
-        ) in provider_results:
-            warnings.extend(provider_warnings)
-            degraded = degraded or provider_degraded
-            retryable = retryable or provider_retryable
-            scan_complete = scan_complete and provider_scan_complete
-            records_seen += provider_records_seen
-            provider_attempts.append(provider_attempt)
-            admitted.extend(records)
-            observations.extend(provider_observations)
+        for result in provider_results:
+            warnings.extend(result.warnings)
+            degraded = degraded or result.degraded
+            retryable = retryable or result.retryable
+            scan_complete = scan_complete and result.scan_complete
+            records_seen += result.records_seen
+            provider_attempts.append(result.attempt)
+            admitted.extend(result.incidents)
+            observations.extend(result.observations)
 
         resolved = resolve_worldwide_incidents(
             tuple(admitted),
@@ -336,34 +340,25 @@ class IncidentRetrieval:
         query: WorldwideDisasterQuery,
         *,
         now: datetime,
-    ) -> tuple[
-        tuple[ActiveIncident, ...],
-        tuple[ActiveIncident, ...],
-        tuple[str, ...],
-        bool,
-        bool,
-        bool,
-        int,
-        ProviderAttempt,
-    ]:
+    ) -> _ProviderRetrievalResult:
         provider = registration.worldwide_provider
         if (
             not registration.source_id
             or not registration.allowed_hosts
             or provider is None
         ):
-            return (
-                (),
-                (),
-                (
+            return _ProviderRetrievalResult(
+                incidents=(),
+                observations=(),
+                warnings=(
                     f"Worldwide provider {registration.name} has incomplete "
                     "executable authority.",
                 ),
-                True,
-                False,
-                False,
-                0,
-                ProviderAttempt(
+                degraded=True,
+                retryable=False,
+                scan_complete=False,
+                records_seen=0,
+                attempt=ProviderAttempt(
                     source_id=registration.source_id or registration.name,
                     attempted_at=now,
                     outcome=ProviderAttemptOutcome.FAILED,
@@ -383,18 +378,18 @@ class IncidentRetrieval:
             reason_code = str(getattr(failure, "reason_code", "invalid_payload"))
             retryable = bool(getattr(failure, "retryable", True))
             http_status = getattr(failure, "http_status", None)
-            return (
-                (),
-                (),
-                (
+            return _ProviderRetrievalResult(
+                incidents=(),
+                observations=(),
+                warnings=(
                     f"Worldwide provider {registration.name} could not be reached "
                     "or returned invalid data.",
                 ),
-                True,
-                retryable,
-                False,
-                0,
-                ProviderAttempt(
+                degraded=True,
+                retryable=retryable,
+                scan_complete=False,
+                records_seen=0,
+                attempt=ProviderAttempt(
                     source_id=registration.source_id,
                     attempted_at=now,
                     outcome=ProviderAttemptOutcome.FAILED,
@@ -508,19 +503,19 @@ class IncidentRetrieval:
             truncated=not scan_complete,
             hazard=query.disaster.value,
         )
-        return (
-            tuple(accepted),
-            tuple(observations),
-            tuple(dict.fromkeys(warnings)),
-            degraded,
-            retryable,
-            scan_complete,
-            (
+        return _ProviderRetrievalResult(
+            incidents=tuple(accepted),
+            observations=tuple(observations),
+            warnings=tuple(dict.fromkeys(warnings)),
+            degraded=degraded,
+            retryable=retryable,
+            scan_complete=scan_complete,
+            records_seen=(
                 batch.records_seen
                 if batch.records_seen is not None
                 else len(batch.records)
             ),
-            provider_attempt,
+            attempt=provider_attempt,
         )
 
 

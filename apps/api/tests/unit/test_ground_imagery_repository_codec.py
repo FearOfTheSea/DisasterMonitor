@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from disaster_monitor.application.ground_imagery.models import (
     GroundImageryRequest,
     GroundImageryRequestState,
@@ -42,7 +44,7 @@ from disaster_monitor.domain.imagery.regions import (
 )
 
 
-def test_request_codec_round_trips_versioned_regions_selections_and_artifacts() -> None:
+def _request_fixture() -> GroundImageryRequest:
     timestamp = datetime(2024, 5, 1, tzinfo=UTC)
     geometry = polygon_from_geojson(
         {
@@ -143,6 +145,47 @@ def test_request_codec_round_trips_versioned_regions_selections_and_artifacts() 
         artifacts=(artifact,),
     )
 
+    return request
+
+
+def test_request_codec_round_trips_versioned_regions_selections_and_artifacts() -> None:
+    request = _request_fixture()
     restored = request_from_document(request_to_document(request))
 
     assert restored == request
+
+
+@pytest.mark.parametrize("field", ["watch_enabled", "scan_complete"])
+@pytest.mark.parametrize("invalid", ["false", 1, None])
+def test_request_codec_rejects_nonboolean_fields(field: str, invalid: object) -> None:
+    document = request_to_document(_request_fixture())
+    if field == "scan_complete":
+        document["search_status"] = [
+            {"sensor": "sentinel-1", "scanned_count": 0, "scan_complete": invalid}
+        ]
+    else:
+        document[field] = invalid
+
+    with pytest.raises(ValueError, match=field):
+        request_from_document(document)
+
+
+def test_request_codec_preserves_absent_legacy_boolean_defaults() -> None:
+    document = request_to_document(_request_fixture())
+    del document["watch_enabled"]
+    document["search_status"] = [{"sensor": "sentinel-1", "scanned_count": 0}]
+
+    restored = request_from_document(document)
+
+    assert restored.watch_enabled is False
+    assert restored.search_status[0].scan_complete is False
+
+
+def test_request_codec_rejects_missing_selection_alternative() -> None:
+    document = request_to_document(_request_fixture())
+    document["selection"]["sensors"][0]["selections"][0][
+        "alternative_observation_ids"
+    ] = ["missing-observation"]
+
+    with pytest.raises(ValueError, match="alternative"):
+        request_from_document(document)

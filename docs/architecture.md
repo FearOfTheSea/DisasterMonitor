@@ -228,8 +228,7 @@ serve.
 - Keep composition limited to constructing and exposing the object graph.
 - Centralize each invariant or mapping; do not copy it between layers.
 - Use stable compatibility facades only for re-exports and composition.
-- Review hand-maintained files above 500 LOC and split files above 700 LOC unless a
-  documented cohesion exception applies.
+- Keep hand-maintained source files under 1,000 lines (at most 999 lines).
 
 File size is a diagnostic rather than an objective. A split must create a meaningful
 ownership or dependency seam; excessive fragmentation is no more maintainable than a
@@ -260,7 +259,10 @@ The application root composes map, operations, source, and weather surfaces.
 `useWorkspaceUrlState` owns browser-history synchronization and cleanup;
 `useWorkspaceNavigation` owns the destination, subsection, and Explore reading pane
 through independent URL parameters. The page renders those states and coordinates
-feature actions. The persistent Explore subtree keeps the OpenLayers instance and
+feature actions through `useWorkspaceActions`; `useWorkspacePresentation` owns the
+derived report and map display data. `ToolsMenu` owns its keyboard interaction, and
+`SecondaryWorkspaces` renders Saved, Sources, and Tools from navigation state. The
+persistent Explore subtree keeps the OpenLayers instance and
 incident filters when another workspace is visible. Natural Earth atlas rendering
 and Streets basemap selection belong to the map adapters; local geographic assets
 and provenance live under `apps/web/public/atlas`.

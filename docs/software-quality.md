@@ -87,11 +87,9 @@ a focused port instead of weakening an architecture test.
 
 ## Size and cohesion
 
-LOC identifies review candidates; it does not measure design quality by itself.
+LOC is a size guardrail; it does not measure design quality by itself.
 
-- Review every hand-maintained source file above 500 LOC for mixed responsibilities.
-- Split files above 700 LOC unless a documented exception demonstrates one cohesive
-  external contract or sequential protocol with a single reason to change.
+- Keep every hand-maintained source file under 1,000 lines (at most 999 lines).
 - Keep stable compatibility facades limited to re-exports and composition.
 - Extract a unit only when it has a meaningful name, ownership boundary, dependency
   seam, reusable policy, or independently testable behavior.

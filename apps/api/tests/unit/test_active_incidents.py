@@ -12,6 +12,7 @@ from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsQuery,
     IncidentCoverageState,
 )
+from disaster_monitor.application.incidents.retrieval import IncidentRetrieval
 from disaster_monitor.application.sources.provider_registry import ProviderRegistry
 from disaster_monitor.domain.disaster import (
     Disaster,
@@ -19,6 +20,10 @@ from disaster_monitor.domain.disaster import (
     SourceAuthority,
     WatchCoverageState,
     point_event_geometry,
+)
+from disaster_monitor.domain.operations import ProviderAttemptOutcome
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
 )
 
 from .active_incidents_support import (
@@ -631,6 +636,43 @@ async def test_incomplete_provider_scan_is_distinct_from_page_continuation() -> 
     assert coverage.scan_complete is False
     assert coverage.records_seen == 50
     assert coverage.truncated is True
+
+
+@pytest.mark.asyncio
+async def test_worldwide_provider_results_keep_coverage_and_retry_diagnostics() -> None:
+    incomplete = FakeWorldwideProvider(
+        "incomplete-floods",
+        ProviderBatch(
+            (_event("incomplete-floods", Disaster.FLOOD, "flood", NOW),),
+            scan_complete=False,
+            records_seen=50,
+        ),
+    )
+    failed = FakeWorldwideProvider("failed-floods", RuntimeError("offline"))
+    retrieval = IncidentRetrieval(
+        ProviderRegistry(
+            (
+                _registration("Incomplete floods", incomplete, Disaster.FLOOD),
+                _registration("Failed floods", failed, Disaster.FLOOD),
+            )
+        ),
+        country_catalog=StaticCountryCatalog(),
+    )
+
+    result = await retrieval.worldwide(Disaster.FLOOD, ActiveIncidentsQuery(), now=NOW)
+
+    assert [item.event_id for item in result.incidents] == ["flood"]
+    assert result.coverage.state is IncidentCoverageState.DEGRADED
+    assert result.coverage.scan_complete is False
+    assert result.coverage.records_seen == 50
+    assert result.coverage.truncated is True
+    assert result.retryable is True
+    assert {
+        attempt.source_id: attempt.outcome for attempt in result.provider_attempts
+    } == {
+        "incomplete-floods": ProviderAttemptOutcome.INCOMPLETE,
+        "failed-floods": ProviderAttemptOutcome.FAILED,
+    }
 
 
 @pytest.mark.asyncio

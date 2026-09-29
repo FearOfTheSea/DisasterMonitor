@@ -32,6 +32,9 @@ from disaster_monitor.application.ports.ground_imagery.repository_codec_values i
     age_class as _age_class,
 )
 from disaster_monitor.application.ports.ground_imagery.repository_codec_values import (
+    boolean as _boolean,
+)
+from disaster_monitor.application.ports.ground_imagery.repository_codec_values import (
     datetime_value as _datetime,
 )
 from disaster_monitor.application.ports.ground_imagery.repository_codec_values import (
@@ -180,7 +183,7 @@ def request_from_document(document: Mapping[str, Any]) -> GroundImageryRequest:
         created_at=_datetime(document, "created_at"),
         updated_at=_datetime(document, "updated_at"),
         owner_scope=_string(document, "owner_scope"),
-        watch_enabled=bool(document.get("watch_enabled", False)),
+        watch_enabled=_boolean(document, "watch_enabled"),
         watch_interval_seconds=(
             None
             if document.get("watch_interval_seconds") is None
@@ -662,11 +665,17 @@ def _selection_from_document(
                     raise ValueError(
                         "A durable imagery selection references no candidate."
                     )
-            alternatives = tuple(
-                candidates[item]
-                for item in _list(outcome, "alternative_observation_ids")
-                if _string_value(item, "alternative_observation_ids") in candidates
-            )
+            alternatives_list: list[Observation] = []
+            for item in _list(outcome, "alternative_observation_ids"):
+                alternative_id = _string_value(item, "alternative_observation_ids")
+                alternative = candidates.get(alternative_id)
+                if alternative is None:
+                    raise ValueError(
+                        "A durable imagery selection alternative references "
+                        "no candidate."
+                    )
+                alternatives_list.append(alternative)
+            alternatives = tuple(alternatives_list)
             selections.append(
                 GroundImagerySelection(
                     role=TemporalRole(_string(outcome, "role")),
@@ -690,7 +699,7 @@ def _search_status_from_document(document: object) -> SensorSearchStatus:
     return SensorSearchStatus(
         sensor=Sensor(_string(value, "sensor")),
         scanned_count=_integer(value, "scanned_count"),
-        scan_complete=bool(value.get("scan_complete", False)),
+        scan_complete=_boolean(value, "scan_complete"),
         next_cursor=_optional_string(value, "next_cursor"),
         failure_code=_optional_string(value, "failure_code"),
         failure_detail=_optional_string(value, "failure_detail"),

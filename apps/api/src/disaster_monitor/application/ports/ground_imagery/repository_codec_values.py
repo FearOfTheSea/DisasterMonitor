@@ -55,6 +55,13 @@ def integer(document: Mapping[str, Any], name: str) -> int:
     return value
 
 
+def boolean(document: Mapping[str, Any], name: str, *, default: bool = False) -> bool:
+    value = document.get(name, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"A durable imagery document field {name} is not a boolean.")
+    return value
+
+
 def number(document: Mapping[str, Any], name: str) -> float:
     value = document.get(name)
     if isinstance(value, bool) or not isinstance(value, (int, float)):

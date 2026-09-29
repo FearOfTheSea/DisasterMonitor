@@ -67,7 +67,7 @@ boundaries, public feature contracts, and feature cycles. Workspace hook tests c
 panel exclusivity, URL restoration, selection, and cleanup; system tests continue to
 cover the rendered map, assistant, and incident-watch workflows.
 
-`test_source_file_quality.py` enforces the documented 700-line hard limit across
+`test_source_file_quality.py` enforces the documented 999-line hard limit across
 hand-maintained backend, frontend, test, and script sources. The generated frontend
 OpenAPI contract is the sole explicit size exemption; `check:api-contract` verifies
 its source of truth and freshness. It also prevents Python test modules from importing

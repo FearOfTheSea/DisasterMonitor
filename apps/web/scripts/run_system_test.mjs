@@ -175,6 +175,10 @@ try {
     );
   }
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
+  await page.goBack();
+  await page.locator('.source-catalog-card').first().waitFor();
+  await page.goForward();
+  await page.getByLabel('Active incidents monitoring').waitFor();
   await page.getByText('Coverage & limitations', { exact: true }).click();
   const incidentFixtures = [
     {
