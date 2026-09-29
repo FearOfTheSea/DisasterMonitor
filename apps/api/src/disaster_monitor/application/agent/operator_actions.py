@@ -1,5 +1,6 @@
 """Bounded operator-action vocabulary and deterministic application policy."""
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -65,6 +66,11 @@ _NAVIGATION_ACTIONS = {
     "open:watches": ("watches", "Open Incident Watches"),
     "open:operations": ("operations", "Open Evidence Operations"),
 }
+_SOURCE_CATALOG_NAVIGATION = re.compile(
+    r"\b(?:open|go to|navigate to|show)\s+(?:the\s+)?"
+    r"(?:source catalog|sources(?: page| panel)?)\b",
+    re.I,
+)
 _TIME_ACTIONS = {
     "time:1h": "1h",
     "time:6h": "6h",
@@ -124,6 +130,10 @@ def resolve_operator_actions(
     candidates = validate_operator_action_candidates(task.operator_action_ids)
     actions: list[OperatorAction] = []
     for action_id in candidates:
+        if action_id == "open:sources" and not _SOURCE_CATALOG_NAVIGATION.search(
+            task.question
+        ):
+            continue
         if action_id in _NAVIGATION_ACTIONS:
             value, label = _NAVIGATION_ACTIONS[action_id]
             actions.append(

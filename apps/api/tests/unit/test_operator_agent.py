@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -125,6 +126,26 @@ def test_invalid_candidates_fail_closed_only_for_actions() -> None:
         resolve_operator_actions(investigation_task(*tuple(OPERATOR_ACTION_IDS)[:5]))
         == ()
     )
+
+
+def test_source_link_request_does_not_open_source_catalog() -> None:
+    task = investigation_task("open:sources")
+
+    assert (
+        resolve_operator_actions(
+            replace(task, question="What happened near Nikolski? Show the source.")
+        )
+        == ()
+    )
+    assert (
+        len(
+            resolve_operator_actions(
+                replace(task, question="Open the source catalog for this report.")
+            )
+        )
+        == 1
+    )
+    assert len(resolve_operator_actions(replace(task, question="Open Sources."))) == 1
 
 
 def test_watch_proposal_uses_only_canonical_normalized_task_scope() -> None:

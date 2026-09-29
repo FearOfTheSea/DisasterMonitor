@@ -48,7 +48,11 @@ _SAFE_MESSAGES = {
 
 def _issue(provider: str, error: DisasterProviderError) -> ProviderIssue:
     failure = error.failure
-    message = _SAFE_MESSAGES.get(failure.reason_code, _SAFE_MESSAGES["invalid_payload"])
+    message = (
+        "The provider denied access to this endpoint."
+        if failure.http_status == 403
+        else _SAFE_MESSAGES.get(failure.reason_code, _SAFE_MESSAGES["invalid_payload"])
+    )
     return ProviderIssue(
         provider=provider,
         message=f"{provider}: {message}",

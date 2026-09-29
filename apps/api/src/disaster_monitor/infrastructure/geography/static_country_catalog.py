@@ -13,6 +13,9 @@ from disaster_monitor.domain.disaster import (
     Country,
     GeographicArea,
 )
+from disaster_monitor.infrastructure.geography.us_subnational import (
+    US_SUBNATIONAL_PLACE_TERMS,
+)
 
 
 def _distance_direction(text: str, match: re.Match[str]) -> bool:
@@ -77,6 +80,15 @@ class StaticCountryCatalog:
                 existing = term_countries.get(key, ())
                 if all(item.alpha3_code != country.alpha3_code for item in existing):
                     term_countries[key] = (*existing, country)
+        usa = next(
+            (country for country in countries if country.alpha3_code == "USA"), None
+        )
+        if usa is not None:
+            for term in US_SUBNATIONAL_PLACE_TERMS:
+                key = term.casefold()
+                existing = term_countries.get(key, ())
+                if all(item.alpha3_code != "USA" for item in existing):
+                    term_countries[key] = (*existing, usa)
         short_codes = tuple(short_code_terms)
         short_code_keys = {term.casefold() for term in short_codes}
         country_names = tuple(
@@ -177,6 +189,11 @@ class StaticCountryCatalog:
         self._refresh_if_changed()
         with self._lock:
             return self._by_code.get(alpha3_code.upper())
+
+    def resolve_exact_name(self, name: str) -> tuple[Country, ...]:
+        self._refresh_if_changed()
+        with self._lock:
+            return self._term_countries.get(name.strip().casefold(), ())
 
     def contains(self, country: Country, latitude: float, longitude: float) -> bool:
         return country.geographic_area.contains(latitude, longitude)

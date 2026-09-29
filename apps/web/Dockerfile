@@ -23,6 +23,7 @@ RUN groupadd --gid 10001 disastermonitor \
     && useradd --uid 10001 --gid disastermonitor --create-home disastermonitor
 COPY --from=builder --chown=disastermonitor:disastermonitor /app/.next/standalone ./
 COPY --from=builder --chown=disastermonitor:disastermonitor /app/.next/static ./.next/static
+COPY --from=builder --chown=disastermonitor:disastermonitor /app/public ./public
 USER disastermonitor
 
 EXPOSE 3000

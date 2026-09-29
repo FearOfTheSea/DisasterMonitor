@@ -9,11 +9,13 @@ from disaster_monitor.domain.disaster import Country
 
 
 class CountryCatalog(Protocol):
-    """Resolve only exact canonical names, codes, and declared aliases."""
+    """Resolve maintained country names and explicit subnational place terms."""
 
     def countries(self) -> tuple[Country, ...]: ...
 
     def find_mentions(self, text: str) -> tuple[Country, ...]: ...
+
+    def resolve_exact_name(self, name: str) -> tuple[Country, ...]: ...
 
     def get_by_alpha3(self, alpha3_code: str) -> Country | None: ...
 

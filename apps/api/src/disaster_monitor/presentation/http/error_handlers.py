@@ -38,8 +38,8 @@ def register_error_handlers(app: FastAPI) -> None:
             status_code=503,
             content={
                 "detail": (
-                    "The local model is unavailable. Start Ollama and pull the "
-                    "configured Qwen model, then try again."
+                    "The local model is unavailable. Check /api/v1/ready for "
+                    "model readiness and deployment status, then try again."
                 )
             },
         )

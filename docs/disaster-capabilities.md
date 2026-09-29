@@ -356,7 +356,10 @@ only as application policy over canonical evidence, never inside provider transp
 
 ## Geography metadata
 
-The packaged fallback records three preservation countries.
+The packaged fallback records Japan, Vietnam, Venezuela, the United States,
+Georgia, and Indonesia. State names resolve to the United States only when the country
+catalog includes its maintained record; names shared with another country,
+such as Georgia, require clarification.
 
 The autonomous updater generates a content-versioned global catalog from a released
 Natural Earth 1:50m Admin 0 revision and the latest validated IANA tzdata archive.

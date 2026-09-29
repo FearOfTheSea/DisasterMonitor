@@ -487,4 +487,6 @@ async def test_http_failures_keep_typed_issue_and_bounded_retry(
     assert result.issues[0].reason_code == expected_code
     assert result.issues[0].retryable is (status in {429, 503})
     assert result.issues[0].http_status == status
+    if status == 403:
+        assert "denied access" in result.issues[0].message
     await client.aclose()

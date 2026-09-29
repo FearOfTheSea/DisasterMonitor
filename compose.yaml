@@ -1,4 +1,33 @@
 services:
+  ollama:
+    image: ollama/ollama:0.33.2
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  ollama-pull:
+    image: ollama/ollama:0.33.2
+    command: ["pull", "qwen3:4b-instruct-2507-q4_K_M"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - ollama-models:/root/.ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+
   postgres:
     image: postgis/postgis:17-3.5
     restart: unless-stopped
@@ -36,15 +65,14 @@ services:
   api:
     build:
       context: ./apps/api
-    extra_hosts:
-      - host.docker.internal:host-gateway
     env_file:
       - path: ./apps/api/.env
         required: false
     environment:
       ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: qwen3:4b-instruct-2507-q4_K_M
+      OLLAMA_TIMEOUT_SECONDS: "300"
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
       EVENT_MEDIA_BLOB_ROOT: /var/lib/disaster-monitor/event-media
@@ -58,6 +86,8 @@ services:
       COUNTRY_CATALOG_AUTOMATIC_UPDATES: "true"
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      ollama-pull:
         condition: service_completed_successfully
     healthcheck:
       test:
@@ -100,8 +130,6 @@ services:
   worker:
     build:
       context: ./apps/api
-    extra_hosts:
-      - host.docker.internal:host-gateway
     env_file:
       - path: ./apps/api/.env
         required: false
@@ -111,13 +139,17 @@ services:
       - disaster_monitor.infrastructure.operations.runtime
       - worker
     environment:
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen3:4b-instruct-2507-q4_K_M
+      OLLAMA_TIMEOUT_SECONDS: "300"
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
       GROUND_IMAGERY_STORAGE_ROOT: /var/lib/disaster-monitor/ground-imagery
       COUNTRY_CATALOG_ROOT: /var/lib/disaster-monitor/geography
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      ollama-pull:
         condition: service_completed_successfully
     restart: unless-stopped
     volumes:
@@ -158,6 +190,7 @@ services:
       - "127.0.0.1:3000:3000"
 
 volumes:
+  ollama-models:
   postgres-data:
   operational-blobs:
   event-media-blobs:

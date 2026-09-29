@@ -50,6 +50,11 @@ OSM access context are described in
 
 ## Run with Compose
 
+Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+and configure the Docker runtime before starting the GPU-backed Ollama service.
+Compose downloads the configured Qwen model on first start and keeps it in a named
+volume. The first pull may take several minutes.
+
 ```powershell
 docker compose up --build
 ```

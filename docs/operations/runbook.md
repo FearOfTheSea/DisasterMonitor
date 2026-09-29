@@ -11,7 +11,7 @@ operation and gate details.
 
 ## Topology and authority
 
-The production-like local topology is `web + api + scheduler + worker +
+The production-like local topology is `web + api + scheduler + worker + Ollama +
 PostgreSQL/PostGIS + filesystem blob storage`.
 
 PostgreSQL stores durable jobs, metadata, state, and audit data. Raw payloads are
@@ -41,6 +41,23 @@ expand decision authority.
 
 ## Start and inspect
 
+The Compose model service requires an NVIDIA GPU driver and
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+configured for Docker. Compose reserves one GPU for Ollama, pulls
+`qwen3:4b-instruct-2507-q4_K_M` into a persistent volume, and starts the API and
+worker only after the pull finishes. Ollama has no published host port.
+
+Check readiness and GPU use after startup:
+
+```sh
+curl -f http://localhost:8001/api/v1/ready
+docker compose exec ollama ollama ps
+docker compose exec ollama nvidia-smi
+```
+
+`/api/v1/health` reports API liveness. `/api/v1/ready` reports model readiness;
+inspect it when the assistant says the local model is unavailable.
+
 Run these commands:
 
 ```powershell
@@ -53,7 +70,8 @@ Invoke-RestMethod http://localhost:8001/api/v1/operations/evidence-history
 Invoke-WebRequest http://localhost:8001/api/v1/metrics
 ```
 
-Wait for the migration service to finish before the API, scheduler, and worker start.
+Wait for the migration service and model pull to finish before the API and worker
+start. The scheduler waits for migration only.
 The long-running services restart after a Docker daemon restart. If PostgreSQL was
 stopped explicitly, run `docker compose up -d` to start it and restore the stack;
 the restart policy does not override an explicit stop.

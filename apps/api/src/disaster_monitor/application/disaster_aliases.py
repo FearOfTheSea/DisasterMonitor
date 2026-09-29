@@ -55,6 +55,8 @@ DISASTER_ALIASES: dict[Disaster, tuple[str, ...]] = {
         "台風",
     ),
     Disaster.VOLCANIC_ERUPTION: (
+        "Krakatau eruption",
+        "Anak Krakatau eruption",
         "volcanic eruption",
         "volcanic eruptions",
         "volcano eruption",

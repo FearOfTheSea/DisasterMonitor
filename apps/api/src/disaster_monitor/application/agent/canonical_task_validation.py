@@ -127,6 +127,16 @@ def _validate_canonical_task(
     assert isinstance(draft.disaster, Disaster)
     country = None
     if scope is GeographicScope.COUNTRY:
+        if (
+            draft.country_name
+            and len(country_catalog.resolve_exact_name(draft.country_name)) > 1
+        ):
+            return _canonical_invalid(
+                question,
+                "The place name could refer to more than one country. "
+                "Which country should I use?",
+                disaster=draft.disaster,
+            )
         country = _resolve_canonical_country(draft, country_catalog)
         if country is None:
             unresolved = draft.country_name or draft.country_code
@@ -406,7 +416,7 @@ def _resolve_canonical_country(
         else None
     )
     if country is None and draft.country_name:
-        matches = country_catalog.find_mentions(draft.country_name)
+        matches = country_catalog.resolve_exact_name(draft.country_name)
         if len(matches) == 1:
             country = matches[0]
     if country is None:
@@ -415,7 +425,10 @@ def _resolve_canonical_country(
         country.canonical_name.casefold(),
         *(alias.casefold() for alias in country.aliases),
     }
-    if draft.country_name and draft.country_name.casefold() not in accepted_names:
+    if draft.country_name and (
+        draft.country_name.casefold() not in accepted_names
+        and country not in country_catalog.resolve_exact_name(draft.country_name)
+    ):
         return None
     if draft.country_code and country.alpha3_code != draft.country_code.upper():
         return None

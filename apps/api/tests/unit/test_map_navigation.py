@@ -29,10 +29,11 @@ def test_country_tool_is_catalog_backed_and_executes_to_validated_bounds() -> No
     assert tool.parameters["properties"] == {
         "country_code": {
             "type": "string",
-            "enum": ["JPN", "VNM", "VEN"],
+            "enum": ["JPN", "VNM", "VEN", "USA", "GEO", "IDN"],
             "description": (
                 "Supported country mappings: JPN = Japan; VNM = Vietnam; "
-                "VEN = Venezuela."
+                "VEN = Venezuela; USA = United States; GEO = Georgia; "
+                "IDN = Indonesia."
             ),
         }
     }

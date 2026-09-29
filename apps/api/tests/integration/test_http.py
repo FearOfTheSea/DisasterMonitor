@@ -371,6 +371,8 @@ async def test_assistant_validation_and_model_error_mapping() -> None:
     assert validation_response.status_code == 422
     assert error_response.status_code == 503
     assert "local model is unavailable" in error_response.json()["detail"]
+    assert "/api/v1/ready" in error_response.json()["detail"]
+    assert "Start Ollama" not in error_response.json()["detail"]
 
 
 @pytest.mark.asyncio

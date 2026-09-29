@@ -326,11 +326,14 @@ def test_invalid_active_catalog_falls_back_to_packaged_metadata(tmp_path: Path) 
 
     catalog = StaticCountryCatalog(tmp_path)
 
-    assert catalog.metadata["version"] == "1.0.0"
+    assert catalog.metadata["version"] == "1.2.0"
     assert [country.alpha3_code for country in catalog.countries()] == [
         "JPN",
         "VNM",
         "VEN",
+        "USA",
+        "GEO",
+        "IDN",
     ]
 
 
