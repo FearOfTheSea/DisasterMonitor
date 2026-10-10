@@ -1,0 +1,131 @@
+{
+  "schema_version": "p4-capability-gates.v1",
+  "reviewed_at": "2026-09-22",
+  "policy": "Deployment-dependent product expansions remain unavailable until every named gate has external evidence and an accepted ADR where required.",
+  "gates": [
+    {
+      "task": 111,
+      "capability": "multi_user_authentication",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "concrete multi-user deployment requirement",
+        "identity-provider and TLS boundary",
+        "threat model and account recovery policy",
+        "least-privilege role matrix",
+        "multi-user persistence migration and audit design"
+      ]
+    },
+    {
+      "task": 112,
+      "capability": "collaborative_review_assignment",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "task 111 authentication and audit gates passed",
+        "deployment-owned assignment and accountability workflow"
+      ]
+    },
+    {
+      "task": 113,
+      "capability": "incident_work_orders",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "task 112 collaboration gate passed",
+        "operator confirmation policy for consequential task creation",
+        "explicit operational-state versus evidence-state contract"
+      ]
+    },
+    {
+      "task": 114,
+      "capability": "organization_4w_registry_interoperability",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "named deployment interchange standard and sample exports",
+        "dataset rights and freshness review",
+        "bounded import and export mapping"
+      ]
+    },
+    {
+      "task": 115,
+      "capability": "shelter_service_registry_interoperability",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "named open dataset and deployment use case",
+        "rights and freshness review",
+        "read-only context contract"
+      ]
+    },
+    {
+      "task": 116,
+      "capability": "resource_request_tracking",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "accepted ADR expanding the product into response coordination",
+        "concrete deployment workflow and accountable owners",
+        "authorization and audit foundations"
+      ]
+    },
+    {
+      "task": 117,
+      "capability": "volunteer_management",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "real deployment demand",
+        "integration assessment against existing coordination software",
+        "privacy and retention policy"
+      ]
+    },
+    {
+      "task": 118,
+      "capability": "missing_found_person_workflows",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "separate privacy-critical subsystem ADR",
+        "legal basis, consent, retention, deletion, and disclosure policy",
+        "isolated encrypted persistence and access audit"
+      ]
+    },
+    {
+      "task": 119,
+      "capability": "public_citizen_submission_endpoints",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "abuse and moderation design",
+        "privacy and media-retention design",
+        "rate-limit and denial-of-service controls",
+        "isolation from trusted-source evidence"
+      ]
+    },
+    {
+      "task": 127,
+      "capability": "local_plugin_export_sdk",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "at least three maintained integrations using the same extension seam",
+        "versioned compatibility and deprecation policy",
+        "static trust and network-permission model"
+      ]
+    },
+    {
+      "task": 128,
+      "capability": "peer_to_peer_node_synchronization",
+      "status": "deferred",
+      "auto_enable": false,
+      "required_evidence": [
+        "proven disconnected multi-node deployment need",
+        "identity and encrypted transport design",
+        "conflict resolution and provenance merge policy",
+        "recovery and adversarial synchronization tests"
+      ]
+    }
+  ]
+}

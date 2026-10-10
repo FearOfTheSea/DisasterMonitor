@@ -1,0 +1,12 @@
+{
+  "schema_version": "adversarial-identity-cases.v1",
+  "version": "2026-09-13",
+  "cases": [
+    {"case_id": "nearby-earthquakes", "category": "nearby_earthquakes", "expected_decision": "keep_separate", "reason": "Time and distance remain outside the reviewed merge bound."},
+    {"case_id": "repeated-storm-name", "category": "repeated_storm_names", "expected_decision": "keep_separate", "reason": "Storm name is not a globally unique identity."},
+    {"case_id": "cross-border-flood", "category": "cross_border", "expected_decision": "one_physical_event_multiple_country_associations", "reason": "Country association does not duplicate the physical event."},
+    {"case_id": "antimeridian-cyclone", "category": "antimeridian", "expected_decision": "preserve_geometry", "reason": "Longitude wrapping must not split or relocate the track."},
+    {"case_id": "same-day-volcano-updates", "category": "same_day_volcano_updates", "expected_decision": "retain_revision_history", "reason": "A same-day update changes freshness, not eruption identity."},
+    {"case_id": "duplicate-correction", "category": "duplicates_and_corrections", "expected_decision": "supersede_same_source", "reason": "A correction remains inspectable while the latest valid observation is current."}
+  ]
+}

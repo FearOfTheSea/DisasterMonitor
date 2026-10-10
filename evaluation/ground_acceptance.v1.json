@@ -1,0 +1,114 @@
+{
+  "schema_version": "ground-acceptance.v1",
+  "version": "2026-09-14",
+  "retrieval_date": "2026-09-14",
+  "resource_target": {
+    "gpu_name": "RTX 3050 Ti",
+    "gpu_memory_mb": 4096,
+    "system_memory_gb": 16,
+    "measurement_command": "check_ground_acceptance.py"
+  },
+  "acceptance_policy": {
+    "required_cases_per_sensor": 2,
+    "no_model_created_facts": true,
+    "no_remote_media_download_in_validator": true,
+    "artifact_requirements": [
+      "source-product identity",
+      "capture interval",
+      "selected grid",
+      "COG checksum",
+      "expected desktop Ground-view state"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "texas-flood-20250704-sentinel-1",
+      "sensor": "sentinel-1",
+      "event_label": "Texas flooding, July 2025",
+      "event_interval_utc": {"from": "2025-07-04T00:00:00Z", "to": "2025-07-12T23:59:59Z"},
+      "capture_interval_utc": {"from": "2025-07-11T00:00:00Z", "to": "2025-07-12T23:59:59Z"},
+      "source_urls": [
+        "https://gis.earthdata.nasa.gov/portal/home/item.html?id=eeae843923c44fdbb47158ed410b26f3",
+        "https://maps.disasters.nasa.gov/ags03/rest/services/texas_flood_202507/s1_flooddetection/MapServer/info/iteminfo"
+      ],
+      "independent_verification_urls": [
+        "https://gis.earthdata.nasa.gov/portal/home/item.html?id=eeae843923c44fdbb47158ed410b26f3",
+        "https://maps.disasters.nasa.gov/ags03/rest/services/texas_flood_202507/s1_flooddetection/MapServer/info/iteminfo"
+      ],
+      "expected_ui_results": [
+        "Ground view keeps the impact region separate from the Sentinel-1 acquisition footprint.",
+        "The S1 result retains a July 2025 capture interval and a catalogued or renderable state.",
+        "The panel labels the result as observational context, not a complete flood-impact assessment."
+      ],
+      "evidence_checksum": "sha256:8ad2e9969a1e6533b8e651d82bf239347fa4987baccd5a7ec64bf4e6b7309e98",
+      "live_status": "not_run"
+    },
+    {
+      "case_id": "washington-flood-202512-sentinel-1",
+      "sensor": "sentinel-1",
+      "event_label": "Washington atmospheric-river flooding, December 2025",
+      "event_interval_utc": {"from": "2025-12-05T00:00:00Z", "to": "2025-12-22T23:59:59Z"},
+      "capture_interval_utc": {"from": "2025-12-07T00:00:00Z", "to": "2025-12-12T23:59:59Z"},
+      "source_urls": [
+        "https://disasters.nasa.gov/what-we-do/disasters/disasters-activations/washington-atmospheric-rivers-2025",
+        "https://governor.wa.gov/news/2025/governor-ferguson-declares-statewide-emergency-responding-major-flooding"
+      ],
+      "independent_verification_urls": [
+        "https://disasters.nasa.gov/what-we-do/disasters/disasters-activations/washington-atmospheric-rivers-2025",
+        "https://wsdot.wa.gov/construction-planning/search-projects/us2-beckler-peak-drainage-vicinity-emergency"
+      ],
+      "expected_ui_results": [
+        "Ground view preserves the S1 radar path even when optical imagery is unavailable or obscured.",
+        "The capture date remains visible independently from the event onset interval.",
+        "A retrieved product cannot be presented as statewide inundation or road-passability evidence."
+      ],
+      "evidence_checksum": "sha256:c83cc5b8518dd5e30f3ac21ab52188f657f635eac14825f78362e6040eba66cc",
+      "live_status": "not_run"
+    },
+    {
+      "case_id": "southern-california-wildfires-202501-sentinel-2",
+      "sensor": "sentinel-2",
+      "event_label": "Southern California wildfires, January 2025",
+      "event_interval_utc": {"from": "2025-01-07T00:00:00Z", "to": "2025-01-31T23:59:59Z"},
+      "capture_interval_utc": {"from": "2025-01-12T00:00:00Z", "to": "2025-01-13T23:59:59Z"},
+      "source_urls": [
+        "https://disasters.nasa.gov/what-we-do/disasters/disasters-activations/southern-california-wildfires-jan-2025",
+        "https://www.fema.gov/sites/default/files/documents/PDAReport_FEMA4856DRexpedited-CA.pdf"
+      ],
+      "independent_verification_urls": [
+        "https://disasters.nasa.gov/what-we-do/disasters/disasters-activations/southern-california-wildfires-jan-2025",
+        "https://www.fema.gov/sites/default/files/documents/PDAReport_FEMA4856DRexpedited-CA.pdf"
+      ],
+      "expected_ui_results": [
+        "Ground view displays an S2 optical acquisition timestamp and quality state without inferring building damage.",
+        "The panel keeps event evidence, capture evidence, and any generated artifact provenance distinct.",
+        "Cloud or quality limitations remain visible instead of being treated as absence of fire impact."
+      ],
+      "evidence_checksum": "sha256:3a6e06ce939d32469126642a03a1336d523e336c3ad8ed1adbfc7a55ccf5ff2d",
+      "live_status": "not_run"
+    },
+    {
+      "case_id": "ourense-wildfire-202508-sentinel-2",
+      "sensor": "sentinel-2",
+      "event_label": "Ourense Province wildfire, Spain, August 2025",
+      "event_interval_utc": {"from": "2025-08-08T00:00:00Z", "to": "2025-08-31T23:59:59Z"},
+      "capture_interval_utc": {"from": "2025-08-16T00:00:00Z", "to": "2025-08-17T23:59:59Z"},
+      "source_urls": [
+        "https://mapping.emergency.copernicus.eu/news/wildfire-in-ourense-province-spain/",
+        "https://mapping.emergency.copernicus.eu/search/?date=2025&q=fires+in+spain&sort=relevance"
+      ],
+      "independent_verification_urls": [
+        "https://mapping.emergency.copernicus.eu/news/wildfire-in-ourense-province-spain/",
+        "https://mapping.emergency.copernicus.eu/"
+      ],
+      "expected_ui_results": [
+        "Ground view shows a Sentinel-2 result captured on the documented August 2025 interval.",
+        "Source attribution and capture time remain visible beside any validated artifact.",
+        "The result is presented as imagery context and not as a complete emergency-mapping or damage claim."
+      ],
+      "evidence_checksum": "sha256:48b96c395146289aec1ac14dcd1e3c4048bc5f4b77b5f05d283d5b73ddeb3c11",
+      "live_status": "not_run"
+    }
+  ],
+  "live_evidence": []
+}

@@ -1,0 +1,84 @@
+{
+  "schema_version": "provider-payload-snapshots.v1",
+  "version": "2026-09-14",
+  "snapshots": {
+    "earthquake-kamchatka-20250729": {
+      "provider": "USGS Earthquakes",
+      "source_url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000qw60",
+      "observations": [
+        {
+          "observation_id": "eq-kamchatka-2025-observation",
+          "identity_key": "usgs:us6000qw60",
+          "published_at": "2025-07-29T23:24:52Z",
+          "retrieved_at": "2025-07-29T23:30:00Z",
+          "expected_ids": ["eq-kamchatka-2025-observation"]
+        }
+      ]
+    },
+    "flood-washington-202512": {
+      "provider": "Washington State executive emergency reporting",
+      "source_url": "https://governor.wa.gov/news/2025/governor-ferguson-declares-statewide-emergency-responding-major-flooding",
+      "observations": [
+        {
+          "observation_id": "wa-flood-2025-observation",
+          "identity_key": "wa:atmospheric-river-flooding:2025-12",
+          "published_at": "2025-12-09T00:00:00Z",
+          "retrieved_at": "2025-12-09T00:12:00Z",
+          "expected_ids": ["wa-flood-2025-observation"]
+        }
+      ]
+    },
+    "wildfire-california-202501": {
+      "provider": "NASA Disasters",
+      "source_url": "https://disasters.nasa.gov/what-we-do/disasters/disasters-activations/southern-california-wildfires-jan-2025",
+      "observations": [
+        {
+          "observation_id": "ca-wildfire-2025-observation",
+          "identity_key": "nasa:california-wildfires:2025-01",
+          "published_at": "2025-01-12T00:00:00Z",
+          "retrieved_at": "2025-01-12T00:20:00Z",
+          "expected_ids": ["ca-wildfire-2025-observation"]
+        }
+      ]
+    },
+    "landslide-los-angeles-202501": {
+      "provider": "NASA Jet Propulsion Laboratory",
+      "source_url": "https://www.jpl.nasa.gov/news/nasa-radar-imagery-reveals-details-about-los-angeles-area-landslides/",
+      "observations": [
+        {
+          "observation_id": "la-landslide-2025-observation",
+          "identity_key": "nasa:jpl:los-angeles-landslides:2025",
+          "published_at": "2025-01-23T00:00:00Z",
+          "retrieved_at": "2025-01-23T00:15:00Z",
+          "expected_ids": ["la-landslide-2025-observation"]
+        }
+      ]
+    },
+    "cyclone-helene-202409": {
+      "provider": "NOAA National Hurricane Center",
+      "source_url": "https://www.nhc.noaa.gov/archive/2024/HELENE.shtml",
+      "observations": [
+        {
+          "observation_id": "helene-2024-observation",
+          "identity_key": "nhc:AL092024",
+          "published_at": "2024-09-23T00:00:00Z",
+          "retrieved_at": "2024-09-23T00:20:00Z",
+          "expected_ids": ["helene-2024-observation"]
+        }
+      ]
+    },
+    "volcano-kilauea-202509": {
+      "provider": "Smithsonian Global Volcanism Program",
+      "source_url": "https://volcano.si.edu/showreport.cfm?gvpvar=GVP.WVAR20250903-332010",
+      "observations": [
+        {
+          "observation_id": "kilauea-2025-observation",
+          "identity_key": "gvp:332010:kilauea:2025",
+          "published_at": "2025-09-03T00:00:00Z",
+          "retrieved_at": "2025-09-03T00:15:00Z",
+          "expected_ids": ["kilauea-2025-observation"]
+        }
+      ]
+    }
+  }
+}
