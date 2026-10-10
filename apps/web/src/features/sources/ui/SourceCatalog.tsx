@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchSourceCatalog } from '@/features/sources/api/sourceCatalogClient';
 import type { SourceCatalogSnapshot } from '@/features/sources/model/sourceCatalog';
+import { matchesApiSchema } from '@/shared/api/generated/assistant';
 import {
   createRefreshController,
   REFRESH_POLICIES,
@@ -22,12 +23,7 @@ type SourceCatalogProps = {
 const SOURCE_CATALOG_CACHE_KEY = 'disaster-monitor:pwa:source-catalog:v1';
 
 function isSourceCatalogSnapshot(value: unknown): value is SourceCatalogSnapshot {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as SourceCatalogSnapshot).catalog_version === 'string' &&
-    Array.isArray((value as SourceCatalogSnapshot).sources)
-  );
+  return matchesApiSchema('SourceCatalogResponse', value);
 }
 
 function label(value: string): string {
@@ -152,7 +148,11 @@ export function SourceCatalog({ onClose }: SourceCatalogProps) {
           </label>
           <label>
             Hazard
-            <select value={hazard} onChange={(event) => setHazard(event.target.value)}>
+            <select
+              aria-label="Hazard"
+              value={hazard}
+              onChange={(event) => setHazard(event.target.value)}
+            >
               <option value="">All hazards</option>
               {hazards.map((value) => (
                 <option key={value} value={value}>
@@ -163,7 +163,11 @@ export function SourceCatalog({ onClose }: SourceCatalogProps) {
           </label>
           <label>
             Role
-            <select value={role} onChange={(event) => setRole(event.target.value)}>
+            <select
+              aria-label="Role"
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+            >
               <option value="">All roles</option>
               {roles.map((value) => (
                 <option key={value} value={value}>

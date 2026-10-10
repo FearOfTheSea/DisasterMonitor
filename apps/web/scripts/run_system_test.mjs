@@ -1,4 +1,5 @@
 import { exerciseGroundImagery } from './system_ground_imagery.mjs';
+import { exerciseResponsiveWorkspaces } from './system_responsive_workspaces.mjs';
 import { spawn } from 'node:child_process';
 
 import { chromium } from '@playwright/test';
@@ -109,6 +110,7 @@ try {
     throw new Error('The rendered page identity did not match Disaster Monitor.');
   }
   await page.getByLabel('Active incidents monitoring').waitFor();
+  await exerciseResponsiveWorkspaces(page);
   await page.getByRole('button', { name: 'Layers', exact: true }).click();
   await page.getByRole('button', { name: 'Layers', exact: true }).click();
   if (

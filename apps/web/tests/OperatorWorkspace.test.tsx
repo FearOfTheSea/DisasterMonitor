@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,7 @@ import {
   fetchOperatorWorkspace,
 } from '@/features/operations/api/operatorWorkspaceClient';
 import { OperatorWorkspace } from '@/features/operations/ui/OperatorWorkspace';
+import type { OperatorWorkspaceState } from '@/shared/types/operatorWorkspace';
 
 vi.mock('@/features/operations/api/operatorWorkspaceClient', () => ({
   addAnalystNote: vi.fn(),
@@ -38,6 +39,7 @@ describe('OperatorWorkspace', () => {
   afterEach(() => cleanup());
 
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(fetchOperatorWorkspace).mockResolvedValue(workspace);
     vi.mocked(addAnalystNote).mockResolvedValue(workspace.notes[0]);
     vi.mocked(addBookmark).mockResolvedValue({
@@ -56,6 +58,33 @@ describe('OperatorWorkspace', () => {
       created_at: '2026-09-16T08:00:00Z',
       autonomous_actions: false,
     });
+  });
+
+  it('keeps the selected incident when an earlier workspace request resolves late', async () => {
+    let resolveEarlier!: (value: OperatorWorkspaceState) => void;
+    const currentWorkspace = {
+      ...workspace,
+      incident_id: 'event-2',
+      notes: [
+        { ...workspace.notes[0], incident_id: 'event-2', text: 'Current event note.' },
+      ],
+    };
+    vi.mocked(fetchOperatorWorkspace).mockImplementation((incidentId) =>
+      incidentId === 'event-1'
+        ? new Promise((resolve) => {
+            resolveEarlier = resolve;
+          })
+        : Promise.resolve(currentWorkspace),
+    );
+    const view = render(<OperatorWorkspace selectedIncidentId="event-1" />);
+    await waitFor(() => expect(fetchOperatorWorkspace).toHaveBeenCalled());
+
+    view.rerender(<OperatorWorkspace selectedIncidentId="event-2" />);
+    expect(await screen.findByText('Current event note.')).toBeVisible();
+    await act(async () => resolveEarlier(workspace));
+
+    expect(screen.getByText('Current event note.')).toBeVisible();
+    expect(screen.queryByText('Call the district desk.')).not.toBeInTheDocument();
   });
 
   it('makes the non-evidence boundary visible and adds tagged notes', async () => {

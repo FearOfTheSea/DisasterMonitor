@@ -10,6 +10,8 @@ URLs, or facts.
 
 ## Run
 
+For this initialized Windows checkout, see [Windows development](docs/windows-development.md).
+
 Backend:
 
 ```powershell

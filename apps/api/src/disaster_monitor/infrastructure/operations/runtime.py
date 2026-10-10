@@ -39,6 +39,7 @@ from disaster_monitor.infrastructure.composition_builders import (
     build_investigation_resources,
 )
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.event_loop import create_event_loop
 from disaster_monitor.infrastructure.geography.static_geographic_region_catalog import (
     StaticGeographicRegionCatalog,
 )
@@ -182,11 +183,15 @@ def run() -> None:
     arguments = parser.parse_args()
     settings = Settings()
     if arguments.command == "migrate":
-        asyncio.run(_migrate(settings))
+        asyncio.run(_migrate(settings), loop_factory=create_event_loop)
     elif arguments.command == "scheduler":
-        asyncio.run(_scheduler(settings, once=arguments.once))
+        asyncio.run(
+            _scheduler(settings, once=arguments.once), loop_factory=create_event_loop
+        )
     else:
-        asyncio.run(_worker(settings, once=arguments.once))
+        asyncio.run(
+            _worker(settings, once=arguments.once), loop_factory=create_event_loop
+        )
 
 
 if __name__ == "__main__":

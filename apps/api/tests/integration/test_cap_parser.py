@@ -35,7 +35,7 @@ def test_cap_parser_preserves_profile_multilingual_geometry_and_signature() -> N
 def test_cap_parser_preserves_source_point_encoded_as_zero_radius_circle() -> None:
     payload = (
         Path(__file__).parents[1] / "fixtures" / "cap_multilingual_update.xml"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     payload = payload.replace(
         "</area>", "<circle>10.5,106.5 0.0</circle></area>", 1
     ).encode()

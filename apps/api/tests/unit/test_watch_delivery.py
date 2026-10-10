@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 from datetime import UTC, datetime
 
 import httpx
@@ -111,5 +113,30 @@ def test_web_push_state_is_self_hosted_and_owner_only(tmp_path) -> None:
     reopened = LocalWebPushStateStore(path)
     assert reopened.application() == application
     assert reopened.subscriptions() == (("desktop-browser", subscription),)
-    assert path.stat().st_mode & 0o777 == 0o600
+    if os.name == "nt":
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$acl=[System.IO.File]::GetAccessControl($env:DM_PRIVATE_STATE_PATH); "
+                "@{protected=$acl.AreAccessRulesProtected; "
+                "identities=@($acl.Access | ForEach-Object {"
+                "$_.IdentityReference.Translate("
+                "[System.Security.Principal.SecurityIdentifier]).Value}); "
+                "owner=[System.Security.Principal.WindowsIdentity]::GetCurrent()"
+                ".User.Value} "
+                "| ConvertTo-Json -Compress",
+            ],
+            env={**os.environ, "DM_PRIVATE_STATE_PATH": str(path)},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        permissions = json.loads(result.stdout)
+        assert permissions["protected"] is True
+        assert permissions["identities"] == [permissions["owner"]]
+    else:
+        assert path.stat().st_mode & 0o777 == 0o600
     assert "private-vapid-key" in path.read_text(encoding="utf-8")

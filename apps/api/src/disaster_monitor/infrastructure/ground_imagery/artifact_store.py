@@ -16,6 +16,7 @@ from disaster_monitor.application.ports.ground_imagery.artifacts import (
 )
 
 _SAFE_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$")
+_WINDOWS_DEVICE_NAME = re.compile(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", re.I)
 
 
 class ArtifactStorageError(ImageryArtifactStoreError):
@@ -47,13 +48,10 @@ class FilesystemImageryArtifactStore:
         _validate_id(artifact_id)
         if len(content) > maximum_bytes:
             raise ArtifactStorageError("The imagery artifact exceeded its size limit.")
-        if self._used_bytes() + len(content) > self._maximum_total_bytes:
-            raise ArtifactStorageError("The imagery storage budget is full.")
         self._root.mkdir(parents=True, exist_ok=True)
         staging = self._root / ".staging"
         staging.mkdir(exist_ok=True)
-        target = self._root / f"{artifact_id}.bin"
-        metadata_target = self._root / f"{artifact_id}.json"
+        target, metadata_target = self._artifact_paths(artifact_id)
         if target.exists() or metadata_target.exists():
             existing = await self.read(artifact_id)
             if (
@@ -62,9 +60,11 @@ class FilesystemImageryArtifactStore:
             ):
                 return existing[0]
             raise ArtifactStorageError("The artifact identity is already published.")
-        temporary = staging / f"{artifact_id}.{uuid4().hex}.tmp"
+        if self._used_bytes() + len(content) > self._maximum_total_bytes:
+            raise ArtifactStorageError("The imagery storage budget is full.")
+        temporary = staging / f"{target.stem}.{uuid4().hex}.tmp"
         digest = hashlib.sha256()
-        metadata_temporary = staging / f"{artifact_id}.{uuid4().hex}.json.tmp"
+        metadata_temporary = staging / f"{target.stem}.{uuid4().hex}.json.tmp"
         published_content = False
         try:
             with temporary.open("wb") as handle:
@@ -78,7 +78,7 @@ class FilesystemImageryArtifactStore:
             stored = StoredArtifact(
                 artifact_id=artifact_id,
                 content_type=content_type,
-                storage_key=f"{artifact_id}.bin",
+                storage_key=target.name,
                 byte_count=len(content),
                 sha256=checksum,
                 etag=f'"{checksum}"',
@@ -123,13 +123,19 @@ class FilesystemImageryArtifactStore:
 
     async def read(self, artifact_id: str) -> tuple[StoredArtifact, bytes] | None:
         _validate_id(artifact_id)
-        metadata_path = self._root / f"{artifact_id}.json"
-        content_path = self._root / f"{artifact_id}.bin"
+        content_path, metadata_path = self._artifact_paths(artifact_id)
         if not metadata_path.is_file() or not content_path.is_file():
             return None
         try:
             document = json.loads(metadata_path.read_text(encoding="utf-8"))
             stored = StoredArtifact(**document)
+            if (
+                stored.artifact_id != artifact_id
+                or stored.storage_key != content_path.name
+            ):
+                raise ArtifactStorageError(
+                    "The imagery artifact identity does not match."
+                )
             content = content_path.read_bytes()
         except (OSError, ValueError, TypeError) as error:
             raise ArtifactStorageError(
@@ -144,10 +150,7 @@ class FilesystemImageryArtifactStore:
 
     async def delete(self, artifact_id: str) -> None:
         _validate_id(artifact_id)
-        for path in (
-            self._root / f"{artifact_id}.bin",
-            self._root / f"{artifact_id}.json",
-        ):
+        for path in self._artifact_paths(artifact_id):
             try:
                 path.unlink()
             except FileNotFoundError:
@@ -170,6 +173,14 @@ class FilesystemImageryArtifactStore:
                 document = json.loads(metadata_path.read_text(encoding="utf-8"))
                 artifact_id = str(document["artifact_id"])
                 _validate_id(artifact_id)
+                content_path, expected_metadata_path = self._artifact_paths(artifact_id)
+                if (
+                    metadata_path != expected_metadata_path
+                    or document["storage_key"] != content_path.name
+                ):
+                    raise ArtifactStorageError(
+                        "The imagery artifact identity does not match."
+                    )
                 modified_at = datetime.fromtimestamp(
                     metadata_path.stat().st_mtime, tz=older_than.tzinfo
                 )
@@ -191,6 +202,22 @@ class FilesystemImageryArtifactStore:
 
     async def aclose(self) -> None:
         return None
+
+    def _artifact_paths(self, artifact_id: str) -> tuple[Path, Path]:
+        # Domain IDs can contain colons, reserved device names, or case-only variants.
+        # Fixed-length hashes retain those identities on all supported filesystems.
+        stem = "artifact-" + hashlib.sha256(artifact_id.encode("utf-8")).hexdigest()
+        content = self._root / f"{stem}.bin"
+        metadata = self._root / f"{stem}.json"
+        legacy_name_supported = os.name != "nt" or (
+            ":" not in artifact_id and not _WINDOWS_DEVICE_NAME.match(artifact_id)
+        )
+        if not content.exists() and not metadata.exists() and legacy_name_supported:
+            legacy_content = self._root / f"{artifact_id}.bin"
+            legacy_metadata = self._root / f"{artifact_id}.json"
+            if legacy_content.exists() or legacy_metadata.exists():
+                return legacy_content, legacy_metadata
+        return content, metadata
 
     def _used_bytes(self) -> int:
         if not self._root.exists():

@@ -2,6 +2,8 @@
 
 import json
 import os
+import subprocess
+import tempfile
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -140,14 +142,40 @@ class LocalWebPushStateStore:
         return raw
 
     def _write(self, document: dict[str, object]) -> None:
-        temporary = self._path.with_suffix(f"{self._path.suffix}.partial")
-        temporary.write_text(
-            json.dumps(document, sort_keys=True, separators=(",", ":")),
-            encoding="utf-8",
-        )
-        temporary.chmod(0o600)
-        os.replace(temporary, self._path)
-        self._path.chmod(0o600)
+        descriptor, name = tempfile.mkstemp(dir=self._path.parent, suffix=".partial")
+        temporary = Path(name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                _restrict_to_owner(temporary)
+                json.dump(document, handle, sort_keys=True, separators=(",", ":"))
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, self._path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def _restrict_to_owner(path: Path) -> None:
+    if os.name != "nt":
+        path.chmod(0o600)
+        return
+    # Windows chmod controls read-only attributes, not access to private keys.
+    script = (
+        "$ErrorActionPreference='Stop'; "
+        "$sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User; "
+        "$acl=New-Object System.Security.AccessControl.FileSecurity; "
+        "$acl.SetOwner($sid); $acl.SetAccessRuleProtection($true,$false); "
+        "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule "
+        "($sid,'FullControl','Allow'); $acl.AddAccessRule($rule); "
+        "[System.IO.File]::SetAccessControl($env:DM_PRIVATE_STATE_PATH,$acl)"
+    )
+    subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+        env={**os.environ, "DM_PRIVATE_STATE_PATH": str(path.resolve())},
+        capture_output=True,
+        check=True,
+        timeout=10,
+    )
 
 
 PushSender = Callable[[str, bytes, str, str], Awaitable[None]]

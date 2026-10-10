@@ -34,3 +34,5 @@ apps/api/data/
 apps/web/data/
 session/
 deep-research-report-*.md
+docs/windows-development.md
+/docs/internal/

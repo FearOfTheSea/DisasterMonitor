@@ -275,3 +275,123 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (max-width: 850px) {
+  :root {
+    --header-height: 108px;
+  }
+  body {
+    padding-bottom: 0;
+  }
+  .app-shell {
+    overflow-y: auto;
+  }
+  .app-header {
+    display: grid;
+    gap: 0 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 44px 48px;
+    height: var(--header-height);
+    padding: 8px 12px;
+    z-index: 40;
+  }
+  .brand {
+    flex-basis: auto;
+    min-width: 0;
+  }
+  .brand h1 {
+    font-size: 16px;
+  }
+  .brand-mark {
+    flex-basis: 28px;
+    height: 28px;
+    width: 28px;
+  }
+  .desktop-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: space-between;
+  }
+  .desktop-nav > button,
+  .tools-menu-container > button {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+  .tools-menu {
+    right: 0;
+    top: 44px;
+  }
+  .header-actions {
+    display: flex;
+    gap: 2px;
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .header-actions > button:not(.command-palette-trigger),
+  .workspace-help {
+    display: flex;
+  }
+  .header-actions .assistant-toggle,
+  .header-actions .workspace-help-trigger {
+    font-size: 0;
+    gap: 0;
+    height: 36px;
+    min-height: 36px;
+    padding: 8px;
+    width: 36px;
+  }
+  .workspace-help {
+    border-left: 0;
+    margin-left: 0;
+    padding-left: 0;
+  }
+  .command-palette-trigger span,
+  .command-palette-trigger kbd {
+    display: none;
+  }
+  .workspace.observatory-explore,
+  .workspace.observatory-explore.observatory-reading-open {
+    display: flex;
+    height: auto;
+    min-height: calc(100dvh - var(--header-height));
+    overflow: visible;
+  }
+  .observatory-explore .active-incidents-panel {
+    max-height: 48dvh;
+  }
+  .observatory-explore .map-region {
+    height: 62dvh;
+    min-height: 520px;
+    width: 100%;
+  }
+  .observatory-explore .selected-event-pane,
+  .observatory-explore .assistant-panel {
+    height: calc(100dvh - var(--header-height));
+    left: 0;
+    position: fixed;
+    top: var(--header-height);
+    width: 100%;
+    z-index: 25;
+  }
+  .secondary-workspace,
+  .ground-workspace {
+    padding: 16px;
+  }
+  .workspace-subnav {
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  .desktop-nav {
+    gap: 0;
+  }
+  .desktop-nav > button,
+  .tools-menu-container > button {
+    padding-inline: 8px;
+  }
+  .brand h1 {
+    font-size: 14px;
+  }
+}

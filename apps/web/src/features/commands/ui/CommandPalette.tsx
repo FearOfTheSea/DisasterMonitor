@@ -116,7 +116,12 @@ export function CommandPalette({ commands, ref }: CommandPaletteProps) {
 
   return (
     <>
-      <button type="button" className="command-palette-trigger" onClick={show}>
+      <button
+        type="button"
+        className="command-palette-trigger"
+        aria-label="Search commands"
+        onClick={show}
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="6.5" />
           <path d="m16 16 4.5 4.5" />

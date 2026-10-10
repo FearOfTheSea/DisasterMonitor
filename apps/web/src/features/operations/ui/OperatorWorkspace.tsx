@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 import {
   addAnalystNote,
@@ -28,31 +28,36 @@ export function OperatorWorkspace({
   const [runbookSteps, setRunbookSteps] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshRevision, setRefreshRevision] = useState(0);
 
-  const refresh = useCallback(
-    async (signal?: AbortSignal) => {
+  useEffect(() => {
+    const controller = new AbortController();
+    async function refresh() {
       try {
-        setWorkspace(await fetchOperatorWorkspace(selectedIncidentId, signal));
+        const next = await fetchOperatorWorkspace(
+          selectedIncidentId,
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        setWorkspace(next);
         setError(null);
       } catch (caught) {
-        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
+        if (!controller.signal.aborted) {
           setError(
             caught instanceof Error ? caught.message : 'Workspace failed to load.',
           );
         }
       }
-    },
-    [selectedIncidentId],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => void refresh(controller.signal), 0);
+    }
+    const timer = window.setTimeout(() => void refresh(), 0);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [refresh]);
+  }, [selectedIncidentId, refreshRevision]);
+
+  const scopedWorkspace =
+    workspace?.incident_id === (selectedIncidentId ?? null) ? workspace : null;
 
   async function saveNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -104,7 +109,7 @@ export function OperatorWorkspace({
       setError(null);
       await action();
       setStatus(success);
-      await refresh();
+      setRefreshRevision((current) => current + 1);
     } catch (caught) {
       setStatus(null);
       setError(caught instanceof Error ? caught.message : 'Workspace update failed.');
@@ -206,21 +211,21 @@ export function OperatorWorkspace({
       </details>
       <div className="operator-workspace-list">
         {section !== 'bookmarks' &&
-          workspace?.notes.map((item) => (
+          scopedWorkspace?.notes.map((item) => (
             <article key={item.note_id}>
               <p>{item.text}</p>
               <small>{item.tags.join(' · ') || 'No tags'} · non-evidence</small>
             </article>
           ))}
         {section !== 'workspace' &&
-          workspace?.bookmarks.map((item) => (
+          scopedWorkspace?.bookmarks.map((item) => (
             <article key={item.bookmark_id}>
               <strong>{item.label}</strong>
               <small>{item.target_id} · non-evidence</small>
             </article>
           ))}
         {section !== 'bookmarks' &&
-          workspace?.runbooks.map((item) => (
+          scopedWorkspace?.runbooks.map((item) => (
             <article key={item.template_id}>
               <strong>{item.name}</strong>
               <small>{item.steps.length} manual steps · no autonomous actions</small>

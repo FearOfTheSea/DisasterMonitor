@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from collections.abc import Sequence
@@ -429,8 +430,9 @@ def _replace_directory_contents(target: Path, source: Path) -> None:
         else:
             child.unlink()
     shutil.copytree(source, target, symlinks=False, dirs_exist_ok=True)
-    for child in target.rglob("*"):
-        os.chown(child, owner.st_uid, owner.st_gid, follow_symlinks=False)
+    if sys.platform != "win32":
+        for child in target.rglob("*"):
+            os.chown(child, owner.st_uid, owner.st_gid, follow_symlinks=False)
 
 
 def _validate_restore_target(target: Path) -> None:

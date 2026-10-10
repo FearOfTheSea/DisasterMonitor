@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2] / "src" / "disaster_monitor"
 def test_application_services_are_compatibility_exports_only() -> None:
     violations = []
     for path in (ROOT / "application" / "services").rglob("*.py"):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         if any(
             isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
             for node in tree.body
@@ -25,7 +25,7 @@ def test_application_consumers_do_not_require_the_complete_operational_repositor
     for path in (ROOT / "application").rglob("*.py"):
         if "ports" in path.parts:
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         if any(
             isinstance(node, ast.Name) and node.id == "OperationalRepository"
             for node in ast.walk(tree)
@@ -38,7 +38,7 @@ def test_http_routes_delegate_conversation_and_evidence_reads() -> None:
     forbidden = {"ConversationStore", "OperationalRepository", "SnapshotReader"}
     violations = []
     for path in (ROOT / "presentation" / "http").glob("*_routes.py"):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         if any(
             isinstance(node, ast.Name) and node.id in forbidden
             for node in ast.walk(tree)
@@ -53,7 +53,7 @@ def test_severity_policy_is_owned_by_domain() -> None:
 
 def test_production_composition_owns_investigation_dependencies() -> None:
     for name in ("app_composition.py", "operations/runtime.py"):
-        source = (ROOT / "infrastructure" / name).read_text()
+        source = (ROOT / "infrastructure" / name).read_text(encoding="utf-8")
         assert "report.provider_registry" not in source
         assert "report.build_agent_tools" not in source
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +10,28 @@ vi.mock('@/features/sources/api/sourceCatalogClient', () => ({
 }));
 
 describe('SourceCatalog', () => {
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    window.localStorage.clear();
+  });
+
+  it('reports the loading error when an offline source record is malformed', async () => {
+    window.localStorage.setItem(
+      'disaster-monitor:pwa:source-catalog:v1',
+      JSON.stringify({
+        schemaVersion: 1,
+        cachedAt: '2026-10-07T00:00:00Z',
+        value: { catalog_version: '2.8.0', sources: [{ source_id: 'broken' }] },
+      }),
+    );
+    vi.mocked(fetchSourceCatalog).mockRejectedValue(new Error('Network unavailable.'));
+
+    render(<SourceCatalog onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Network unavailable.');
+    expect(screen.queryByText(/stale source catalog cached/)).not.toBeInTheDocument();
+  });
 
   it('is read-only and explains metadata separately from runtime state', async () => {
     vi.mocked(fetchSourceCatalog).mockResolvedValue({
@@ -65,5 +86,13 @@ describe('SourceCatalog', () => {
     expect(screen.getByText(/Registered; health checked on request/i)).toBeVisible();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+
+    vi.mocked(fetchSourceCatalog).mockRejectedValue(new Error('Network unavailable.'));
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Refresh metadata' }));
+    expect(await screen.findByText(/stale source catalog cached/)).toBeVisible();
+    expect(screen.getByText('NWS active weather alerts')).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

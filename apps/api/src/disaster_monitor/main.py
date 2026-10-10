@@ -109,7 +109,12 @@ app = create_app()
 
 def run() -> None:
     """Run the development server."""
-    uvicorn.run("disaster_monitor.main:app", host="127.0.0.1", port=8001)
+    uvicorn.run(
+        "disaster_monitor.main:app",
+        host="127.0.0.1",
+        port=8001,
+        loop="disaster_monitor.infrastructure.event_loop:create_event_loop",
+    )
 
 
 if __name__ == "__main__":
