@@ -1,5 +1,4 @@
 'use client';
-/* eslint-disable @next/next/no-img-element -- Contextual source previews retain attribution and original content. */
 import { useEffect, useState } from 'react';
 import {
   fetchSectionEvidence,
@@ -8,7 +7,8 @@ import {
 import type { StandaloneEvidenceResult } from '@/shared/api/generated/assistant';
 import type { CycloneMapLayer } from '@/shared/types/assistant';
 import { ExposureInspection } from './ExposureInspection';
-import { API_BASE_URL } from '@/shared/config/runtime';
+import { PhotographCollection } from './PhotographCollection';
+import { ReportedAccounts } from './ReportedAccounts';
 
 export function StandaloneEvidence({
   identifier,
@@ -69,14 +69,19 @@ export function StandaloneEvidence({
       {evidence.state === 'unconfigured' && (
         <p>This section requires operator configuration.</p>
       )}
-      {(evidence.facts ?? []).map((fact, index) => (
-        <p key={index}>
-          <strong>
-            {fact.label}: {String(fact.value)}
-          </strong>{' '}
-          · {fact.status} · {fact.source.publisher}
-        </p>
-      ))}
+      {evidence.reported_accounts?.length ? (
+        <ReportedAccounts key={key} accounts={evidence.reported_accounts} />
+      ) : null}
+      {(!evidence.reported_accounts?.length ? (evidence.facts ?? []) : []).map(
+        (fact, index) => (
+          <p key={index}>
+            <strong>
+              {fact.label}: {String(fact.value)}
+            </strong>{' '}
+            · {fact.status} · {fact.source.publisher}
+          </p>
+        ),
+      )}
       {(evidence.narratives ?? []).map((narrative, index) => (
         <p key={index}>{narrative}</p>
       ))}
@@ -152,38 +157,9 @@ export function StandaloneEvidence({
           {evidence.baseline.coping_capacity_index}. {evidence.baseline.interpretation}
         </p>
       )}
-      {evidence.media?.items.map((item) => (
-        <figure key={item.media_id}>
-          <img
-            src={`${API_BASE_URL}/media/${encodeURIComponent(item.media_id)}`}
-            alt={item.caption}
-            loading="lazy"
-          />
-          <figcaption>
-            {item.caption} · {item.credit} · {item.publisher} ·{' '}
-            {item.captured_at ?? 'Capture date unknown'} · {item.association_status}
-            <br />
-            <a href={item.source_page_url} target="_blank" rel="noreferrer">
-              Source and rights
-            </a>
-          </figcaption>
-        </figure>
-      ))}
-      {evidence.media && (
-        <>
-          <p>
-            {evidence.media.rejected_count} candidates rejected by association, rights,
-            or delivery gates.
-          </p>
-          <ul>
-            {evidence.media.rejection_reasons?.map(([reason, count]) => (
-              <li key={reason}>
-                {reason.replaceAll('_', ' ')}: {count}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      {evidence.media ? (
+        <PhotographCollection key={key} gallery={evidence.media} />
+      ) : null}
       {[...(evidence.limitations ?? []), ...(evidence.humanitarian?.gaps ?? [])].map(
         (limitation, index) => (
           <p className="event-brief-caution" key={index}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { useGroundImageryWorkflow } from '@/features/imagery/hooks/useGroundImageryWorkflow';
 import { GroundComparisons } from '@/features/imagery/ui/GroundComparisons';
@@ -33,6 +33,8 @@ type GroundImageryPanelProps = {
   incidentLabel: string;
   incidentTime: string | null;
   onClose: () => void;
+  findOnOpen?: boolean;
+  children?: ReactNode;
 };
 
 const DISPLAY_SENSORS: Sensor[] = ['sentinel-1', 'sentinel-2'];
@@ -46,6 +48,8 @@ function GroundImageryView({
   incidentLabel,
   incidentTime,
   onClose,
+  findOnOpen = false,
+  children,
 }: GroundImageryPanelProps) {
   const monitoring = useMonitoringReadiness();
   const {
@@ -60,7 +64,12 @@ function GroundImageryView({
     handleRegion,
     handleWatch,
     handlePrepare,
-  } = useGroundImageryWorkflow(incidentId, monitoring.available);
+  } = useGroundImageryWorkflow(
+    incidentId,
+    monitoring.available,
+    findOnOpen,
+    incidentTime !== null,
+  );
 
   return (
     <aside
@@ -121,7 +130,7 @@ function GroundImageryView({
 
           {error ? (
             <div className="ground-imagery-error" role="alert">
-              <strong>Ground view unavailable</strong>
+              <strong>{request ? 'Imagery notice' : 'Ground view unavailable'}</strong>
               <p>{error}</p>
               <button type="button" onClick={() => void load()}>
                 Try again
@@ -337,6 +346,12 @@ function GroundImageryView({
           </p>
         </div>
         <div className="ground-stage">
+          {children ? (
+            <details className="ground-imagery-section">
+              <summary>Event articles and impacts</summary>
+              {children}
+            </details>
+          ) : null}
           {request ? (
             <GroundComparisons request={request} />
           ) : (
@@ -448,6 +463,20 @@ function SelectionOutcome({
           <p className="ground-imagery-observation-time">
             Sensed through {formatImageryTime(selection.observation.captured_end)} ·{' '}
             {selection.observation.product_id}
+          </p>
+          <p>
+            Platform: {selection.observation.platform ?? 'Unknown'} ·{' '}
+            {selection.observation.source_url?.startsWith('https://') ? (
+              <a
+                href={selection.observation.source_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Acquisition source
+              </a>
+            ) : (
+              'Acquisition source URL unavailable'
+            )}
           </p>
           <DataAgeBadge
             kind="imagery_capture"

@@ -209,7 +209,7 @@ class DisasterMediaItemResponse(BaseModel):
     caption: str
     credit: str
     credit_kind: str
-    published_at: datetime
+    published_at: datetime | None
     captured_at: datetime | None = None
     license_name: str | None = None
     license_url: str | None = None

@@ -44,6 +44,12 @@ const apiSchemas = {
       activity_status: {
         $ref: '#/components/schemas/IncidentActivityStatus',
       },
+      collection_notices: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
       country: {
         anyOf: [
           {
@@ -1892,6 +1898,12 @@ const apiSchemas = {
   },
   DisasterMediaGallery: {
     properties: {
+      candidate_count: {
+        type: 'integer',
+      },
+      collection_limit: {
+        type: 'integer',
+      },
       event_id: {
         type: 'string',
       },
@@ -1930,6 +1942,21 @@ const apiSchemas = {
             },
           ],
           type: 'array',
+        },
+        type: 'array',
+      },
+      source_articles: {
+        items: {
+          $ref: '#/components/schemas/SourceReference',
+        },
+        type: 'array',
+      },
+      truncated: {
+        type: 'boolean',
+      },
+      unavailable_sources: {
+        items: {
+          $ref: '#/components/schemas/MediaUnavailableSource',
         },
         type: 'array',
       },
@@ -2057,8 +2084,15 @@ const apiSchemas = {
         type: 'string',
       },
       published_at: {
-        format: 'date-time',
-        type: 'string',
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       publisher: {
         type: 'string',
@@ -2074,6 +2108,12 @@ const apiSchemas = {
       },
       source_page_url: {
         type: 'string',
+      },
+      source_references: {
+        items: {
+          $ref: '#/components/schemas/MediaSourceAttribution',
+        },
+        type: 'array',
       },
       uncertainty: {
         type: 'string',
@@ -2181,8 +2221,15 @@ const apiSchemas = {
         type: 'string',
       },
       published_at: {
-        format: 'date-time',
-        type: 'string',
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       publisher: {
         type: 'string',
@@ -2231,6 +2278,22 @@ const apiSchemas = {
   },
   DiscoveryReportResponse: {
     properties: {
+      access_issue: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      claims: {
+        items: {
+          $ref: '#/components/schemas/ReportedImpactResponse',
+        },
+        type: 'array',
+      },
       event_time: {
         anyOf: [
           {
@@ -2248,10 +2311,30 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      geometry: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/EventGeometryResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       indexed_at: {
         anyOf: [
           {
             format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      location: {
+        anyOf: [
+          {
             type: 'string',
           },
           {
@@ -4683,6 +4766,76 @@ const apiSchemas = {
     enum: ['licensed_reuse', 'source_preview'],
     type: 'string',
   },
+  MediaSourceAttribution: {
+    properties: {
+      caption: {
+        type: 'string',
+      },
+      captured_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      credit: {
+        type: 'string',
+      },
+      credit_kind: {
+        $ref: '#/components/schemas/MediaCreditKind',
+      },
+      published_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      publisher: {
+        type: 'string',
+      },
+      rights_status: {
+        $ref: '#/components/schemas/MediaRightsStatus',
+      },
+      source_page_url: {
+        type: 'string',
+      },
+    },
+    required: [
+      'source_page_url',
+      'publisher',
+      'caption',
+      'credit',
+      'credit_kind',
+      'published_at',
+      'captured_at',
+      'rights_status',
+    ],
+    type: 'object',
+  },
+  MediaUnavailableSource: {
+    properties: {
+      detail: {
+        type: 'string',
+      },
+      publisher: {
+        type: 'string',
+      },
+      source_page_url: {
+        type: 'string',
+      },
+    },
+    required: ['source_page_url', 'publisher', 'detail'],
+    type: 'object',
+  },
   MonitoringReadinessResponse: {
     properties: {
       detail: {
@@ -5405,6 +5558,57 @@ const apiSchemas = {
       },
     },
     required: ['category', 'label', 'value', 'status', 'source'],
+    type: 'object',
+  },
+  ReportedImpact: {
+    properties: {
+      excerpt: {
+        type: 'string',
+      },
+      fact: {
+        $ref: '#/components/schemas/ReportedFact',
+      },
+      qualifiers: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+    },
+    required: ['fact', 'excerpt'],
+    type: 'object',
+  },
+  ReportedImpactResponse: {
+    properties: {
+      category: {
+        enum: [
+          'fatalities',
+          'injuries',
+          'displacement',
+          'roads_bridges',
+          'electricity',
+          'water',
+          'communications',
+        ],
+        type: 'string',
+      },
+      excerpt: {
+        type: 'string',
+      },
+      label: {
+        type: 'string',
+      },
+      qualifiers: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      value: {
+        type: 'string',
+      },
+    },
+    required: ['category', 'label', 'value', 'excerpt'],
     type: 'object',
   },
   ReportSectionResponse: {
@@ -6234,6 +6438,12 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      reported_accounts: {
+        items: {
+          $ref: '#/components/schemas/ReportedImpact',
+        },
+        type: 'array',
+      },
       retrieved_at: {
         format: 'date-time',
         type: 'string',
@@ -6777,6 +6987,7 @@ export type ActiveIncidentCountryResponse = {
 
 export type ActiveIncidentResponse = {
   activity_status?: IncidentActivityStatus;
+  collection_notices?: Array<string>;
   country?: ActiveIncidentCountryResponse | null;
   detection?: IncidentDetectionTimelineResponse;
   disaster: Disaster;
@@ -7218,6 +7429,8 @@ export type DisasterIncidentCoverageResponse = {
 };
 
 export type DisasterMediaGallery = {
+  candidate_count?: number;
+  collection_limit?: number;
   event_id: string;
   generated_at: string;
   items: Array<DisasterMediaItem>;
@@ -7225,6 +7438,9 @@ export type DisasterMediaGallery = {
   provider_ids: Array<string>;
   rejected_count: number;
   rejection_reasons?: Array<[string, number]>;
+  source_articles?: Array<SourceReference>;
+  truncated?: boolean;
+  unavailable_sources?: Array<MediaUnavailableSource>;
   warnings?: Array<string>;
 };
 
@@ -7253,12 +7469,13 @@ export type DisasterMediaItem = {
   license_url: string | null;
   media_id: string;
   physical_event_id: string;
-  published_at: string;
+  published_at: string | null;
   publisher: string;
   rights_status: MediaRightsStatus;
   role: MediaContentRole;
   source_id: string;
   source_page_url: string;
+  source_references?: Array<MediaSourceAttribution>;
   uncertainty: string;
   width: number;
 };
@@ -7279,7 +7496,7 @@ export type DisasterMediaItemResponse = {
   license_url?: string | null;
   media_id: string;
   physical_event_id: string;
-  published_at: string;
+  published_at: string | null;
   publisher: string;
   rights_status: string;
   role: string;
@@ -7290,9 +7507,13 @@ export type DisasterMediaItemResponse = {
 };
 
 export type DiscoveryReportResponse = {
+  access_issue?: string | null;
+  claims?: Array<ReportedImpactResponse>;
   event_time?: string | null;
   fatality_evidence?: Array<string>;
+  geometry?: EventGeometryResponse | null;
   indexed_at?: string | null;
+  location?: string | null;
   origin?: string | null;
   source: SourceResponse;
 };
@@ -8109,6 +8330,23 @@ export type MediaCreditKind = 'photographer' | 'agency' | 'publisher';
 
 export type MediaRightsStatus = 'licensed_reuse' | 'source_preview';
 
+export type MediaSourceAttribution = {
+  caption: string;
+  captured_at: string | null;
+  credit: string;
+  credit_kind: MediaCreditKind;
+  published_at: string | null;
+  publisher: string;
+  rights_status: MediaRightsStatus;
+  source_page_url: string;
+};
+
+export type MediaUnavailableSource = {
+  detail: string;
+  publisher: string;
+  source_page_url: string;
+};
+
 export type MonitoringReadinessResponse = {
   detail: string;
   durable_storage: boolean;
@@ -8338,6 +8576,27 @@ export type ReportedFact = {
   value: string;
 };
 
+export type ReportedImpact = {
+  excerpt: string;
+  fact: ReportedFact;
+  qualifiers?: Array<string>;
+};
+
+export type ReportedImpactResponse = {
+  category:
+    | 'fatalities'
+    | 'injuries'
+    | 'displacement'
+    | 'roads_bridges'
+    | 'electricity'
+    | 'water'
+    | 'communications';
+  excerpt: string;
+  label: string;
+  qualifiers?: Array<string>;
+  value: string;
+};
+
 export type ReportSectionResponse = {
   content: string;
   title: string;
@@ -8555,6 +8814,7 @@ export type StandaloneEvidenceResult = {
   narratives?: Array<string>;
   physical_event_id: string;
   reason_codes?: Array<string>;
+  reported_accounts?: Array<ReportedImpact>;
   retrieved_at: string;
   section: 'impacts' | 'warnings' | 'forecast' | 'exposure' | 'humanitarian' | 'media';
   state: 'available' | 'empty' | 'unconfigured' | 'degraded' | 'error';

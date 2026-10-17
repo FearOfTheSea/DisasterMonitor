@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -90,6 +91,16 @@ def test_region_resolver_prefers_associated_impact_over_modeled_or_point() -> No
     assert result.region.core == mapped.geometry
     assert result.region.source_footprints[0].evidence_id == "mapped"
     assert result.region.inspection != result.region.core
+
+
+@pytest.mark.parametrize("hazard", list(Disaster))
+def test_every_category_has_an_explicit_point_region_outcome(hazard):
+    context = replace(_context(point=Coordinate(1.5, 10.5)), disaster=hazard)
+    result = RegionResolver(GeodesicGeometryEngine()).resolve(context)
+    if hazard in (Disaster.DROUGHT, Disaster.TROPICAL_CYCLONE):
+        assert result.state is RegionResolutionState.NEEDS_REGION
+    else:
+        assert result.state is RegionResolutionState.RESOLVED
 
 
 def test_acquisition_footprint_cannot_become_an_impact_region() -> None:

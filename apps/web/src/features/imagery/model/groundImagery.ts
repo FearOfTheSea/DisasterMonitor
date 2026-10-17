@@ -4,6 +4,7 @@ import type {
   GroundImageryRequestResponse,
   GroundImagerySelectionResponse,
   GroundImagerySensorStatusResponse,
+  GroundImageryObservationResponse,
   Sensor,
 } from '@/shared/api/generated/assistant';
 
@@ -107,39 +108,42 @@ export function artifactForSelection(
   return artifacts?.find((artifact) => artifact.selection_id === selectionId);
 }
 
-export function automaticPreviewSelection(
+export function automaticPreparationSelections(
   request: GroundImageryPanelRequest,
-): GroundImagerySelectionResponse | undefined {
+): GroundImagerySelectionResponse[] {
   if (
     request.state === 'queued' ||
     request.jobs?.some(
       (job) =>
         job.request_version === request.request_version &&
-        ['queued', 'running', 'retryable'].includes(job.status),
+        ['queued', 'running', 'retry_wait', 'retryable'].includes(job.status),
     )
   )
-    return undefined;
-  for (const role of ['latest_useful', 'first_useful_after_onset']) {
-    for (const sensor of ['sentinel-1', 'sentinel-2'] as const) {
-      const selection = sensorStatus(request, sensor)?.selections.find(
-        (item) => item.role === role && item.observation,
-      );
-      if (selection)
-        return artifactForSelection(request.artifacts, selection.selection_id)
-          ? undefined
-          : selection;
-    }
-  }
-  for (const sensor of ['sentinel-1', 'sentinel-2'] as const) {
-    const selection = sensorStatus(request, sensor)?.selections.find(
-      (item) => item.role === 'pre_event_reference' && item.observation,
-    );
-    if (selection)
-      return artifactForSelection(request.artifacts, selection.selection_id)
-        ? undefined
-        : selection;
-  }
-  return undefined;
+    return [];
+  const captures = new Set<string>();
+  return request.sensors
+    .flatMap((sensor) => sensor.selections)
+    .toSorted((a, b) => {
+      const roles = [
+        'latest_useful',
+        'first_useful_after_onset',
+        'pre_event_reference',
+      ];
+      const rank = (role: string) =>
+        roles.includes(role) ? roles.indexOf(role) : roles.length;
+      return rank(a.role) - rank(b.role);
+    })
+    .filter((selection) => {
+      if (
+        !selection.observation ||
+        artifactForSelection(request.artifacts, selection.selection_id) ||
+        captures.has(selection.observation.observation_id)
+      )
+        return false;
+      captures.add(selection.observation.observation_id);
+      return true;
+    })
+    .slice(0, 4);
 }
 
 export type GroundComparisonPair = {
@@ -173,6 +177,11 @@ export function comparisonForSensor(
         selection.reason !== 'obscured',
     );
   if (!beforeSelection?.observation || !afterSelection?.observation) return undefined;
+  if (
+    captureRelationship(request, beforeSelection.observation) !== 'before' ||
+    captureRelationship(request, afterSelection.observation) !== 'after'
+  )
+    return undefined;
   const before = artifactForSelection(request.artifacts, beforeSelection.selection_id);
   const after = artifactForSelection(request.artifacts, afterSelection.selection_id);
   if (!before || !after || !matchingGrid(before, after)) return undefined;
@@ -183,6 +192,19 @@ export function comparisonForSensor(
   )
     return undefined;
   return { before, after, beforeSelection, afterSelection };
+}
+
+export function captureRelationship(
+  request: GroundImageryPanelRequest,
+  observation: GroundImageryObservationResponse,
+): 'before' | 'after' | 'observation' {
+  const onset = request.temporal_plan;
+  if (!onset.impact_start_earliest || !onset.impact_start_latest) return 'observation';
+  if (Date.parse(observation.captured_end) < Date.parse(onset.impact_start_earliest))
+    return 'before';
+  if (Date.parse(observation.captured_start) > Date.parse(onset.impact_start_latest))
+    return 'after';
+  return 'observation';
 }
 
 function matchingGrid(

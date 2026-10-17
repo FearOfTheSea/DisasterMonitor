@@ -5,6 +5,7 @@ import re
 import unicodedata
 from collections import Counter
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from disaster_monitor.application.media import (
@@ -14,7 +15,10 @@ from disaster_monitor.application.media import (
     MediaAssociationStatus,
     MediaCandidateAssessment,
     MediaContentRole,
+    MediaDiscoveryBatch,
     MediaEventContext,
+    MediaSourceAttribution,
+    MediaUnavailableSource,
 )
 from disaster_monitor.application.ports.event_media import (
     EventMediaProvider,
@@ -83,7 +87,50 @@ class EventMediaAssociationPolicy:
         *,
         now: datetime,
     ) -> MediaCandidateAssessment:
+        if re.search(
+            r"\b(?:file photo|archive|advertisement|unrelated|recommended|logo)\b",
+            candidate.caption,
+            re.I,
+        ):
+            return self._rejected(candidate, "media.association.unrelated_asset")
+        linked = any(
+            source.canonical_url == candidate.source_page_url
+            for source in context.collected_articles
+        )
+        if linked:
+            if context.event_time_known:
+                years = {
+                    int(y) for y in re.findall(r"\b(?:19|20)\d{2}\b", candidate.caption)
+                }
+                if years and context.event_time.year not in years:
+                    return self._rejected(
+                        candidate, "media.association.explicit_year_mismatch"
+                    )
+                if candidate.captured_at and _aware(candidate.captured_at) < _aware(
+                    context.event_time
+                ) - timedelta(days=1):
+                    return self._rejected(
+                        candidate, "media.association.capture_time_mismatch"
+                    )
+            elif re.search(r"\b(?:19|20)\d{2}\b", candidate.caption):
+                return self._rejected(
+                    candidate, "media.association.unresolved_capture_context"
+                )
+            return MediaCandidateAssessment(
+                candidate,
+                MediaAssociationStatus.EXACT_EVENT_LINK,
+                ("media.association.collected_article",),
+                (
+                    "Photograph belongs to a retained event article; article "
+                    "association does not independently verify the photographed "
+                    "place or time."
+                ),
+            )
+        if not context.event_time_known:
+            return self._rejected(candidate, "media.association.event_time_unknown")
         rules: list[str] = []
+        if candidate.published_at is None:
+            return self._rejected(candidate, "media.association.publication_unknown")
         published_at = _aware(candidate.published_at)
         event_time = _aware(context.event_time)
         now = _aware(now)
@@ -181,7 +228,7 @@ class EventMediaAssociationPolicy:
 
 
 class DisasterMediaService:
-    """Find a small gallery without changing event truth or report availability."""
+    """Retain a bounded collection without changing event truth or report access."""
 
     def __init__(
         self,
@@ -189,12 +236,14 @@ class DisasterMediaService:
         store: MediaAssetStore,
         *,
         clock: Callable[[], datetime],
-        target_count: int = 3,
+        target_count: int = 72,
         association_policy: EventMediaAssociationPolicy | None = None,
     ) -> None:
         self._providers = tuple(providers)
         self._store = store
         self._clock = clock
+        if not 1 <= target_count <= 180:
+            raise ValueError("Media collection must retain between 1 and 180 assets.")
         self._target_count = target_count
         self._association = association_policy or EventMediaAssociationPolicy()
 
@@ -205,34 +254,62 @@ class DisasterMediaService:
         rejection_reasons: Counter[str] = Counter()
         provider_ids: list[str] = []
         warnings: list[str] = []
+        unavailable: list[MediaUnavailableSource] = []
+        truncated = False
+        candidate_count = 0
         for provider in self._providers:
             provider_ids.append(provider.provider_id)
             try:
-                candidates = await provider.discover(context, now=now)
+                candidates = await asyncio.wait_for(
+                    provider.discover(context, now=now), timeout=120
+                )
             except Exception:
                 warnings.append(
                     f"Media discovery from {provider.provider_id} was unavailable."
                 )
                 continue
-            for candidate in candidates:
+            if isinstance(candidates, MediaDiscoveryBatch):
+                warnings.extend(candidates.warnings)
+                unavailable.extend(candidates.unavailable_sources)
+                truncated = truncated or candidates.truncated
+                candidates = candidates.candidates
+            candidate_count += len(candidates)
+            if len(candidates) > 180:
+                truncated = True
+            for candidate in candidates[:180]:
                 assessment = self._association.assess(candidate, context, now=now)
                 if assessment.status == MediaAssociationStatus.REJECTED:
                     rejected_count += 1
                     rejection_reasons[assessment.rule_ids[-1].rsplit(".", 1)[-1]] += 1
+                    unavailable.append(
+                        MediaUnavailableSource(
+                            candidate.source_page_url,
+                            candidate.publisher,
+                            "Photograph excluded: "
+                            + assessment.rule_ids[-1]
+                            .rsplit(".", 1)[-1]
+                            .replace("_", " "),
+                        )
+                    )
                     continue
                 accepted.append((provider, assessment))
 
         accepted.sort(key=_candidate_sort_key)
+        truncated = truncated or len(accepted) > 180
+        accepted = accepted[:180]
         items: list[DisasterMediaItem] = []
-        checksums: set[str] = set()
-        batch_size = max(self._target_count * 2, self._target_count)
+        checksums: dict[str, int] = {}
+        batch_size = 4
         for start in range(0, len(accepted), batch_size):
             if len(items) >= self._target_count:
+                truncated = True
                 break
             retrieval_batch = accepted[start : start + batch_size]
             retrievals = await asyncio.gather(
                 *(
-                    provider.retrieve(assessment.candidate)
+                    asyncio.wait_for(
+                        provider.retrieve(assessment.candidate), timeout=20
+                    )
                     for provider, assessment in retrieval_batch
                 ),
                 return_exceptions=True,
@@ -241,22 +318,55 @@ class DisasterMediaService:
                 retrieval_batch, retrievals, strict=True
             ):
                 if len(items) >= self._target_count:
+                    truncated = True
                     break
                 if isinstance(retrieved, BaseException):
                     rejected_count += 1
                     rejection_reasons["delivery_failed"] += 1
+                    unavailable.append(
+                        MediaUnavailableSource(
+                            assessment.candidate.source_page_url,
+                            assessment.candidate.publisher,
+                            (
+                                "Photograph delivery failed; source article remains "
+                                "available."
+                            ),
+                        )
+                    )
                     continue
                 try:
                     stored = self._store.put(retrieved)
                 except Exception:
                     rejected_count += 1
                     rejection_reasons["storage_failed"] += 1
+                    unavailable.append(
+                        MediaUnavailableSource(
+                            assessment.candidate.source_page_url,
+                            assessment.candidate.publisher,
+                            (
+                                "Media storage limit or storage failure; "
+                                "source article remains available."
+                            ),
+                        )
+                    )
                     continue
                 if stored.content_sha256 in checksums:
                     rejected_count += 1
                     rejection_reasons["duplicate_content"] += 1
+                    index = checksums[stored.content_sha256]
+                    items[index] = replace(
+                        items[index],
+                        source_references=tuple(
+                            dict.fromkeys(
+                                (
+                                    *items[index].source_references,
+                                    _attribution(assessment.candidate),
+                                )
+                            )
+                        ),
+                    )
                     continue
-                checksums.add(stored.content_sha256)
+                checksums[stored.content_sha256] = len(items)
                 candidate = assessment.candidate
                 items.append(
                     DisasterMediaItem(
@@ -285,6 +395,7 @@ class DisasterMediaService:
                         content_sha256=stored.content_sha256,
                         width=retrieved.width,
                         height=retrieved.height,
+                        source_references=(_attribution(candidate),),
                     )
                 )
         if not items:
@@ -296,6 +407,11 @@ class DisasterMediaService:
                 f"Only {len(items)} source-associated image(s) met the event and "
                 "media safety gates."
             )
+        if truncated:
+            warnings.append(
+                "Photograph collection truncated by acquisition or "
+                "retained-asset limits. Source articles remain available."
+            )
         return DisasterMediaGallery(
             event_id=context.event_id,
             physical_event_id=context.physical_event_id,
@@ -305,6 +421,11 @@ class DisasterMediaService:
             provider_ids=tuple(dict.fromkeys(provider_ids)),
             warnings=tuple(dict.fromkeys(warnings)),
             rejection_reasons=tuple(sorted(rejection_reasons.items())),
+            collection_limit=self._target_count,
+            candidate_count=candidate_count,
+            truncated=truncated,
+            unavailable_sources=tuple(dict.fromkeys(unavailable)),
+            source_articles=context.collected_articles,
         )
 
     async def aclose(self) -> None:
@@ -324,7 +445,9 @@ def _candidate_sort_key(
     return (
         association_rank,
         candidate.source_priority,
-        -_aware(candidate.published_at).timestamp(),
+        -_aware(candidate.published_at).timestamp()
+        if candidate.published_at
+        else float("inf"),
         candidate.candidate_id,
     )
 
@@ -371,3 +494,16 @@ def _location_terms(location: str) -> tuple[str, ...]:
 
 def _aware(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def _attribution(candidate: DisasterMediaCandidate) -> MediaSourceAttribution:
+    return MediaSourceAttribution(
+        candidate.source_page_url,
+        candidate.publisher,
+        candidate.caption,
+        candidate.credit,
+        candidate.credit_kind,
+        candidate.published_at,
+        candidate.captured_at,
+        candidate.rights_status,
+    )

@@ -51,7 +51,8 @@ describe('ground imagery client', () => {
     );
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
       incident_id: 'incident-1',
-      idempotency_key: 'ground-view:incident-1',
+      owner_scope: expect.stringMatching(/^desktop:/),
+      idempotency_key: 'incident-1',
       refresh_if_stale: true,
     });
 

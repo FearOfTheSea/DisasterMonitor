@@ -11,9 +11,10 @@ import {
   refreshGroundImageryRequest,
   setGroundImageryWatch,
 } from '@/features/imagery/api/groundImageryClient';
-import type {
-  GroundImageryPanelReadiness,
-  GroundImageryPanelRequest,
+import {
+  automaticPreparationSelections,
+  type GroundImageryPanelReadiness,
+  type GroundImageryPanelRequest,
 } from '@/features/imagery/model/groundImagery';
 import type {
   GroundImageryRegionRequest,
@@ -28,6 +29,8 @@ const WATCH_POLL_MS = 30_000;
 export function useGroundImageryWorkflow(
   incidentId: string,
   monitoringAvailable = false,
+  findOnOpen = false,
+  eventTimeKnown = true,
 ) {
   const [request, setRequest] = useState<GroundImageryPanelRequest>();
   const [readiness, setReadiness] = useState<GroundImageryPanelReadiness>();
@@ -46,18 +49,68 @@ export function useGroundImageryWorkflow(
       setSearchIsSlow(false);
       setError(undefined);
       setAction(undefined);
+      if (!eventTimeKnown) {
+        setError(
+          'Event time is unresolved. Publication time cannot target imagery. Article reporting remains available.',
+        );
+        setLoadState('error');
+        return;
+      }
       try {
-        const [, nextRequest] = await Promise.all([
-          fetchGroundImageryReadiness(signal).then((nextReadiness) => {
-            if (!signal?.aborted && version === requestVersion.current)
-              setReadiness(nextReadiness);
-            return nextReadiness;
-          }),
+        const [nextReadiness, nextRequest] = await Promise.all([
+          fetchGroundImageryReadiness(signal)
+            .then((nextReadiness) => {
+              if (!signal?.aborted && version === requestVersion.current)
+                setReadiness(nextReadiness);
+              return nextReadiness;
+            })
+            .catch(() => {
+              if (!signal?.aborted && version === requestVersion.current)
+                setError(
+                  'Rendering availability could not be checked; catalog results remain available.',
+                );
+              return undefined;
+            }),
           createGroundImageryRequest(incidentId, signal),
         ]);
         if (signal?.aborted || version !== requestVersion.current) return;
         setRequest(nextRequest);
         setLoadState('ready');
+        if (
+          findOnOpen &&
+          nextReadiness?.state === 'ready' &&
+          nextRequest.region.region
+        ) {
+          const selections = automaticPreparationSelections(nextRequest);
+          for (const selection of selections) {
+            if (signal?.aborted || version !== requestVersion.current) return;
+            setAction(`prepare:${selection.selection_id}`);
+            try {
+              const prepared = await prepareGroundImagerySelection(
+                nextRequest.request_id,
+                {
+                  sensor: selection.sensor,
+                  role: selection.role,
+                  overview: true,
+                },
+                signal,
+              );
+              if (signal?.aborted || version !== requestVersion.current) return;
+              setRequest(prepared);
+            } catch (caught) {
+              if (signal?.aborted || version !== requestVersion.current) return;
+              setError(
+                caught instanceof Error
+                  ? caught.message
+                  : 'Imagery preparation failed.',
+              );
+              // Quota, readiness, and provider errors stop automatic work.
+              break;
+            }
+          }
+          if (!signal?.aborted && version === requestVersion.current)
+            setAction(undefined);
+        }
       } catch (loadError) {
         if (signal?.aborted || version !== requestVersion.current) return;
         setError(
@@ -66,11 +119,20 @@ export function useGroundImageryWorkflow(
         setLoadState('error');
       }
     },
-    [incidentId],
+    [incidentId, findOnOpen, eventTimeKnown],
   );
 
   useEffect(() => {
     const controller = new AbortController();
+    if (findOnOpen) {
+      void Promise.resolve().then(() => {
+        if (!controller.signal.aborted) return load(controller.signal);
+      });
+      return () => {
+        controller.abort();
+        requestVersion.current += 1;
+      };
+    }
     void fetchGroundImageryReadiness(controller.signal)
       .then((next) => {
         if (!controller.signal.aborted) setReadiness(next);
@@ -87,7 +149,7 @@ export function useGroundImageryWorkflow(
       controller.abort();
       requestVersion.current += 1;
     };
-  }, [incidentId]);
+  }, [incidentId, findOnOpen, load]);
 
   useEffect(() => {
     if (loadState !== 'loading') return;

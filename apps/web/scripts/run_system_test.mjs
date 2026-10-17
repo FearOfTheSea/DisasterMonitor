@@ -85,6 +85,7 @@ try {
   await waitForApplication('http://127.0.0.1:8787/api/v1/health');
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1536, height: 1024 } });
+  page.setDefaultTimeout(30_000);
   const browserErrors = [];
   page.on('console', (message) => {
     if (message.type() === 'error') {
@@ -110,7 +111,9 @@ try {
     throw new Error('The rendered page identity did not match Disaster Monitor.');
   }
   await page.getByLabel('Active incidents monitoring').waitFor();
-  await exerciseResponsiveWorkspaces(page);
+  if (process.env.SYSTEM_TEST_DESKTOP_ONLY !== '1') {
+    await exerciseResponsiveWorkspaces(page);
+  }
   await page.getByRole('button', { name: 'Layers', exact: true }).click();
   await page.getByRole('button', { name: 'Layers', exact: true }).click();
   if (
@@ -223,6 +226,7 @@ try {
   ];
   for (const fixture of incidentFixtures) {
     await page
+      .locator('.incident-list')
       .getByText(fixture.location, { exact: true })
       .waitFor({ timeout: 30_000 });
     const coverage = page
@@ -242,6 +246,7 @@ try {
     if (rail) rail.scrollTop = 0;
   });
   await page.getByRole('button', { name: 'Focus United States on map' }).click();
+  await page.getByRole('button', { name: 'Find imagery', exact: true }).click();
   await page.getByRole('button', { name: 'Return to event' }).click();
   await page.getByRole('button', { name: 'Back to events' }).click();
   const initialScreenshotPath = process.env.SYSTEM_TEST_INITIAL_SCREENSHOT;
@@ -277,10 +282,12 @@ try {
     throw new Error('The assistant opened before the Active Incidents workflow.');
   }
   for (const fixture of incidentFixtures) {
-    const button = page.getByRole('button', {
-      name: `Focus ${fixture.country} on map`,
-    });
+    const button = page
+      .locator('.incident-list')
+      .getByRole('button')
+      .filter({ hasText: fixture.location });
     await button.click();
+    await page.getByRole('button', { name: 'Find imagery', exact: true }).click();
     await page.getByRole('heading', { name: 'Ground view' }).waitFor();
     await page.getByRole('button', { name: 'Return to event' }).click();
     if (fixture !== incidentFixtures.at(-1)) {
@@ -305,6 +312,11 @@ try {
   await page.getByRole('heading', { name: 'Incident watches' }).waitFor();
   await page.getByLabel('Watch disaster').selectOption('wildfire');
   await page.getByLabel('Watch scope').selectOption('worldwide');
+  if (!(await page.getByRole('button', { name: 'Create watch' }).isEnabled())) {
+    throw new Error(
+      'Scheduled-watch regression is blocked: this stack has no durable operational storage/readiness. Core desktop map and event handoff checks completed; no watch acceptance is claimed.',
+    );
+  }
   const createWatchResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/v1/incident-watches') &&

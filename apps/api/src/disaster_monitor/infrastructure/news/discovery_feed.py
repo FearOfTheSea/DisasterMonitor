@@ -159,6 +159,10 @@ class GdeltDiscoveryFeed:
                                 ),
                                 text="",
                                 indexed_at=item.indexed_at,
+                                access_issue=(
+                                    "Publisher content unavailable or restricted; "
+                                    "article lead retained."
+                                ),
                             )
                         )
                 yield DiscoveryBatch(

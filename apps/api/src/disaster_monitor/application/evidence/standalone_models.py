@@ -11,6 +11,7 @@ from disaster_monitor.domain.evidence import ReportedFact
 from disaster_monitor.domain.exposure import ExposureAnalysis
 from disaster_monitor.domain.hazard_context import BaselineVulnerabilityContext
 from disaster_monitor.domain.humanitarian import HumanitarianContextSnapshot
+from disaster_monitor.domain.reported_impacts import ReportedImpact
 from disaster_monitor.domain.warnings import CapAlert
 
 EvidenceSection = Literal[
@@ -42,3 +43,4 @@ class StandaloneEvidenceResult:
     humanitarian: HumanitarianContextSnapshot | None = None
     baseline: BaselineVulnerabilityContext | None = None
     media: DisasterMediaGallery | None = None
+    reported_accounts: tuple[ReportedImpact, ...] = ()

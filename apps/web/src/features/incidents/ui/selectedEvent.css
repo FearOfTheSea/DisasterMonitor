@@ -127,6 +127,33 @@
 .event-uncertainty {
   color: var(--warning) !important;
 }
+
+.event-impact-accounts,
+.event-collected-article {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+.event-impact-accounts summary {
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.event-collected-article h4 {
+  margin: 0;
+  line-height: 1.5;
+}
+.event-report-times {
+  font-size: 12px !important;
+}
+.event-photograph {
+  margin: 16px 0;
+  overflow-wrap: anywhere;
+}
+.event-photograph img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
 .event-source-list {
   list-style: none;
   margin: 0;

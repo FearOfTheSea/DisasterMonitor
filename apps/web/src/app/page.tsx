@@ -15,6 +15,7 @@ import { DiscoveryScanControls } from '@/features/incidents/ui/DiscoveryScanCont
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
 import { SelectedEventPane } from '@/features/incidents/ui/SelectedEventPane';
 import { disasterLabel } from '@/features/incidents/ui/incidentPresentation';
+import { ArticleCollection } from '@/features/incidents/ui/ArticleCollection';
 import { GroundImageryPanel } from '@/features/imagery/ui/GroundImageryPanel';
 import { WorkspaceHelp } from '@/features/help/ui/WorkspaceHelp';
 import { DisasterMap } from '@/features/map/ui/DisasterMap';
@@ -395,11 +396,28 @@ export default function Home() {
       {groundOpen && selectedIncident && (
         <div className="ground-workspace">
           <GroundImageryPanel
+            findOnOpen
             incidentId={selectedIncident.event_id}
             incidentLabel={`${disasterLabel(selectedIncident.disaster)} · ${selectedIncident.location}`}
             incidentTime={selectedIncident.event_time}
             onClose={() => openPane('event')}
-          />
+          >
+            {selectedIncident.discovery_reports?.length ? (
+              <ArticleCollection
+                key={selectedIncident.event_id}
+                reports={selectedIncident.discovery_reports}
+                notices={selectedIncident.collection_notices}
+              />
+            ) : (
+              <a
+                href={selectedIncident.source.canonical_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {selectedIncident.source.publisher}: {selectedIncident.source.title}
+              </a>
+            )}
+          </GroundImageryPanel>
         </div>
       )}
       <SecondaryWorkspaces navigation={navigation} operationsProps={operationsProps} />

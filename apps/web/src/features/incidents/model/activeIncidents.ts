@@ -94,6 +94,7 @@ export type ActiveIncident = {
   event_time: string | null;
   event_time_basis?: 'reported' | 'unknown';
   discovery_reports?: import('@/shared/api/generated/assistant').DiscoveryReportResponse[];
+  collection_notices?: string[];
   independent_origins?: number | null;
   event_time_end?: string | null;
   event_time_precision?: EventTimePrecision;

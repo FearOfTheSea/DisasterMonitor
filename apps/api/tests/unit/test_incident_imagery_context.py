@@ -11,6 +11,9 @@ from disaster_monitor.application.ground_imagery.resolve_region import (
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
+from disaster_monitor.application.incidents.discovery_projection import (
+    discovery_incident,
+)
 from disaster_monitor.application.incidents.imagery_context import (
     ActiveIncidentImageryContextReader,
     EarthquakeProductImageryContextReader,
@@ -28,8 +31,15 @@ from disaster_monitor.domain.disaster import (
     SourceAuthority,
     SourceReference,
 )
+from disaster_monitor.domain.discovery import DiscoveryEvent
 from disaster_monitor.domain.earthquake_context import EarthquakeContext
-from disaster_monitor.domain.events import point_event_geometry
+from disaster_monitor.domain.events import (
+    EventCoordinate,
+    EventGeometry,
+    EventGeometryKind,
+    point_event_geometry,
+)
+from disaster_monitor.domain.imagery.regions import RegionSourceKind
 from disaster_monitor.infrastructure.ground_imagery.geometry import (
     GeodesicGeometryEngine,
 )
@@ -146,3 +156,40 @@ async def test_canonical_usgs_incident_requests_usgs_products() -> None:
 
     assert result is context
     assert service.event_ids == [context.incident_id]
+
+
+async def test_reported_discovery_area_is_context_not_a_damage_perimeter():
+    now = datetime(2026, 10, 18, tzinfo=UTC)
+    source = SourceReference(
+        "news", "Daily", "Drought area", "https://daily.example/area", now, None, now
+    )
+    geometry = EventGeometry(
+        EventGeometryKind.AREA,
+        source,
+        coordinates=tuple(
+            EventCoordinate(lat, lon)
+            for lat, lon in ((10, 100), (10, 101), (11, 101), (10, 100))
+        ),
+    )
+    event = DiscoveryEvent(
+        "discovery:area",
+        Disaster.DROUGHT,
+        "Reported province",
+        now,
+        geometry,
+        (),
+        0,
+        supplemental_sources=(source,),
+    )
+    incident = discovery_incident(event, now)
+
+    class Incidents:
+        async def lookup(self, identifier):
+            return incident
+
+    context = await ActiveIncidentImageryContextReader(
+        cast(ActiveIncidentsService, Incidents())
+    ).get_imagery_context(event.event_id)
+    assert context.evidence[0].source.source_kind is RegionSourceKind.REPORTED_PLACE
+    assert context.evidence[0].source.reference == source.canonical_url
+    assert "not a measured damage" in context.evidence[0].semantic_role

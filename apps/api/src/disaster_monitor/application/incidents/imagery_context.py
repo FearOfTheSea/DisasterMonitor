@@ -68,7 +68,9 @@ class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
                 area = None
             if area is not None:
                 source_kind = (
-                    RegionSourceKind.MODELED_HAZARD
+                    RegionSourceKind.REPORTED_PLACE
+                    if incident.discovery_event is not None
+                    else RegionSourceKind.MODELED_HAZARD
                     if geometry.estimated
                     else RegionSourceKind.MAPPED_IMPACT
                 )
@@ -77,20 +79,23 @@ class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
                         evidence_id=f"event-geometry:{incident.event_id}",
                         geometry=area,
                         source=RegionSource(
-                            source_id=incident.source.source_id,
+                            source_id=geometry.source.source_id,
                             source_kind=source_kind,
-                            publisher=incident.source.publisher,
-                            reference=incident.source.canonical_url,
-                            captured_at=incident.source.retrieved_at,
-                            attribution=incident.source.publisher,
+                            publisher=geometry.source.publisher,
+                            reference=geometry.source.canonical_url,
+                            captured_at=geometry.source.retrieved_at,
+                            attribution=geometry.source.publisher,
                         ),
                         association=(
                             AssociationStatus.POSSIBLE
                             if geometry.estimated
+                            or incident.discovery_event is not None
                             else AssociationStatus.CONFIRMED
                         ),
                         semantic_role=(
-                            "modeled event geography"
+                            "source-reported area; not a measured damage perimeter"
+                            if incident.discovery_event is not None
+                            else "modeled event geography"
                             if geometry.estimated
                             else "source event geography"
                         ),

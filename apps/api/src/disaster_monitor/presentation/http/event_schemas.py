@@ -134,6 +134,26 @@ class DiscoveryReportResponse(BaseModel):
     event_time: datetime | None = None
     origin: str | None = None
     fatality_evidence: list[str] = Field(default_factory=list)
+    claims: list["ReportedImpactResponse"] = Field(default_factory=list)
+    location: str | None = None
+    geometry: EventGeometryResponse | None = None
+    access_issue: str | None = None
+
+
+class ReportedImpactResponse(BaseModel):
+    category: Literal[
+        "fatalities",
+        "injuries",
+        "displacement",
+        "roads_bridges",
+        "electricity",
+        "water",
+        "communications",
+    ]
+    label: str
+    value: str
+    excerpt: str
+    qualifiers: list[str] = Field(default_factory=list)
 
 
 class ActiveIncidentResponse(BaseModel):
@@ -147,6 +167,7 @@ class ActiveIncidentResponse(BaseModel):
     event_time: datetime | None
     event_time_basis: Literal["reported", "unknown"] = "reported"
     discovery_reports: list[DiscoveryReportResponse] = Field(default_factory=list)
+    collection_notices: list[str] = Field(default_factory=list)
     independent_origins: int | None = None
     event_time_end: datetime | None = None
     event_time_precision: EventTimePrecision = EventTimePrecision.EXACT

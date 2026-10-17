@@ -8,6 +8,8 @@ import {
   displayActiveIncidentCountry,
   type IncidentMapRecord,
 } from '@/features/incidents/model/activeIncidents';
+import { ArticleCollection } from './ArticleCollection';
+import { StandaloneEvidence } from '@/features/event-brief/public';
 import { DisasterIcon } from './DisasterIcon';
 import { disasterLabel, relatedInvestigation } from './incidentPresentation';
 import type { CycloneMapLayer } from '@/shared/types/assistant';
@@ -61,6 +63,7 @@ export function SelectedEventPane({
   onGroundView: () => void;
   onForecastLayers?: (layers: CycloneMapLayer[]) => void;
 }) {
+  const [photosOpen, setPhotosOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('overview');
   const heading = useRef<HTMLHeadingElement>(null);
   const tabList = useRef<HTMLDivElement>(null);
@@ -165,6 +168,14 @@ export function SelectedEventPane({
       >
         {tab === 'overview' && (
           <>
+            <div className="event-actions">
+              <button type="button" onClick={onAsk}>
+                {relatedInvestigation(incident).label}
+              </button>
+              <button type="button" onClick={onGroundView}>
+                Find imagery
+              </button>
+            </div>
             <section>
               <h3>What is known</h3>
               <p>
@@ -219,86 +230,38 @@ export function SelectedEventPane({
                 and coverage limits are detailed in the Evidence tab.
               </p>
             </section>
-            <section>
-              <h3>Sources</h3>
-              <ul className="event-source-list">
-                {sources.map((source) => (
-                  <li key={`${source.source_id}:${source.canonical_url}`}>
-                    <a href={source.canonical_url} target="_blank" rel="noreferrer">
-                      {source.publisher}: {source.title}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </section>
-            {incident.discovery_reports?.length ? (
-              <section aria-label="Discovery reporting">
-                <h3>Attributed discovery reports</h3>
-                <p>
-                  Reporting is evidence of a claim, not automatic confirmation. Shared
-                  origins are not independent confirmation; unknown lineage remains
-                  uncertain.
-                </p>
+            {!incident.discovery_reports?.length ? (
+              <section>
+                <h3>Sources</h3>
                 <ul className="event-source-list">
-                  {incident.discovery_reports.map((report) => (
-                    <li key={report.source.canonical_url}>
-                      <a
-                        href={report.source.canonical_url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {report.source.publisher}: {report.source.title}
+                  {sources.map((source) => (
+                    <li key={`${source.source_id}:${source.canonical_url}`}>
+                      <a href={source.canonical_url} target="_blank" rel="noreferrer">
+                        {source.publisher}: {source.title}
                       </a>
-                      <p>
-                        Published:{' '}
-                        {report.source.published_at
-                          ? dateTime(report.source.published_at)
-                          : 'Unknown'}{' '}
-                        · Updated:{' '}
-                        {report.source.updated_at
-                          ? dateTime(report.source.updated_at)
-                          : 'Unknown'}{' '}
-                        · Indexed:{' '}
-                        {report.indexed_at ? dateTime(report.indexed_at) : 'Unknown'} ·
-                        Retrieved: {dateTime(report.source.retrieved_at)}
-                      </p>
-                      {report.origin ? (
-                        <p>Shared reporting origin: {report.origin}</p>
-                      ) : (
-                        <p>Reporting independence unknown.</p>
-                      )}
-                      {report.fatality_evidence?.length ? (
-                        report.fatality_evidence.map((claim) => (
-                          <blockquote key={claim}>
-                            {claim}
-                            <br />
-                            Reported by {report.source.publisher}; unverified claim.
-                          </blockquote>
-                        ))
-                      ) : (
-                        <p>
-                          No affirmative fatality evidence extracted. Unknown does not
-                          mean zero.
-                        </p>
-                      )}
                     </li>
                   ))}
                 </ul>
-                {!incident.geometry ? (
-                  <p>
-                    Location unresolved. This event remains inspectable in the list.
-                  </p>
-                ) : null}
               </section>
             ) : null}
-            <div className="event-actions">
-              <button type="button" onClick={onAsk}>
-                {relatedInvestigation(incident).label}
-              </button>
-              <button type="button" onClick={onGroundView}>
-                Open Ground view
-              </button>
-            </div>
+            {incident.discovery_reports?.length ? (
+              <>
+                <ArticleCollection
+                  key={incident.event_id}
+                  reports={incident.discovery_reports}
+                  notices={incident.collection_notices}
+                />
+                <details onToggle={(event) => setPhotosOpen(event.currentTarget.open)}>
+                  <summary>Article photographs</summary>
+                  {photosOpen ? (
+                    <StandaloneEvidence
+                      identifier={incident.event_id}
+                      section="media"
+                    />
+                  ) : null}
+                </details>
+              </>
+            ) : null}
           </>
         )}
         {tab === 'evidence' && incident.event_time_basis === 'unknown' ? (

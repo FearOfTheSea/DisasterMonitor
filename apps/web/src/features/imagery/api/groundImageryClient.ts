@@ -11,10 +11,17 @@ import { matchesApiSchema } from '@/shared/api/generated/assistant';
 import { readJsonResponse } from '@/shared/api/http';
 import { API_BASE_URL } from '@/shared/config/runtime';
 
+let desktopScope: string | undefined;
+function imageryScope() {
+  desktopScope ??= `desktop:${crypto.randomUUID()}`;
+  return desktopScope;
+}
+
 export async function createGroundImageryRequest(
   incidentId: string,
   signal?: AbortSignal,
 ): Promise<GroundImageryRequestResponse> {
+  const scope = imageryScope();
   return requestJson<GroundImageryRequestResponse>(
     'GroundImageryRequestResponse',
     `${API_BASE_URL}/ground-imagery/requests`,
@@ -23,7 +30,8 @@ export async function createGroundImageryRequest(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         incident_id: incidentId,
-        idempotency_key: `ground-view:${incidentId}`,
+        owner_scope: scope,
+        idempotency_key: incidentId,
         refresh_if_stale: true,
       }),
       signal,
@@ -99,6 +107,7 @@ export async function setGroundImageryWatch(
 export async function prepareGroundImagerySelection(
   requestId: string,
   payload: GroundImageryPrepareRequest,
+  signal?: AbortSignal,
 ): Promise<GroundImageryRequestResponse> {
   return requestJson<GroundImageryRequestResponse>(
     'GroundImageryRequestResponse',
@@ -107,6 +116,7 @@ export async function prepareGroundImagerySelection(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal,
     },
   );
 }

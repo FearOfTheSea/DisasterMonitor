@@ -6,6 +6,7 @@ from typing import Protocol
 from disaster_monitor.application.media import (
     DisasterMediaCandidate,
     DisasterMediaGallery,
+    MediaDiscoveryBatch,
     MediaEventContext,
     RetrievedMedia,
     StoredMediaAsset,
@@ -18,7 +19,7 @@ class EventMediaProvider(Protocol):
 
     async def discover(
         self, context: MediaEventContext, *, now: datetime
-    ) -> tuple[DisasterMediaCandidate, ...]: ...
+    ) -> tuple[DisasterMediaCandidate, ...] | MediaDiscoveryBatch: ...
 
     async def retrieve(self, candidate: DisasterMediaCandidate) -> RetrievedMedia: ...
 

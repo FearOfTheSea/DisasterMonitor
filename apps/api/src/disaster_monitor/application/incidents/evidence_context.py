@@ -25,11 +25,10 @@ class IncidentEvidenceContextReader:
 
     async def read(self, identifier: str) -> IncidentEvidenceContext:
         incident = await self._incidents.lookup(identifier)
-        if incident.discovery_event and incident.discovery_event.event_time is None:
-            raise LookupError(
-                "Event time is unresolved; "
-                "publication time cannot target event evidence."
-            )
+        time_known = (
+            not incident.discovery_event
+            or incident.discovery_event.event_time is not None
+        )
         country = (
             self._catalog.get_by_alpha3(incident.country.country_code)
             if incident.country
@@ -61,6 +60,12 @@ class IncidentEvidenceContextReader:
             (country.canonical_name, *country.aliases) if country else (),
             first.latitude if first else None,
             first.longitude if first else None,
+            collected_articles=tuple(
+                r.article.source for r in incident.discovery_event.reports
+            )
+            if incident.discovery_event
+            else (),
+            event_time_known=time_known,
         )
         event = (
             DisasterEvent(
@@ -79,7 +84,7 @@ class IncidentEvidenceContextReader:
                 provider_tier=incident.provider_tier,
                 observation_kind=incident.observation_kind,
             )
-            if country
+            if country and time_known
             else None
         )
         return IncidentEvidenceContext(media, event, area)

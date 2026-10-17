@@ -3,7 +3,7 @@
 import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from html import unescape
 from html.parser import HTMLParser
 from typing import Any, cast
@@ -16,6 +16,7 @@ from disaster_monitor.application.media import MediaCreditKind
 class _Figure:
     image_url: str | None
     caption: str
+    in_article: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,10 +42,17 @@ class _MetadataParser(HTMLParser):
         self._figure_image: str | None = None
         self._caption_depth = 0
         self._caption_parts: list[str] = []
+        self._article_depth = 0
+        self._excluded_depth = 0
+        self._figure_in_article = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = {name.casefold(): value or "" for name, value in attrs}
         tag = tag.casefold()
+        if tag == "article":
+            self._article_depth += 1
+        if tag in {"aside", "nav", "header", "footer"}:
+            self._excluded_depth += 1
         if tag == "meta":
             key = (values.get("property") or values.get("name") or "").casefold()
             content = values.get("content", "").strip()
@@ -58,6 +66,9 @@ class _MetadataParser(HTMLParser):
             if self._figure_depth == 0:
                 self._figure_image = None
                 self._caption_parts = []
+                self._figure_in_article = (
+                    self._article_depth > 0 and self._excluded_depth == 0
+                )
             self._figure_depth += 1
         elif tag == "img" and self._figure_depth > 0 and self._figure_image is None:
             self._figure_image = next(
@@ -73,6 +84,10 @@ class _MetadataParser(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.casefold()
+        if tag == "article":
+            self._article_depth = max(0, self._article_depth - 1)
+        if tag in {"aside", "nav", "header", "footer"}:
+            self._excluded_depth = max(0, self._excluded_depth - 1)
         if tag == "script" and self._script_parts is not None:
             value = "".join(self._script_parts).strip()
             if value:
@@ -87,6 +102,7 @@ class _MetadataParser(HTMLParser):
                     _Figure(
                         self._figure_image,
                         _clean_text(" ".join(self._caption_parts)),
+                        self._figure_in_article,
                     )
                 )
 
@@ -144,7 +160,6 @@ def _article_metadata(html: str, page_url: str) -> _ArticleMetadata | None:
     )
     captured_at = _first_datetime(
         (image_object or {}).get("dateCreated"),
-        (image_object or {}).get("uploadDate"),
     )
     return _ArticleMetadata(
         title=title,
@@ -156,6 +171,40 @@ def _article_metadata(html: str, page_url: str) -> _ArticleMetadata | None:
         published_at=published_at,
         captured_at=captured_at,
     )
+
+
+def _article_photographs(html: str, page_url: str) -> tuple[_ArticleMetadata, ...]:
+    """Lead metadata plus captioned article figures, never arbitrary page images."""
+    from dataclasses import replace
+
+    lead = _article_metadata(html, page_url)
+    if lead is None:
+        return ()
+    parser = _MetadataParser()
+    parser.feed(html)
+    photographs = {lead.image_url: lead}
+    for figure in parser.figures:
+        if not figure.in_article or not figure.caption or not figure.image_url:
+            continue
+        url = urljoin(page_url, unescape(figure.image_url.strip()))
+        if urlsplit(url).scheme != "https" or url in photographs:
+            continue
+        if re.search(
+            r"\b(?:logo|advertisement|recommended|related story|file photo|archive)\b",
+            figure.caption,
+            re.I,
+        ):
+            continue
+        credit, kind = _credit(None, figure.caption)
+        photographs[url] = replace(
+            lead,
+            image_url=url,
+            caption=figure.caption,
+            credit=credit,
+            credit_kind=kind,
+            captured_at=None,
+        )
+    return tuple(photographs.values())
 
 
 def _json_ld_objects(
@@ -259,7 +308,7 @@ def _first_datetime(*values: object) -> datetime | None:
             parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
         except ValueError:
             continue
-        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+        return parsed if parsed.tzinfo is not None else None
     return None
 
 

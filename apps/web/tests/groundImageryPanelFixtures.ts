@@ -115,6 +115,13 @@ const grid = {
 
 export const comparisonRequest: GroundImageryRequestResponse = {
   ...request,
+  temporal_plan: {
+    ...request.temporal_plan,
+    impact_start_earliest: '2024-05-19T12:00:00Z',
+    impact_start_latest: '2024-05-19T12:00:00Z',
+    onset_precision: 'exact',
+    onset_source_id: 'controlled-source',
+  },
   region: {
     ...request.region,
     region: {

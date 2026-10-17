@@ -1,6 +1,8 @@
 """Bounded, shared worldwide publication scans with incremental persistence."""
 
 import asyncio
+import logging
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -15,6 +17,8 @@ from disaster_monitor.domain.discovery import (
     group_reports,
     supplement_events,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class DiscoveryScanService:
@@ -35,6 +39,7 @@ class DiscoveryScanService:
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._active: dict[int, DiscoveryRun] = {}
         self._lock = asyncio.Lock()
+        self._persistence_failures: OrderedDict[str, DiscoveryRun] = OrderedDict()
 
     async def start(self, days: int = 7) -> DiscoveryRun:
         interval = ReportingInterval.at_start(days, self._clock())
@@ -58,6 +63,8 @@ class DiscoveryScanService:
             return run
 
     async def get(self, scan_id: str) -> DiscoveryRun:
+        if scan_id in self._persistence_failures:
+            return self._persistence_failures[scan_id]
         run = await self._store.read(scan_id)
         if run is None:
             raise LookupError("Scan not found or retained scan expired.")
@@ -109,6 +116,13 @@ class DiscoveryScanService:
                                 + batch.failed_operations,
                                 truncated=run.truncated or batch.truncated or capped,
                             )
+                            run = replace(
+                                run,
+                                events=tuple(
+                                    replace(event, collection_notices=run.issues)
+                                    for event in run.events
+                                ),
+                            )
                             await self._store.save(run)
                             if capped:
                                 break
@@ -140,6 +154,13 @@ class DiscoveryScanService:
                 if status == "completed":
                     status = "incomplete"
             run = replace(run, status=status, finished_at=self._clock())
+            run = replace(
+                run,
+                events=tuple(
+                    replace(event, collection_notices=run.issues)
+                    for event in run.events
+                ),
+            )
             await self._store.save(run)
         except asyncio.CancelledError:
             await self._store.save(
@@ -154,6 +175,26 @@ class DiscoveryScanService:
                 )
             )
             raise
+        except Exception:
+            logger.exception("Discovery scan persistence failed: %s", run.scan_id)
+            notice = (
+                "Scan persistence failed. Available results remain in this API "
+                "process only; durable retention is unavailable."
+            )
+            self._persistence_failures[run.scan_id] = replace(
+                run,
+                status="incomplete" if run.reports else "failed",
+                finished_at=self._clock(),
+                issues=(*run.issues, notice),
+                events=tuple(
+                    replace(
+                        event, collection_notices=(*event.collection_notices, notice)
+                    )
+                    for event in run.events
+                ),
+            )
+            while len(self._persistence_failures) > 8:
+                self._persistence_failures.popitem(last=False)
         finally:
             self._tasks.pop(run.scan_id, None)
             if self._active.get(run.interval.days, run).scan_id == run.scan_id:

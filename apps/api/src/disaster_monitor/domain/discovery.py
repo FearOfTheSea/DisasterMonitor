@@ -45,6 +45,7 @@ class DiscoveryArticle:
     geometry: EventGeometry | None = None
     event_key: str | None = None
     origin: str | None = None
+    access_issue: str | None = None
 
     def __post_init__(self) -> None:
         for value in (
@@ -80,6 +81,7 @@ class DiscoveryEvent:
     reports: tuple[AssessedReport, ...]
     independent_origins: int
     supplemental_sources: tuple[SourceReference, ...] = ()
+    collection_notices: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +178,13 @@ def group_reports(reports: tuple[AssessedReport, ...]) -> tuple[DiscoveryEvent, 
         groups.setdefault(_association_key(report), {})[
             report.article.source.canonical_url
         ] = report
+    # Undated reports cannot create window events. Strongly associated retained
+    # accounts can still be inspected separately under an eligible event.
+    for report in reports:
+        if report.eligibility == "unknown_publication" and report.disaster is not None:
+            retained_group = groups.get(_association_key(report))
+            if retained_group is not None:
+                retained_group[report.article.source.canonical_url] = report
     events = []
     for key, values in groups.items():
         group = tuple(values.values())

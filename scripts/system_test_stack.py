@@ -74,6 +74,19 @@ def main() -> int:
         discovery_store=discovery_store
     )
     fake_model = FakeSystemModel()
+    inspection = os.environ.get("INSPECTION_ACCEPTANCE") == "1"
+    if inspection:
+        from inspection_acceptance_fixtures import (
+            inspection_discovery,
+            inspection_ground,
+            inspection_media,
+        )
+
+        from disaster_monitor.infrastructure.media.memory_store import (
+            InMemoryMediaAssetStore,
+        )
+
+        media_store = InMemoryMediaAssetStore(maximum_assets=180)
     app = create_app(
         settings=Settings(
             allowed_origins="http://127.0.0.1:4173",
@@ -81,7 +94,18 @@ def main() -> int:
             country_catalog_root=Path(catalog_directory.name),
         ),
         overrides=AppDependencyOverrides(
-            discovery_scans=build_system_discovery(discovery_store),
+            discovery_scans=inspection_discovery(discovery_store)
+            if inspection
+            else build_system_discovery(discovery_store),
+            event_media=inspection_media(media_store) if inspection else None,
+            media_asset_store=media_store if inspection else None,
+            ground_imagery_service=inspection_ground(
+                active_incidents,
+                Path(catalog_directory.name) / "imagery",
+                rate_limited=os.environ.get("INSPECTION_RATE_LIMITS", "1") != "0",
+            )
+            if inspection
+            else None,
             model=fake_model,
             agent_model=StructuredAgentModel(
                 fake_model,

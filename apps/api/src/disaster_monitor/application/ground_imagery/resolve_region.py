@@ -162,9 +162,13 @@ class GroundImageryRegionResolver:
                 ),
             )
 
-        if context.verified_point is not None and (
-            context.disaster is not Disaster.TROPICAL_CYCLONE
-            or context.verified_point_is_land_impact
+        if (
+            context.verified_point is not None
+            and context.disaster in HAZARD_FALLBACK_RADII_KM
+            and (
+                context.disaster is not Disaster.TROPICAL_CYCLONE
+                or context.verified_point_is_land_impact
+            )
         ):
             radius = (
                 HAZARD_FALLBACK_RADII_KM[context.disaster]
@@ -302,9 +306,13 @@ class GroundImageryRegionResolver:
                 margin_km=margin,
                 point_fallback=False,
             )
-        if context.verified_point is not None and (
-            context.disaster is not Disaster.TROPICAL_CYCLONE
-            or context.verified_point_is_land_impact
+        if (
+            context.verified_point is not None
+            and context.disaster in HAZARD_FALLBACK_RADII_KM
+            and (
+                context.disaster is not Disaster.TROPICAL_CYCLONE
+                or context.verified_point_is_land_impact
+            )
         ):
             radius = (
                 HAZARD_FALLBACK_RADII_KM[context.disaster]

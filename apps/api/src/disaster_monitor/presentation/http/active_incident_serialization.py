@@ -1,11 +1,15 @@
 """Shared serialization for list, lookup, and standalone incident evidence."""
 
 from disaster_monitor.application.incidents.models import ActiveIncident
+from disaster_monitor.domain.reported_impacts import extract_reported_impacts
 from disaster_monitor.presentation.http.common_response_serialization import (
     _event_geometry_response,
     _source_response,
 )
-from disaster_monitor.presentation.http.event_schemas import DiscoveryReportResponse
+from disaster_monitor.presentation.http.event_schemas import (
+    DiscoveryReportResponse,
+    ReportedImpactResponse,
+)
 from disaster_monitor.presentation.http.schemas import (
     ActiveIncidentCountryResponse,
     ActiveIncidentResponse,
@@ -47,8 +51,46 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                 event_time=report.article.event_time,
                 origin=report.article.origin,
                 fatality_evidence=list(report.fatality_evidence),
+                claims=[
+                    ReportedImpactResponse.model_validate(
+                        {
+                            "category": claim.fact.category,
+                            "label": claim.fact.label,
+                            "value": claim.fact.value,
+                            "excerpt": claim.excerpt,
+                            "qualifiers": list(claim.qualifiers),
+                        }
+                    )
+                    for claim in extract_reported_impacts(
+                        report.article.text,
+                        report.article.source,
+                        location=report.article.location,
+                    )
+                ],
+                location=report.article.location,
+                geometry=_event_geometry_response(report.article.geometry),
+                access_issue=report.article.access_issue
+                or (
+                    "Article content was not available for extraction."
+                    if not report.article.text
+                    else None
+                ),
             )
             for report in incident.discovery_event.reports
+        ]
+        if incident.discovery_event
+        else [],
+        collection_notices=[
+            (
+                "Only collected reports are shown. Discovery has bounded "
+                "article and query budgets; coverage is not exhaustive."
+            ),
+            (
+                "Impact extraction uses English source sentences up to 600 "
+                "characters from retained text (at most 20,000 characters "
+                "per article); missing claims remain unknown."
+            ),
+            *incident.discovery_event.collection_notices,
         ]
         if incident.discovery_event
         else [],

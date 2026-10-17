@@ -213,6 +213,7 @@ export async function exerciseGroundImagery(page) {
       .includes('/ground-imagery/artifacts/artifact%3Asystem-fixture/tiles/'),
   );
   await page.getByRole('button', { name: 'Focus Thailand on map' }).click();
+  await page.getByRole('button', { name: 'Find imagery', exact: true }).click();
   await page.getByRole('heading', { name: 'Ground view' }).waitFor();
   await page.getByText('The source point is a broad event locator.').waitFor();
   await page.getByLabel('Center latitude').fill('15');

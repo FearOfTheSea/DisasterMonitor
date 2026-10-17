@@ -80,7 +80,113 @@ describe('Ground imagery preparation and comparison', () => {
     );
 
     expect(await screen.findByText('Prepared observation')).toBeVisible();
-    expect(screen.getByAltText('Sentinel-1 radar after capture')).toBeVisible();
+    expect(screen.getByAltText('Sentinel-1 radar observation capture')).toBeVisible();
+  });
+
+  it('finds and prepares distinct captures on opening without another confirmation', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      artifacts: [],
+    });
+    api.fetchGroundImageryReadiness.mockResolvedValue({
+      state: 'ready',
+      detail: 'Rendering configured.',
+    });
+    api.prepareGroundImagerySelection.mockResolvedValue(comparisonRequest);
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="Flood"
+        incidentTime="2024-05-19T12:00:00Z"
+        findOnOpen
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Matched before / after')).toBeVisible();
+    expect(api.createGroundImageryRequest).toHaveBeenCalledTimes(1);
+    expect(api.prepareGroundImagerySelection).toHaveBeenCalled();
+  });
+
+  it('explains unresolved time without sending a fabricated imagery target', async () => {
+    render(
+      <GroundImageryPanel
+        incidentId="undated"
+        incidentLabel="Drought"
+        incidentTime={null}
+        findOnOpen
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      await screen.findByText(/Publication time cannot target imagery/),
+    ).toBeVisible();
+    expect(api.createGroundImageryRequest).not.toHaveBeenCalled();
+  });
+
+  it('discards a pending imagery response after switching events', async () => {
+    let finish: (value: typeof request) => void = () => undefined;
+    api.createGroundImageryRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const props = {
+      incidentLabel: 'Flood',
+      incidentTime: '2024-05-19T12:00:00Z',
+      findOnOpen: true,
+      onClose: vi.fn(),
+    };
+    const view = render(<GroundImageryPanel {...props} incidentId="old" />);
+    await act(async () => undefined);
+    view.rerender(<GroundImageryPanel {...props} incidentId="new" />);
+    await screen.findByText(/Request ground-imagery:1/);
+    await act(async () => finish({ ...request, request_id: 'old-result' }));
+    expect(screen.queryByText(/old-result/)).toBeNull();
+  });
+
+  it('does not add preparation work when a retained request is already queued', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      state: 'queued',
+      artifacts: [],
+    });
+    api.fetchGroundImageryReadiness.mockResolvedValue({
+      state: 'ready',
+      detail: 'Rendering configured.',
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="Flood"
+        incidentTime="2024-05-19T12:00:00Z"
+        findOnOpen
+        onClose={vi.fn()}
+      />,
+    );
+    await screen.findByText('Region basis');
+    expect(api.prepareGroundImagerySelection).not.toHaveBeenCalled();
+  });
+
+  it('does not label a prepared observation after impact when onset is unknown', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...comparisonRequest,
+      temporal_plan: request.temporal_plan,
+      artifacts: [comparisonRequest.artifacts![1]],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="Cyclone"
+        incidentTime="2024-05-19T12:00:00Z"
+        findOnOpen
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      await screen.findByAltText('Sentinel-1 radar observation capture'),
+    ).toBeVisible();
+    expect(screen.queryByAltText(/after capture/)).toBeNull();
   });
 
   it('previews a usable radar capture ahead of a newer obscured optical capture', async () => {
@@ -138,7 +244,9 @@ describe('Ground imagery preparation and comparison', () => {
       screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
 
-    expect(await screen.findByAltText('Sentinel-1 radar after capture')).toBeVisible();
+    expect(
+      await screen.findByAltText('Sentinel-1 radar observation capture'),
+    ).toBeVisible();
     expect(screen.queryByAltText('Sentinel-2 optical after capture')).toBeNull();
   });
 

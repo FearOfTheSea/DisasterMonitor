@@ -44,6 +44,7 @@ from disaster_monitor.domain.events import EventGeometryKind
 from disaster_monitor.domain.exposure import ExposureGeometry, ExposureGeometryRole
 from disaster_monitor.domain.hazards.taxonomy import DEFAULT_HAZARD_TAXONOMY
 from disaster_monitor.domain.imagery.regions import polygon_from_geojson
+from disaster_monitor.domain.reported_impacts import inspect_report_impacts
 from disaster_monitor.domain.warnings import WarningLifecycleState
 
 
@@ -379,16 +380,26 @@ class StandaloneEvidenceService:
                     forecast_layers=packet.supplemental_geometry,
                     limitations=packet.warnings,
                 )
+            accounts = tuple(
+                account
+                for report in (packet.world_state.reports if packet.world_state else ())
+                for account in inspect_report_impacts(report)
+            )
             return replace(
                 result,
                 state="degraded"
                 if batch.issues or packet.partial
                 else "available"
-                if packet.facts or packet.narratives
+                if accounts
                 else "empty",
-                facts=packet.facts,
-                narratives=packet.narratives,
-                limitations=packet.warnings,
+                facts=tuple(account.fact for account in accounts),
+                reported_accounts=accounts,
+                limitations=(
+                    *packet.warnings,
+                    "All admitted in-scope source accounts are shown. "
+                    "Counts are not added or selected as truth; "
+                    "dates and geographic scopes may differ.",
+                ),
             )
         except Exception:
             return replace(

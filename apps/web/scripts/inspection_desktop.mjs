@@ -1,0 +1,241 @@
+// Controlled desktop acceptance. Start INSPECTION_ACCEPTANCE=1 stack separately.
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { chromium, expect } from '@playwright/test';
+
+const output = process.env.INSPECTION_SCREENSHOT_DIR;
+assert(output, 'Set INSPECTION_SCREENSHOT_DIR outside the repository.');
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({
+  viewport: { width: 1536, height: 1024 },
+  reducedMotion: 'reduce',
+});
+const errors = [];
+const warnings = [];
+const checks = [];
+page.on('pageerror', (error) => errors.push(error.message));
+page.on('console', (message) => {
+  if (message.type() === 'warning') warnings.push(message.text());
+  if (
+    message.type() === 'error' ||
+    (message.type() === 'warning' &&
+      !message.text().startsWith('Canvas2D: Multiple readback operations'))
+  )
+    errors.push(message.text());
+});
+const capture = async (name) =>
+  page.screenshot({ path: join(output, `${name}.png`), fullPage: false });
+const check = (name, evidence) => checks.push({ name, result: 'passed', evidence });
+try {
+  await page.context().route('https://controlled.example/**', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<title>Controlled source fixture</title><h1>Controlled source fixture</h1><p>Not live news.</p>',
+    }),
+  );
+  await page.goto('http://127.0.0.1:4173/?c=10%2C105&z=5', {
+    waitUntil: 'domcontentloaded',
+  });
+  assert.equal(await page.title(), 'Disaster Monitor');
+  await page
+    .getByRole('button', { name: 'Scan the world', exact: true })
+    .press('Enter');
+  await expect(page.getByText(/8 events from 57 collected reports/)).toBeVisible({
+    timeout: 20000,
+  });
+  check(
+    'Page identity and meaningful content',
+    'Disaster Monitor; scan returned eight controlled events across seven categories.',
+  );
+  const map = page.getByLabel('Interactive map', { exact: true });
+  const box = await map.boundingBox();
+  assert(box);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(
+    page.getByRole('heading', { name: 'Flood', exact: true, level: 2 }),
+  ).toBeVisible();
+  check('Map selection', 'Clicking the source point opens the flood event pane.');
+  await page.getByRole('button', { name: 'Back to events' }).click();
+  await page
+    .getByRole('button', { name: 'Focus Region 1 on map', exact: true })
+    .click();
+  const impact = page.getByRole('region', { name: 'Reported impacts' });
+  await impact.getByText('Fatalities · 8 accounts', { exact: true }).press('Enter');
+  await expect(impact.getByText('Fatalities: 0', { exact: true })).toBeVisible();
+  await expect(
+    impact.getByText(/Correction: no deaths were reported in North District/),
+  ).toBeVisible();
+  await impact.getByText('Fatalities: 0', { exact: true }).scrollIntoViewIfNeeded();
+  await capture('inspection-claims');
+  const popupPromise = page.waitForEvent('popup');
+  await impact.getByRole('link').first().click();
+  const popup = await popupPromise;
+  await expect(
+    popup.getByRole('heading', { name: 'Controlled source fixture' }),
+  ).toBeVisible();
+  assert(popup.url().startsWith('https://controlled.example/flood/'));
+  await popup.close();
+  check(
+    'Claim attribution and navigation',
+    'Zero and differing preliminary counts retain source links, scope, dates, excerpts, and correction wording.',
+  );
+  await impact.getByText('Fatalities · 8 accounts', { exact: true }).press('Enter');
+  const articles = page.getByRole('region', { name: 'Dated articles' });
+  assert.equal(await articles.getByRole('link').count(), 5);
+  await articles
+    .getByRole('button', { name: 'Next articles', exact: true })
+    .press('Enter');
+  assert.equal(await articles.getByRole('link').count(), 2);
+  await page.getByText('Unknown publication times · 1', { exact: true }).press('Enter');
+  await expect(
+    page.getByText(/Indexing and retrieval times do not establish publication time/),
+  ).toBeVisible();
+  await capture('inspection-articles');
+  check(
+    'Article pagination and missing dates',
+    'Five latest dated links, two remaining dated links, and one separately labelled unknown publication. Enter operates paging and disclosures.',
+  );
+  await page.getByText('Article photographs', { exact: true }).press('Enter');
+  const photographs = page.getByRole('region', {
+    name: 'Article photograph collection',
+  });
+  await expect(
+    photographs.getByRole('heading', { name: 'Article photographs · 7 retained' }),
+  ).toBeVisible();
+  await photographs.getByRole('img').first().scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      photographs
+        .getByRole('img')
+        .first()
+        .evaluate((img) => img.complete && img.naturalWidth > 0),
+    )
+    .toBe(true);
+  assert.equal(await photographs.getByRole('img').count(), 5);
+  await photographs.getByRole('button', { name: 'Next photographs' }).press('Enter');
+  assert.equal(await photographs.getByRole('img').count(), 2);
+  await expect(photographs.getByText(/Photograph delivery failed/)).toBeVisible();
+  await capture('inspection-photographs');
+  check(
+    'Photograph browsing',
+    'Seven synthetic test assets, paged five/two; actual image endpoint decodes, broken delivery retains article link, acquisition/storage limits remain visible.',
+  );
+  const searching = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/ground-imagery/requests') &&
+      response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Find imagery', exact: true }).press('Enter');
+  assert.equal((await searching).status(), 202);
+  await expect(
+    page
+      .getByRole('heading', { name: 'Prepared observation' })
+      .or(page.getByRole('heading', { name: 'Matched before / after' })),
+  ).toBeVisible({ timeout: 30000 });
+  await expect(
+    page.getByRole('button', { name: 'Preparing…', exact: true }),
+  ).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page
+        .locator('.ground-single-preview img')
+        .evaluate((img) => img.complete && img.naturalWidth > 0),
+    )
+    .toBe(true);
+  await page.getByText('Event articles and impacts', { exact: true }).press('Enter');
+  await expect(
+    page.getByRole('heading', { name: 'Collected articles · 8' }),
+  ).toBeVisible();
+  await page.getByText('Event articles and impacts', { exact: true }).press('Enter');
+  await capture('inspection-imagery');
+  check(
+    'One-action imagery and nonblocking reporting',
+    'Find imagery triggers real controlled Ground catalog/preparation; dated artifacts and coverage map render; articles remain accessible in the imagery view.',
+  );
+  await page.getByRole('button', { name: 'Return to event' }).click();
+  await page.getByRole('button', { name: 'Back to events' }).click();
+  const categories = [
+    'Earthquake',
+    'Flood',
+    'Wildfire',
+    'Landslide',
+    'Tropical cyclone',
+    'Volcanic eruption',
+    'Drought',
+  ];
+  for (let index = 0; index < 7; index++) {
+    await page
+      .getByRole('button', { name: `Focus Region ${index} on map`, exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: categories[index], exact: true, level: 2 }),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Find imagery', exact: true })
+      .press('Enter');
+    await expect(page.getByRole('heading', { name: 'Region basis' })).toBeVisible({
+      timeout: 20000,
+    });
+    if (index === 0)
+      await expect(
+        page.getByText('No recent observation', { exact: true }).first(),
+      ).toBeVisible();
+    if (index === 2)
+      await expect(page.getByText(/provider error/i).first()).toBeVisible();
+    if (index === 4)
+      await expect(
+        page.getByText('Region needed', { exact: true }).first(),
+      ).toBeVisible();
+    await page.getByRole('button', { name: 'Return to event' }).click();
+    await page.getByRole('button', { name: 'Back to events' }).click();
+  }
+  check(
+    'Seven category imagery paths',
+    'All seven inspected. Earthquake has no acquisition; wildfire has provider failure; cyclone needs region; drought uses a supported area.',
+  );
+  await page
+    .getByRole('button', { name: 'Inspect Unresolved Valley', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Find imagery', exact: true }).press('Enter');
+  await expect(page.getByText(/Publication time cannot target imagery/)).toBeVisible();
+  await page.getByText('Event articles and impacts', { exact: true }).press('Enter');
+  await expect(page.getByText(/Location unresolved for mapping/)).toBeVisible();
+  await capture('inspection-unresolved');
+  check(
+    'Missing location/time',
+    'Unlocated drought remains inspectable; no fabricated imagery target or onset.',
+  );
+  assert.equal(await page.locator('nextjs-portal').count(), 0);
+  assert.deepEqual(errors, []);
+  check(
+    'Console health and framework overlay',
+    'No console errors, page exceptions, or Next.js overlay. Chromium Canvas2D performance hints are recorded separately.',
+  );
+  await writeFile(
+    join(output, 'inspection-browser-results.json'),
+    JSON.stringify(
+      {
+        url: 'http://127.0.0.1:4173',
+        viewport: { width: 1536, height: 1024 },
+        controlled: true,
+        checks,
+        errors,
+        warnings,
+      },
+      null,
+      2,
+    ),
+  );
+  console.log(JSON.stringify({ checks, errors }, null, 2));
+} catch (error) {
+  await capture('inspection-failure');
+  await writeFile(
+    join(output, 'inspection-browser-failure.txt'),
+    String(error) + '\n' + errors.join('\n'),
+  );
+  throw error;
+} finally {
+  await browser.close();
+}

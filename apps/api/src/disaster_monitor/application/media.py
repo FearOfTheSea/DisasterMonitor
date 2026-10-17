@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from disaster_monitor.domain.disaster import Disaster
+from disaster_monitor.domain.evidence_types import SourceReference
 
 
 class MediaAssociationStatus(StrEnum):
@@ -52,6 +53,8 @@ class MediaEventContext:
     country_terms: tuple[str, ...]
     latitude: float | None
     longitude: float | None
+    collected_articles: tuple[SourceReference, ...] = ()
+    event_time_known: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,12 +72,39 @@ class DisasterMediaCandidate:
     caption: str
     credit: str
     credit_kind: MediaCreditKind
-    published_at: datetime
+    published_at: datetime | None
     captured_at: datetime | None
     license_name: str | None
     license_url: str | None
     rights_status: MediaRightsStatus
     source_priority: int
+
+
+@dataclass(frozen=True, slots=True)
+class MediaUnavailableSource:
+    source_page_url: str
+    publisher: str
+    detail: str
+
+
+@dataclass(frozen=True, slots=True)
+class MediaDiscoveryBatch:
+    candidates: tuple[DisasterMediaCandidate, ...]
+    warnings: tuple[str, ...] = ()
+    unavailable_sources: tuple[MediaUnavailableSource, ...] = ()
+    truncated: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class MediaSourceAttribution:
+    source_page_url: str
+    publisher: str
+    caption: str
+    credit: str
+    credit_kind: MediaCreditKind
+    published_at: datetime | None
+    captured_at: datetime | None
+    rights_status: MediaRightsStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,7 +145,7 @@ class DisasterMediaItem:
     caption: str
     credit: str
     credit_kind: MediaCreditKind
-    published_at: datetime
+    published_at: datetime | None
     captured_at: datetime | None
     license_name: str | None
     license_url: str | None
@@ -128,6 +158,7 @@ class DisasterMediaItem:
     content_sha256: str
     width: int
     height: int
+    source_references: tuple[MediaSourceAttribution, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,3 +171,8 @@ class DisasterMediaGallery:
     provider_ids: tuple[str, ...]
     warnings: tuple[str, ...] = ()
     rejection_reasons: tuple[tuple[str, int], ...] = ()
+    collection_limit: int = 72
+    candidate_count: int = 0
+    truncated: bool = False
+    unavailable_sources: tuple[MediaUnavailableSource, ...] = ()
+    source_articles: tuple[SourceReference, ...] = ()

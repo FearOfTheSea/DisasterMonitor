@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
@@ -17,6 +18,7 @@ from disaster_monitor.application.media_analysis.event_media import (
     EventMediaAssociationPolicy,
 )
 from disaster_monitor.domain.disaster import Disaster
+from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.infrastructure.media.memory_store import InMemoryMediaAssetStore
 
 NOW = datetime(2026, 8, 15, 12, tzinfo=UTC)
@@ -105,6 +107,60 @@ def test_association_rejects_an_old_unrelated_disaster_photo() -> None:
 
     assert result.status == MediaAssociationStatus.REJECTED
     assert result.rule_ids == ("media.association.explicit_year_mismatch",)
+
+
+@pytest.mark.asyncio
+async def test_expanded_gallery_retains_duplicate_sources_and_delivery_failures():
+    candidates = tuple(_candidate(str(i)) for i in range(9))
+
+    class Provider:
+        provider_id = "fixture"
+
+        async def discover(self, context, *, now):
+            return candidates
+
+        async def retrieve(self, candidate):
+            if candidate == candidates[-1]:
+                raise OSError("broken image")
+            content = (
+                b"same"
+                if candidate in candidates[:2]
+                else candidate.candidate_id.encode()
+            )
+            return RetrievedMedia(candidate, content, "image/png", 640, 360)
+
+    result = await DisasterMediaService(
+        (Provider(),), InMemoryMediaAssetStore(), clock=lambda: NOW
+    ).discover(_context())
+    assert len(result.items) == 7
+    duplicate = next(
+        i for i in result.items if i.source_page_url == candidates[0].source_page_url
+    )
+    assert {s.source_page_url for s in duplicate.source_references} == {
+        c.source_page_url for c in candidates[:2]
+    }
+    assert any(
+        s.source_page_url == candidates[-1].source_page_url
+        for s in result.unavailable_sources
+    )
+    assert result.collection_limit >= len(result.items)
+
+
+def test_linked_article_can_supply_media_without_an_invented_onset():
+    candidate = _candidate("linked")
+    source = SourceReference(
+        "news",
+        "Daily",
+        candidate.article_title,
+        candidate.source_page_url,
+        None,
+        None,
+        NOW,
+    )
+    context = replace(_context(), collected_articles=(source,), event_time_known=False)
+    result = EventMediaAssociationPolicy().assess(candidate, context, now=NOW)
+    assert result.status == MediaAssociationStatus.EXACT_EVENT_LINK
+    assert "media.association.collected_article" in result.rule_ids
 
 
 @pytest.mark.asyncio

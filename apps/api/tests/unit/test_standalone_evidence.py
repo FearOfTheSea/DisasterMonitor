@@ -116,11 +116,11 @@ async def test_event_specific_impacts_are_available_without_assistant_messages()
                 (
                     SituationReport(
                         context.event.source,
-                        "2 homes damaged in River Town.",
+                        "2 roads damaged in River Town.",
                         facts=(
                             ReportedFact(
-                                "buildings",
-                                "Damaged homes",
+                                "infrastructure",
+                                "Damaged roads",
                                 "2",
                                 FactStatus.PRELIMINARY,
                                 context.event.source,
@@ -140,6 +140,57 @@ async def test_event_specific_impacts_are_available_without_assistant_messages()
     assert result.state in ("available", "degraded")
     assert result.facts[0].value == "2"
     assert result.facts[0].source.publisher == "GDACS"
+
+
+async def test_impact_inspection_exposes_all_accounts_not_only_selected_facts():
+    from dataclasses import replace
+
+    from disaster_monitor.application.disaster import ProviderBatch
+    from disaster_monitor.domain.evidence import ReportedFact, SituationReport
+    from disaster_monitor.domain.evidence_types import FactStatus
+
+    context = await CountryContexts().read("selected")
+
+    class Reports:
+        async def get_situation_reports(self, event, query, *, now):
+            reports = []
+            for i, value in enumerate(("0", "10", "12")):
+                source = replace(
+                    context.event.source, canonical_url=f"https://daily.example/{i}"
+                )
+                reports.append(
+                    SituationReport(
+                        source,
+                        f"Officials reported {value} deaths.",
+                        facts=(
+                            ReportedFact(
+                                "casualties",
+                                "Deaths",
+                                value,
+                                FactStatus.PRELIMINARY,
+                                source,
+                            ),
+                            ReportedFact(
+                                "buildings",
+                                "Schools destroyed",
+                                "5",
+                                FactStatus.PRELIMINARY,
+                                source,
+                            ),
+                        ),
+                        event_id=event.event_id,
+                        disaster=event.disaster,
+                    )
+                )
+            return ProviderBatch(tuple(reports))
+
+    result = await StandaloneEvidenceService(
+        CountryContexts(), situation=Reports(), clock=lambda: NOW
+    ).execute("selected", "impacts")
+    assert [f.value for f in result.facts] == ["0", "10", "12"]
+    assert len(result.reported_accounts) == 3
+    assert len({c.fact.source.canonical_url for c in result.reported_accounts}) == 3
+    assert all(c.excerpt for c in result.reported_accounts)
 
 
 async def test_broad_country_report_cannot_become_impacts_from_requested_fact_id():

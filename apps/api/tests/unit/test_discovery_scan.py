@@ -115,6 +115,56 @@ def test_duplicates_syndication_and_separate_nearby_events():
     assert groups[0].geometry is None
 
 
+def test_unknown_dates_attach_only_to_an_already_eligible_explicit_event():
+    first = article(event_key="event-a")
+    unknown = replace(
+        first,
+        source=replace(
+            first.source, published_at=None, canonical_url="https://unknown.example/a"
+        ),
+    )
+    unrelated = replace(unknown, event_key="other")
+    interval = ReportingInterval.at_start(7, NOW)
+    groups = group_reports(
+        tuple(assess_article(a, interval) for a in (unknown, first, unrelated))
+    )
+    assert len(groups) == 1
+    assert len(groups[0].reports) == 2
+    assert any(r.article.source.published_at is None for r in groups[0].reports)
+
+
+async def test_terminal_storage_failure_is_explicit_instead_of_running_forever(
+    tmp_path,
+):
+    from disaster_monitor.application.incidents.discovery_scan import (
+        DiscoveryScanService,
+    )
+    from disaster_monitor.infrastructure.operations.file_discovery_store import (
+        FileDiscoveryStore,
+    )
+
+    class Store(FileDiscoveryStore):
+        async def save(self, run):
+            if run.status != "running":
+                raise OSError("controlled disk failure")
+            await super().save(run)
+
+    class Feed:
+        source_id = "fixture"
+
+        async def discover(self, *, interval):
+            yield DiscoveryBatch(articles=(article(),), successful_operations=1)
+
+    service = DiscoveryScanService((Feed(),), Store(tmp_path), clock=lambda: NOW)
+    run = await service.start(7)
+    await service.wait(run.scan_id)
+    result = await service.get(run.scan_id)
+    assert result.status == "incomplete"
+    assert result.events
+    assert any("persistence" in issue for issue in result.issues)
+    await service.aclose()
+
+
 @pytest.mark.asyncio
 async def test_scan_sharing_partial_failure_empty_failure_and_truncation(tmp_path):
     from disaster_monitor.application.incidents.discovery_scan import (

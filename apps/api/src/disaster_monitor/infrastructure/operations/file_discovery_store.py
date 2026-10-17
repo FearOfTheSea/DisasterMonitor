@@ -43,12 +43,14 @@ class FileDiscoveryStore:
 
     async def read(self, scan_id: str) -> DiscoveryRun | None:
         path = self._path(scan_id)
-        if not path.exists():
-            return None
-        try:
-            return _CODEC.validate_json(await asyncio.to_thread(path.read_bytes))
-        except FileNotFoundError:
-            return None
+        # Windows denies replacement/deletion while a normal reader holds the
+        # destination open. Share the writer lock through the complete file read.
+        async with self._lock:
+            try:
+                content = await asyncio.to_thread(path.read_bytes)
+            except FileNotFoundError:
+                return None
+        return _CODEC.validate_json(content)
 
     async def recent(self) -> tuple[DiscoveryRun, ...]:
         if not self._root.exists():

@@ -17,8 +17,10 @@ from defusedxml import ElementTree
 from disaster_monitor.application.media import (
     DisasterMediaCandidate,
     MediaCreditKind,
+    MediaDiscoveryBatch,
     MediaEventContext,
     MediaRightsStatus,
+    MediaUnavailableSource,
     RetrievedMedia,
 )
 from disaster_monitor.application.ports.image_metadata import image_metadata
@@ -29,6 +31,8 @@ from disaster_monitor.infrastructure.disaster.http_backoff import (
 )
 from disaster_monitor.infrastructure.media.news_article_parser import (
     _article_metadata,
+    _article_photographs,
+    _ArticleMetadata,
     _clean_text,
 )
 
@@ -61,7 +65,7 @@ class _NewsItem:
     description: str
     source_page_url: str
     publisher: str
-    published_at: datetime
+    published_at: datetime | None
     policy: PublisherMediaPolicy
 
 
@@ -93,7 +97,11 @@ class NewsEventMediaProvider:
 
     async def discover(
         self, context: MediaEventContext, *, now: datetime
-    ) -> tuple[DisasterMediaCandidate, ...]:
+    ) -> tuple[DisasterMediaCandidate, ...] | MediaDiscoveryBatch:
+        if context.collected_articles:
+            return await self._collected(context)
+        if not context.event_time_known:
+            return ()
         del now
         news_items: list[_NewsItem] = []
         preferred_domains = tuple(
@@ -124,7 +132,7 @@ class NewsEventMediaProvider:
             unique.values(),
             key=lambda item: (
                 item.policy.priority,
-                -item.published_at.timestamp(),
+                -item.published_at.timestamp() if item.published_at else float("inf"),
                 item.source_page_url,
             ),
         )[: self._candidate_limit * 3]
@@ -141,6 +149,98 @@ class NewsEventMediaProvider:
                 item for item in scraped if isinstance(item, DisasterMediaCandidate)
             )
         return tuple(candidates[: self._candidate_limit])
+
+    async def _collected(self, context: MediaEventContext) -> MediaDiscoveryBatch:
+        candidates: list[DisasterMediaCandidate] = []
+        unavailable: list[MediaUnavailableSource] = []
+        truncated = len(context.collected_articles) > self._candidate_limit
+        # The article budget and six photographs per page bound acquisition.
+        for source in context.collected_articles[: self._candidate_limit]:
+            policy = self._by_page_host.get(
+                (urlsplit(source.canonical_url).hostname or "").casefold()
+            )
+            if policy is None:
+                unavailable.append(
+                    MediaUnavailableSource(
+                        source.canonical_url,
+                        source.publisher,
+                        (
+                            "No maintained publisher media-access policy; no media "
+                            "fetched."
+                        ),
+                    )
+                )
+                continue
+            try:
+                body, kind = await self._bounded_get(
+                    source.canonical_url,
+                    allowed_hosts=policy.page_hosts,
+                    maximum_bytes=self._maximum_page_bytes,
+                    accept="text/html, application/xhtml+xml",
+                )
+                if kind not in {"text/html", "application/xhtml+xml"}:
+                    raise ValueError("Publisher did not return HTML.")
+                photographs = _article_photographs(
+                    body.decode("utf-8", errors="replace"), source.canonical_url
+                )
+                truncated = truncated or len(photographs) > 6
+                for metadata in photographs[:6]:
+                    candidate = self._candidate(
+                        _NewsItem(
+                            source.title,
+                            "",
+                            source.canonical_url,
+                            source.publisher,
+                            source.published_at,
+                            policy,
+                        ),
+                        metadata,
+                    )
+                    if candidate is not None:
+                        candidates.append(candidate)
+                if not photographs:
+                    unavailable.append(
+                        MediaUnavailableSource(
+                            source.canonical_url,
+                            source.publisher,
+                            "No eligible article photograph metadata found.",
+                        )
+                    )
+            except Exception:
+                unavailable.append(
+                    MediaUnavailableSource(
+                        source.canonical_url,
+                        source.publisher,
+                        (
+                            "Publisher media access failed or was restricted; source "
+                            "article remains available."
+                        ),
+                    )
+                )
+        for source in context.collected_articles[self._candidate_limit :]:
+            unavailable.append(
+                MediaUnavailableSource(
+                    source.canonical_url,
+                    source.publisher,
+                    (
+                        "Article media acquisition budget reached; source article "
+                        "remains available."
+                    ),
+                )
+            )
+        return MediaDiscoveryBatch(
+            tuple(candidates),
+            warnings=(
+                (
+                    f"Media acquisition checks at most {self._candidate_limit} "
+                    f"collected articles and six photographs per article, under "
+                    f"maintained publisher policies. JPEG/PNG and storage limits "
+                    f"also apply."
+                ),
+            ),
+            unavailable_sources=tuple(unavailable),
+            truncated=truncated,
+        )
 
     async def retrieve(self, candidate: DisasterMediaCandidate) -> RetrievedMedia:
         policy = self._by_source_id.get(candidate.source_id)
@@ -223,6 +323,11 @@ class NewsEventMediaProvider:
         metadata = _article_metadata(text, item.source_page_url)
         if metadata is None:
             return None
+        return self._candidate(item, metadata)
+
+    def _candidate(
+        self, item: _NewsItem, metadata: _ArticleMetadata
+    ) -> DisasterMediaCandidate | None:
         image_host = (
             (urlsplit(metadata.image_url).hostname or "").casefold().rstrip(".")
         )
@@ -426,6 +531,7 @@ def _validate_url(url: str, allowed_hosts: frozenset[str]) -> None:
     host = (parsed.hostname or "").casefold().rstrip(".")
     if (
         parsed.scheme != "https"
+        or parsed.port not in (None, 443)
         or parsed.username
         or parsed.password
         or host not in allowed_hosts

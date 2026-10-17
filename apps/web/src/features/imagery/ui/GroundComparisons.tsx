@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { GroundCoverageMap } from '@/features/imagery/ui/GroundCoverageMap';
 import {
   comparisonForSensor,
+  captureRelationship,
   formatImageryTime,
   sensorStatus,
   SENSOR_LABELS,
@@ -69,11 +70,11 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
             <figure className="ground-single-preview">
               <img
                 src={previewUrl(prepared.artifact.artifact_id)}
-                alt={`${SENSOR_LABELS[prepared.artifact.sensor]} ${prepared.artifact.role === 'pre_event_reference' ? 'before' : 'after'} capture`}
+                alt={`${SENSOR_LABELS[prepared.artifact.sensor]} ${captureRelationship(request, prepared.observation)} capture`}
               />
               <figcaption>
-                {prepared.artifact.role === 'pre_event_reference' ? 'Before' : 'After'}{' '}
-                · {formatImageryTime(prepared.observation.captured_start)}
+                {captureRelationship(request, prepared.observation)} ·{' '}
+                {formatImageryTime(prepared.observation.captured_start)}
               </figcaption>
             </figure>
             <GroundCoverageMap
@@ -118,7 +119,7 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
                 </small>
                 <p>
                   {after?.observation
-                    ? `After-onset capture catalogued at ${formatImageryTime(after.observation.captured_start)}; no validated comparison artifact yet.`
+                    ? `${captureRelationship(request, after.observation)} capture catalogued at ${formatImageryTime(after.observation.captured_start)}; no validated comparison artifact yet.`
                     : (after?.explanation ??
                       status?.failure_detail ??
                       'No role result returned.')}
