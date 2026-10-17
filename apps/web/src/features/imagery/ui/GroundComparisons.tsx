@@ -56,7 +56,15 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
                   {formatImageryTime(prepared.observation.captured_start)}
                 </p>
               </div>
-              <span className="ground-imagery-status is-positive">Image ready</span>
+              <span
+                className={`ground-imagery-status ${prepared.observation.quality?.quality_state === 'useful' ? 'is-positive' : 'is-warning'}`}
+              >
+                {prepared.observation.quality?.usable_fraction === 0
+                  ? 'Artifact delivered; no usable pixels'
+                  : prepared.observation.quality?.quality_state === 'useful'
+                    ? 'Useful observation ready'
+                    : 'Artifact delivered; inspect regional quality'}
+              </span>
             </div>
             <figure className="ground-single-preview">
               <img

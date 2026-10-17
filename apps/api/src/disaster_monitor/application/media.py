@@ -139,3 +139,4 @@ class DisasterMediaGallery:
     rejected_count: int
     provider_ids: tuple[str, ...]
     warnings: tuple[str, ...] = ()
+    rejection_reasons: tuple[tuple[str, int], ...] = ()

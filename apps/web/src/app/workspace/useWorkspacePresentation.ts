@@ -1,6 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
+import {
+  useIncidentSelection,
+  matchesIncidentIdentifier,
+} from '@/features/incidents/hooks/useIncidentSelection';
 
 import type {
   ActiveIncidentsSnapshot,
@@ -92,9 +96,19 @@ export function useWorkspacePresentation({
         : displayedIncidents,
     [watchFocusIncident, displayedIncidents],
   );
-  const selectedIncident = useMemo(
-    () => mapIncidents.find((incident) => incident.event_id === selectedIncidentId),
-    [mapIncidents, selectedIncidentId],
+  const selectionRecords = useMemo(
+    () =>
+      watchFocusIncident
+        ? [watchFocusIncident, ...(snapshot?.incidents ?? [])]
+        : (snapshot?.incidents ?? []),
+    [watchFocusIncident, snapshot],
+  );
+  const selection = useIncidentSelection(selectedIncidentId, selectionRecords);
+  const selectedIncident = selection.incident;
+  const selectionOutsideView = Boolean(
+    selectedIncident &&
+    selectedIncidentId &&
+    !mapIncidents.some((item) => matchesIncidentIdentifier(item, selectedIncidentId)),
   );
 
   return {
@@ -107,5 +121,8 @@ export function useWorkspacePresentation({
     displayedSnapshot,
     mapIncidents,
     selectedIncident,
+    selectionOutsideView,
+    selectionError: selection.error,
+    selectionLoading: selection.loading,
   };
 }

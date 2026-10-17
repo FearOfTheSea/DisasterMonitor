@@ -7,6 +7,11 @@ from datetime import UTC, datetime
 import httpx
 
 from disaster_monitor.domain.news import NewsFeedItem
+from disaster_monitor.infrastructure.disaster.errors import ProviderFailure
+from disaster_monitor.infrastructure.disaster.http_backoff import (
+    check_cooldown,
+    record_failure,
+)
 
 _DISASTER_QUERY = (
     "(earthquake OR flood OR wildfire OR landslide OR hurricane OR typhoon OR cyclone "
@@ -32,7 +37,12 @@ class GdeltDocNewsFeed:
         self._timeout_seconds = timeout_seconds
         self._maximum_records = maximum_records
         self._maximum_response_bytes = maximum_response_bytes
-        self._client = client
+        self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
+        self._owns_client = client is None
+
+    async def aclose(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
 
     async def fetch_since(
         self, *, since: datetime, now: datetime
@@ -120,7 +130,21 @@ async def _get_json(
     params: dict[str, str],
 ) -> object:
     if client is not None:
+        check_cooldown(client, url)
         response = await client.get(url, params=params)
+        if response.status_code == 429 or response.status_code >= 500:
+            record_failure(
+                client,
+                response,
+                ProviderFailure(
+                    "rate_limited"
+                    if response.status_code == 429
+                    else "http_server_error",
+                    retryable=True,
+                    http_status=response.status_code,
+                ),
+                final_attempt=True,
+            )
         response.raise_for_status()
         return _bounded_json(response, maximum_response_bytes)
     async with httpx.AsyncClient(timeout=timeout_seconds) as temporary_client:

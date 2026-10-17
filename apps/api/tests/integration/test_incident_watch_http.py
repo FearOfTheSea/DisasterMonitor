@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -5,6 +6,9 @@ import httpx
 import pytest
 from conftest import FakeLanguageModel
 
+from disaster_monitor.application.incidents.manage_incident_watches import (
+    ManageIncidentWatches,
+)
 from disaster_monitor.application.incidents.refresh_incident_watch import (
     RefreshIncidentWatch,
 )
@@ -21,6 +25,9 @@ from disaster_monitor.domain.disaster import (
 )
 from disaster_monitor.infrastructure.composition import AppDependencyOverrides
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.geography.static_country_catalog import (
+    StaticCountryCatalog,
+)
 from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
 )
@@ -67,6 +74,14 @@ async def test_incident_watch_crud_timeline_and_read_contract(tmp_path: Path) ->
         overrides=AppDependencyOverrides(
             model=FakeLanguageModel(),
             operational_repository=repository,
+        ),
+    )
+    # This isolated contract fixture supplies an explicitly available scheduler.
+    # Default manual deployment availability is covered separately.
+    app.state.dependencies = replace(
+        app.state.dependencies,
+        incident_watches=ManageIncidentWatches(
+            repository, StaticCountryCatalog(), monitoring_available=True
         ),
     )
     async with httpx.AsyncClient(

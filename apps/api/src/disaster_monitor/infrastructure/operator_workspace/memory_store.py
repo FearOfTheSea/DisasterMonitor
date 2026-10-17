@@ -39,9 +39,13 @@ class InMemoryOperatorWorkspaceStore:
             item for item in self._notes.values() if item.incident_id == incident_id
         )
 
-    async def bookmarks(self, incident_id: str | None) -> tuple[OperatorBookmark, ...]:
+    async def bookmarks(
+        self, incident_id: str | None, *, all_scopes: bool = False
+    ) -> tuple[OperatorBookmark, ...]:
         return tuple(
-            item for item in self._bookmarks.values() if item.incident_id == incident_id
+            item
+            for item in self._bookmarks.values()
+            if all_scopes or item.incident_id == incident_id
         )
 
     async def runbooks(self) -> tuple[RunbookTemplate, ...]:

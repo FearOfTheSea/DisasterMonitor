@@ -58,6 +58,7 @@ type MapAdapterOptions = {
 };
 
 export type SatelliteLayerConfiguration = {
+  onTileError?: () => void;
   sourceId: string;
   url: string;
   attribution: string;
@@ -327,16 +328,18 @@ export class OpenLayersMapAdapter {
   setSatelliteImagery(configuration?: SatelliteLayerConfiguration): void {
     this.clearSatelliteImagery();
     if (!configuration) return;
+    const source = new XYZ({
+      url: configuration.url,
+      attributions: configuration.attribution,
+      maxZoom: configuration.maximumUsefulZoom,
+      crossOrigin: 'anonymous',
+      transition: 0,
+    });
+    source.on('tileloaderror', () => configuration.onTileError?.());
     const layer = new TileLayer({
       opacity: validOpacity(configuration.opacity) ? configuration.opacity : 1,
       preload: 1,
-      source: new XYZ({
-        url: configuration.url,
-        attributions: configuration.attribution,
-        maxZoom: configuration.maximumUsefulZoom,
-        crossOrigin: 'anonymous',
-        transition: 0,
-      }),
+      source,
     });
     layer.set('dmLayerType', 'satellite-imagery');
     layer.set('dmLayerId', 'satellite-imagery');

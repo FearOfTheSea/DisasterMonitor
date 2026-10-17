@@ -21,6 +21,11 @@ from disaster_monitor.infrastructure.disaster.errors import (
     DisasterProviderResponseError,
     ProviderFailure,
 )
+from disaster_monitor.infrastructure.disaster.http_backoff import (
+    check_cooldown,
+    record_failure,
+    record_transport_failure,
+)
 
 _RETRYABLE_CODES = {
     ProviderFailureReason.TIMEOUT,
@@ -197,6 +202,8 @@ async def _request_json(
 ) -> Any:
     """Execute one bounded JSON request with one retry for transient failures."""
     validate_network_target(url, allowed_hosts)
+    requested_url = str(client.build_request("GET", url, params=params).url)
+    check_cooldown(client, requested_url)
     response_body = b""
     no_content = False
     for attempt in range(2):
@@ -212,7 +219,17 @@ async def _request_json(
                     response.raise_for_status()
                 except httpx.HTTPStatusError as error:
                     failure = _http_failure(error)
-                    if failure.failure.reason_code in _RETRYABLE_CODES and attempt == 0:
+                    deferred = record_failure(
+                        client,
+                        error.response,
+                        failure.failure,
+                        final_attempt=attempt == 1,
+                    )
+                    if (
+                        failure.failure.reason_code in _RETRYABLE_CODES
+                        and attempt == 0
+                        and not deferred
+                    ):
                         await asyncio.sleep(0.05)
                         continue
                     raise failure from error
@@ -263,6 +280,7 @@ async def _request_json(
             if attempt == 0:
                 await asyncio.sleep(0.05)
                 continue
+            record_transport_failure(client, requested_url, failure.failure)
             raise failure from error
         except httpx.HTTPError as error:
             failure = DisasterProviderError(
@@ -274,6 +292,7 @@ async def _request_json(
             if attempt == 0:
                 await asyncio.sleep(0.05)
                 continue
+            record_transport_failure(client, requested_url, failure.failure)
             raise failure from error
         else:
             break
@@ -306,6 +325,8 @@ async def get_text(
 ) -> str:
     """Fetch one bounded HTML/text response using the same typed transport rules."""
     validate_network_target(url, allowed_hosts)
+    requested_url = str(client.build_request("GET", url, params=params).url)
+    check_cooldown(client, requested_url)
     for attempt in range(2):
         try:
             async with client.stream(
@@ -315,7 +336,17 @@ async def get_text(
                     response.raise_for_status()
                 except httpx.HTTPStatusError as error:
                     failure = _http_failure(error)
-                    if failure.failure.reason_code in _RETRYABLE_CODES and attempt == 0:
+                    deferred = record_failure(
+                        client,
+                        error.response,
+                        failure.failure,
+                        final_attempt=attempt == 1,
+                    )
+                    if (
+                        failure.failure.reason_code in _RETRYABLE_CODES
+                        and attempt == 0
+                        and not deferred
+                    ):
                         await asyncio.sleep(0.05)
                         continue
                     raise failure from error
@@ -364,6 +395,7 @@ async def get_text(
             if attempt == 0:
                 await asyncio.sleep(0.05)
                 continue
+            record_transport_failure(client, requested_url, failure.failure)
             raise failure from error
         except httpx.HTTPError as error:
             failure = DisasterProviderError(
@@ -375,6 +407,7 @@ async def get_text(
             if attempt == 0:
                 await asyncio.sleep(0.05)
                 continue
+            record_transport_failure(client, requested_url, failure.failure)
             raise failure from error
         else:
             break
@@ -399,6 +432,8 @@ async def get_bytes(
 ) -> bytes:
     """Fetch one bounded binary response, retaining the shared failure taxonomy."""
     validate_network_target(url, allowed_hosts)
+    requested_url = str(client.build_request("GET", url, params=params).url)
+    check_cooldown(client, requested_url)
     for attempt in range(2):
         try:
             async with client.stream(
@@ -408,7 +443,17 @@ async def get_bytes(
                     response.raise_for_status()
                 except httpx.HTTPStatusError as error:
                     failure = _http_failure(error)
-                    if failure.failure.reason_code in _RETRYABLE_CODES and attempt == 0:
+                    deferred = record_failure(
+                        client,
+                        error.response,
+                        failure.failure,
+                        final_attempt=attempt == 1,
+                    )
+                    if (
+                        failure.failure.reason_code in _RETRYABLE_CODES
+                        and attempt == 0
+                        and not deferred
+                    ):
                         await asyncio.sleep(0.05)
                         continue
                     raise failure from error
@@ -435,6 +480,7 @@ async def get_bytes(
             if attempt == 0:
                 await asyncio.sleep(0.05)
                 continue
+            record_transport_failure(client, requested_url, failure.failure)
             raise failure from error
         except httpx.HTTPError as error:
             failure = DisasterProviderError(
@@ -446,6 +492,7 @@ async def get_bytes(
             if attempt == 0:
                 await asyncio.sleep(0.05)
                 continue
+            record_transport_failure(client, requested_url, failure.failure)
             raise failure from error
         else:
             break

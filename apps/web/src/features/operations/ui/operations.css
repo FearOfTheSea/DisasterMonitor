@@ -220,6 +220,41 @@
   color: var(--muted);
 }
 
+.notebook-editor,
+.notebook-editor form,
+.notebook-editor label {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.notebook-editor {
+  margin-top: 24px;
+  max-width: 760px;
+}
+
+.notebook-editor input,
+.notebook-editor textarea,
+.notebook-editor select {
+  background: var(--surface-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  min-width: 0;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.notebook-editor button {
+  justify-self: start;
+}
+
+.notebook-editor article {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
 .findings-center {
   border-bottom: 1px solid var(--line);
   display: grid;

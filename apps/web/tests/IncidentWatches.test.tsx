@@ -25,6 +25,14 @@ vi.mock('@/features/operations/api/incidentWatches', () => ({
   setIncidentWatchEnabled: vi.fn(),
 }));
 
+const monitoring = vi.hoisted(() => ({
+  available: true,
+  detail: 'Test scheduler is available.',
+}));
+vi.mock('@/shared/hooks/useMonitoringReadiness', () => ({
+  useMonitoringReadiness: () => monitoring,
+}));
+
 const WATCH: IncidentWatch = {
   watch_id: 'incident-watch:1',
   disaster: 'flood',
@@ -92,6 +100,7 @@ describe('IncidentWatches', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    monitoring.available = true;
     vi.mocked(fetchIncidentWatches).mockResolvedValue([WATCH]);
     vi.mocked(fetchIncidentWatchTimeline).mockResolvedValue([CHANGE]);
     vi.mocked(setIncidentWatchEnabled).mockResolvedValue({
@@ -123,7 +132,7 @@ describe('IncidentWatches', () => {
     );
     render(<IncidentWatches onSelectIncident={vi.fn()} />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Loading incident watches');
+    expect(screen.getByText('Loading incident watches…')).toBeVisible();
     resolve?.([]);
 
     expect(
@@ -176,6 +185,16 @@ describe('IncidentWatches', () => {
     expect(
       await screen.findByText('No incident watches have been created.'),
     ).toBeInTheDocument();
+  });
+
+  it('disables creation and enabling when the deployment has no scheduler', async () => {
+    monitoring.available = false;
+    vi.mocked(fetchIncidentWatches).mockResolvedValue([{ ...WATCH, enabled: false }]);
+    render(<IncidentWatches onSelectIncident={vi.fn()} />);
+    expect(
+      await screen.findByRole('button', { name: 'Enable Vietnam watch' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create watch' })).toBeDisabled();
   });
 
   it('creates a worldwide single-disaster watch', async () => {

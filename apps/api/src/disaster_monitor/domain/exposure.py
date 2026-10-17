@@ -12,6 +12,7 @@ from disaster_monitor.domain.imagery.regions import Coordinate, MultiPolygon
 
 
 class ExposureGeometryRole(StrEnum):
+    OPERATOR_INSPECTION = "operator_inspection"
     MAPPED_HAZARD = "mapped_hazard"
     FORECAST_HAZARD = "forecast_hazard"
     MODELLED_HAZARD = "modelled_hazard"

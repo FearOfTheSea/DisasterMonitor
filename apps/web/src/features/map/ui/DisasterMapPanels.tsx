@@ -5,7 +5,6 @@ import {
 import { copStyleSemantics } from '@/features/map/model/copRenderPlan';
 import { cycloneStyleSemantics } from '@/features/map/model/cycloneMapLayers';
 import {
-  observationTimeForSource,
   type SatelliteImagerySource,
   type SatelliteMapState,
   type SatelliteSourceId,
@@ -18,7 +17,6 @@ import type {
   CommonOperationalPicture,
   CycloneMapLayer,
 } from '@/shared/types/assistant';
-
 type SatelliteImageryControlsProps = {
   enabled: boolean;
   source: SatelliteImagerySource;
@@ -26,10 +24,10 @@ type SatelliteImageryControlsProps = {
   state: SatelliteMapState;
   opacity: number;
   catalogUnavailable: boolean;
+  missingTiles?: boolean;
   onStateChange: (state: SatelliteMapState) => void;
   onOpacityChange: (opacity: number) => void;
 };
-
 export function SatelliteImageryControls({
   enabled,
   source,
@@ -37,6 +35,7 @@ export function SatelliteImageryControls({
   state,
   opacity,
   catalogUnavailable,
+  missingTiles,
   onStateChange,
   onOpacityChange,
 }: SatelliteImageryControlsProps) {
@@ -57,7 +56,6 @@ export function SatelliteImageryControls({
             if (!nextSource) return;
             onStateChange({
               sourceId,
-              observationTime: observationTimeForSource(nextSource),
             });
           }}
         >
@@ -86,7 +84,7 @@ export function SatelliteImageryControls({
           <span>Observation date</span>
           <input
             type="date"
-            value={state.observationTime ?? ''}
+            value={state.observationTime ?? source.defaultTime ?? ''}
             disabled={!enabled}
             onChange={(event) =>
               onStateChange({
@@ -102,7 +100,7 @@ export function SatelliteImageryControls({
           <input
             type="datetime-local"
             step="600"
-            value={state.observationTime?.slice(0, 16) ?? ''}
+            value={(state.observationTime ?? source.defaultTime)?.slice(0, 16) ?? ''}
             disabled={!enabled}
             onChange={(event) =>
               onStateChange({
@@ -117,11 +115,45 @@ export function SatelliteImageryControls({
       ) : null}
       <div className="satellite-source-details" aria-live="polite">
         <span>Provider: {source.provider}</span>
-        <span>Requested observation: {state.observationTime ?? 'not selected'}</span>
         <span>
-          Available observation time is not reported by this client; the requested time
-          may be unavailable.
+          Requested observation:{' '}
+          {state.observationTime ?? source.defaultTime ?? 'unavailable'}
         </span>
+        <span>
+          {state.observationTime
+            ? 'Explicit observation date'
+            : 'Latest advertised observation'}{' '}
+          · {source.availabilityState ?? 'loading metadata'}
+        </span>
+        {source.metadataRetrievedAt && (
+          <span>Metadata retrieved: {source.metadataRetrievedAt}</span>
+        )}
+        {state.observationTime && (
+          <button
+            type="button"
+            onClick={() => onStateChange({ sourceId: state.sourceId })}
+          >
+            Use latest advertised time
+          </button>
+        )}
+        {(
+          source.limitations ?? [
+            'Temporal metadata is unavailable. Select an explicit date or retry later.',
+          ]
+        ).map((detail) => (
+          <span key={detail}>{detail}</span>
+        ))}
+        <span>
+          MODIS and VIIRS have polar swath and daylight gaps. GOES covers the Americas;
+          Himawari covers Asia and the Pacific. Visible imagery may be dark or
+          cloud-covered.
+        </span>
+        {missingTiles && (
+          <strong role="status">
+            Imagery tiles are missing for this place or time. Try another observation
+            date or sensor.
+          </strong>
+        )}
         <span>Attribution: {source.attribution}</span>
         <strong>Imagery is not live.</strong>
         {!source.available ? (
@@ -129,14 +161,14 @@ export function SatelliteImageryControls({
         ) : null}
         {catalogUnavailable ? (
           <strong>
-            Provider catalog unavailable; credentialed providers remain disabled.
+            Temporal metadata is unavailable. Explicit dates remain selectable; tile
+            availability is uncertain.
           </strong>
         ) : null}
       </div>
     </fieldset>
   );
 }
-
 export function WeatherAlertCoverage({
   snapshot,
 }: {
@@ -163,12 +195,10 @@ export function WeatherAlertCoverage({
     </aside>
   );
 }
-
 type ClusteredIncident = {
   incidentId: string;
   incident: IncidentMapRecord;
 };
-
 export function IncidentClusterPicker({
   incidents,
   onClose,
@@ -200,7 +230,6 @@ export function IncidentClusterPicker({
     </aside>
   );
 }
-
 export function CommonOperationalPictureLegend({
   picture,
   visible,
@@ -241,7 +270,6 @@ export function CommonOperationalPictureLegend({
     </aside>
   );
 }
-
 export function CycloneLegend({
   layers,
   visible,

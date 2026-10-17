@@ -15,7 +15,6 @@ import type {
   GroundImageryPanelReadiness,
   GroundImageryPanelRequest,
 } from '@/features/imagery/model/groundImagery';
-import { automaticPreviewSelection } from '@/features/imagery/model/groundImagery';
 import type {
   GroundImageryRegionRequest,
   GroundImagerySelectionResponse,
@@ -26,7 +25,10 @@ const SLOW_SEARCH_DELAY_MS = 8_000;
 const PREPARATION_POLL_MS = 3_000;
 const WATCH_POLL_MS = 30_000;
 
-export function useGroundImageryWorkflow(incidentId: string) {
+export function useGroundImageryWorkflow(
+  incidentId: string,
+  monitoringAvailable = false,
+) {
   const [request, setRequest] = useState<GroundImageryPanelRequest>();
   const [readiness, setReadiness] = useState<GroundImageryPanelReadiness>();
   const [loadState, setLoadState] = useState<LoadState>('idle');
@@ -34,7 +36,6 @@ export function useGroundImageryWorkflow(incidentId: string) {
   const [error, setError] = useState<string>();
   const [action, setAction] = useState<string>();
   const requestVersion = useRef(0);
-  const attemptedPreviews = useRef(new Set<string>());
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -70,13 +71,23 @@ export function useGroundImageryWorkflow(incidentId: string) {
 
   useEffect(() => {
     const controller = new AbortController();
-    const timer = window.setTimeout(() => void load(controller.signal), 0);
+    void fetchGroundImageryReadiness(controller.signal)
+      .then((next) => {
+        if (!controller.signal.aborted) setReadiness(next);
+      })
+      .catch((caught: unknown) => {
+        if (!controller.signal.aborted)
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : 'Imagery availability is unknown.',
+          );
+      });
     return () => {
-      window.clearTimeout(timer);
       controller.abort();
       requestVersion.current += 1;
     };
-  }, [load]);
+  }, [incidentId]);
 
   useEffect(() => {
     if (loadState !== 'loading') return;
@@ -85,7 +96,11 @@ export function useGroundImageryWorkflow(incidentId: string) {
   }, [loadState]);
 
   useEffect(() => {
-    if (!request || (request.state !== 'queued' && !request.watch_enabled)) return;
+    if (
+      !request ||
+      (request.state !== 'queued' && !(request.watch_enabled && monitoringAvailable))
+    )
+      return;
     const controller = new AbortController();
     const version = requestVersion.current;
     const pollInterval =
@@ -110,7 +125,7 @@ export function useGroundImageryWorkflow(incidentId: string) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [request]);
+  }, [request, monitoringAvailable]);
 
   const runAction = useCallback(
     async (name: string, operation: () => Promise<GroundImageryPanelRequest>) => {
@@ -134,22 +149,6 @@ export function useGroundImageryWorkflow(incidentId: string) {
     },
     [],
   );
-
-  useEffect(() => {
-    if (!request || readiness?.state !== 'ready' || action) return;
-    const selection = automaticPreviewSelection(request);
-    if (!selection) return;
-    const attemptKey = `${request.request_id}:${request.request_version}:${selection.selection_id}`;
-    if (attemptedPreviews.current.has(attemptKey)) return;
-    attemptedPreviews.current.add(attemptKey);
-    void runAction(`prepare:${selection.selection_id}`, () =>
-      prepareGroundImagerySelection(request.request_id, {
-        sensor: selection.sensor,
-        role: selection.role,
-        overview: true,
-      }),
-    );
-  }, [action, readiness?.state, request, runAction]);
 
   const handleRefresh = () => {
     if (!request) return;

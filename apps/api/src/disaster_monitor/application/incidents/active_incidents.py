@@ -5,7 +5,9 @@ import base64
 import binascii
 import hashlib
 import json
+from collections import OrderedDict
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from disaster_monitor.application.evidence.event_policies import (
@@ -13,6 +15,9 @@ from disaster_monitor.application.evidence.event_policies import (
 )
 from disaster_monitor.application.evidence.event_resolution import (
     EventPolicyRegistry,
+)
+from disaster_monitor.application.incidents.identity_assignments import (
+    IncidentIdentityAssignments,
 )
 from disaster_monitor.application.incidents.meaningful_change import (
     mark_meaningful_changes,
@@ -34,6 +39,10 @@ from disaster_monitor.application.incidents.projection_codec import (
     snapshot_to_projection,
 )
 from disaster_monitor.application.incidents.retrieval import IncidentRetrieval
+from disaster_monitor.application.incidents.snapshot_cache import (
+    IncidentCursorExpiredError,
+    IncidentSnapshotCache,
+)
 from disaster_monitor.application.incidents.watch_observation import observe_watch
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
@@ -42,6 +51,9 @@ from disaster_monitor.application.ports.geographic_regions import (
     GeographicRegionCatalog,
 )
 from disaster_monitor.application.ports.geography import CountryCatalog
+from disaster_monitor.application.ports.incident_identity_store import (
+    IncidentIdentityStore,
+)
 from disaster_monitor.application.ports.incident_projection import (
     IncidentProjectionStore,
 )
@@ -59,6 +71,11 @@ from disaster_monitor.domain.disaster_types import (
     EventTimePrecision,
     event_temporality_overlaps,
 )
+from disaster_monitor.domain.event_identifiers import (
+    EventIdentifierRole,
+    event_identifier_role,
+)
+from disaster_monitor.domain.hazards.taxonomy import DEFAULT_HAZARD_TAXONOMY
 
 
 def _now_utc() -> datetime:
@@ -80,6 +97,7 @@ class ActiveIncidentsService:
         read_from_projection: bool = False,
         provider_attempt_recorder: ProviderAttemptWriter | None = None,
         candidate_store: NewsCandidateStore | None = None,
+        identity_store: IncidentIdentityStore | None = None,
     ) -> None:
         self._clock = clock
         self._retrieval = IncidentRetrieval(
@@ -97,7 +115,16 @@ class ActiveIncidentsService:
         self._read_from_projection = read_from_projection
         self._provider_attempt_recorder = provider_attempt_recorder
         self._candidate_store = candidate_store
-        self._snapshot_cache: dict[str, ActiveIncidentsSnapshot] = {}
+        self._snapshot_cache = IncidentSnapshotCache()
+        self._acquisition_cache = IncidentSnapshotCache(
+            maximum_bytes=32 * 1024**2, lifetime=timedelta(days=1)
+        )
+        self._acquisitions: OrderedDict[str, str] = OrderedDict()
+        self._inflight: dict[str, asyncio.Task[ActiveIncidentsSnapshot]] = {}
+        self._latest_snapshot: ActiveIncidentsSnapshot | None = None
+        self._identities = (
+            IncidentIdentityAssignments(identity_store) if identity_store else None
+        )
 
     async def execute(
         self, query: ActiveIncidentsQuery | None = None
@@ -107,20 +134,142 @@ class ActiveIncidentsService:
             return self._page_cached_snapshot(bounded_query)
         if self._projection_store is not None and self._read_from_projection:
             return await self._read_projection(bounded_query)
+        key = _acquisition_key(bounded_query)
+        version = self._acquisitions.get(key)
+        cached = (
+            self._acquisition_cache.get(version, now=self._clock()) if version else None
+        )
+        if cached is not None:
+            if self._clock() - cached.retrieved_at >= timedelta(minutes=5):
+                self._start_refresh(bounded_query)
+                return replace(
+                    _page_snapshot(cached, bounded_query),
+                    is_stale=True,
+                    refresh_state="refreshing",
+                )
+            return _page_snapshot(cached, bounded_query)
         return await self.refresh(bounded_query)
 
     async def refresh(
         self, query: ActiveIncidentsQuery | None = None
     ) -> ActiveIncidentsSnapshot:
-        """Acquire providers once, persist the complete result, and return a page."""
         bounded_query = query or ActiveIncidentsQuery()
+        full = await asyncio.shield(self._start_refresh(bounded_query))
+        return _page_snapshot(full, bounded_query)
+
+    def _start_refresh(
+        self, query: ActiveIncidentsQuery
+    ) -> asyncio.Task[ActiveIncidentsSnapshot]:
+        key = _acquisition_key(query)
+        running = self._inflight.get(key)
+        if running is not None:
+            return running
+        acquisition_query = replace(
+            query,
+            country_code=None,
+            search=None,
+            page_size=None,
+            cursor=None,
+            hazard=query.hazard if _unsupported_hazard(query) else None,
+        )
+
+        async def acquire() -> ActiveIncidentsSnapshot:
+            try:
+                snapshot = await self._acquire(acquisition_query)
+                if snapshot.snapshot_version:
+                    self._acquisitions[key] = snapshot.snapshot_version
+                    self._acquisitions.move_to_end(key)
+                    while len(self._acquisitions) > 8:
+                        self._acquisitions.popitem(last=False)
+                if (
+                    query.view is not IncidentView.HISTORICAL
+                    and not _unsupported_hazard(query)
+                ):
+                    self._latest_snapshot = snapshot
+                return snapshot
+            finally:
+                self._inflight.pop(key, None)
+
+        task = asyncio.create_task(acquire())
+        # Background refresh failures are observed; the previous snapshot stays usable.
+        task.add_done_callback(
+            lambda done: None if done.cancelled() else done.exception()
+        )
+        self._inflight[key] = task
+        return task
+
+    async def aclose(self) -> None:
+        tasks = tuple(self._inflight.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def lookup(self, identifier: str) -> ActiveIncident:
+        snapshot = await self.execute()
+        matches = tuple(
+            item
+            for item in snapshot.incidents
+            if identifier
+            in {
+                item.event_id,
+                item.physical_event_id,
+                *(
+                    alias
+                    for alias in item.provider_ids
+                    if event_identifier_role(alias)
+                    is EventIdentifierRole.PHYSICAL_EVENT
+                ),
+            }
+        )
+        if len(matches) > 1:
+            raise ValueError(
+                "The incident identifier is ambiguous: it matches multiple "
+                "physical events."
+            )
+        if not matches:
+            retained = (
+                self._identities.lookup(identifier, now=self._clock())
+                if self._identities
+                else None
+            )
+            if retained:
+                return retained
+            raise LookupError(
+                "Incident is unavailable in the retained source snapshots."
+            )
+        return matches[0]
+
+    async def _acquire(self, query: ActiveIncidentsQuery) -> ActiveIncidentsSnapshot:
+        """Acquire providers once, persist the complete result, and return a page."""
+        bounded_query = query
         now = self._clock()
         previous_incidents = await self._previous_incidents()
         results = await asyncio.gather(
             *(
                 self._retrieval.worldwide(disaster, bounded_query, now=now)
-                for disaster in Disaster
+                for disaster in (
+                    (bounded_query.hazard,)
+                    if bounded_query.hazard is not None
+                    and _unsupported_hazard(bounded_query)
+                    else Disaster
+                )
             )
+        )
+        prior_version = self._acquisitions.get(_acquisition_key(query))
+        prior = (
+            self._acquisition_cache.get(prior_version, now=now)
+            if prior_version
+            else None
+        )
+        failed_hazards = {
+            result.coverage.disaster
+            for result in results
+            if not result.successful and not result.incidents
+        }
+        retained = (
+            tuple(item for item in prior.incidents if item.disaster in failed_hazards)
+            if prior
+            else ()
         )
         if self._provider_attempt_recorder is not None:
             for result in results:
@@ -130,7 +279,10 @@ class ActiveIncidentsService:
                     )
         provider_incidents = tuple(
             sorted(
-                (incident for result in results for incident in result.incidents),
+                (
+                    *retained,
+                    *(incident for result in results for incident in result.incidents),
+                ),
                 key=lambda incident: (
                     -incident.event_time.timestamp(),
                     incident.disaster.value,
@@ -177,8 +329,32 @@ class ActiveIncidentsService:
         full_snapshot = ActiveIncidentsSnapshot(
             retrieved_at=now,
             incidents=incidents,
+            is_stale=bool(retained),
+            refresh_state="stale" if retained else "fresh",
             coverage=coverage_with_news_candidates(
-                tuple(result.coverage for result in results), candidates, incidents
+                tuple(
+                    replace(
+                        result.coverage,
+                        incident_count=sum(
+                            item.disaster is result.coverage.disaster
+                            for item in incidents
+                        ),
+                        detail=result.coverage.detail
+                        + (
+                            " Retained the last successful incident rows; "
+                            "source retrieval times are unchanged."
+                            if result.coverage.disaster in failed_hazards
+                            and any(
+                                item.disaster is result.coverage.disaster
+                                for item in retained
+                            )
+                            else ""
+                        ),
+                    )
+                    for result in results
+                ),
+                candidates,
+                incidents,
             ),
             warnings=tuple(
                 dict.fromkeys(
@@ -209,6 +385,8 @@ class ActiveIncidentsService:
                 else ()
             ),
         )
+        if self._identities is not None:
+            full_snapshot = await self._identities.stabilize(full_snapshot)
         if self._projection_store is not None:
             await self._projection_store.append_incident_projection(
                 snapshot_to_projection(full_snapshot, created_at=now)
@@ -239,7 +417,7 @@ class ActiveIncidentsService:
 
     async def _previous_incidents(self) -> tuple[ActiveIncident, ...]:
         if self._projection_store is None:
-            return ()
+            return self._latest_snapshot.incidents if self._latest_snapshot else ()
         projection = await self._projection_store.latest_incident_projection()
         if projection is None:
             return ()
@@ -255,10 +433,8 @@ class ActiveIncidentsService:
         version = snapshot.snapshot_version
         if version is None:
             return
-        self._snapshot_cache[version] = snapshot
-        if len(self._snapshot_cache) > 8:
-            oldest = next(iter(self._snapshot_cache))
-            del self._snapshot_cache[oldest]
+        self._snapshot_cache.put(snapshot, now=self._clock())
+        self._acquisition_cache.put(snapshot, now=self._clock())
 
     def _page_cached_snapshot(
         self, query: ActiveIncidentsQuery
@@ -268,9 +444,12 @@ class ActiveIncidentsService:
         offset = token["offset"]
         if not isinstance(snapshot_version, str) or not isinstance(offset, int):
             raise ValueError("The incident cursor is invalid.")
-        snapshot = self._snapshot_cache.get(snapshot_version)
+        snapshot = self._snapshot_cache.get(snapshot_version, now=self._clock())
         if snapshot is None:
-            raise ValueError("The incident snapshot cursor has expired.")
+            raise IncidentCursorExpiredError(
+                "The incident snapshot cursor has expired. Refresh the list "
+                "to continue."
+            )
         if token["query"] != _cursor_query_key(query):
             raise ValueError("The incident cursor does not match the query.")
         return _page_snapshot(snapshot, query, offset=offset)
@@ -421,6 +600,8 @@ def _page_snapshot(
         has_more=has_more,
         total_incident_count=len(filtered),
         historical_limitations=snapshot.historical_limitations,
+        refresh_state=snapshot.refresh_state,
+        is_stale=snapshot.is_stale,
     )
 
 
@@ -445,6 +626,24 @@ def _empty_projection_snapshot(
         correlations=(),
         snapshot_version=None,
         total_incident_count=0,
+    )
+
+
+def _acquisition_key(query: ActiveIncidentsQuery) -> str:
+    return json.dumps(
+        {
+            "days": query.time_window_days if query.view is IncidentView.RECENT else 30,
+            "limit": query.acquisition_limit_per_disaster,
+            "historical": query.view is IncidentView.HISTORICAL,
+            "start": query.occurrence_start.isoformat()
+            if query.occurrence_start
+            else None,
+            "end": query.occurrence_end.isoformat() if query.occurrence_end else None,
+            "unsupported_hazard": query.hazard.value
+            if query.hazard is not None and _unsupported_hazard(query)
+            else None,
+        },
+        sort_keys=True,
     )
 
 
@@ -514,3 +713,12 @@ __all__ = [
     "ActiveIncidentsSnapshot",
     "ActiveIncidentsService",
 ]
+
+
+def _unsupported_hazard(query: ActiveIncidentsQuery) -> bool:
+    return (
+        query.hazard is not None
+        and not DEFAULT_HAZARD_TAXONOMY.require(
+            query.hazard.value
+        ).incident_discovery_supported
+    )

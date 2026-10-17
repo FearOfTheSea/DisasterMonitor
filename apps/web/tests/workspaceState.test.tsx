@@ -3,18 +3,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useMapWorkspace } from '@/app/workspace/useMapWorkspace';
 
-const incidents = { status: 'loading' as const, snapshot: undefined };
-
 afterEach(() => {
   vi.useRealTimers();
   window.history.replaceState(null, '', '/');
 });
 
 describe('workspace coordination', () => {
+  it('retains a selected URL identity when filters or pagination omit it', () => {
+    const { result, rerender } = renderHook(() => useMapWorkspace(), {
+      initialProps: { status: 'loading' as 'loading' | 'success' },
+    });
+    act(() => result.current.handleSelectActiveIncident('usgs:retained'));
+    rerender({ status: 'success' });
+    expect(result.current.usableSelectedIncidentId).toBe('usgs:retained');
+  });
   it('restores URL view and preserves state through browser navigation', () => {
     vi.useFakeTimers();
     window.history.replaceState(null, '', '/?c=48,2&z=5&r=europe');
-    const { result, unmount } = renderHook(() => useMapWorkspace(incidents));
+    const { result, unmount } = renderHook(() => useMapWorkspace());
     expect(result.current.mapView).toEqual({
       centerLatitude: 48,
       centerLongitude: 2,

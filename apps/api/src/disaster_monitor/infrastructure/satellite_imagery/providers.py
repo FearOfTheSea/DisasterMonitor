@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import httpx
+
 from disaster_monitor.application.ports.satellite_imagery import (
     SatelliteImageryProduct,
+    SatelliteProductAvailability,
     SatelliteRasterTile,
     SatelliteTemporalMode,
     SatelliteTileRequest,
 )
 from disaster_monitor.application.satellite_imagery import SatelliteImageryInputError
+from disaster_monitor.infrastructure.satellite_imagery.availability import (
+    GibsAvailability,
+)
 
 _GIBS_ATTRIBUTION = (
     "We acknowledge the use of imagery provided by services from NASA's Global "
@@ -21,6 +27,14 @@ class NasaGibsImageryProvider:
     """Credential-free catalog entries loaded directly by the browser from GIBS."""
 
     provider_id = "nasa-gibs"
+
+    def __init__(self, *, client: httpx.AsyncClient | None = None):
+        self._client = client or httpx.AsyncClient(timeout=20, follow_redirects=False)
+        self._owns_client = client is None
+        self._availability = GibsAvailability(self._client)
+
+    async def availability(self) -> tuple[SatelliteProductAvailability, ...]:
+        return await self._availability.availability()
 
     @property
     def products(self) -> tuple[SatelliteImageryProduct, ...]:
@@ -95,4 +109,6 @@ class NasaGibsImageryProvider:
         raise SatelliteImageryInputError("NASA GIBS tiles are loaded directly.")
 
     async def aclose(self) -> None:
-        return None
+        await self._availability.aclose()
+        if self._owns_client:
+            await self._client.aclose()

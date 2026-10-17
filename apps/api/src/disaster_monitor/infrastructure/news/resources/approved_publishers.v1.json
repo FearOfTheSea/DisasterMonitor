@@ -6,7 +6,7 @@
       "publisher_name": "NASA Earth Observatory",
       "feed_url": "https://science.nasa.gov/feed/?science_org=22414%2C19791",
       "allowed_hosts": ["science.nasa.gov"],
-      "allowed_path_prefixes": ["/feed/"],
+      "allowed_path_prefixes": ["/feed/", "/earth/earth-observatory/"],
       "acquisition_mode": "rss_atom",
       "user_agent": "DisasterMonitor/1.0 (+mailto:disaster-monitor-local@example.invalid)",
       "contact_email": "disaster-monitor-local@example.invalid",

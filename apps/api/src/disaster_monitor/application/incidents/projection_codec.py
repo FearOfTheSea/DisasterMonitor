@@ -53,6 +53,8 @@ def snapshot_to_projection(
         raise ValueError("A durable incident projection requires a snapshot version.")
     payload = {
         "retrieved_at": snapshot.retrieved_at.isoformat(),
+        "refresh_state": snapshot.refresh_state,
+        "is_stale": snapshot.is_stale,
         "incidents": [_incident_document(item) for item in snapshot.incidents],
         "observations": [_incident_document(item) for item in snapshot.observations],
         "coverage": [_coverage_document(item) for item in snapshot.coverage],
@@ -94,6 +96,12 @@ def projection_to_snapshot(
         total = payload.get("total_incident_count")
         return ActiveIncidentsSnapshot(
             retrieved_at=datetime.fromisoformat(str(payload["retrieved_at"])),
+            refresh_state="refreshing"
+            if payload.get("refresh_state") == "refreshing"
+            else "stale"
+            if payload.get("is_stale")
+            else "fresh",
+            is_stale=bool(payload.get("is_stale", False)),
             incidents=incidents,
             observations=observations,
             coverage=coverage,

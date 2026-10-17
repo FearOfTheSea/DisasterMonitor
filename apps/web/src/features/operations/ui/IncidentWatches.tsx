@@ -17,6 +17,7 @@ import type {
   IncidentWatchEvent,
 } from '@/features/operations/model/incidentWatch';
 import type { DisasterType } from '@/features/incidents/public';
+import { useMonitoringReadiness } from '@/shared/hooks/useMonitoringReadiness';
 import {
   createRefreshController,
   REFRESH_POLICIES,
@@ -77,6 +78,7 @@ export function IncidentWatches({
   refreshToken = 0,
   onDataChange,
 }: IncidentWatchesProps) {
+  const monitoring = useMonitoringReadiness();
   const [watches, setWatches] = useState<IncidentWatch[]>([]);
   const [selectedWatchId, setSelectedWatchId] = useState<string>();
   const [timeline, setTimeline] = useState<IncidentWatchChange[]>([]);
@@ -124,6 +126,7 @@ export function IncidentWatches({
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!monitoring.available) return;
     if (scopeKind === 'country' && !country.trim()) return;
     setSaving(true);
     setError(undefined);
@@ -238,6 +241,7 @@ export function IncidentWatches({
         </button>
       </div>
       <form className="incident-watch-create" onSubmit={submitCreate}>
+        <p role="status">{monitoring.detail}</p>
         <label>
           <span>Watch disaster</span>
           <select
@@ -246,7 +250,11 @@ export function IncidentWatches({
             onChange={(event) => setDisaster(event.target.value as DisasterType)}
           >
             {DISASTERS.map((item) => (
-              <option key={item.value} value={item.value}>
+              <option
+                key={item.value}
+                value={item.value}
+                disabled={item.value === 'drought'}
+              >
                 {item.label}
               </option>
             ))}
@@ -293,7 +301,11 @@ export function IncidentWatches({
         </label>
         <button
           type="submit"
-          disabled={saving || (scopeKind === 'country' && !country.trim())}
+          disabled={
+            !monitoring.available ||
+            saving ||
+            (scopeKind === 'country' && !country.trim())
+          }
         >
           {saving ? 'Creating…' : 'Create watch'}
         </button>
@@ -312,7 +324,11 @@ export function IncidentWatches({
       {!loading && !error && watches.length === 0 ? (
         <div className="incident-watch-empty">
           <strong>No incident watches have been created.</strong>
-          <p>Create one bounded monitoring scope to begin scheduled source checks.</p>
+          <p>
+            {monitoring.available
+              ? 'Create one bounded monitoring scope to begin scheduled source checks.'
+              : 'Scheduled watches cannot run in this deployment. Manual incident browsing remains available.'}
+          </p>
         </div>
       ) : null}
       <div className="incident-watch-list">
@@ -349,6 +365,7 @@ export function IncidentWatches({
                 <button
                   type="button"
                   onClick={() => void toggleWatch(watch)}
+                  disabled={!watch.enabled && !monitoring.available}
                   aria-label={`${watch.enabled ? 'Disable' : 'Enable'} ${label} watch`}
                 >
                   {watch.enabled ? 'Disable' : 'Enable'}

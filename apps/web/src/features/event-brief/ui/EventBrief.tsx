@@ -2,7 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element -- USGS artifacts are source-owned evidence and must not be transformed. */
 
+import type { CycloneMapLayer } from '@/shared/types/assistant';
 import { useEffect, useState } from 'react';
+import { StandaloneEvidence } from '@/features/event-brief/ui/StandaloneEvidence';
 
 import {
   fetchEarthquakeContext,
@@ -56,6 +58,7 @@ type EventBriefWarnings = {
 const SECTIONS = [
   ['identity', 'Identity'],
   ['observations', 'Observations'],
+  ['impacts', 'Impacts'],
   ['warnings', 'Warnings'],
   ['forecast', 'Forecast / model'],
   ['exposure', 'Exposure'],
@@ -70,13 +73,14 @@ type SectionId = (typeof SECTIONS)[number][0];
 
 export function EventBrief({
   incident,
-  warnings,
   onGroundView,
+  onForecastLayers,
   presentation = 'tabs',
 }: {
   incident: EventBriefIncident;
   warnings?: EventBriefWarnings;
   onGroundView: () => void;
+  onForecastLayers?: (layers: CycloneMapLayer[]) => void;
   presentation?: 'tabs' | 'disclosures';
 }) {
   const [section, setSection] = useState<SectionId>('identity');
@@ -96,8 +100,13 @@ export function EventBrief({
     if (incident.disaster !== 'earthquake' || !usgsEventId) return;
     const controller = new AbortController();
     void fetchEarthquakeContext(usgsEventId, controller.signal)
-      .then((context) => setEarthquakeResult({ eventId: usgsEventId, context }))
-      .catch(() => setEarthquakeResult({ eventId: usgsEventId }));
+      .then((context) => {
+        if (!controller.signal.aborted)
+          setEarthquakeResult({ eventId: usgsEventId, context });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setEarthquakeResult({ eventId: usgsEventId });
+      });
     return () => controller.abort();
   }, [incident.disaster, usgsEventId]);
 
@@ -108,16 +117,15 @@ export function EventBrief({
         aria-label="Event evidence"
       >
         {SECTIONS.filter(([id]) => id !== 'timeline').map(([id, label]) => (
-          <details key={id} open={id === 'observations' ? true : undefined}>
-            <summary>{label}</summary>
+          <LazyDisclosure key={id} label={label} initialOpen={id === 'observations'}>
             <SectionContent
               section={id}
               incident={incident}
-              warnings={warnings}
               earthquakeContext={earthquakeContext}
               onGroundView={onGroundView}
+              onForecastLayers={onForecastLayers}
             />
-          </details>
+          </LazyDisclosure>
         ))}
       </section>
     );
@@ -156,9 +164,9 @@ export function EventBrief({
         <SectionContent
           section={section}
           incident={incident}
-          warnings={warnings}
           earthquakeContext={earthquakeContext}
           onGroundView={onGroundView}
+          onForecastLayers={onForecastLayers}
         />
       </div>
     </section>
@@ -168,8 +176,8 @@ export function EventBrief({
 function SectionContent({
   section,
   incident,
-  warnings,
   onGroundView,
+  onForecastLayers,
   earthquakeContext,
 }: {
   section: SectionId;
@@ -177,6 +185,7 @@ function SectionContent({
   warnings?: EventBriefWarnings;
   earthquakeContext?: EarthquakeContext;
   onGroundView: () => void;
+  onForecastLayers?: (layers: CycloneMapLayer[]) => void;
 }) {
   switch (section) {
     case 'identity':
@@ -211,67 +220,51 @@ function SectionContent({
       ) : (
         <Gap>No admitted source observations are available.</Gap>
       );
+    case 'impacts':
+      return (
+        <StandaloneEvidence
+          identifier={incident.physical_event_id ?? incident.event_id}
+          section="impacts"
+        />
+      );
     case 'warnings':
-      return warnings?.alerts.length ? (
-        <>
-          <p className="event-brief-caution">
-            Official warnings remain separate from physical-event observations unless a
-            conservative association is recorded.
-          </p>
-          <ul className="event-brief-list">
-            {warnings.alerts.slice(0, 5).map((warning) => (
-              <li
-                key={`${warning.sender ?? warning.source_id}:${warning.provider_alert_id}`}
-              >
-                <strong>{warning.event}</strong>
-                <span>{warning.affected_area}</span>
-                <small>
-                  Issuer: {warning.publisher} · {warning.lifecycle_state ?? 'active'} ·
-                  valid {warning.effective ?? warning.sent ?? 'not reported'} to{' '}
-                  {warning.expires ?? 'not reported'}
-                </small>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <Gap>No official warning is conservatively associated with this event.</Gap>
+      return (
+        <StandaloneEvidence
+          identifier={incident.physical_event_id ?? incident.event_id}
+          section="warnings"
+        />
       );
     case 'forecast':
       return incident.disaster === 'earthquake' ? (
         <EarthquakeModelContext context={earthquakeContext} />
       ) : (
-        <Gap>No event-associated forecast/model product is currently available.</Gap>
+        <StandaloneEvidence
+          identifier={incident.physical_event_id ?? incident.event_id}
+          section="forecast"
+          onForecastLayers={onForecastLayers}
+        />
       );
     case 'exposure':
       return (
-        <div>
-          <h4>Population and assets intersecting a source-backed area</h4>
-          <p>
-            Exposure analysis uses the exact mapped, forecast, or modelled geometry and
-            versioned WorldPop/GHSL and local OSM datasets.
-          </p>
-          <p className="event-brief-caution">
-            People and assets inside that geometry are not verified as affected.
-          </p>
-        </div>
+        <StandaloneEvidence
+          identifier={incident.physical_event_id ?? incident.event_id}
+          section="exposure"
+        />
       );
     case 'humanitarian':
       return (
-        <div>
-          <p>
-            Humanitarian situation reports are listed only when associated source
-            evidence exists.
-          </p>
-          <p className="event-brief-caution">
-            INFORM values are baseline vulnerability context, visually separate from
-            event impacts.
-          </p>
-        </div>
+        <StandaloneEvidence
+          identifier={incident.physical_event_id ?? incident.event_id}
+          section="humanitarian"
+        />
       );
     case 'imagery':
       return (
         <div>
+          <StandaloneEvidence
+            identifier={incident.physical_event_id ?? incident.event_id}
+            section="media"
+          />
           <p>
             Ground view keeps capture dates, coverage masks, sensor readiness, and
             before/after comparison lineage inspectable.
@@ -457,4 +450,22 @@ function countryAssociationLabel(incident: EventBriefIncident): string {
 
 function Gap({ children }: { children: string }) {
   return <p className="event-brief-gap">{children}</p>;
+}
+
+function LazyDisclosure({
+  label,
+  initialOpen,
+  children,
+}: {
+  label: string;
+  initialOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(initialOpen);
+  return (
+    <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>{label}</summary>
+      {open ? children : null}
+    </details>
+  );
 }

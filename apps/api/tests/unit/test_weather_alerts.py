@@ -126,3 +126,25 @@ async def test_weather_alerts_distinguish_successful_empty_from_partial_coverage
     assert partial.coverage.state is WeatherAlertCoverageState.DEGRADED
     assert len(partial.alerts) == 1
     assert partial.warnings[0].reason_code == "record_limit_reached"
+
+
+async def test_failed_warning_refresh_preserves_successful_retrieval_time():
+    current = [NOW]
+
+    class Flaky(FakeWeatherProvider):
+        failed = False
+
+        async def fetch_active_alerts(self, *, now):
+            if self.failed:
+                raise TimeoutError()
+            return await super().fetch_active_alerts(now=now)
+
+    provider = Flaky()
+    service = WeatherAlertsService(provider, clock=lambda: current[0])
+    first = await service.execute()
+    provider.failed = True
+    current[0] += timedelta(minutes=3)
+    retained = await service.execute()
+    assert retained.coverage.state is WeatherAlertCoverageState.DEGRADED
+    assert retained.retrieved_at == first.retrieved_at
+    assert retained.alerts == first.alerts

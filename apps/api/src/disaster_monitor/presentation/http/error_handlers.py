@@ -3,6 +3,9 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from disaster_monitor.application.ports.monitoring import (
+    ScheduledMonitoringUnavailableError,
+)
 from disaster_monitor.domain.errors import (
     ConversationNotFoundError,
     InvalidQuestionError,
@@ -14,6 +17,12 @@ from disaster_monitor.domain.errors import (
 
 def register_error_handlers(app: FastAPI) -> None:
     """Keep domain and provider details out of HTTP responses."""
+
+    @app.exception_handler(ScheduledMonitoringUnavailableError)
+    async def handle_monitoring_unavailable(
+        _request: Request, error: ScheduledMonitoringUnavailableError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=503, content={"detail": str(error)})
 
     @app.exception_handler(InvalidQuestionError)
     async def handle_invalid_question(

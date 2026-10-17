@@ -18,6 +18,10 @@ from disaster_monitor.domain.exposure import (
 )
 
 _DISPLAY_LABELS = {
+    ExposureGeometryRole.OPERATOR_INSPECTION: (
+        "Population/assets intersecting the operator inspection area "
+        "(not an impact footprint)"
+    ),
     ExposureGeometryRole.MAPPED_HAZARD: (
         "Population/assets intersecting the mapped area"
     ),

@@ -1,14 +1,16 @@
 """Browser Web Push payload boundary with deterministic finding text."""
 
 import json
-import os
-import subprocess
-import tempfile
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from disaster_monitor.domain.spatial_watches import WatchFinding
+from disaster_monitor.infrastructure.private_files import (
+    atomic_private_write,
+    restrict_private_path,
+    verify_private_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +49,8 @@ class LocalWebPushStateStore:
             raise ValueError("Web Push state requires a concrete file path.")
         path.parent.mkdir(parents=True, exist_ok=True)
         self._path = path
+        if path.exists() and not verify_private_path(path):
+            restrict_private_path(path, backup=True)
 
     def initialize(self, application: VapidApplicationState) -> None:
         document = self._read()
@@ -142,40 +146,9 @@ class LocalWebPushStateStore:
         return raw
 
     def _write(self, document: dict[str, object]) -> None:
-        descriptor, name = tempfile.mkstemp(dir=self._path.parent, suffix=".partial")
-        temporary = Path(name)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                _restrict_to_owner(temporary)
-                json.dump(document, handle, sort_keys=True, separators=(",", ":"))
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, self._path)
-        finally:
-            temporary.unlink(missing_ok=True)
-
-
-def _restrict_to_owner(path: Path) -> None:
-    if os.name != "nt":
-        path.chmod(0o600)
-        return
-    # Windows chmod controls read-only attributes, not access to private keys.
-    script = (
-        "$ErrorActionPreference='Stop'; "
-        "$sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User; "
-        "$acl=New-Object System.Security.AccessControl.FileSecurity; "
-        "$acl.SetOwner($sid); $acl.SetAccessRuleProtection($true,$false); "
-        "$rule=New-Object System.Security.AccessControl.FileSystemAccessRule "
-        "($sid,'FullControl','Allow'); $acl.AddAccessRule($rule); "
-        "[System.IO.File]::SetAccessControl($env:DM_PRIVATE_STATE_PATH,$acl)"
-    )
-    subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-        env={**os.environ, "DM_PRIVATE_STATE_PATH": str(path.resolve())},
-        capture_output=True,
-        check=True,
-        timeout=10,
-    )
+        atomic_private_write(
+            self._path, json.dumps(document, sort_keys=True, separators=(",", ":"))
+        )
 
 
 PushSender = Callable[[str, bytes, str, str], Awaitable[None]]

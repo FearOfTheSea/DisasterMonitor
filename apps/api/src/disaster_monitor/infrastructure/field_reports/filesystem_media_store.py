@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 
 from disaster_monitor.domain.field_reports import FieldMediaLineage
+from disaster_monitor.infrastructure.private_files import (
+    atomic_private_write,
+    restrict_private_path,
+    verify_private_path,
+)
 
 
 class FilesystemFieldMediaStore:
@@ -24,6 +28,10 @@ class FilesystemFieldMediaStore:
             raise ValueError("Field-media store byte limit must be positive.")
         self._root = root.resolve()
         self._root.mkdir(parents=True, exist_ok=True)
+        restrict_private_path(self._root)
+        for existing in self._root.rglob("*"):
+            if existing.is_file() and not verify_private_path(existing):
+                restrict_private_path(existing, backup=True)
         self._maximum_bytes = maximum_bytes
         self._clock = clock
         self.purge_expired()
@@ -152,11 +160,4 @@ class FilesystemFieldMediaStore:
 
     @staticmethod
     def _atomic_write(path: Path, content: bytes) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_suffix(f"{path.suffix}.tmp")
-        with temporary.open("wb") as stream:
-            stream.write(content)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temporary, 0o600)
-        temporary.replace(path)
+        atomic_private_write(path, content)

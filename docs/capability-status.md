@@ -13,7 +13,7 @@ and normative promotion are separate claims.
 - **Unsupported**: No production path is claimed.
 
 Volcanic-eruption discovery uses a bounded primary Smithsonian/GVP path. Its
-preliminary WVAR coverage and source limits remain explicit. They do not imply
+preliminary WVAR coverage, bounded GDACS fallback, and source limits remain explicit. They do not imply
 complete global surveillance or impact evidence.
 
 ## Family status
@@ -89,7 +89,7 @@ that PII detection is complete, that public humanitarian datasets are complete, 
 that route estimates are safe for operational use.
 
 Bounded P4 foundations and the explicitly deferred deployment gates are documented in
-[p4-long-term-capabilities.md](p4-long-term-capabilities.md). Classification, human
+[P4 deployment gates](p4-capability-gates.v1.json). Classification, human
 label volume, simulation, retrospective losses, and notebook conclusions cannot alter
 canonical evidence or source authority.
 
@@ -148,6 +148,29 @@ observations, situation updates, claim reconciliation, and coverage state. A dur
 cross-subsystem incident stream that joins warning lifecycles, Ground selections, and
 Incident Watch changes remains implementation-pending; those records are not relabeled
 or implied by generic coverage warnings.
+
+## Manual desktop repair, 11 October 2026
+
+Incident selection now opens Event Overview. Independent sections retrieve impacts,
+associated warnings, cyclone context, exposure, humanitarian context, and contextual
+media without assistant output. Provider admission and reconciliation still apply.
+Exposure and INFORM require an operator-supplied validated dataset manifest.
+
+The manual runtime shares incident acquisitions, retains stale successful results,
+provides independent identity lookup, and stores bounded identity aliases locally.
+Cursor snapshots have a 30-minute lifetime and an explicit refresh response on expiry.
+Scheduled incident and Ground watches remain unavailable in this deployment.
+Ground discovery and preparation require explicit actions; completed metadata survives restart.
+
+NASA overview imagery uses advertised temporal metadata, and tile failures remain visible.
+Contextual photos expose rejection categories. These repairs do not establish useful
+imagery yield: the repeated ten-query photo sample returned zero images. The six-event
+Ground exercise delivered three artifacts, with no useful post-event observation or comparison.
+The useful radar artifact was an older pre-event reference.
+
+See [Windows setup and limits](internal/temp/windows-non-agent-setup-2026-10-11.md)
+and the [post-repair report](internal/temp/non-agent-post-repair-report-2026-10-11.md) for measured evidence.
+Declared external and human promotion gates retain their separate pending status.
 
 ## Unsupported
 

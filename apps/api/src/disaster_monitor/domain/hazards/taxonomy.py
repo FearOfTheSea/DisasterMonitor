@@ -22,6 +22,8 @@ class HazardDefinition:
     identity_kind: HazardIdentityKind
     disaster: Disaster | None
     warning_event_codes: tuple[str, ...] = ()
+    incident_discovery_supported: bool = True
+    tsunami_warning_context: bool = False
 
     def __post_init__(self) -> None:
         if not self.hazard_id.strip() or not self.display_name.strip():
@@ -94,6 +96,8 @@ def _definition(
     *,
     identity: HazardIdentityKind = HazardIdentityKind.DISCRETE_EVENT,
     warning_codes: tuple[str, ...] = (),
+    incident_discovery_supported: bool = True,
+    tsunami_warning_context: bool = False,
 ) -> HazardDefinition:
     return HazardDefinition(
         hazard_id=disaster.value,
@@ -102,6 +106,8 @@ def _definition(
         identity_kind=identity,
         disaster=disaster,
         warning_event_codes=warning_codes,
+        incident_discovery_supported=incident_discovery_supported,
+        tsunami_warning_context=tsunami_warning_context,
     )
 
 
@@ -112,6 +118,7 @@ DEFAULT_HAZARD_TAXONOMY = HazardTaxonomy(
             "Earthquake",
             ("earthquake", "quake", "seismic event"),
             warning_codes=("earthquake",),
+            tsunami_warning_context=True,
         ),
         _definition(
             Disaster.FLOOD,
@@ -150,6 +157,7 @@ DEFAULT_HAZARD_TAXONOMY = HazardTaxonomy(
             ("drought", "dry spell", "khô hạn"),
             identity=HazardIdentityKind.SPATIAL_TIME_WINDOW,
             warning_codes=("drought",),
+            incident_discovery_supported=False,
         ),
         HazardDefinition(
             hazard_id="tsunami_warning",

@@ -1,11 +1,26 @@
 """Application-owned contracts for selectable satellite raster imagery."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal, Protocol
 
 SatelliteTemporalMode = Literal["daily", "subdaily", "fixed"]
 SatelliteAccessMode = Literal["direct_gibs", "api"]
 SatelliteRightsAccessModel = Literal["public", "free_account", "self_hosted", "paid"]
+
+
+@dataclass(frozen=True, slots=True)
+class SatelliteProductAvailability:
+    source_id: str
+    state: Literal["available", "empty", "degraded", "error"]
+    default_time: str | None
+    time_values: tuple[str, ...]
+    metadata_retrieved_at: datetime | None
+    limitations: tuple[str, ...] = ()
+
+
+class SatelliteAvailabilityReader(Protocol):
+    async def availability(self) -> tuple[SatelliteProductAvailability, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)

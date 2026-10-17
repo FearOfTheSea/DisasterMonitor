@@ -87,15 +87,20 @@ export function IncidentPanelControls({
   const hasFilters = Boolean(
     search.trim() || view !== 'recent' || hazard || occurrenceStart || occurrenceEnd,
   );
-  const statusTitle = offline
-    ? 'Offline snapshot'
-    : unavailable
-      ? 'Incidents unavailable'
-      : loading
-        ? snapshot
-          ? 'Updating snapshot'
-          : 'Loading active incidents…'
-        : 'Snapshot received';
+  const statusTitle =
+    snapshot?.refresh_state === 'refreshing'
+      ? 'Refreshing sources; retained snapshot'
+      : snapshot?.is_stale
+        ? 'Stale snapshot; source retrieval degraded'
+        : offline
+          ? 'Offline snapshot'
+          : unavailable
+            ? 'Incidents unavailable'
+            : loading
+              ? snapshot
+                ? 'Updating snapshot'
+                : 'Loading active incidents…'
+              : 'Snapshot received';
   const statusDetail = unavailable
     ? (error ?? 'Incident providers could not be reached.')
     : loading && !snapshot
@@ -131,6 +136,28 @@ export function IncidentPanelControls({
           {loading ? 'Updating…' : offline || unavailable ? 'Try again' : 'Refresh'}
         </button>
       </div>
+      {error && !unavailable && !offline && <p role="alert">{error}</p>}
+      {snapshot && onHazardChange && (
+        <div className="incident-hazard-counts" aria-label="Counts by hazard">
+          <span className="incident-hazard-counts-label">Acquired by hazard</span>
+          {snapshot.coverage.map((item) => (
+            <button
+              key={item.disaster}
+              type="button"
+              aria-pressed={hazard === item.disaster}
+              onClick={() =>
+                onHazardChange(hazard === item.disaster ? undefined : item.disaster)
+              }
+            >
+              <span>
+                {HAZARD_OPTIONS.find((option) => option.value === item.disaster)
+                  ?.label ?? item.disaster}
+              </span>
+              <strong>{item.incident_count}</strong>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="incident-search">
         <svg
           viewBox="0 0 24 24"

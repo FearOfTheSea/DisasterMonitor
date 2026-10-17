@@ -223,6 +223,7 @@ async def test_zero_accepted_images_return_bounded_diagnostics() -> None:
     assert gallery.items == ()
     assert gallery.rejected_count == 1
     assert gallery.provider_ids == ("fixture-media",)
+    assert gallery.rejection_reasons == (("disaster_missing", 1),)
     assert gallery.warnings == (
         "No source-associated images met the event and media safety gates.",
     )

@@ -189,3 +189,41 @@ def test_request_codec_rejects_missing_selection_alternative() -> None:
 
     with pytest.raises(ValueError, match="alternative"):
         request_from_document(document)
+
+
+@pytest.mark.asyncio
+async def test_file_repository_recovers_request_and_artifact_metadata(tmp_path):
+    from importlib import import_module
+
+    module = import_module(
+        "disaster_monitor.infrastructure.ground_imagery.file_repository"
+    )
+    request = _request_fixture()
+    repository = module.FileGroundImageryRequestStore(tmp_path / "requests.json")
+    await repository.save_request(request)
+    restored = module.FileGroundImageryRequestStore(tmp_path / "requests.json")
+    assert await restored.get_request(request.request_id) == request
+    assert (
+        await restored.get_request_for_selection(request.artifacts[0].selection_id)
+        == request
+    )
+
+
+async def test_restart_retains_artifacts_and_marks_preparation_interrupted(
+    tmp_path,
+):
+    from dataclasses import replace
+
+    from disaster_monitor.infrastructure.ground_imagery.file_repository import (
+        FileGroundImageryRequestStore,
+    )
+
+    request = replace(_request_fixture(), state=GroundImageryRequestState.QUEUED)
+    path = tmp_path / "requests.json"
+    store = FileGroundImageryRequestStore(path)
+    await store.save_request(request)
+    restored = await FileGroundImageryRequestStore(path).get_request(request.request_id)
+    assert restored.state is GroundImageryRequestState.FAILED
+    assert "interrupted_restart" in restored.reason_codes
+    assert restored.artifacts == request.artifacts
+    assert restored.request_version == request.request_version + 1

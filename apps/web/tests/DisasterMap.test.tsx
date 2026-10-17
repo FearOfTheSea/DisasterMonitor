@@ -44,7 +44,7 @@ vi.mock('@/features/map/api/satelliteImageryClient', async (importOriginal) => {
     await importOriginal<typeof import('@/features/map/api/satelliteImageryClient')>();
   return {
     ...original,
-    fetchSatelliteImageryCatalog: satelliteClientMocks.fetchCatalog,
+    fetchSatelliteTemporalAvailability: satelliteClientMocks.fetchCatalog,
   };
 });
 
@@ -83,12 +83,54 @@ describe('DisasterMap assistant focus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     satelliteClientMocks.fetchCatalog.mockResolvedValue([
-      { sourceId: 'nasa-viirs-snpp-true-color', available: true },
-      { sourceId: 'nasa-modis-terra-true-color', available: true },
-      { sourceId: 'nasa-modis-aqua-true-color', available: true },
-      { sourceId: 'nasa-goes-east-geocolor', available: true },
-      { sourceId: 'nasa-goes-west-geocolor', available: true },
-      { sourceId: 'nasa-himawari-9-visible', available: true },
+      {
+        sourceId: 'nasa-viirs-snpp-true-color',
+        availabilityState: 'available',
+        defaultTime: 'nasa-viirs-snpp-true-color'.includes('true-color')
+          ? '2026-08-20'
+          : '2026-08-20T12:00:00Z',
+        limitations: [],
+      },
+      {
+        sourceId: 'nasa-modis-terra-true-color',
+        availabilityState: 'available',
+        defaultTime: 'nasa-modis-terra-true-color'.includes('true-color')
+          ? '2026-08-20'
+          : '2026-08-20T12:00:00Z',
+        limitations: [],
+      },
+      {
+        sourceId: 'nasa-modis-aqua-true-color',
+        availabilityState: 'available',
+        defaultTime: 'nasa-modis-aqua-true-color'.includes('true-color')
+          ? '2026-08-20'
+          : '2026-08-20T12:00:00Z',
+        limitations: [],
+      },
+      {
+        sourceId: 'nasa-goes-east-geocolor',
+        availabilityState: 'available',
+        defaultTime: 'nasa-goes-east-geocolor'.includes('true-color')
+          ? '2026-08-20'
+          : '2026-08-20T12:00:00Z',
+        limitations: [],
+      },
+      {
+        sourceId: 'nasa-goes-west-geocolor',
+        availabilityState: 'available',
+        defaultTime: 'nasa-goes-west-geocolor'.includes('true-color')
+          ? '2026-08-20'
+          : '2026-08-20T12:00:00Z',
+        limitations: [],
+      },
+      {
+        sourceId: 'nasa-himawari-9-visible',
+        availabilityState: 'available',
+        defaultTime: 'nasa-himawari-9-visible'.includes('true-color')
+          ? '2026-08-20'
+          : '2026-08-20T12:00:00Z',
+        limitations: [],
+      },
     ]);
   });
 

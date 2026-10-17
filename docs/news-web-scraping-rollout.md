@@ -167,8 +167,8 @@ drift and latency metrics, and an observation-only route that cannot promote can
 These are promotion gates, not deferred production cleanup.
 
 The packaged registry admits one enabled source, NASA Earth Observatory Natural
-Events, under the bounded controls and rights review recorded in
-`docs/p2-interoperability-and-provider-evaluations.md`. Operators can replace that
+Events, under the bounded controls and rights-review metadata in the
+[packaged publisher registry](../apps/api/src/disaster_monitor/infrastructure/news/resources/approved_publishers.v1.json). Operators can replace that
 default by setting `APPROVED_WEB_SOURCE_REGISTRY_PATH` to a reviewed registry; an empty
 registry disables direct publisher collection. A worker restart is required after
 registry membership or kill-switch changes.

@@ -117,6 +117,7 @@ export function useActiveIncidents() {
   const pageController = useRef<AbortController | null>(null);
   const pageLoading = useRef(false);
   const version = useRef(0);
+  const forceRefresh = useRef(false);
   const queryKey = cacheKey(
     view,
     hazard,
@@ -139,7 +140,10 @@ export function useActiveIncidents() {
       setError(undefined);
       try {
         const key = queryKey;
+        const requestedRefresh = forceRefresh.current;
+        forceRefresh.current = false;
         const nextSnapshot = await fetchActiveIncidents({
+          refresh: requestedRefresh || undefined,
           pageSize: 20,
           view: view === 'recent' ? undefined : view,
           hazard,
@@ -202,10 +206,10 @@ export function useActiveIncidents() {
     };
   }, [load, queryKey]);
 
-  const refresh = useCallback(
-    () => refreshController.current?.refreshNow() ?? Promise.resolve(),
-    [],
-  );
+  const refresh = useCallback(() => {
+    forceRefresh.current = true;
+    return refreshController.current?.refreshNow() ?? Promise.resolve();
+  }, []);
 
   const loadMore = useCallback(async () => {
     const cursor = snapshot?.next_cursor;
@@ -270,7 +274,11 @@ export function useActiveIncidents() {
       });
     } catch (caught) {
       if (!controller.signal.aborted && queryKeyRef.current === queryKey)
-        setError(errorMessage(caught));
+        setError(
+          caught instanceof HttpResponseError && caught.status === 410
+            ? 'This page snapshot expired. Refresh to recover current pages; your selected incident is retained.'
+            : errorMessage(caught),
+        );
     } finally {
       if (pageController.current === controller) {
         pageController.current = null;

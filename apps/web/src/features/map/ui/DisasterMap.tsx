@@ -20,11 +20,10 @@ import {
 } from '@/features/map/model/mapLayerState';
 import { REGIONAL_PRESETS } from '@/features/map/model/regionalPresets';
 import { MapLayerControls } from '@/features/map/ui/MapLayerControls';
-import { fetchSatelliteImageryCatalog } from '@/features/map/api/satelliteImageryClient';
+import { fetchSatelliteTemporalAvailability } from '@/features/map/api/satelliteImageryClient';
 import {
   SATELLITE_IMAGERY_SOURCES,
   buildNasaGibsTileUrl,
-  observationTimeForSource,
   type SatelliteMapState,
   type SatelliteImagerySource,
   type SatelliteSourceId,
@@ -37,6 +36,7 @@ import type {
 import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 import type {
   CommonOperationalPicture,
+  CycloneMapLayer,
   MapView,
   SelectedEvent,
 } from '@/shared/types/assistant';
@@ -72,6 +72,7 @@ type DisasterMapProps = {
   activeIncidents?: IncidentMapRecord[];
   selectedIncidentId?: string;
   selectedEvent?: SelectedEvent;
+  standaloneCycloneLayers?: CycloneMapLayer[];
   layerState?: MapLayerState;
   onLayerStateChange?: (state: MapLayerState) => void;
   correlationCount?: number;
@@ -94,6 +95,7 @@ export function DisasterMap({
   activeIncidents = EMPTY_ACTIVE_INCIDENTS,
   selectedIncidentId,
   selectedEvent,
+  standaloneCycloneLayers,
   layerState: controlledLayerState,
   onLayerStateChange,
   correlationCount = 0,
@@ -153,7 +155,6 @@ export function DisasterMap({
       ) as SatelliteImagerySource;
       return {
         sourceId: source.id,
-        observationTime: observationTimeForSource(source),
       };
     });
   const satelliteState = controlledSatelliteState ?? uncontrolledSatelliteState;
@@ -166,13 +167,13 @@ export function DisasterMap({
   const [catalogUnavailable, setCatalogUnavailable] = useState(false);
   const loadSatelliteCatalog = useCallback(async (signal: AbortSignal) => {
     try {
-      const availability = await fetchSatelliteImageryCatalog(signal);
+      const availability = await fetchSatelliteTemporalAvailability(signal);
       if (signal.aborted) return;
-      const byId = new Map(availability.map((item) => [item.sourceId, item.available]));
+      const byId = new Map(availability.map((item) => [item.sourceId, item]));
       setSatelliteSources((current) =>
         current.map((source) => ({
           ...source,
-          available: byId.get(source.id) ?? source.available,
+          ...byId.get(source.id),
         })),
       );
       setCatalogUnavailable(false);
@@ -185,14 +186,20 @@ export function DisasterMap({
     () => activeIncidentMapFeatures(activeIncidents),
     [activeIncidents],
   );
-  const cycloneLayers = useMemo(() => cycloneMapLayers(selectedEvent), [selectedEvent]);
+  const cycloneLayers = useMemo(
+    () => standaloneCycloneLayers ?? cycloneMapLayers(selectedEvent),
+    [selectedEvent, standaloneCycloneLayers],
+  );
   const selectedSatelliteSource = useMemo(
     () =>
       satelliteSources.find((source) => source.id === satelliteSourceId) ??
       satelliteSources[0],
     [satelliteSourceId, satelliteSources],
   );
-  const requestedObservationTime = satelliteState.observationTime;
+  const requestedObservationTime =
+    satelliteState.observationTime ?? selectedSatelliteSource.defaultTime;
+  const [missingTilesFor, setMissingTilesFor] = useState<string>();
+  const satelliteTileKey = `${satelliteSourceId}:${requestedObservationTime}`;
   const initialView = useRef(view ?? DEFAULT_MAP_VIEW);
   const lastReportedView = useRef(view ?? DEFAULT_MAP_VIEW);
   const handleViewChange = useCallback(
@@ -222,8 +229,14 @@ export function DisasterMap({
       attribution: selectedSatelliteSource.attribution,
       maximumUsefulZoom: selectedSatelliteSource.maximumUsefulZoom,
       opacity: DEFAULT_SATELLITE_OPACITY,
+      onTileError: () => setMissingTilesFor(satelliteTileKey),
     };
-  }, [satelliteEnabled, requestedObservationTime, selectedSatelliteSource]);
+  }, [
+    satelliteEnabled,
+    requestedObservationTime,
+    selectedSatelliteSource,
+    satelliteTileKey,
+  ]);
 
   useEffect(() => {
     const controller = createRefreshController(
@@ -477,6 +490,7 @@ export function DisasterMap({
           state={satelliteState}
           opacity={satelliteOpacity}
           catalogUnavailable={catalogUnavailable}
+          missingTiles={missingTilesFor === satelliteTileKey}
           onStateChange={changeSatelliteState}
           onOpacityChange={setSatelliteOpacity}
         />

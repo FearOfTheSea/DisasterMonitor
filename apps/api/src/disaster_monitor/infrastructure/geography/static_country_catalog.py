@@ -179,6 +179,10 @@ class StaticCountryCatalog:
         for match in matches:
             if _distance_direction(text, match) or _gdacs_event_type(text, match):
                 continue
+            # Exact country selection has its own resolver. The common noun
+            # must not establish an incident country, even as the whole title.
+            if match.group(0).casefold() == "island":
+                continue
             for country in term_countries.get(match.group(0).casefold(), ()):
                 if country.alpha3_code not in found_codes:
                     found.append(country)

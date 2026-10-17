@@ -177,6 +177,8 @@ async def test_distinct_observation_intervals_on_the_same_day_remain_separate():
     "field,value",
     [
         ("onset_date", "2026-09-26T01:00:00"),
+        ("onset_date", "1970-01-01T00:00:00Z"),
+        ("dateinsert", "1970-01-01T00:00:00Z"),
         ("expires_date", "2026-08-01T01:00:00"),
         ("dateinsert", "2026-10-01T01:00:00"),
     ],

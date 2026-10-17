@@ -188,8 +188,8 @@ async def test_uses_source_country_when_coordinate_is_offshore() -> None:
                     Disaster.EARTHQUAKE,
                     "offshore-earthquake",
                     NOW,
-                    latitude=0.0,
-                    longitude=0.0,
+                    latitude=10.0,
+                    longitude=111.0,
                     location="OFFSHORE REGION, VIETNAM",
                 ),
             )

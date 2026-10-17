@@ -6,6 +6,9 @@ from uuid import uuid4
 
 from disaster_monitor.application.ports.geography import CountryCatalog
 from disaster_monitor.application.ports.incident_watch_store import IncidentWatchStore
+from disaster_monitor.application.ports.monitoring import (
+    ScheduledMonitoringUnavailableError,
+)
 from disaster_monitor.domain.disaster import (
     Country,
     Disaster,
@@ -14,6 +17,7 @@ from disaster_monitor.domain.disaster import (
     IncidentWatchScope,
     WatchScopeKind,
 )
+from disaster_monitor.domain.hazards.taxonomy import DEFAULT_HAZARD_TAXONOMY
 
 
 class InvalidIncidentWatchScopeError(ValueError):
@@ -32,11 +36,13 @@ class ManageIncidentWatches:
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         identifier: Callable[[], str] = lambda: str(uuid4()),
+        monitoring_available: bool = True,
     ) -> None:
         self._store = store
         self._country_catalog = country_catalog
         self._clock = clock
         self._identifier = identifier
+        self._monitoring_available = monitoring_available
 
     async def create(
         self,
@@ -47,6 +53,14 @@ class ManageIncidentWatches:
         refresh_interval_seconds: int,
     ) -> IncidentWatch:
         scope = self._canonical_scope(scope_kind, country)
+        if not DEFAULT_HAZARD_TAXONOMY.require(
+            disaster.value
+        ).incident_discovery_supported:
+            raise InvalidIncidentWatchScopeError(
+                "Drought has no executable event-discovery provider."
+            )
+        if not self._monitoring_available:
+            raise ScheduledMonitoringUnavailableError()
         now = self._clock()
         created = IncidentWatch(
             watch_id=f"incident-watch:{self._identifier()}",
@@ -65,7 +79,25 @@ class ManageIncidentWatches:
     async def list(self) -> tuple[IncidentWatch, ...]:
         return await self._store.list_watches()
 
+    @property
+    def monitoring_available(self) -> bool:
+        return self._monitoring_available
+
     async def set_enabled(self, watch_id: str, *, enabled: bool) -> IncidentWatch:
+        existing = await self._store.get_watch(watch_id)
+        if existing is None:
+            raise IncidentWatchNotFoundError(watch_id)
+        if (
+            enabled
+            and not DEFAULT_HAZARD_TAXONOMY.require(
+                existing.disaster.value
+            ).incident_discovery_supported
+        ):
+            raise InvalidIncidentWatchScopeError(
+                "Drought has no executable event-discovery provider."
+            )
+        if enabled and not self._monitoring_available:
+            raise ScheduledMonitoringUnavailableError()
         updated = await self._store.set_watch_enabled(
             watch_id,
             enabled=enabled,

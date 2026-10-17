@@ -158,6 +158,41 @@ async def test_cog_artifact_can_be_read_and_tiled(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("x", "y"), [(5, 3), (4, 2)])
+async def test_tiles_outside_artifact_coverage_are_transparent(
+    tmp_path: Path, x: int, y: int
+) -> None:
+    with MemoryFile() as memory:
+        with memory.open(
+            driver="GTiff",
+            width=10,
+            height=10,
+            count=3,
+            dtype="uint8",
+            crs="EPSG:3857",
+            transform=from_bounds(-50, -50, 50, 50, 10, 10),
+        ) as dataset:
+            dataset.write(np.full((3, 10, 10), 100, dtype="uint8"))
+        content = memory.read()
+    store = FilesystemImageryArtifactStore(tmp_path)
+    await store.put_bytes(
+        artifact_id="artifact:regional",
+        content_type="image/tiff",
+        content=content,
+        maximum_bytes=128 * 1024 * 1024,
+    )
+
+    tile = await RasterioStoredArtifactTileRenderer(store).tile(
+        "artifact:regional", 3, x, y
+    )
+
+    with MemoryFile(tile) as memory:
+        with memory.open() as dataset:
+            assert (dataset.width, dataset.height, dataset.count) == (256, 256, 4)
+            assert not np.any(dataset.read(4))
+
+
+@pytest.mark.asyncio
 async def test_sentinel_2_data_mask_controls_tile_alpha(tmp_path: Path) -> None:
     store = FilesystemImageryArtifactStore(tmp_path)
     await store.put_bytes(

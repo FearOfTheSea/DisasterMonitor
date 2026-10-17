@@ -197,6 +197,9 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      is_stale: {
+        type: 'boolean',
+      },
       next_cursor: {
         anyOf: [
           {
@@ -212,6 +215,10 @@ const apiSchemas = {
           $ref: '#/components/schemas/ActiveIncidentResponse',
         },
         type: 'array',
+      },
+      refresh_state: {
+        enum: ['fresh', 'refreshing', 'stale'],
+        type: 'string',
       },
       retrieved_at: {
         format: 'date-time',
@@ -691,6 +698,470 @@ const apiSchemas = {
     required: ['message', 'conversation_id', 'model'],
     type: 'object',
   },
+  AssociatedWarning: {
+    properties: {
+      alert: {
+        $ref: '#/components/schemas/CapAlert',
+      },
+      association: {
+        $ref: '#/components/schemas/WarningAssociation',
+      },
+    },
+    required: ['alert', 'association'],
+    type: 'object',
+  },
+  BaselineVulnerabilityContext: {
+    properties: {
+      aggregation_level: {
+        type: 'string',
+      },
+      context_role: {
+        type: 'string',
+      },
+      coping_capacity_index: {
+        type: 'number',
+      },
+      dataset_version: {
+        type: 'string',
+      },
+      interpretation: {
+        type: 'string',
+      },
+      place_code: {
+        type: 'string',
+      },
+      place_name: {
+        type: 'string',
+      },
+      risk_index: {
+        type: 'number',
+      },
+      source_id: {
+        type: 'string',
+      },
+      vintage: {
+        type: 'integer',
+      },
+      vulnerability_index: {
+        type: 'number',
+      },
+    },
+    required: [
+      'place_code',
+      'place_name',
+      'aggregation_level',
+      'dataset_version',
+      'vintage',
+      'risk_index',
+      'vulnerability_index',
+      'coping_capacity_index',
+      'source_id',
+      'context_role',
+      'interpretation',
+    ],
+    type: 'object',
+  },
+  CapAlert: {
+    properties: {
+      addresses: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      attribution: {
+        type: 'string',
+      },
+      canonical_url: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      codes: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      identifier: {
+        type: 'string',
+      },
+      incidents: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      infos: {
+        items: {
+          $ref: '#/components/schemas/CapInfo',
+        },
+        type: 'array',
+      },
+      limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      message_type: {
+        $ref: '#/components/schemas/CapMessageType',
+      },
+      note: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      profile: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      publisher: {
+        type: 'string',
+      },
+      references: {
+        items: {
+          $ref: '#/components/schemas/CapMessageReference',
+        },
+        type: 'array',
+      },
+      restriction: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      scope: {
+        $ref: '#/components/schemas/CapScope',
+      },
+      sender: {
+        type: 'string',
+      },
+      sent: {
+        format: 'date-time',
+        type: 'string',
+      },
+      signature_present: {
+        type: 'boolean',
+      },
+      signature_verified: {
+        anyOf: [
+          {
+            type: 'boolean',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source_id: {
+        type: 'string',
+      },
+      status: {
+        $ref: '#/components/schemas/CapStatus',
+      },
+    },
+    required: [
+      'identifier',
+      'sender',
+      'sent',
+      'status',
+      'message_type',
+      'scope',
+      'source_id',
+      'publisher',
+      'infos',
+      'retrieved_at',
+      'attribution',
+      'limitations',
+    ],
+    type: 'object',
+  },
+  CapArea: {
+    properties: {
+      altitude_m: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      ceiling_m: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      circles: {
+        items: {
+          $ref: '#/components/schemas/CapCircle',
+        },
+        type: 'array',
+      },
+      description: {
+        type: 'string',
+      },
+      geocodes: {
+        items: {
+          maxItems: 2,
+          minItems: 2,
+          prefixItems: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'string',
+            },
+          ],
+          type: 'array',
+        },
+        type: 'array',
+      },
+      polygons: {
+        items: {
+          $ref: '#/components/schemas/MultiPolygon',
+        },
+        type: 'array',
+      },
+    },
+    required: ['description'],
+    type: 'object',
+  },
+  CapCircle: {
+    properties: {
+      center: {
+        $ref: '#/components/schemas/Coordinate',
+      },
+      radius_km: {
+        type: 'number',
+      },
+    },
+    required: ['center', 'radius_km'],
+    type: 'object',
+  },
+  CapInfo: {
+    properties: {
+      areas: {
+        items: {
+          $ref: '#/components/schemas/CapArea',
+        },
+        type: 'array',
+      },
+      categories: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      certainty: {
+        $ref: '#/components/schemas/WarningCertainty',
+      },
+      description: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      effective: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      event: {
+        type: 'string',
+      },
+      event_codes: {
+        items: {
+          maxItems: 2,
+          minItems: 2,
+          prefixItems: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'string',
+            },
+          ],
+          type: 'array',
+        },
+        type: 'array',
+      },
+      expires: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      headline: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      instruction: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      language: {
+        type: 'string',
+      },
+      onset: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      parameters: {
+        items: {
+          maxItems: 2,
+          minItems: 2,
+          prefixItems: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'string',
+            },
+          ],
+          type: 'array',
+        },
+        type: 'array',
+      },
+      sender_name: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      severity: {
+        $ref: '#/components/schemas/WarningSeverity',
+      },
+      urgency: {
+        $ref: '#/components/schemas/WarningUrgency',
+      },
+    },
+    required: [
+      'language',
+      'categories',
+      'event',
+      'event_codes',
+      'urgency',
+      'severity',
+      'certainty',
+      'effective',
+      'onset',
+      'expires',
+      'sender_name',
+      'headline',
+      'description',
+      'instruction',
+      'areas',
+    ],
+    type: 'object',
+  },
+  CapMessageReference: {
+    properties: {
+      identifier: {
+        type: 'string',
+      },
+      sender: {
+        type: 'string',
+      },
+      sent: {
+        format: 'date-time',
+        type: 'string',
+      },
+    },
+    required: ['sender', 'identifier', 'sent'],
+    type: 'object',
+  },
+  CapMessageType: {
+    enum: ['alert', 'update', 'cancel', 'ack', 'error'],
+    type: 'string',
+  },
+  CapScope: {
+    enum: ['public', 'restricted', 'private'],
+    type: 'string',
+  },
+  CapStatus: {
+    enum: ['actual', 'exercise', 'system', 'test', 'draft'],
+    type: 'string',
+  },
   CommonOperationalPictureResponse: {
     properties: {
       cop_id: {
@@ -818,6 +1289,10 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  ContextAvailability: {
+    enum: ['available', 'partial', 'no_data', 'unavailable'],
+    type: 'string',
+  },
   ConversationMessageResponse: {
     properties: {
       assistant_response: {
@@ -891,6 +1366,18 @@ const apiSchemas = {
     required: ['conversation_id', 'created_at', 'updated_at', 'preview'],
     type: 'object',
   },
+  Coordinate: {
+    properties: {
+      latitude: {
+        type: 'number',
+      },
+      longitude: {
+        type: 'number',
+      },
+    },
+    required: ['latitude', 'longitude'],
+    type: 'object',
+  },
   CreateIncidentWatchOperatorActionResponse: {
     additionalProperties: false,
     properties: {
@@ -953,6 +1440,29 @@ const apiSchemas = {
     required: ['status', 'summary', 'limitation'],
     type: 'object',
   },
+  CycloneMapCoordinate: {
+    properties: {
+      latitude: {
+        type: 'number',
+      },
+      longitude: {
+        type: 'number',
+      },
+      valid_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: ['latitude', 'longitude'],
+    type: 'object',
+  },
   CycloneMapCoordinateResponse: {
     properties: {
       latitude: {
@@ -978,6 +1488,105 @@ const apiSchemas = {
       },
     },
     required: ['latitude', 'longitude'],
+    type: 'object',
+  },
+  CycloneMapGeometryKind: {
+    enum: ['point', 'track', 'area'],
+    type: 'string',
+  },
+  CycloneMapLayer: {
+    properties: {
+      coordinates: {
+        items: {
+          $ref: '#/components/schemas/CycloneMapCoordinate',
+        },
+        type: 'array',
+      },
+      geometry_kind: {
+        $ref: '#/components/schemas/CycloneMapGeometryKind',
+      },
+      issued_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      layer_id: {
+        type: 'string',
+      },
+      limitation: {
+        type: 'string',
+      },
+      provisional: {
+        type: 'boolean',
+      },
+      reconciliation: {
+        type: 'string',
+      },
+      semantic_role: {
+        $ref: '#/components/schemas/CycloneMapSemanticRole',
+      },
+      source: {
+        $ref: '#/components/schemas/SourceReference',
+      },
+      storm_id: {
+        type: 'string',
+      },
+      valid_from: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      valid_to: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      wind_threshold: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      wind_threshold_unit: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: [
+      'layer_id',
+      'semantic_role',
+      'geometry_kind',
+      'coordinates',
+      'source',
+      'issued_at',
+      'valid_from',
+      'valid_to',
+      'storm_id',
+      'provisional',
+      'limitation',
+      'reconciliation',
+    ],
     type: 'object',
   },
   CycloneMapLayerResponse: {
@@ -1074,6 +1683,10 @@ const apiSchemas = {
       'reconciliation',
     ],
     type: 'object',
+  },
+  CycloneMapSemanticRole: {
+    enum: ['provisional_track', 'forecast_track', 'uncertainty_area', 'wind_radii'],
+    type: 'string',
   },
   DecisionEstimateResponse: {
     properties: {
@@ -1250,6 +1863,66 @@ const apiSchemas = {
     required: ['disaster', 'state', 'incident_count', 'detail'],
     type: 'object',
   },
+  DisasterMediaGallery: {
+    properties: {
+      event_id: {
+        type: 'string',
+      },
+      generated_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      items: {
+        items: {
+          $ref: '#/components/schemas/DisasterMediaItem',
+        },
+        type: 'array',
+      },
+      physical_event_id: {
+        type: 'string',
+      },
+      provider_ids: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      rejected_count: {
+        type: 'integer',
+      },
+      rejection_reasons: {
+        items: {
+          maxItems: 2,
+          minItems: 2,
+          prefixItems: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'integer',
+            },
+          ],
+          type: 'array',
+        },
+        type: 'array',
+      },
+      warnings: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+    },
+    required: [
+      'event_id',
+      'physical_event_id',
+      'generated_at',
+      'items',
+      'rejected_count',
+      'provider_ids',
+    ],
+    type: 'object',
+  },
   DisasterMediaGalleryResponse: {
     properties: {
       event_id: {
@@ -1285,6 +1958,127 @@ const apiSchemas = {
       },
     },
     required: ['event_id', 'physical_event_id', 'generated_at'],
+    type: 'object',
+  },
+  DisasterMediaItem: {
+    properties: {
+      association_detail: {
+        type: 'string',
+      },
+      association_rule_ids: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      association_status: {
+        $ref: '#/components/schemas/MediaAssociationStatus',
+      },
+      caption: {
+        type: 'string',
+      },
+      captured_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      content_sha256: {
+        type: 'string',
+      },
+      credit: {
+        type: 'string',
+      },
+      credit_kind: {
+        $ref: '#/components/schemas/MediaCreditKind',
+      },
+      event_id: {
+        type: 'string',
+      },
+      height: {
+        type: 'integer',
+      },
+      license_name: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      license_url: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      media_id: {
+        type: 'string',
+      },
+      physical_event_id: {
+        type: 'string',
+      },
+      published_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      publisher: {
+        type: 'string',
+      },
+      rights_status: {
+        $ref: '#/components/schemas/MediaRightsStatus',
+      },
+      role: {
+        $ref: '#/components/schemas/MediaContentRole',
+      },
+      source_id: {
+        type: 'string',
+      },
+      source_page_url: {
+        type: 'string',
+      },
+      uncertainty: {
+        type: 'string',
+      },
+      width: {
+        type: 'integer',
+      },
+    },
+    required: [
+      'media_id',
+      'event_id',
+      'physical_event_id',
+      'source_id',
+      'publisher',
+      'source_page_url',
+      'caption',
+      'credit',
+      'credit_kind',
+      'published_at',
+      'captured_at',
+      'license_name',
+      'license_url',
+      'rights_status',
+      'role',
+      'association_status',
+      'association_rule_ids',
+      'association_detail',
+      'uncertainty',
+      'content_sha256',
+      'width',
+      'height',
+    ],
     type: 'object',
   },
   DisasterMediaItemResponse: {
@@ -1766,6 +2560,146 @@ const apiSchemas = {
       'imagery_selection',
       'watch_change',
       'claim_reconciliation',
+    ],
+    type: 'string',
+  },
+  ExposureAnalysis: {
+    properties: {
+      assets: {
+        items: {
+          $ref: '#/components/schemas/InfrastructureAsset',
+        },
+        type: 'array',
+      },
+      calculated_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      display_label: {
+        type: 'string',
+      },
+      geometry: {
+        $ref: '#/components/schemas/ExposureGeometry',
+      },
+      limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      osm_completeness: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/OsmCompletenessIndicator',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      population_disagreement: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/PopulationDisagreement',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      population_estimates: {
+        items: {
+          $ref: '#/components/schemas/PopulationExposureEstimate',
+        },
+        type: 'array',
+      },
+    },
+    required: [
+      'geometry',
+      'population_estimates',
+      'assets',
+      'population_disagreement',
+      'display_label',
+      'calculated_at',
+      'limitations',
+    ],
+    type: 'object',
+  },
+  ExposureDataset: {
+    properties: {
+      dataset_id: {
+        type: 'string',
+      },
+      license_name: {
+        type: 'string',
+      },
+      publisher: {
+        type: 'string',
+      },
+      resolution_m: {
+        type: 'number',
+      },
+      role: {
+        $ref: '#/components/schemas/ExposureDatasetRole',
+      },
+      source_url: {
+        type: 'string',
+      },
+      uncertainty: {
+        type: 'string',
+      },
+      version: {
+        type: 'string',
+      },
+      vintage: {
+        type: 'integer',
+      },
+    },
+    required: [
+      'dataset_id',
+      'publisher',
+      'version',
+      'vintage',
+      'resolution_m',
+      'license_name',
+      'source_url',
+      'role',
+      'uncertainty',
+    ],
+    type: 'object',
+  },
+  ExposureDatasetRole: {
+    enum: ['primary', 'secondary'],
+    type: 'string',
+  },
+  ExposureGeometry: {
+    properties: {
+      geometry: {
+        $ref: '#/components/schemas/MultiPolygon',
+      },
+      observed_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      role: {
+        $ref: '#/components/schemas/ExposureGeometryRole',
+      },
+      source_id: {
+        type: 'string',
+      },
+      source_version: {
+        type: 'string',
+      },
+    },
+    required: ['geometry', 'role', 'source_id', 'source_version', 'observed_at'],
+    type: 'object',
+  },
+  ExposureGeometryRole: {
+    enum: [
+      'operator_inspection',
+      'mapped_hazard',
+      'forecast_hazard',
+      'modelled_hazard',
     ],
     type: 'string',
   },
@@ -2652,6 +3586,176 @@ const apiSchemas = {
     required: ['role', 'sensor', 'start', 'end', 'expanded_start', 'expanded_end'],
     type: 'object',
   },
+  HumanitarianContextSnapshot: {
+    properties: {
+      availability: {
+        $ref: '#/components/schemas/ContextAvailability',
+      },
+      country_code: {
+        type: 'string',
+      },
+      event_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      gaps: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      indicators: {
+        items: {
+          $ref: '#/components/schemas/HumanitarianIndicator',
+        },
+        type: 'array',
+      },
+      limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      operational_presence: {
+        items: {
+          $ref: '#/components/schemas/OperationalPresence',
+        },
+        type: 'array',
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+    },
+    required: [
+      'country_code',
+      'event_id',
+      'availability',
+      'indicators',
+      'operational_presence',
+      'retrieved_at',
+      'gaps',
+      'limitations',
+    ],
+    type: 'object',
+  },
+  HumanitarianIndicator: {
+    properties: {
+      admin1_code: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      admin1_name: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      causal_attribution: {
+        type: 'boolean',
+      },
+      country_code: {
+        type: 'string',
+      },
+      dataset_id: {
+        type: 'string',
+      },
+      dataset_updated_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      dimensions: {
+        items: {
+          maxItems: 2,
+          minItems: 2,
+          prefixItems: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'string',
+            },
+          ],
+          type: 'array',
+        },
+        type: 'array',
+      },
+      indicator_id: {
+        type: 'string',
+      },
+      kind: {
+        $ref: '#/components/schemas/HumanitarianIndicatorKind',
+      },
+      license_name: {
+        type: 'string',
+      },
+      reference_period_end: {
+        format: 'date-time',
+        type: 'string',
+      },
+      reference_period_start: {
+        format: 'date-time',
+        type: 'string',
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      source_id: {
+        type: 'string',
+      },
+      source_url: {
+        type: 'string',
+      },
+      stale: {
+        type: 'boolean',
+      },
+      unit: {
+        type: 'string',
+      },
+      value: {
+        type: 'number',
+      },
+    },
+    required: [
+      'indicator_id',
+      'source_id',
+      'kind',
+      'value',
+      'unit',
+      'country_code',
+      'admin1_code',
+      'admin1_name',
+      'reference_period_start',
+      'reference_period_end',
+      'dataset_id',
+      'dataset_updated_at',
+      'retrieved_at',
+      'source_url',
+      'license_name',
+    ],
+    type: 'object',
+  },
+  HumanitarianIndicatorKind: {
+    enum: ['baseline_population', 'displaced_people', 'food_insecurity'],
+    type: 'string',
+  },
   IncidentActivityStatus: {
     enum: ['ongoing', 'ended', 'unknown'],
     type: 'string',
@@ -2726,6 +3830,68 @@ const apiSchemas = {
       },
     },
     type: 'object',
+  },
+  InfrastructureAsset: {
+    properties: {
+      asset_id: {
+        type: 'string',
+      },
+      category: {
+        $ref: '#/components/schemas/InfrastructureCategory',
+      },
+      coordinate: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/Coordinate',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      geometry: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/MultiPolygon',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      name: {
+        type: 'string',
+      },
+      path: {
+        items: {
+          $ref: '#/components/schemas/Coordinate',
+        },
+        type: 'array',
+      },
+      source_dataset_id: {
+        type: 'string',
+      },
+      source_version: {
+        type: 'string',
+      },
+    },
+    required: ['asset_id', 'name', 'category', 'source_dataset_id', 'source_version'],
+    type: 'object',
+  },
+  InfrastructureCategory: {
+    enum: [
+      'hospital',
+      'clinic',
+      'school',
+      'fire_station',
+      'police',
+      'bridge',
+      'major_road',
+      'power',
+      'water',
+      'shelter',
+    ],
+    type: 'string',
   },
   InvestigationCaseCountryResponse: {
     properties: {
@@ -3245,6 +4411,18 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  LinearRing: {
+    properties: {
+      coordinates: {
+        items: {
+          $ref: '#/components/schemas/Coordinate',
+        },
+        type: 'array',
+      },
+    },
+    required: ['coordinates'],
+    type: 'object',
+  },
   LineStringGeometryResponse: {
     properties: {
       coordinates: {
@@ -3328,6 +4506,56 @@ const apiSchemas = {
       'severity',
     ],
     type: 'string',
+  },
+  MediaAssociationStatus: {
+    enum: ['exact_event_link', 'corroborated', 'rejected'],
+    type: 'string',
+  },
+  MediaContentRole: {
+    enum: [
+      'aftermath',
+      'rescue_effort',
+      'relief_operation',
+      'scientific_overview',
+      'relevant_scene',
+    ],
+    type: 'string',
+  },
+  MediaCreditKind: {
+    enum: ['photographer', 'agency', 'publisher'],
+    type: 'string',
+  },
+  MediaRightsStatus: {
+    enum: ['licensed_reuse', 'source_preview'],
+    type: 'string',
+  },
+  MonitoringReadinessResponse: {
+    properties: {
+      detail: {
+        type: 'string',
+      },
+      durable_storage: {
+        type: 'boolean',
+      },
+      projection_available: {
+        type: 'boolean',
+      },
+      scheduler_worker_configured: {
+        type: 'boolean',
+      },
+      status: {
+        enum: ['ready', 'degraded', 'unavailable'],
+        type: 'string',
+      },
+    },
+    required: [
+      'status',
+      'durable_storage',
+      'scheduler_worker_configured',
+      'projection_available',
+      'detail',
+    ],
+    type: 'object',
   },
   MultimodalAssetResponse: {
     properties: {
@@ -3550,6 +4778,18 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  MultiPolygon: {
+    properties: {
+      polygons: {
+        items: {
+          $ref: '#/components/schemas/Polygon',
+        },
+        type: 'array',
+      },
+    },
+    required: ['polygons'],
+    type: 'object',
+  },
   OpenPanelOperatorActionResponse: {
     additionalProperties: false,
     properties: {
@@ -3593,6 +4833,88 @@ const apiSchemas = {
     ],
     type: 'object',
   },
+  OperationalPresence: {
+    properties: {
+      acronym: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      admin1_code: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      admin1_name: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      country_code: {
+        type: 'string',
+      },
+      dataset_id: {
+        type: 'string',
+      },
+      dataset_updated_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      license_name: {
+        type: 'string',
+      },
+      organization: {
+        type: 'string',
+      },
+      presence_id: {
+        type: 'string',
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      sector: {
+        type: 'string',
+      },
+      source_id: {
+        type: 'string',
+      },
+      source_url: {
+        type: 'string',
+      },
+    },
+    required: [
+      'presence_id',
+      'source_id',
+      'organization',
+      'acronym',
+      'sector',
+      'country_code',
+      'admin1_code',
+      'admin1_name',
+      'dataset_id',
+      'dataset_updated_at',
+      'retrieved_at',
+      'source_url',
+      'license_name',
+    ],
+    type: 'object',
+  },
   OperatorActionScopeResponse: {
     additionalProperties: false,
     properties: {
@@ -3624,6 +4946,87 @@ const apiSchemas = {
     required: ['kind'],
     type: 'object',
   },
+  OsmCompletenessIndicator: {
+    properties: {
+      calculated_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      critical_facility_density_per_sq_km: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      dataset_id: {
+        type: 'string',
+      },
+      dataset_version: {
+        type: 'string',
+      },
+      limitation: {
+        type: 'string',
+      },
+      mapped_feature_count: {
+        type: 'integer',
+      },
+      named_feature_fraction: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      quality: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/OsmCompletenessQuality',
+          },
+          {
+            type: 'string',
+          },
+        ],
+      },
+      road_density_km_per_sq_km: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source_updated_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+    },
+    required: [
+      'dataset_id',
+      'dataset_version',
+      'source_updated_at',
+      'calculated_at',
+      'mapped_feature_count',
+      'named_feature_fraction',
+      'road_density_km_per_sq_km',
+      'critical_facility_density_per_sq_km',
+      'quality',
+      'limitation',
+    ],
+    type: 'object',
+  },
+  OsmCompletenessQuality: {
+    enum: ['good', 'limited', 'poor', 'unknown'],
+    type: 'string',
+  },
   PointGeometryResponse: {
     properties: {
       coordinates: {
@@ -3649,6 +5052,21 @@ const apiSchemas = {
       },
     },
     required: ['type', 'coordinates', 'crs'],
+    type: 'object',
+  },
+  Polygon: {
+    properties: {
+      exterior: {
+        $ref: '#/components/schemas/LinearRing',
+      },
+      holes: {
+        items: {
+          $ref: '#/components/schemas/LinearRing',
+        },
+        type: 'array',
+      },
+    },
+    required: ['exterior'],
     type: 'object',
   },
   PolygonGeometryResponse: {
@@ -3684,9 +5102,156 @@ const apiSchemas = {
     required: ['type', 'coordinates', 'crs'],
     type: 'object',
   },
+  PopulationDisagreement: {
+    properties: {
+      absolute_difference: {
+        type: 'number',
+      },
+      comparison_dataset_id: {
+        type: 'string',
+      },
+      primary_dataset_id: {
+        type: 'string',
+      },
+      relative_difference: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: [
+      'primary_dataset_id',
+      'comparison_dataset_id',
+      'absolute_difference',
+      'relative_difference',
+    ],
+    type: 'object',
+  },
+  PopulationExposureEstimate: {
+    properties: {
+      calculated_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      dataset: {
+        $ref: '#/components/schemas/ExposureDataset',
+      },
+      estimate_id: {
+        type: 'string',
+      },
+      geometry_hash: {
+        type: 'string',
+      },
+      lineage: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      lower_bound: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      population: {
+        type: 'number',
+      },
+      upper_bound: {
+        anyOf: [
+          {
+            type: 'number',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: [
+      'estimate_id',
+      'population',
+      'dataset',
+      'geometry_hash',
+      'calculated_at',
+      'lineage',
+    ],
+    type: 'object',
+  },
   ProviderTier: {
     enum: ['primary', 'secondary'],
     type: 'string',
+  },
+  ReportedFact: {
+    properties: {
+      category: {
+        type: 'string',
+      },
+      claim_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      event_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      label: {
+        type: 'string',
+      },
+      observed_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      reported_location: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source: {
+        $ref: '#/components/schemas/SourceReference',
+      },
+      status: {
+        $ref: '#/components/schemas/FactStatus',
+      },
+      value: {
+        type: 'string',
+      },
+    },
+    required: ['category', 'label', 'value', 'status', 'source'],
+    type: 'object',
   },
   ReportSectionResponse: {
     properties: {
@@ -3698,6 +5263,82 @@ const apiSchemas = {
       },
     },
     required: ['title', 'content'],
+    type: 'object',
+  },
+  SatelliteAvailabilityResponse: {
+    properties: {
+      products: {
+        items: {
+          $ref: '#/components/schemas/SatelliteProductAvailability',
+        },
+        type: 'array',
+      },
+    },
+    required: ['products'],
+    type: 'object',
+  },
+  SatelliteProductAvailability: {
+    properties: {
+      default_time: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      metadata_retrieved_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source_id: {
+        type: 'string',
+      },
+      state: {
+        enum: ['available', 'empty', 'degraded', 'error'],
+        type: 'string',
+      },
+      time_values: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+    },
+    required: [
+      'source_id',
+      'state',
+      'default_time',
+      'time_values',
+      'metadata_retrieved_at',
+    ],
+    type: 'object',
+  },
+  SectionEvidenceResponse: {
+    properties: {
+      contract_version: {
+        type: 'string',
+      },
+      evidence: {
+        $ref: '#/components/schemas/StandaloneEvidenceResult',
+      },
+    },
+    required: ['evidence'],
     type: 'object',
   },
   SelectedEventResponse: {
@@ -4229,6 +5870,71 @@ const apiSchemas = {
     required: ['registered', 'configured', 'availability', 'availability_detail'],
     type: 'object',
   },
+  SourceReference: {
+    properties: {
+      authority: {
+        $ref: '#/components/schemas/SourceAuthority',
+      },
+      canonical_url: {
+        type: 'string',
+      },
+      published_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      publisher: {
+        type: 'string',
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      snapshot_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source_id: {
+        type: 'string',
+      },
+      title: {
+        type: 'string',
+      },
+      updated_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: [
+      'source_id',
+      'publisher',
+      'title',
+      'canonical_url',
+      'published_at',
+      'updated_at',
+      'retrieved_at',
+    ],
+    type: 'object',
+  },
   SourceResponse: {
     properties: {
       authority: {
@@ -4294,6 +6000,106 @@ const apiSchemas = {
       },
     },
     required: ['source_id', 'publisher', 'title', 'canonical_url', 'retrieved_at'],
+    type: 'object',
+  },
+  StandaloneEvidenceResult: {
+    properties: {
+      baseline: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/BaselineVulnerabilityContext',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      event_id: {
+        type: 'string',
+      },
+      exposure: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/ExposureAnalysis',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      facts: {
+        items: {
+          $ref: '#/components/schemas/ReportedFact',
+        },
+        type: 'array',
+      },
+      forecast_layers: {
+        items: {
+          $ref: '#/components/schemas/CycloneMapLayer',
+        },
+        type: 'array',
+      },
+      humanitarian: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/HumanitarianContextSnapshot',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      limitations: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      media: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/DisasterMediaGallery',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      narratives: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      physical_event_id: {
+        type: 'string',
+      },
+      reason_codes: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      retrieved_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      section: {
+        enum: ['impacts', 'warnings', 'forecast', 'exposure', 'humanitarian', 'media'],
+        type: 'string',
+      },
+      state: {
+        enum: ['available', 'empty', 'unconfigured', 'degraded', 'error'],
+        type: 'string',
+      },
+      warnings: {
+        items: {
+          $ref: '#/components/schemas/AssociatedWarning',
+        },
+        type: 'array',
+      },
+    },
+    required: ['event_id', 'physical_event_id', 'section', 'state', 'retrieved_at'],
     type: 'object',
   },
   VisualAnalysisConfigurationResponse: {
@@ -4460,6 +6266,43 @@ const apiSchemas = {
       'created_at',
     ],
     type: 'object',
+  },
+  WarningAssociation: {
+    properties: {
+      basis: {
+        $ref: '#/components/schemas/WarningAssociationBasis',
+      },
+      confirmed: {
+        type: 'boolean',
+      },
+      event_id: {
+        type: 'string',
+      },
+      rationale: {
+        type: 'string',
+      },
+      warning_identifier: {
+        type: 'string',
+      },
+    },
+    required: ['warning_identifier', 'event_id', 'basis', 'confirmed', 'rationale'],
+    type: 'object',
+  },
+  WarningAssociationBasis: {
+    enum: ['explicit_incident_id', 'time_and_geometry'],
+    type: 'string',
+  },
+  WarningCertainty: {
+    enum: ['observed', 'likely', 'possible', 'unlikely', 'unknown'],
+    type: 'string',
+  },
+  WarningSeverity: {
+    enum: ['extreme', 'severe', 'moderate', 'minor', 'unknown'],
+    type: 'string',
+  },
+  WarningUrgency: {
+    enum: ['immediate', 'expected', 'future', 'past', 'unknown'],
+    type: 'string',
   },
   WeatherAlertCoordinateResponse: {
     properties: {
@@ -4808,8 +6651,10 @@ export type ActiveIncidentsSnapshotResponse = {
   has_more?: boolean;
   historical_limitations?: Array<string>;
   incidents?: Array<ActiveIncidentResponse>;
+  is_stale?: boolean;
   next_cursor?: string | null;
   observations?: Array<ActiveIncidentResponse>;
+  refresh_state?: 'fresh' | 'refreshing' | 'stale';
   retrieved_at: string;
   snapshot_version?: string | null;
   total_incident_count?: number | null;
@@ -4909,12 +6754,102 @@ export type AssistantResponse = {
   warnings?: Array<string>;
 };
 
+export type AssociatedWarning = {
+  alert: CapAlert;
+  association: WarningAssociation;
+};
+
+export type BaselineVulnerabilityContext = {
+  aggregation_level: string;
+  context_role: string;
+  coping_capacity_index: number;
+  dataset_version: string;
+  interpretation: string;
+  place_code: string;
+  place_name: string;
+  risk_index: number;
+  source_id: string;
+  vintage: number;
+  vulnerability_index: number;
+};
+
 export type BookmarkRequest = {
   incident_id?: string | null;
   label: string;
   target_id: string;
   target_type: string;
 };
+
+export type CapAlert = {
+  addresses?: Array<string>;
+  attribution: string;
+  canonical_url?: string | null;
+  codes?: Array<string>;
+  identifier: string;
+  incidents?: Array<string>;
+  infos: Array<CapInfo>;
+  limitations: Array<string>;
+  message_type: CapMessageType;
+  note?: string | null;
+  profile?: string | null;
+  publisher: string;
+  references?: Array<CapMessageReference>;
+  restriction?: string | null;
+  retrieved_at: string;
+  scope: CapScope;
+  sender: string;
+  sent: string;
+  signature_present?: boolean;
+  signature_verified?: boolean | null;
+  source?: string | null;
+  source_id: string;
+  status: CapStatus;
+};
+
+export type CapArea = {
+  altitude_m?: number | null;
+  ceiling_m?: number | null;
+  circles?: Array<CapCircle>;
+  description: string;
+  geocodes?: Array<[string, string]>;
+  polygons?: Array<MultiPolygon>;
+};
+
+export type CapCircle = {
+  center: Coordinate;
+  radius_km: number;
+};
+
+export type CapInfo = {
+  areas: Array<CapArea>;
+  categories: Array<string>;
+  certainty: WarningCertainty;
+  description: string | null;
+  effective: string | null;
+  event: string;
+  event_codes: Array<[string, string]>;
+  expires: string | null;
+  headline: string | null;
+  instruction: string | null;
+  language: string;
+  onset: string | null;
+  parameters?: Array<[string, string]>;
+  sender_name: string | null;
+  severity: WarningSeverity;
+  urgency: WarningUrgency;
+};
+
+export type CapMessageReference = {
+  identifier: string;
+  sender: string;
+  sent: string;
+};
+
+export type CapMessageType = 'alert' | 'update' | 'cancel' | 'ack' | 'error';
+
+export type CapScope = 'public' | 'restricted' | 'private';
+
+export type CapStatus = 'actual' | 'exercise' | 'system' | 'test' | 'draft';
 
 export type CaptureRole = 'pre_event' | 'post_event' | 'single_capture' | 'unknown';
 
@@ -4951,6 +6886,8 @@ export type CompoundHazardCorrelationResponse = {
   time_delta_seconds: number;
 };
 
+export type ContextAvailability = 'available' | 'partial' | 'no_data' | 'unavailable';
+
 export type ConversationMessageResponse = {
   assistant_response?: AssistantResponse | null;
   content: string;
@@ -4971,6 +6908,11 @@ export type ConversationSummaryResponse = {
   created_at: string;
   preview: string;
   updated_at: string;
+};
+
+export type Coordinate = {
+  latitude: number;
+  longitude: number;
 };
 
 export type CountryCatalogSourceResponse = {
@@ -5016,10 +6958,35 @@ export type CrossHazardAssessmentResponse = {
   summary: string;
 };
 
+export type CycloneMapCoordinate = {
+  latitude: number;
+  longitude: number;
+  valid_at?: string | null;
+};
+
 export type CycloneMapCoordinateResponse = {
   latitude: number;
   longitude: number;
   valid_at?: string | null;
+};
+
+export type CycloneMapGeometryKind = 'point' | 'track' | 'area';
+
+export type CycloneMapLayer = {
+  coordinates: Array<CycloneMapCoordinate>;
+  geometry_kind: CycloneMapGeometryKind;
+  issued_at: string;
+  layer_id: string;
+  limitation: string;
+  provisional: boolean;
+  reconciliation: string;
+  semantic_role: CycloneMapSemanticRole;
+  source: SourceReference;
+  storm_id: string;
+  valid_from: string | null;
+  valid_to: string | null;
+  wind_threshold?: number | null;
+  wind_threshold_unit?: string | null;
 };
 
 export type CycloneMapLayerResponse = {
@@ -5039,6 +7006,9 @@ export type CycloneMapLayerResponse = {
   wind_threshold?: number | null;
   wind_threshold_unit?: string | null;
 };
+
+export type CycloneMapSemanticRole =
+  'provisional_track' | 'forecast_track' | 'uncertainty_area' | 'wind_radii';
 
 export type DecisionEstimateResponse = {
   contradicting_evidence_ids: Array<string>;
@@ -5090,6 +7060,17 @@ export type DisasterIncidentCoverageResponse = {
   truncated?: boolean;
 };
 
+export type DisasterMediaGallery = {
+  event_id: string;
+  generated_at: string;
+  items: Array<DisasterMediaItem>;
+  physical_event_id: string;
+  provider_ids: Array<string>;
+  rejected_count: number;
+  rejection_reasons?: Array<[string, number]>;
+  warnings?: Array<string>;
+};
+
 export type DisasterMediaGalleryResponse = {
   event_id: string;
   generated_at: string;
@@ -5098,6 +7079,31 @@ export type DisasterMediaGalleryResponse = {
   provider_ids?: Array<string>;
   rejected_count?: number;
   warnings?: Array<string>;
+};
+
+export type DisasterMediaItem = {
+  association_detail: string;
+  association_rule_ids: Array<string>;
+  association_status: MediaAssociationStatus;
+  caption: string;
+  captured_at: string | null;
+  content_sha256: string;
+  credit: string;
+  credit_kind: MediaCreditKind;
+  event_id: string;
+  height: number;
+  license_name: string | null;
+  license_url: string | null;
+  media_id: string;
+  physical_event_id: string;
+  published_at: string;
+  publisher: string;
+  rights_status: MediaRightsStatus;
+  role: MediaContentRole;
+  source_id: string;
+  source_page_url: string;
+  uncertainty: string;
+  width: number;
 };
 
 export type DisasterMediaItemResponse = {
@@ -5243,6 +7249,46 @@ export type EvidenceTimelineEventType =
   | 'imagery_selection'
   | 'watch_change'
   | 'claim_reconciliation';
+
+export type ExposureAnalysis = {
+  assets: Array<InfrastructureAsset>;
+  calculated_at: string;
+  display_label: string;
+  geometry: ExposureGeometry;
+  limitations: Array<string>;
+  osm_completeness?: OsmCompletenessIndicator | null;
+  population_disagreement: PopulationDisagreement | null;
+  population_estimates: Array<PopulationExposureEstimate>;
+};
+
+export type ExposureDataset = {
+  dataset_id: string;
+  license_name: string;
+  publisher: string;
+  resolution_m: number;
+  role: ExposureDatasetRole;
+  source_url: string;
+  uncertainty: string;
+  version: string;
+  vintage: number;
+};
+
+export type ExposureDatasetRole = 'primary' | 'secondary';
+
+export type ExposureGeometry = {
+  geometry: MultiPolygon;
+  observed_at: string;
+  role: ExposureGeometryRole;
+  source_id: string;
+  source_version: string;
+};
+
+export type ExposureGeometryRole =
+  'operator_inspection' | 'mapped_hazard' | 'forecast_hazard' | 'modelled_hazard';
+
+export type ExposureInspectionRequest = {
+  bounds: [number, number, number, number];
+};
 
 export type ExternalFieldMappingRequest = {
   captured_at: string;
@@ -5574,6 +7620,41 @@ export type HTTPValidationError = {
   detail?: Array<ValidationError>;
 };
 
+export type HumanitarianContextSnapshot = {
+  availability: ContextAvailability;
+  country_code: string;
+  event_id: string | null;
+  gaps: Array<string>;
+  indicators: Array<HumanitarianIndicator>;
+  limitations: Array<string>;
+  operational_presence: Array<OperationalPresence>;
+  retrieved_at: string;
+};
+
+export type HumanitarianIndicator = {
+  admin1_code: string | null;
+  admin1_name: string | null;
+  causal_attribution?: boolean;
+  country_code: string;
+  dataset_id: string;
+  dataset_updated_at: string;
+  dimensions?: Array<[string, string]>;
+  indicator_id: string;
+  kind: HumanitarianIndicatorKind;
+  license_name: string;
+  reference_period_end: string;
+  reference_period_start: string;
+  retrieved_at: string;
+  source_id: string;
+  source_url: string;
+  stale?: boolean;
+  unit: string;
+  value: number;
+};
+
+export type HumanitarianIndicatorKind =
+  'baseline_population' | 'displaced_people' | 'food_insecurity';
+
 export type ImportedFieldMediaRequest = {
   content_base64: string;
   external_id: string;
@@ -5677,6 +7758,29 @@ export type IncidentWatchScopeResponse = {
   kind: 'country' | 'worldwide';
 };
 
+export type InfrastructureAsset = {
+  asset_id: string;
+  category: InfrastructureCategory;
+  coordinate?: Coordinate | null;
+  geometry?: MultiPolygon | null;
+  name: string;
+  path?: Array<Coordinate>;
+  source_dataset_id: string;
+  source_version: string;
+};
+
+export type InfrastructureCategory =
+  | 'hospital'
+  | 'clinic'
+  | 'school'
+  | 'fire_station'
+  | 'police'
+  | 'bridge'
+  | 'major_road'
+  | 'power'
+  | 'water'
+  | 'shelter';
+
 export type InvestigationCaseCountryResponse = {
   country_code: string;
   country_name: string;
@@ -5762,6 +7866,10 @@ export type InvestigationTargetResponse = {
   warnings?: Array<string>;
 };
 
+export type LinearRing = {
+  coordinates: Array<Coordinate>;
+};
+
 export type LineStringGeometryResponse = {
   coordinates: Array<[number, number]>;
   crs: 'EPSG:4326';
@@ -5800,6 +7908,19 @@ export type MeasurementKind =
   | 'fire_radiative_power'
   | 'burned_area'
   | 'severity';
+
+export type MediaAssociationStatus = 'exact_event_link' | 'corroborated' | 'rejected';
+
+export type MediaContentRole =
+  | 'aftermath'
+  | 'rescue_effort'
+  | 'relief_operation'
+  | 'scientific_overview'
+  | 'relevant_scene';
+
+export type MediaCreditKind = 'photographer' | 'agency' | 'publisher';
+
+export type MediaRightsStatus = 'licensed_reuse' | 'source_preview';
 
 export type MonitoringReadinessResponse = {
   detail: string;
@@ -5865,6 +7986,10 @@ export type MultimodalStateResponse = {
   state_version: string;
 };
 
+export type MultiPolygon = {
+  polygons: Array<Polygon>;
+};
+
 export type NotebookEntryRequest = {
   content: string;
   created_by: string;
@@ -5881,6 +8006,22 @@ export type OpenPanelOperatorActionResponse = {
   risk: 'automatic';
   target: 'panel';
   value: 'findings' | 'sources' | 'watches' | 'operations';
+};
+
+export type OperationalPresence = {
+  acronym: string | null;
+  admin1_code: string | null;
+  admin1_name: string | null;
+  country_code: string;
+  dataset_id: string;
+  dataset_updated_at: string;
+  license_name: string;
+  organization: string;
+  presence_id: string;
+  retrieved_at: string;
+  sector: string;
+  source_id: string;
+  source_url: string;
 };
 
 export type OperatorActionRequest = {
@@ -5908,16 +8049,54 @@ export type OperatorActionScopeResponse = {
 
 export type OperatorDecision = 'reviewed' | 'approved_bounded' | 'rejected';
 
+export type OsmCompletenessIndicator = {
+  calculated_at: string;
+  critical_facility_density_per_sq_km: number | null;
+  dataset_id: string;
+  dataset_version: string;
+  limitation: string;
+  mapped_feature_count: number;
+  named_feature_fraction: number | null;
+  quality: OsmCompletenessQuality | string;
+  road_density_km_per_sq_km: number | null;
+  source_updated_at: string;
+};
+
+export type OsmCompletenessQuality = 'good' | 'limited' | 'poor' | 'unknown';
+
 export type PointGeometryResponse = {
   coordinates: [number, number];
   crs: 'EPSG:4326';
   type: 'Point';
 };
 
+export type Polygon = {
+  exterior: LinearRing;
+  holes?: Array<LinearRing>;
+};
+
 export type PolygonGeometryResponse = {
   coordinates: Array<Array<[number, number]>>;
   crs: 'EPSG:4326';
   type: 'Polygon';
+};
+
+export type PopulationDisagreement = {
+  absolute_difference: number;
+  comparison_dataset_id: string;
+  primary_dataset_id: string;
+  relative_difference: number | null;
+};
+
+export type PopulationExposureEstimate = {
+  calculated_at: string;
+  dataset: ExposureDataset;
+  estimate_id: string;
+  geometry_hash: string;
+  lineage: Array<string>;
+  lower_bound?: number | null;
+  population: number;
+  upper_bound?: number | null;
 };
 
 export type ProviderBudgetResponse = {
@@ -5960,6 +8139,18 @@ export type ReadinessResponse = {
   status: string;
 };
 
+export type ReportedFact = {
+  category: string;
+  claim_id?: string | null;
+  event_id?: string | null;
+  label: string;
+  observed_at?: string | null;
+  reported_location?: string | null;
+  source: SourceReference;
+  status: FactStatus;
+  value: string;
+};
+
 export type ReportSectionResponse = {
   content: string;
   title: string;
@@ -5983,6 +8174,10 @@ export type RunbookTemplateRequest = {
   steps: Array<string>;
 };
 
+export type SatelliteAvailabilityResponse = {
+  products: Array<SatelliteProductAvailability>;
+};
+
 export type SatelliteImageryCatalogResponse = {
   products: Array<SatelliteImageryProductResponse>;
 };
@@ -6001,6 +8196,20 @@ export type SatelliteImageryProductResponse = {
   source_id: string;
   temporal_mode: 'daily' | 'subdaily' | 'fixed';
   temporal_step_minutes?: number | null;
+};
+
+export type SatelliteProductAvailability = {
+  default_time: string | null;
+  limitations?: Array<string>;
+  metadata_retrieved_at: string | null;
+  source_id: string;
+  state: 'available' | 'empty' | 'degraded' | 'error';
+  time_values: Array<string>;
+};
+
+export type SectionEvidenceResponse = {
+  contract_version?: string;
+  evidence: StandaloneEvidenceResult;
 };
 
 export type SelectedEventResponse = {
@@ -6122,6 +8331,18 @@ export type SourceOperationalStateResponse = {
   registered: boolean;
 };
 
+export type SourceReference = {
+  authority?: SourceAuthority;
+  canonical_url: string;
+  published_at: string | null;
+  publisher: string;
+  retrieved_at: string;
+  snapshot_id?: string | null;
+  source_id: string;
+  title: string;
+  updated_at: string | null;
+};
+
 export type SourceResponse = {
   authority?: SourceAuthority;
   canonical_url: string;
@@ -6133,6 +8354,24 @@ export type SourceResponse = {
   source_id: string;
   title: string;
   updated_at?: string | null;
+};
+
+export type StandaloneEvidenceResult = {
+  baseline?: BaselineVulnerabilityContext | null;
+  event_id: string;
+  exposure?: ExposureAnalysis | null;
+  facts?: Array<ReportedFact>;
+  forecast_layers?: Array<CycloneMapLayer>;
+  humanitarian?: HumanitarianContextSnapshot | null;
+  limitations?: Array<string>;
+  media?: DisasterMediaGallery | null;
+  narratives?: Array<string>;
+  physical_event_id: string;
+  reason_codes?: Array<string>;
+  retrieved_at: string;
+  section: 'impacts' | 'warnings' | 'forecast' | 'exposure' | 'humanitarian' | 'media';
+  state: 'available' | 'empty' | 'unconfigured' | 'degraded' | 'error';
+  warnings?: Array<AssociatedWarning>;
 };
 
 export type ValidationError = {
@@ -6175,6 +8414,23 @@ export type VisualObservationResponse = {
   uncertainty: string;
   visual_cues?: Array<string>;
 };
+
+export type WarningAssociation = {
+  basis: WarningAssociationBasis;
+  confirmed: boolean;
+  event_id: string;
+  rationale: string;
+  warning_identifier: string;
+};
+
+export type WarningAssociationBasis = 'explicit_incident_id' | 'time_and_geometry';
+
+export type WarningCertainty =
+  'observed' | 'likely' | 'possible' | 'unlikely' | 'unknown';
+
+export type WarningSeverity = 'extreme' | 'severe' | 'moderate' | 'minor' | 'unknown';
+
+export type WarningUrgency = 'immediate' | 'expected' | 'future' | 'past' | 'unknown';
 
 export type WeatherAlertCoordinateResponse = {
   latitude: number;

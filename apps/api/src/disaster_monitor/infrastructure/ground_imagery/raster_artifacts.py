@@ -330,7 +330,10 @@ def _tile_bytes(dataset: Any, zoom: int, x: int, y: int) -> bytes:
     )
     requested = window_from_bounds(*bounds, transform=dataset.transform)
     full = Window(0, 0, dataset.width, dataset.height)
-    intersection = requested.intersection(full)
+    try:
+        intersection = requested.intersection(full)
+    except rasterio.errors.WindowError:
+        return _transparent_png()
     if intersection.width <= 0 or intersection.height <= 0:
         return _transparent_png()
     values = dataset.read(

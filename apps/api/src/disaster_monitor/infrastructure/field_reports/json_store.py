@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +22,11 @@ from disaster_monitor.domain.field_reports import (
     OperatorObservation,
     UnverifiedFieldReport,
 )
+from disaster_monitor.infrastructure.private_files import (
+    atomic_private_write,
+    restrict_private_path,
+    verify_private_path,
+)
 
 
 class JsonFieldReportStore:
@@ -30,6 +34,8 @@ class JsonFieldReportStore:
         if maximum_reports <= 0:
             raise ValueError("Field-report capacity must be positive.")
         self._path = path.resolve()
+        if self._path.is_file() and not verify_private_path(self._path):
+            restrict_private_path(self._path, backup=True)
         self._maximum_reports = maximum_reports
         self._lock = asyncio.Lock()
         self._reports: dict[str, UnverifiedFieldReport] = {}
@@ -252,11 +258,6 @@ def _json_value(value: object) -> object:
 
 
 def _atomic_json_write(path: Path, document: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f"{path.suffix}.tmp")
-    with temporary.open("w", encoding="utf-8") as stream:
-        json.dump(document, stream, ensure_ascii=False, separators=(",", ":"))
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.chmod(temporary, 0o600)
-    temporary.replace(path)
+    atomic_private_write(
+        path, json.dumps(document, ensure_ascii=False, separators=(",", ":"))
+    )

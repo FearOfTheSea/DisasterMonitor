@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +16,11 @@ from disaster_monitor.domain.spatial_watches import (
     LocalAssetKind,
     SpatialInputKind,
 )
+from disaster_monitor.infrastructure.private_files import (
+    atomic_private_write,
+    restrict_private_path,
+    verify_private_path,
+)
 
 
 class LocalSpatialWatchStore:
@@ -27,6 +31,8 @@ class LocalSpatialWatchStore:
             raise ValueError("Spatial watch storage requires a concrete file path.")
         path.parent.mkdir(parents=True, exist_ok=True)
         self._path = path
+        if path.is_file() and not verify_private_path(path):
+            restrict_private_path(path, backup=True)
         self._lock = asyncio.Lock()
 
     async def save_scope(self, scope: AreaOfInterestScope) -> None:
@@ -93,14 +99,9 @@ class LocalSpatialWatchStore:
         return document
 
     def _write(self, document: dict[str, Any]) -> None:
-        temporary = self._path.with_suffix(f"{self._path.suffix}.partial")
-        temporary.write_text(
-            json.dumps(document, sort_keys=True, separators=(",", ":")),
-            encoding="utf-8",
+        atomic_private_write(
+            self._path, json.dumps(document, sort_keys=True, separators=(",", ":"))
         )
-        temporary.chmod(0o600)
-        os.replace(temporary, self._path)
-        self._path.chmod(0o600)
 
 
 def _list(value: object) -> list[dict[str, Any]]:

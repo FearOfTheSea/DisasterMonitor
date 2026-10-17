@@ -1,11 +1,14 @@
 """Validated satellite-imagery catalog and tile retrieval use case."""
 
+import asyncio
 import re
 from datetime import date, datetime
 
 from disaster_monitor.application.ports.satellite_imagery import (
+    SatelliteAvailabilityReader,
     SatelliteImageryProduct,
     SatelliteImageryProvider,
+    SatelliteProductAvailability,
     SatelliteRasterTile,
     SatelliteTileRequest,
 )
@@ -37,8 +40,14 @@ class SatelliteImageryUpstreamError(SatelliteImageryError):
 class SatelliteImageryService:
     """Expose a safe catalog and dispatch protected tiles to fixed providers."""
 
-    def __init__(self, providers: tuple[SatelliteImageryProvider, ...]) -> None:
+    def __init__(
+        self,
+        providers: tuple[SatelliteImageryProvider, ...],
+        *,
+        availability_readers: tuple[SatelliteAvailabilityReader, ...] = (),
+    ) -> None:
         self._providers = providers
+        self._availability_readers = availability_readers
         self._providers_by_id: dict[str, SatelliteImageryProvider] = {}
         self._products: tuple[SatelliteImageryProduct, ...] = tuple(
             product for provider in providers for product in provider.products
@@ -59,6 +68,26 @@ class SatelliteImageryService:
 
     def catalog(self) -> tuple[SatelliteImageryProduct, ...]:
         return self._products
+
+    async def availability(self) -> tuple[SatelliteProductAvailability, ...]:
+        batches = await asyncio.gather(
+            *(reader.availability() for reader in self._availability_readers)
+        )
+        indexed = {row.source_id: row for batch in batches for row in batch}
+        return tuple(
+            indexed.get(
+                product.source_id,
+                SatelliteProductAvailability(
+                    product.source_id,
+                    "empty",
+                    None,
+                    (),
+                    None,
+                    ("Temporal availability is not reported by this provider.",),
+                ),
+            )
+            for product in self._products
+        )
 
     async def fetch_tile(self, request: SatelliteTileRequest) -> SatelliteRasterTile:
         provider = self._providers_by_id.get(request.provider_id)

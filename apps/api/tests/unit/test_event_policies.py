@@ -77,6 +77,33 @@ def _generic_event(event_id: str, **changes: object) -> DisasterEvent:
     )
 
 
+def test_shared_glide_context_does_not_split_mainshock_or_merge_aftershocks() -> None:
+    observations = []
+    for event_id, source_id, seconds in (
+        ("usgs:mainshock", "usgs-earthquakes", 0),
+        ("emsc:mainshock", "emsc-earthquakes", 1),
+        ("gdacs:eq:mainshock", "gdacs-earthquakes", 0),
+        ("gdacs:eq:aftershock", "gdacs-earthquakes", 3600),
+    ):
+        source = replace(SOURCE, source_id=source_id)
+        observations.append(
+            _event(
+                event_id,
+                source=source,
+                event_time=NOW + timedelta(seconds=seconds),
+                provider_ids=(event_id, "glide:EQ-2026-000188-PAN")
+                if source_id == "gdacs-earthquakes"
+                else (event_id,),
+            )
+        )
+    identities = EarthquakeEventPolicy().identify(tuple(observations)).physical_events
+    assert sorted(len(identity.observations) for identity in identities) == [1, 3]
+    merged = next(
+        identity for identity in identities if len(identity.observations) == 3
+    )
+    assert "glide:EQ-2026-000188-PAN" in merged.event.provider_ids
+
+
 def test_wildfire_provider_identifier_selects_one_of_same_day_events() -> None:
     query = DisasterQuery(
         disaster=Disaster.WILDFIRE,

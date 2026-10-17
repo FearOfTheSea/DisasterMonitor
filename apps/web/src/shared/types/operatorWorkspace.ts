@@ -31,4 +31,26 @@ export type OperatorWorkspaceState = {
   notes: AnalystNote[];
   bookmarks: OperatorBookmark[];
   runbooks: RunbookTemplate[];
+  notebooks?: CaseNotebook[];
+};
+
+export type CaseNotebook = {
+  notebook_id: string;
+  title: string;
+  created_by: string;
+  created_at: string;
+  incident_ids: string[];
+  evidence: false;
+};
+export type NotebookEntry = {
+  entry_id: string;
+  notebook_id: string;
+  kind: 'source_snapshot' | 'question' | 'analytical_run' | 'conclusion';
+  title: string;
+  content: string;
+  reference_id: string | null;
+  created_by: string;
+  created_at: string;
+  evidence: false;
+  alters_canonical_state: false;
 };

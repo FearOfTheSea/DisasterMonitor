@@ -33,9 +33,11 @@ from disaster_monitor.application.evidence.multimodal_association import (
     MultimodalEventAssociator,
 )
 from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
+from disaster_monitor.application.evidence.standalone import StandaloneEvidenceService
 from disaster_monitor.application.exposure.access_context import (
     RouteAccessContextService,
 )
+from disaster_monitor.application.exposure.analysis import ExposureAnalysisService
 from disaster_monitor.application.field_reports.incident_verifier import (
     ProjectionIncidentVerifier,
 )
@@ -46,6 +48,9 @@ from disaster_monitor.application.field_reports.service import FieldReportServic
 from disaster_monitor.application.humanitarian.context import HumanitarianContextService
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
+)
+from disaster_monitor.application.incidents.evidence_context import (
+    IncidentEvidenceContextReader,
 )
 from disaster_monitor.application.incidents.manage_incident_watches import (
     ManageIncidentWatches,
@@ -117,6 +122,7 @@ from disaster_monitor.infrastructure.composition_models import (
     InvestigationResources,
 )
 from disaster_monitor.infrastructure.configuration import Settings
+from disaster_monitor.infrastructure.exposure.manifest import load_dataset_services
 from disaster_monitor.infrastructure.exposure.osrm import SelfHostedOsrmAdapter
 from disaster_monitor.infrastructure.field_reports.filesystem_media_store import (
     FilesystemFieldMediaStore,
@@ -131,6 +137,9 @@ from disaster_monitor.infrastructure.humanitarian.hdx_hapi import HdxHapiContext
 from disaster_monitor.infrastructure.humanitarian.iom_dtm import IomDtmContextAdapter
 from disaster_monitor.infrastructure.media.filesystem_store import (
     FilesystemMediaAssetStore,
+)
+from disaster_monitor.infrastructure.operations.file_incident_identity_store import (
+    FileIncidentIdentityStore,
 )
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
@@ -334,6 +343,9 @@ def build_app_dependencies(
             ),
             provider_attempt_recorder=operational.repository,
             candidate_store=operational.repository,
+            identity_store=FileIncidentIdentityStore(
+                settings.incident_identity_store_path
+            ),
         )
     )
     worldwide_report = (
@@ -521,7 +533,27 @@ def build_app_dependencies(
         for resource in humanitarian_field.close_resources:
             await close_resource(resource)
 
+    datasets = load_dataset_services(settings.evidence_dataset_manifest)
+    standalone_evidence = StandaloneEvidenceService(
+        IncidentEvidenceContextReader(configured_active_incidents, country_catalog),
+        situation=retrieval.situation_provider,
+        reconciler=retrieval.evidence_reconciler,
+        warnings=configured_weather_alerts,
+        exposure=ExposureAnalysisService(
+            population_providers=datasets.population_providers,
+            asset_provider=datasets.asset_provider,
+            completeness_provider=datasets.asset_provider,
+        )
+        if datasets.population_providers or datasets.asset_provider
+        else None,
+        humanitarian=humanitarian_field.humanitarian_context,
+        baseline=datasets.baseline,
+        media=media_services.discovery,
+        dataset_limitations=datasets.limitations,
+        clock=clock,
+    )
     return AppDependencies(
+        standalone_evidence=standalone_evidence,
         conversation_queries=ConversationQueries(conversations),
         evidence_history=EvidenceHistoryQuery(operational.repository),
         queue_status=QueueStatusQuery(operational.repository),
@@ -546,6 +578,8 @@ def build_app_dependencies(
         incident_watches=ManageIncidentWatches(
             cast(IncidentWatchStore, operational.repository),
             country_catalog,
+            monitoring_available=settings.scheduled_monitoring_enabled
+            and operational.repository.durable,
         ),
         satellite_imagery=configured_satellite_imagery,
         ground_imagery=configured_ground_imagery,
@@ -577,6 +611,8 @@ def build_app_dependencies(
             startup_hooks=(migrate_operational_repository, catalog_automation.start),
             shutdown_hooks=(
                 catalog_automation.aclose,
+                standalone_evidence.aclose,
+                lambda: close_resource(configured_active_incidents),
                 lambda: close_resource(language_model),
                 investigation.lifecycle.shutdown,
                 lambda: close_resource(configured_agent_model),

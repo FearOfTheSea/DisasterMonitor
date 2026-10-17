@@ -22,6 +22,11 @@ from disaster_monitor.application.media import (
     RetrievedMedia,
 )
 from disaster_monitor.application.ports.image_metadata import image_metadata
+from disaster_monitor.infrastructure.disaster.errors import ProviderFailure
+from disaster_monitor.infrastructure.disaster.http_backoff import (
+    check_cooldown,
+    record_failure,
+)
 from disaster_monitor.infrastructure.media.news_article_parser import (
     _article_metadata,
     _clean_text,
@@ -270,6 +275,7 @@ class NewsEventMediaProvider:
         maximum_bytes: int,
         accept: str,
     ) -> tuple[bytes, str]:
+        check_cooldown(self._client, url)
         for attempt in range(2):
             try:
                 return await self._bounded_get_once(
@@ -283,8 +289,19 @@ class NewsEventMediaProvider:
                     continue
                 raise
             except httpx.HTTPStatusError as error:
+                defer = record_failure(
+                    self._client,
+                    error.response,
+                    ProviderFailure(
+                        "http_error",
+                        retryable=error.response.status_code in _RETRYABLE_STATUS_CODES,
+                        http_status=error.response.status_code,
+                    ),
+                    final_attempt=attempt == 1,
+                )
                 if (
                     attempt == 0
+                    and not defer
                     and error.response.status_code in _RETRYABLE_STATUS_CODES
                 ):
                     continue
@@ -302,6 +319,7 @@ class NewsEventMediaProvider:
         current = url
         for _ in range(4):
             _validate_url(current, allowed_hosts)
+            check_cooldown(self._client, current)
             headers = {
                 "Accept": accept,
                 "User-Agent": "DisasterMonitor/0.1 event-media-preview",

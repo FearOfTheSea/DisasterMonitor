@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +22,12 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock('@/features/imagery/api/groundImageryClient', () => api);
+vi.mock('@/shared/hooks/useMonitoringReadiness', () => ({
+  useMonitoringReadiness: () => ({
+    available: true,
+    detail: 'Test scheduler is available.',
+  }),
+}));
 
 describe('Ground imagery preparation and comparison', () => {
   beforeEach(() => {
@@ -68,6 +74,9 @@ describe('Ground imagery preparation and comparison', () => {
         incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
 
     expect(await screen.findByText('Prepared observation')).toBeVisible();
@@ -125,9 +134,56 @@ describe('Ground imagery preparation and comparison', () => {
         onClose={vi.fn()}
       />,
     );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
 
     expect(await screen.findByAltText('Sentinel-1 radar after capture')).toBeVisible();
     expect(screen.queryByAltText('Sentinel-2 optical after capture')).toBeNull();
+  });
+
+  it('labels a fully obscured artifact as delivered but unusable', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...request,
+      artifacts: [
+        {
+          ...comparisonRequest.artifacts![1],
+          artifact_id: 'artifact:clouded',
+          selection_id: 'optical-prepared',
+          sensor: 'sentinel-2',
+          observation: {
+            ...observation('S2-clouded', '2024-05-23T00:00:00Z'),
+            sensor: 'sentinel-2',
+            quality: {
+              covered_fraction: 1,
+              usable_fraction: 0,
+              obscured_fraction: 1,
+              uncertain_fraction: 0,
+              uncovered_fraction: 0,
+              component_usable_fractions: { 'component-1': 0 },
+              quality_state: 'obscured',
+              mask_definition: 's2-core-scl-datamask-v1',
+            },
+          },
+        },
+      ],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
+
+    expect(
+      await screen.findByText('Artifact delivered; no usable pixels'),
+    ).toBeVisible();
+    expect(screen.queryByText('Image ready')).toBeNull();
   });
 
   it('shows matched-grid side-by-side and swipe comparison controls', async () => {
@@ -140,6 +196,9 @@ describe('Ground imagery preparation and comparison', () => {
         incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
 
     expect(await screen.findByText('Matched before / after')).toBeVisible();
@@ -165,6 +224,9 @@ describe('Ground imagery preparation and comparison', () => {
         onClose={vi.fn()}
       />,
     );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
 
     expect(await screen.findByText('Prepared observation')).toBeVisible();
     expect(screen.getByAltText('Sentinel-1 radar after capture')).toBeVisible();
@@ -177,7 +239,7 @@ describe('Ground imagery preparation and comparison', () => {
     expect(screen.getAllByText(/Sensed through/)).toHaveLength(2);
   });
 
-  it('prepares one selected post-event capture automatically when rendering is ready', async () => {
+  it('prepares only the capture the operator chooses', async () => {
     api.createGroundImageryRequest.mockResolvedValue({
       ...comparisonRequest,
       artifacts: [],
@@ -198,7 +260,13 @@ describe('Ground imagery preparation and comparison', () => {
         onClose={vi.fn()}
       />,
     );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
 
+    const buttons = await screen.findAllByRole('button', { name: 'Prepare COG' });
+    expect(api.prepareGroundImagerySelection).not.toHaveBeenCalled();
+    fireEvent.click(buttons[1]);
     expect(await screen.findByText('Prepared observation')).toBeVisible();
     expect(api.prepareGroundImagerySelection).toHaveBeenCalledTimes(1);
     expect(api.prepareGroundImagerySelection).toHaveBeenCalledWith('ground-imagery:1', {
@@ -239,8 +307,14 @@ describe('Ground imagery preparation and comparison', () => {
         onClose={vi.fn()}
       />,
     );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
 
     await screen.findByText('Latest useful view');
+    expect(api.prepareGroundImagerySelection).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Prepare COG' }).at(-1)!);
+    await act(async () => undefined);
     expect(api.prepareGroundImagerySelection).toHaveBeenCalledWith('ground-imagery:1', {
       sensor: 'sentinel-1',
       role: 'latest_useful',
@@ -267,6 +341,9 @@ describe('Ground imagery preparation and comparison', () => {
         incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
 
     await act(async () => vi.advanceTimersByTimeAsync(0));
@@ -298,6 +375,9 @@ describe('Ground imagery preparation and comparison', () => {
         incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
 
     await act(async () => vi.advanceTimersByTimeAsync(0));

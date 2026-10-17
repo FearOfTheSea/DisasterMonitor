@@ -263,3 +263,29 @@ async def test_news_sitemap_extracts_only_admitted_timestamped_metadata() -> Non
     assert [item.canonical_url for item in items] == [
         "https://news.example/articles/flood-1"
     ]
+
+
+def test_known_nasa_namespace_spacing_defect_is_repaired_without_accepting_unsafe_xml():
+    from disaster_monitor.infrastructure.news.web_metadata_parser import (
+        parse_web_metadata,
+    )
+
+    nasa = _source(source_id="nasa-earth-observatory-natural-events")
+    malformed = RSS.replace(
+        b'<rss version="2.0">',
+        b'<rss version="2.0" xmlns:apod="https://science.nasa.gov/apod/"xmlns:media="http://search.yahoo.com/mrss/">',
+    )
+    assert (
+        len(
+            parse_web_metadata(nasa, malformed, since=NOW - timedelta(hours=1), now=NOW)
+        )
+        == 1
+    )
+    with pytest.raises(ValueError, match="unsafe XML"):
+        parse_web_metadata(
+            nasa, b"<!DOCTYPE rss>" + malformed, since=NOW - timedelta(hours=1), now=NOW
+        )
+    with pytest.raises(ValueError, match="malformed XML"):
+        parse_web_metadata(
+            _source(), malformed, since=NOW - timedelta(hours=1), now=NOW
+        )

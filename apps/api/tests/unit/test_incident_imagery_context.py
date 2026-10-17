@@ -99,6 +99,10 @@ async def test_gdacs_flood_list_point_is_not_an_imagery_target() -> None:
     )
 
     class StaticIncidents:
+        async def lookup(self, identifier: str) -> ActiveIncident:
+            assert identifier == incident.event_id
+            return incident
+
         async def execute(self, query: object) -> ActiveIncidentsSnapshot:
             return ActiveIncidentsSnapshot(now, (incident,), (), ())
 

@@ -368,7 +368,10 @@ async def test_unsupported_products_and_response_size_bound_fail_safely() -> Non
         ep_feed=_forecast_feed(
             track_url=None,
             cone_url=None,
-            extra_items="<item><title>Advisory Wind Field [shp]</title><link>https://www.nhc.noaa.gov/wind.zip</link></item>",
+            extra_items=(
+                "<item><title>Advisory Wind Field "
+                "[shp]</title><link>https://www.nhc.noaa.gov/wind.zip</link></item>"
+            ),
         ),
     )
     unsupported = await NhcCycloneForecastAdapter(

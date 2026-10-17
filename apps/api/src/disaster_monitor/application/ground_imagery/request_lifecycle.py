@@ -50,6 +50,9 @@ from disaster_monitor.application.ports.ground_imagery.incidents import (
 from disaster_monitor.application.ports.ground_imagery.repository import (
     GroundImageryRequestStore,
 )
+from disaster_monitor.application.ports.monitoring import (
+    ScheduledMonitoringUnavailableError,
+)
 from disaster_monitor.domain.imagery.observations import (
     Sensor,
 )
@@ -78,6 +81,7 @@ class GroundImageryRequestLifecycle:
         self._clock = clock
         self._enabled = enabled
         self._rate_limiter = rate_limiter
+        self._monitoring_available = False
 
     async def create_request(
         self,
@@ -343,6 +347,8 @@ class GroundImageryRequestLifecycle:
             raise ValueError(
                 "Imagery watch intervals must be between one and 24 hours."
             )
+        if enabled and not self._monitoring_available:
+            raise ScheduledMonitoringUnavailableError()
         interval = interval_seconds
         now = self._clock()
         if enabled and interval is None:

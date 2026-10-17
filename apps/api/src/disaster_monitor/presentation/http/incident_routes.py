@@ -20,7 +20,9 @@ from disaster_monitor.application.incidents.manage_incident_watches import (
     InvalidIncidentWatchScopeError,
     ManageIncidentWatches,
 )
-from disaster_monitor.application.incidents.models import ActiveIncident
+from disaster_monitor.application.incidents.snapshot_cache import (
+    IncidentCursorExpiredError,
+)
 from disaster_monitor.application.ports.operator_identity import (
     TrustedOperatorIdentityPolicy,
 )
@@ -28,9 +30,8 @@ from disaster_monitor.domain.disaster import (
     Disaster,
     WatchScopeKind,
 )
-from disaster_monitor.presentation.http.common_response_serialization import (
-    _event_geometry_response,
-    _source_response,
+from disaster_monitor.presentation.http.active_incident_serialization import (
+    active_incident_response,
 )
 from disaster_monitor.presentation.http.operator_identity import (
     get_trusted_operator_identity_policy,
@@ -41,14 +42,11 @@ from disaster_monitor.presentation.http.response_serialization import (
     _incident_watch_response,
 )
 from disaster_monitor.presentation.http.schemas import (
-    ActiveIncidentCountryResponse,
     ActiveIncidentResponse,
     ActiveIncidentsSnapshotResponse,
     CompoundHazardCorrelationResponse,
     DisasterIncidentCoverageResponse,
-    EventMeasurementResponse,
     EvidenceSnapshotResponse,
-    IncidentDetectionTimelineResponse,
     IncidentWatchChangeResponse,
     IncidentWatchCreateRequest,
     IncidentWatchEnabledRequest,
@@ -100,11 +98,12 @@ async def active_incidents(
     cursor: Annotated[str | None, Query(max_length=2_000)] = None,
     occurrence_start: Annotated[datetime | None, Query()] = None,
     occurrence_end: Annotated[datetime | None, Query()] = None,
+    refresh: bool = False,
 ) -> ActiveIncidentsSnapshotResponse:
     """Return bounded, source-backed worldwide events without model inference."""
     try:
         parsed_hazard = None if hazard is None else Disaster(hazard)
-        snapshot = await service.execute(
+        snapshot = await (service.refresh if refresh else service.execute)(
             ActiveIncidentsQuery(
                 time_window_days=time_window_days,
                 limit_per_disaster=limit_per_disaster,
@@ -119,66 +118,18 @@ async def active_incidents(
                 occurrence_end=occurrence_end,
             )
         )
+    except IncidentCursorExpiredError as error:
+        raise HTTPException(status_code=410, detail=str(error)) from error
     except (ValueError, KeyError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    def incident_response(incident: ActiveIncident) -> ActiveIncidentResponse:
-        country = incident.country
-        return ActiveIncidentResponse(
-            event_id=incident.event_id,
-            physical_event_id=incident.physical_event_id,
-            disaster=incident.disaster,
-            country=(
-                None
-                if country is None
-                else ActiveIncidentCountryResponse(
-                    code=country.country_code,
-                    name=country.country_name,
-                    association_basis=country.basis.value,
-                    distance_km=country.distance_km,
-                )
-            ),
-            location=incident.location,
-            event_time=incident.event_time,
-            event_time_end=incident.event_time_end,
-            event_time_precision=incident.event_time_precision,
-            geometry=_event_geometry_response(incident.geometry),
-            measurements=[
-                EventMeasurementResponse(
-                    kind=measurement.kind,
-                    value=measurement.value,
-                    unit=measurement.unit,
-                    source_id=measurement.source.source_id,
-                )
-                for measurement in incident.measurements
-            ],
-            provider_ids=list(incident.provider_ids),
-            lineage_ids=list(incident.lineage_ids),
-            provider_tier=incident.provider_tier,
-            source_authority=incident.source_authority,
-            source=_source_response(incident.source),
-            evidence_sources=[
-                _source_response(source) for source in incident.evidence_sources
-            ],
-            observation_kind=incident.observation_kind.value,
-            activity_status=incident.activity_status,
-            verification_status=incident.verification_status.value,
-            detection=IncidentDetectionTimelineResponse(
-                news_break_at=incident.detection.news_break_at,
-                first_observed_at=incident.detection.first_observed_at,
-                candidate_created_at=incident.detection.candidate_created_at,
-                verified_at=incident.detection.verified_at,
-                monitor_visible_at=incident.detection.monitor_visible_at,
-                assistant_ready_at=incident.detection.assistant_ready_at,
-            ),
-            last_meaningful_change_at=incident.last_meaningful_change_at,
-        )
-
     return ActiveIncidentsSnapshotResponse(
         retrieved_at=snapshot.retrieved_at,
-        incidents=[incident_response(incident) for incident in snapshot.incidents],
+        incidents=[
+            active_incident_response(incident) for incident in snapshot.incidents
+        ],
         observations=[
-            incident_response(incident) for incident in snapshot.observations
+            active_incident_response(incident) for incident in snapshot.observations
         ],
         coverage=[
             DisasterIncidentCoverageResponse(
@@ -199,6 +150,8 @@ async def active_incidents(
         has_more=snapshot.has_more,
         total_incident_count=snapshot.total_incident_count,
         historical_limitations=list(snapshot.historical_limitations),
+        refresh_state=snapshot.refresh_state,
+        is_stale=snapshot.is_stale,
         correlations=[
             CompoundHazardCorrelationResponse(
                 correlation_id=item.correlation_id,
@@ -219,6 +172,21 @@ async def active_incidents(
             for item in snapshot.correlations
         ],
     )
+
+
+@router.get(
+    "/incidents/{identifier}", response_model=ActiveIncidentResponse, tags=["incidents"]
+)
+async def lookup_incident(
+    identifier: str,
+    service: Annotated[ActiveIncidentsService, Depends(get_active_incidents_service)],
+) -> ActiveIncidentResponse:
+    try:
+        return active_incident_response(await service.lookup(identifier))
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.post(
@@ -271,6 +239,8 @@ async def set_incident_watch_enabled(
         raise HTTPException(
             status_code=404, detail="Incident watch not found."
         ) from None
+    except InvalidIncidentWatchScopeError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     return _incident_watch_response(watch)
 
 

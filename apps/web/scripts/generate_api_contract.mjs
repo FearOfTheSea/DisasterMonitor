@@ -168,6 +168,9 @@ const runtimeSchemaNames = new Set([
   'GroundImageryRequestResponse',
   'GroundImageryManifestResponse',
   'ActiveIncidentsSnapshotResponse',
+  'SectionEvidenceResponse',
+  'MonitoringReadinessResponse',
+  'SatelliteAvailabilityResponse',
 ]);
 const pendingRuntimeSchemas = [...runtimeSchemaNames];
 while (pendingRuntimeSchemas.length) {

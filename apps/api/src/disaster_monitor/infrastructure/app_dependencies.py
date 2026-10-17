@@ -16,6 +16,7 @@ from disaster_monitor.application.decision.record_operator_action import (
 )
 from disaster_monitor.application.earthquake_context import EarthquakeContextService
 from disaster_monitor.application.evidence.queries import EvidenceHistoryQuery
+from disaster_monitor.application.evidence.standalone import StandaloneEvidenceService
 from disaster_monitor.application.exposure.access_context import (
     RouteAccessContextService,
 )
@@ -121,6 +122,7 @@ class AppDependencies:
     operator_identity: TrustedOperatorIdentityPolicy
     country_catalog_automation: CountryCatalogUpdateAutomation
     agent_diagnostics: AgentDiagnostics | None
+    standalone_evidence: StandaloneEvidenceService | None = None
     provider_budget: ProviderBudgetLedger | None = None
     route_access: RouteAccessContextService | None = None
     lifecycle: AppLifecycle = field(default_factory=AppLifecycle)

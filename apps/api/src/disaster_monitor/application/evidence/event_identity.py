@@ -17,6 +17,10 @@ from disaster_monitor.domain.disaster import (
     PhysicalEventIdentityResult,
     geographic_distance_km,
 )
+from disaster_monitor.domain.event_identifiers import (
+    EventIdentifierRole,
+    event_identifier_role,
+)
 
 
 def event_point(event: DisasterEvent) -> EventCoordinate | None:
@@ -70,7 +74,11 @@ def _admitted_provider_identifier(identifier: str) -> str | None:
     as cross-record identity evidence.
     """
     normalized = identifier.strip().lower()
-    if not normalized or ":" not in normalized:
+    if (
+        not normalized
+        or ":" not in normalized
+        or event_identifier_role(normalized) is EventIdentifierRole.CONTEXT
+    ):
         return None
     namespace, value = normalized.split(":", 1)
     if not namespace or not value:

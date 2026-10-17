@@ -184,8 +184,11 @@ async def operator_workspace(
         OperatorWorkspaceService, Depends(get_operator_workspace_service)
     ],
     incident_id: Annotated[str | None, Query()] = None,
+    global_scope: bool = False,
 ) -> dict[str, object]:
-    return await service.export_state(incident_id=incident_id)
+    return await service.export_state(
+        incident_id=incident_id, aggregate_bookmarks=not global_scope
+    )
 
 
 @router.post("/mapping-workflows", tags=["interoperability"])

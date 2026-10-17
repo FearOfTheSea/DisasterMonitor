@@ -11,6 +11,15 @@ operation and gate details.
 
 ## Topology and authority
 
+This checkout's manual desktop deployment runs only the API and web frontend.
+It supports on-demand incident browsing and standalone evidence without a model.
+Scheduled incident and Ground watches are unavailable; creation and enabling return HTTP 503.
+Read, delete, and disable operations remain available. A flag alone does not supply worker continuity.
+See [Windows desktop setup](../internal/temp/windows-non-agent-setup-2026-10-11.md)
+for file persistence, acquisition bounds, dataset configuration, and restart limits.
+
+The topology below describes a separate operational deployment, rather than the running manual desktop.
+
 The production-like local topology is `web + api + scheduler + worker + Ollama +
 PostgreSQL/PostGIS + filesystem blob storage`.
 

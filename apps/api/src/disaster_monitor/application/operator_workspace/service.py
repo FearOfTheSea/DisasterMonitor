@@ -135,12 +135,16 @@ class OperatorWorkspaceService:
             raise LookupError(notebook_id)
         return await self._store.notebook_entries(notebook_id)
 
-    async def export_state(self, *, incident_id: str | None) -> dict[str, object]:
+    async def export_state(
+        self, *, incident_id: str | None, aggregate_bookmarks: bool = True
+    ) -> dict[str, object]:
         return {
             "boundary": "non_evidence_operator_state",
             "incident_id": incident_id,
             "notes": await self._store.notes(incident_id),
-            "bookmarks": await self._store.bookmarks(incident_id),
+            "bookmarks": await self._store.bookmarks(
+                incident_id, all_scopes=aggregate_bookmarks and incident_id is None
+            ),
             "runbooks": await self._store.runbooks(),
             "notebooks": await self._store.notebooks(),
         }

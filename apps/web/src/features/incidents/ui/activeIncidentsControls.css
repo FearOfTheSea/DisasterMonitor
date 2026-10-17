@@ -127,6 +127,40 @@
   margin: 0 24px 16px;
 }
 
+.incident-hazard-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 16px 12px;
+}
+
+.incident-hazard-counts-label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.incident-hazard-counts button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  min-height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.incident-hazard-counts button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .incident-query-controls label {
   color: var(--muted);
   display: grid;

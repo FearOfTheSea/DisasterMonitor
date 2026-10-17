@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Literal
 
 from disaster_monitor.application.disaster import ObservationKind
 from disaster_monitor.application.evidence.event_policies import (
@@ -179,6 +180,8 @@ class ActiveIncidentsSnapshot:
     has_more: bool = False
     total_incident_count: int | None = None
     historical_limitations: tuple[str, ...] = ()
+    refresh_state: Literal["fresh", "refreshing", "stale"] = "fresh"
+    is_stale: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,9 +3,13 @@
 from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel
 
 from disaster_monitor.application.ports.event_media import MediaAssetStore
-from disaster_monitor.application.ports.satellite_imagery import SatelliteTileRequest
+from disaster_monitor.application.ports.satellite_imagery import (
+    SatelliteProductAvailability,
+    SatelliteTileRequest,
+)
 from disaster_monitor.application.satellite_imagery import (
     SatelliteImageryInputError,
     SatelliteImageryService,
@@ -79,6 +83,21 @@ async def satellite_imagery_catalog(
             for product in service.catalog()
         ]
     )
+
+
+class SatelliteAvailabilityResponse(BaseModel):
+    products: tuple[SatelliteProductAvailability, ...]
+
+
+@router.get(
+    "/satellite-imagery/availability",
+    response_model=SatelliteAvailabilityResponse,
+    tags=["satellite-imagery"],
+)
+async def satellite_availability(
+    service: Annotated[SatelliteImageryService, Depends(get_satellite_imagery_service)],
+) -> SatelliteAvailabilityResponse:
+    return SatelliteAvailabilityResponse(products=await service.availability())
 
 
 @router.get(

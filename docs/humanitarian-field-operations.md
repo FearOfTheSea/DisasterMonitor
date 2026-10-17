@@ -40,7 +40,9 @@ the existing local operator workspace.
 ## Local storage and privacy
 
 Reports, immutable review history, operator observations, notes, bookmarks, and
-runbooks use atomically replaced local JSON stores. Stored files are mode `0600`.
+runbooks use atomically replaced local JSON stores. POSIX stores use mode `0600`.
+Windows stores use verified private ACLs, preserve existing owners, and retain a
+private backup before the first ACL migration. Mode bits alone do not establish Windows privacy.
 Images are limited to JPEG and PNG, four per report, and a bounded byte size. Before
 persistence, the API:
 

@@ -1,5 +1,6 @@
 """Deterministic metadata-only parsers for admitted news feeds."""
 
+import re
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from xml.etree.ElementTree import Element
@@ -22,6 +23,9 @@ def parse_web_metadata(
 ) -> tuple[NewsFeedItem, ...]:
     if b"<!DOCTYPE" in body.upper() or b"<!ENTITY" in body.upper():
         raise ValueError("Web source returned unsafe XML.")
+    if source.source_id == "nasa-earth-observatory-natural-events":
+        # Verified NASA feed defect: adjacent namespace attributes lack whitespace.
+        body = re.sub(rb"([\x22\x27])(?=xmlns(?::[A-Za-z][\w.-]*)?=)", rb"\1 ", body)
     try:
         root = ElementTree.fromstring(body)
     except ElementTree.ParseError as error:

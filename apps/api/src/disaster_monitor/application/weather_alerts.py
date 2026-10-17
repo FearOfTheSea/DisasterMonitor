@@ -1,11 +1,16 @@
 """Provider-neutral official warning read service and stable UI projection."""
 
+import asyncio
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from disaster_monitor.application.ports.weather_alerts import (
+    WeatherAlertBatch,
+    WeatherAlertProviderIssue,
+)
 from disaster_monitor.application.warnings.lifecycle import reconcile_cap_messages
 from disaster_monitor.domain.warnings import (
     ReconciledWarning,
@@ -120,10 +125,61 @@ class WeatherAlertsService:
     ) -> None:
         self._provider = provider
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._batch: WeatherAlertBatch | None = None
+        self._retrieved_at: datetime | None = None
+        self._checked_at: datetime | None = None
+        self._last_success: WeatherAlertBatch | None = None
+        self._inflight: asyncio.Task[WeatherAlertBatch] | None = None
+
+    async def current_messages(self) -> WeatherAlertBatch:
+        now = self._clock()
+        if (
+            self._batch
+            and self._checked_at
+            and now - self._checked_at < timedelta(minutes=2)
+        ):
+            return self._batch
+        if self._inflight is None:
+            self._inflight = asyncio.create_task(self._retrieve(now))
+        task = self._inflight
+        try:
+            return await asyncio.shield(task)
+        finally:
+            if task.done():
+                self._inflight = None
+
+    async def _retrieve(self, now: datetime) -> WeatherAlertBatch:
+        try:
+            batch = await self._provider.fetch_active_alerts(now=now)
+        except Exception:
+            batch = WeatherAlertBatch(
+                issue=WeatherAlertProviderIssue(
+                    "warning_retrieval_failed",
+                    "Warning retrieval failed.",
+                    retryable=True,
+                )
+            )
+        if batch.issue is None:
+            self._last_success = batch
+            self._retrieved_at = now
+        elif not batch.alerts and self._last_success and batch.issue:
+            batch = replace(
+                self._last_success,
+                issue=replace(
+                    batch.issue,
+                    partial=True,
+                    detail=batch.issue.detail
+                    + " Retained the last successful messages; validity is rechecked.",
+                ),
+            )
+        elif batch.alerts:
+            self._retrieved_at = now
+        self._batch, self._checked_at = batch, now
+        return batch
 
     async def execute(self) -> WeatherAlertsSnapshot:
         now = self._clock()
-        batch = await self._provider.fetch_active_alerts(now=now)
+        batch = await self.current_messages()
         alerts = tuple(
             _project_warning(item)
             for item in reconcile_cap_messages(batch.alerts, now=now)
@@ -147,7 +203,7 @@ class WeatherAlertsService:
                 "this does not prove that no hazard exists."
             )
         return WeatherAlertsSnapshot(
-            retrieved_at=now,
+            retrieved_at=self._retrieved_at or now,
             alerts=alerts,
             coverage=WeatherAlertCoverage(
                 source_id=getattr(self._provider, "source_id", NWS_SOURCE_ID),
@@ -163,6 +219,9 @@ class WeatherAlertsService:
         )
 
     async def aclose(self) -> None:
+        if self._inflight is not None:
+            self._inflight.cancel()
+            await asyncio.gather(self._inflight, return_exceptions=True)
         close = getattr(self._provider, "aclose", None)
         if close is not None:
             await close()

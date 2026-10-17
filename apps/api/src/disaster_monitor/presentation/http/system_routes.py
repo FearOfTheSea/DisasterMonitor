@@ -107,15 +107,17 @@ async def monitoring_readiness(
         request.app.state.dependencies.operational_repository,
     )
     durable_storage = repository.durable
-    if not durable_storage:
+    configured = request.app.state.dependencies.incident_watches.monitoring_available
+    if not durable_storage or not configured:
         return MonitoringReadinessResponse(
             status="degraded",
-            durable_storage=False,
+            durable_storage=durable_storage,
             scheduler_worker_configured=False,
             projection_available=False,
             detail=(
-                "Standalone development mode is using in-memory operational state; "
-                "scheduler and worker continuity are not configured."
+                "Scheduled monitoring is unavailable. Durable operational storage "
+                "and explicitly configured scheduler/worker processes are required. "
+                "Manual browsing and retained local records remain available."
             ),
         )
     try:

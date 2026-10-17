@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchActiveIncidents } from '@/features/incidents/api/incidentsClient';
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
 import type { ActiveIncidentsSnapshot } from '@/features/incidents/model/activeIncidents';
+import { HttpResponseError } from '@/shared/api/http';
 
 vi.mock('@/features/incidents/api/incidentsClient', () => ({
   fetchActiveIncidents: vi.fn(),
@@ -23,6 +24,24 @@ describe('useActiveIncidents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
+  });
+
+  it('retains the page on expiry and recovers through explicit refresh', async () => {
+    vi.mocked(fetchActiveIncidents)
+      .mockResolvedValueOnce({ ...snapshot('first'), next_cursor: 'expired' })
+      .mockRejectedValueOnce(new HttpResponseError('Expired snapshot', 410))
+      .mockResolvedValueOnce(snapshot('recovered'));
+    const { result } = renderHook(() => useActiveIncidents());
+    await waitFor(() => expect(result.current.snapshot?.retrieved_at).toBe('first'));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.error).toContain('Refresh to recover');
+    expect(result.current.snapshot?.retrieved_at).toBe('first');
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(result.current.snapshot?.retrieved_at).toBe('recovered');
   });
 
   it('loads on first render and exposes an explicit manual refresh', async () => {
@@ -50,6 +69,7 @@ describe('useActiveIncidents', () => {
     });
 
     expect(fetchActiveIncidents).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetchActiveIncidents).mock.calls[1][0]?.refresh).toBe(true);
     expect(result.current.snapshot?.retrieved_at).toBe('2026-08-20T07:00:00Z');
   });
 

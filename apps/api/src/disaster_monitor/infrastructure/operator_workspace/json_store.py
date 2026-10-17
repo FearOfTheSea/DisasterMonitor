@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -17,11 +16,18 @@ from disaster_monitor.domain.operator_workspace import (
     OperatorBookmark,
     RunbookTemplate,
 )
+from disaster_monitor.infrastructure.private_files import (
+    atomic_private_write,
+    restrict_private_path,
+    verify_private_path,
+)
 
 
 class JsonOperatorWorkspaceStore:
     def __init__(self, path: Path) -> None:
         self._path = path.resolve()
+        if self._path.is_file() and not verify_private_path(self._path):
+            restrict_private_path(self._path, backup=True)
         self._lock = asyncio.Lock()
         self._notes: dict[str, AnalystNote] = {}
         self._bookmarks: dict[str, OperatorBookmark] = {}
@@ -93,11 +99,13 @@ class JsonOperatorWorkspaceStore:
             note for note in self._notes.values() if note.incident_id == incident_id
         )
 
-    async def bookmarks(self, incident_id: str | None) -> tuple[OperatorBookmark, ...]:
+    async def bookmarks(
+        self, incident_id: str | None, *, all_scopes: bool = False
+    ) -> tuple[OperatorBookmark, ...]:
         return tuple(
             bookmark
             for bookmark in self._bookmarks.values()
-            if bookmark.incident_id == incident_id
+            if all_scopes or bookmark.incident_id == incident_id
         )
 
     async def runbooks(self) -> tuple[RunbookTemplate, ...]:
@@ -200,14 +208,9 @@ class JsonOperatorWorkspaceStore:
                 _json_record(asdict(item)) for item in entries.values()
             ],
         }
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self._path.with_suffix(f"{self._path.suffix}.tmp")
-        with temporary.open("w", encoding="utf-8") as stream:
-            json.dump(document, stream, ensure_ascii=False, separators=(",", ":"))
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temporary, 0o600)
-        temporary.replace(self._path)
+        atomic_private_write(
+            self._path, json.dumps(document, ensure_ascii=False, separators=(",", ":"))
+        )
 
 
 def _json_record(record: dict[str, object]) -> dict[str, object]:

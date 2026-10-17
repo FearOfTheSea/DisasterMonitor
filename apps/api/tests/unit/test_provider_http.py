@@ -9,6 +9,20 @@ URL = "https://example.test/feed"
 HOSTS = frozenset({"example.test"})
 
 
+async def test_final_timeout_backs_off_subsequent_queries():
+    calls = []
+
+    def timeout(request):
+        calls.append(request)
+        raise httpx.ReadTimeout("Unavailable", request=request)
+
+    async with _client(timeout) as client:
+        for _ in range(2):
+            with pytest.raises(DisasterProviderError):
+                await get_json(client, URL, allowed_hosts=HOSTS)
+    assert len(calls) == 2
+
+
 def _client(handler) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
@@ -97,3 +111,20 @@ async def test_json_transport_retries_rate_limits_but_preserves_attempt_metadata
     assert caught.value.failure.retryable is True
     assert caught.value.failure.http_status == 429
     await client.aclose()
+
+
+async def test_retry_after_prevents_repeated_requests_during_provider_cooldown():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(429, headers={"Retry-After": "120"}, request=request)
+
+    async with _client(handler) as client:
+        for _ in range(2):
+            with pytest.raises(DisasterProviderError) as caught:
+                await get_json(client, URL, allowed_hosts=HOSTS)
+            assert (
+                caught.value.failure.reason_code is ProviderFailureReason.RATE_LIMITED
+            )
+    assert len(calls) == 1

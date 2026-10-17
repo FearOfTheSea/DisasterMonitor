@@ -177,6 +177,8 @@ export type ActiveIncidentsSnapshot = {
   has_more?: boolean;
   total_incident_count?: number | null;
   historical_limitations?: string[];
+  refresh_state?: 'fresh' | 'refreshing' | 'stale';
+  is_stale?: boolean;
   availability?: 'live' | 'offline-cache';
   cached_at?: string;
 };

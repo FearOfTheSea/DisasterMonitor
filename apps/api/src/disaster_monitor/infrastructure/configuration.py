@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     cdse_client_id: SecretStr | None = Field(default=None, repr=False)
     cdse_client_secret: SecretStr | None = Field(default=None, repr=False)
     ground_imagery_enabled: bool = True
+    evidence_dataset_manifest: Path | None = None
+    incident_identity_store_path: Path = Path("data/incidents/identities.json")
     ground_imagery_catalog_max_response_bytes: int = Field(
         default=8_000_000, ge=10_000, le=8_388_608
     )
@@ -93,6 +95,7 @@ class Settings(BaseSettings):
     operational_database_url: SecretStr | None = Field(default=None, repr=False)
     operational_blob_root: Path = Path("data/operational/blobs")
     operational_auto_migrate: bool = True
+    scheduled_monitoring_enabled: bool = False
     country_catalog_root: Path = Path("data/geography")
     country_catalog_automatic_updates: bool = True
     country_catalog_update_timeout_seconds: float = Field(default=60.0, gt=0, le=300)

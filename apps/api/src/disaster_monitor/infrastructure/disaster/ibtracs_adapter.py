@@ -163,13 +163,31 @@ class IbtracsTrackAdapter:
         )
         tracks, issues = _parse_tracks(payload)
         selected_name_tokens = _name_tokens(event.source.title)
+        selected_ids = {
+            identifier.rsplit(":", 1)[-1].upper()
+            for identifier in event.provider_ids
+            if identifier.startswith(("atcf:", "ibtracs:"))
+        }
+        authoritative_matches = {
+            track.sid
+            for track in tracks
+            if selected_ids
+            & {
+                track.sid.upper(),
+                *(identifier.upper() for identifier in track.atcf_ids),
+            }
+        }
         matches: list[tuple[_Track, float]] = []
         for track in tracks:
             normalized_name = _normalized_name(track.name)
-            if (
-                normalized_name in _GENERIC_NAMES
-                or normalized_name not in selected_name_tokens
-                or abs(track.start - event.event_time) > _MAX_START_DIFFERENCE
+            identified = track.sid in authoritative_matches
+            if (authoritative_matches and not identified) or (
+                not identified
+                and (
+                    normalized_name in _GENERIC_NAMES
+                    or normalized_name not in selected_name_tokens
+                    or abs(track.start - event.event_time) > _MAX_START_DIFFERENCE
+                )
             ):
                 continue
             distance = min(
@@ -190,6 +208,11 @@ class IbtracsTrackAdapter:
             return ProviderBatch(issues=tuple(issues))
 
         track, distance = matches[0]
+        identity_basis = (
+            "authoritative storm identifier and track proximity"
+            if track.sid in authoritative_matches
+            else "storm name, track start, and track proximity"
+        )
         agency_text = ", ".join(track.agencies) if track.agencies else "not stated"
         publisher = "NOAA National Centers for Environmental Information (IBTrACS)"
         if track.agencies:
@@ -243,8 +266,8 @@ class IbtracsTrackAdapter:
             source=source,
             narrative=(
                 f"NOAA IBTrACS {track.track_type.lower()} track {track.sid} was "
-                "reconciled to the selected GDACS cyclone by storm name, track start, "
-                f"and track proximity (closest retained point {distance:.0f} km). "
+                f"reconciled to the selected GDACS cyclone by {identity_basis} "
+                f"(closest retained point {distance:.0f} km). "
                 "IBTrACS is a merged best-track archive, not an independent live-event "
                 "authority; contributing agency data can overlap the GDACS upstream "
                 "source, and provisional points can be revised."
@@ -364,12 +387,14 @@ def _parse_tracks(payload: str) -> tuple[tuple[_Track, ...], list[ProviderIssue]
                 or not isfinite(latitude)
                 or not isfinite(longitude)
                 or not -90 <= latitude <= 90
-                or not -180 <= longitude <= 180
+                or not -180 <= longitude <= 360
             ):
                 raise ValueError("required track fields are invalid")
         except (TypeError, ValueError, OverflowError) as error:
             issues.append(_invalid_record(index, error))
             continue
+        if longitude > 180:
+            longitude -= 360
         group = grouped.setdefault(
             sid,
             {

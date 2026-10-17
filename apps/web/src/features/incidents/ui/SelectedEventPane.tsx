@@ -10,6 +10,7 @@ import {
 } from '@/features/incidents/model/activeIncidents';
 import { DisasterIcon } from './DisasterIcon';
 import { disasterLabel, relatedInvestigation } from './incidentPresentation';
+import type { CycloneMapLayer } from '@/shared/types/assistant';
 import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 
 type Tab = 'overview' | 'evidence' | 'timeline';
@@ -49,6 +50,7 @@ export function SelectedEventPane({
   onClose,
   onAsk,
   onGroundView,
+  onForecastLayers,
 }: {
   incident: IncidentMapRecord;
   snapshotRetrievedAt: string;
@@ -56,6 +58,7 @@ export function SelectedEventPane({
   onClose: () => void;
   onAsk: () => void;
   onGroundView: () => void;
+  onForecastLayers?: (layers: CycloneMapLayer[]) => void;
 }) {
   const [tab, setTab] = useState<Tab>('overview');
   const heading = useRef<HTMLHeadingElement>(null);
@@ -230,6 +233,7 @@ export function SelectedEventPane({
             incident={incident}
             warnings={warnings}
             onGroundView={onGroundView}
+            onForecastLayers={onForecastLayers}
             presentation="disclosures"
           />
         )}

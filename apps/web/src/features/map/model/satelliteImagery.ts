@@ -31,6 +31,11 @@ export type SatelliteImagerySource = {
   maximumUsefulZoom: number;
   available: boolean;
   access: DirectGibsAccess;
+  availabilityState?: 'available' | 'empty' | 'degraded' | 'error';
+  defaultTime?: string;
+  timeValues?: string[];
+  metadataRetrievedAt?: string;
+  limitations?: string[];
 };
 
 const GIBS_ATTRIBUTION =

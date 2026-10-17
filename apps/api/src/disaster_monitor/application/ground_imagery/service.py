@@ -88,6 +88,7 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         job_queue: GroundImageryJobQueue | None = None,
         rate_limiter: GroundImageryRequestLimiter | None = None,
         authenticated_processing_available: bool = True,
+        monitoring_available: bool = True,
     ) -> None:
         self._catalog = catalog
         super().__init__(
@@ -102,6 +103,7 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             enabled,
             rate_limiter,
         )
+        self._monitoring_available = monitoring_available
         self._artifact_workflow = GroundImageryArtifactWorkflow(
             region_resolver,
             clock=clock,
@@ -271,13 +273,39 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             return queued
         if self._rate_limiter is not None:
             await self._rate_limiter.claim_preparation()
-        return await self._prepare_selection_now(
+        preparing = replace(
             request,
-            sensor=sensor,
-            role=temporal_role,
-            overview=overview,
-            output_kind=output_kind,
+            state=GroundImageryRequestState.QUEUED,
+            updated_at=self._clock(),
+            reason_codes=_identifiers.unique_reasons(
+                (*request.reason_codes, "artifact_preparation_in_progress")
+            ),
         )
+        await self._store.save_request(preparing)
+        try:
+            updated = await self._prepare_selection_now(
+                preparing,
+                sensor=sensor,
+                role=temporal_role,
+                overview=overview,
+                output_kind=output_kind,
+            )
+        except Exception:
+            await self.mark_preparation_failed(request_id, detail="Preparation failed.")
+            raise
+        completed = replace(
+            updated,
+            state=GroundImageryRequestState.PARTIAL
+            if request.state is GroundImageryRequestState.FAILED
+            else request.state,
+            reason_codes=tuple(
+                code
+                for code in updated.reason_codes
+                if code != "artifact_preparation_in_progress"
+            ),
+        )
+        await self._store.save_request(completed)
+        return completed
 
     @property
     def job_queue(self) -> GroundImageryJobQueue | None:

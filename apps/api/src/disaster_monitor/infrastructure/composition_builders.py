@@ -121,6 +121,9 @@ from disaster_monitor.infrastructure.ground_imagery.artifact_store import (
     FilesystemImageryArtifactStore,
 )
 from disaster_monitor.infrastructure.ground_imagery.cdse_catalog import CDSEStacCatalog
+from disaster_monitor.infrastructure.ground_imagery.file_repository import (
+    FileGroundImageryRequestStore,
+)
 from disaster_monitor.infrastructure.ground_imagery.geoboundaries import (
     GeoBoundariesPlaceLookup,
 )
@@ -130,9 +133,6 @@ from disaster_monitor.infrastructure.ground_imagery.geometry import (
 from disaster_monitor.infrastructure.ground_imagery.local_products import (
     FallbackGroundImageryRenderer,
     PublicCogRenderer,
-)
-from disaster_monitor.infrastructure.ground_imagery.memory_repository import (
-    InMemoryGroundImageryRequestStore,
 )
 from disaster_monitor.infrastructure.ground_imagery.postgres_jobs import (
     PostgresGroundImageryJobQueue,
@@ -413,7 +413,8 @@ def build_satellite_imagery_service(settings: Settings) -> SatelliteImageryServi
     dependency or credential-bearing tile proxy.
     """
     del settings
-    return SatelliteImageryService((NasaGibsImageryProvider(),))
+    provider = NasaGibsImageryProvider()
+    return SatelliteImageryService((provider,), availability_readers=(provider,))
 
 
 def build_ground_imagery_service(
@@ -435,7 +436,9 @@ def build_ground_imagery_service(
     request_store = (
         PostgresGroundImageryRequestStore(dsn)
         if dsn
-        else InMemoryGroundImageryRequestStore()
+        else FileGroundImageryRequestStore(
+            settings.ground_imagery_storage_root / "requests.json"
+        )
     )
     client_id = (
         settings.cdse_client_id.get_secret_value()
@@ -508,6 +511,7 @@ def build_ground_imagery_service(
         job_queue=job_queue,
         rate_limiter=GroundImageryRequestLimiter(),
         authenticated_processing_available=remote_renderer is not None,
+        monitoring_available=bool(dsn) and settings.scheduled_monitoring_enabled,
     )
 
 

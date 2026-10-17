@@ -11,7 +11,7 @@ solutions, prefer the design that makes ownership, dependencies, and future chan
 easiest to understand.
 
 The repository-wide decision order and quality attributes are defined in
-[software-quality.md](software-quality.md). This document defines how those priorities
+[software-quality.md](internal/guide/software-quality.md). This document defines how those priorities
 map to concrete boundaries.
 
 ## Repository

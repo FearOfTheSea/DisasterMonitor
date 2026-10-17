@@ -253,6 +253,8 @@ class ActiveIncidentsSnapshotResponse(BaseModel):
     has_more: bool = False
     total_incident_count: int | None = None
     historical_limitations: list[str] = Field(default_factory=list)
+    refresh_state: Literal["fresh", "refreshing", "stale"] = "fresh"
+    is_stale: bool = False
 
 
 class CountryIncidentWatchScopeRequest(BaseModel):

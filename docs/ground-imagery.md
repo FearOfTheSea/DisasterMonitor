@@ -1,7 +1,7 @@
 # Event-focused Ground view
 
 Ground view is the bounded Sentinel-1/Sentinel-2 observation workflow described in
-[`plan.md`](../plan.md). It is regional context for an admitted incident. It must not
+[desktop repair plan](internal/temp/non-agent-repair-plan-2026-10-11.md). It is regional context for an admitted incident. It must not
 be read as a building-level damage assessment, a road-passability result, a casualty
 count, or proof that an area outside observed coverage was unaffected.
 
@@ -46,12 +46,14 @@ The current vertical slice provides:
   a 5/15/30 km operator-selected inspection circle when an incident has no
   defensible impact region,
   a comparison-stage summary for each sensor when no pair is renderable,
-  refresh/watch controls, artifact download, and manifest links. Selecting an
-  incident opens Ground view; it prepares the latest post-event image automatically
-  when available, or a pre-event reference otherwise, and polls queued work;
+  refresh controls, artifact download, and manifest links. Selecting an incident
+  opens Event Overview. Ground discovery and preparation each require explicit
+  user actions. The interface distinguishes delivered artifacts from useful observations;
 - PostgreSQL JSONB request persistence, stale-version protection, and durable
   selection lookup when the operational database is configured. Prepared artifacts
-  retain their observation snapshot through refreshes;
+  retain their observation snapshot through refreshes. Manual deployment uses atomic
+  file-backed request metadata beside artifacts, bounded to 256 requests and 64 MiB.
+  Restart preserves completed work and marks interrupted preparation explicitly;
 - PostgreSQL-backed leased preparation jobs with fencing tokens, bounded retry/backoff,
   explicit Copernicus Data Space budget reservations, failure diagnostics, restart
   recovery, scheduled watch claims, and reference-aware artifact retention cleanup.
@@ -76,10 +78,13 @@ CDSE catalog metadata alone cannot establish image quality or guarantee that a
 product is already available to the Process API. A selected product may still fail
 rendering or cover only part of the incident region. Ground view preserves those
 states and does not claim that every disaster has a post-event image.
-Opening an idempotent Ground view refreshes its catalog search when the previous
+An explicit idempotent Ground search refreshes its catalog when the previous
 search time is at least one hour old. Manual refresh and due watch checks use the
 current server time, so newly published captures can enter the search window.
-Watch preferences survive restart in PostgreSQL and the worker claims due checks
+Scheduled watches are unavailable in the manual desktop deployment. Creating or
+enabling one returns HTTP 503; existing preferences remain readable and disableable.
+Continuous operation requires the database, scheduler, and worker described in the runbook.
+In that separate deployment, watch preferences survive restart in PostgreSQL and the worker claims due checks
 without two workers processing the same due time. A live watch does not guarantee
 new imagery: provider availability, catalog lag, source quality, and request limits
 still apply. The UI shows both sensing time and the latest search time.
@@ -137,6 +142,8 @@ Capture intervals come from sensing metadata, not download time. Sentinel-1 and
 Sentinel-2 are searched and selected independently, so a missing optical result does
 not hide a usable radar result and vice versa. Partial, cloudy, stale, and incomplete
 states remain explicit.
+Regional quality accompanies each delivered artifact. An optical core with zero usable
+pixels is labelled delivered but unusable. Obscured observations do not form comparison pairs.
 An observation footprint shows where the satellite acquired data; it is not a
 damage or flood-extent outline. Transparent map pixels mean no source data. Optical
 cloud classes and radar ambiguity still limit what visible pixels can establish.

@@ -160,12 +160,28 @@ export function comparisonForSensor(
       selection.role === 'earlier_reference',
   );
   const afterSelection =
-    selections.find((selection) => selection.role === 'first_useful_after_onset') ??
-    selections.find((selection) => selection.role === 'latest_useful');
+    selections.find(
+      (selection) =>
+        selection.role === 'first_useful_after_onset' &&
+        selection.observation &&
+        selection.reason !== 'obscured',
+    ) ??
+    selections.find(
+      (selection) =>
+        selection.role === 'latest_useful' &&
+        selection.observation &&
+        selection.reason !== 'obscured',
+    );
   if (!beforeSelection?.observation || !afterSelection?.observation) return undefined;
   const before = artifactForSelection(request.artifacts, beforeSelection.selection_id);
   const after = artifactForSelection(request.artifacts, afterSelection.selection_id);
   if (!before || !after || !matchingGrid(before, after)) return undefined;
+  if (
+    beforeSelection.reason === 'obscured' ||
+    beforeSelection.observation.quality?.usable_fraction === 0 ||
+    afterSelection.observation.quality?.usable_fraction === 0
+  )
+    return undefined;
   return { before, after, beforeSelection, afterSelection };
 }
 

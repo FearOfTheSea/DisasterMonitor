@@ -19,6 +19,7 @@ class IncidentImageryContext:
     disaster: Disaster
     country_code: str | None
     event_time: datetime
+    provider_ids: tuple[str, ...] = ()
     evidence: tuple[RegionEvidence, ...] = ()
     verified_point: Coordinate | None = None
     onset: ImpactOnset | None = None

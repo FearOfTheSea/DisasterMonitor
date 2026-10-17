@@ -6,7 +6,7 @@ import { createDefaultMapLayerState } from '@/features/map/model/mapLayerState';
 import type { AssistantResponse } from '@/shared/types/assistant';
 
 describe('workspace actions', () => {
-  it('selects an incident and opens its Ground pane with a restorable URL identity', () => {
+  it('selects an incident and opens its overview with a restorable URL identity', () => {
     const selectActiveIncident = vi.fn();
     const openPane = vi.fn();
     const { result } = renderHook(() =>
@@ -20,7 +20,7 @@ describe('workspace actions', () => {
     act(() => result.current.selectIncident('event-1'));
 
     expect(selectActiveIncident).toHaveBeenCalledWith('event-1');
-    expect(openPane).toHaveBeenCalledWith('ground', 'event-1');
+    expect(openPane).toHaveBeenCalledWith('event', 'event-1');
   });
 
   it('applies assistant actions to layers and opens the requested workspace', async () => {

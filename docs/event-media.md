@@ -3,7 +3,9 @@
 Disaster Monitor can add a small contextual photo gallery after deterministic
 workflow selects a physical event.
 
-The current target is three photos. Each item shows its source, caption,
+The bounded target is three photos, without a minimum-result promise. The standalone
+Event Evidence Imagery section retrieves media without assistant output. Empty results
+include rejection categories. Each item shows its source, caption,
 publication or capture date, credit, content role, rights status, and
 event-association status.
 

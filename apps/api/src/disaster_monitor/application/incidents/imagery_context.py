@@ -10,7 +10,6 @@ from disaster_monitor.application.ground_imagery.impact_regions import (
     shakemap_source_regions,
 )
 from disaster_monitor.application.incidents.active_incidents import (
-    ActiveIncidentsQuery,
     ActiveIncidentsService,
 )
 from disaster_monitor.application.ports.ground_imagery.incidents import (
@@ -41,19 +40,9 @@ class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
     async def get_imagery_context(
         self, incident_id: str
     ) -> IncidentImageryContext | None:
-        snapshot = await self._incidents.execute(
-            ActiveIncidentsQuery(
-                time_window_days=30,
-                limit_per_disaster=20,
-                acquisition_limit_per_disaster=100,
-                search=incident_id,
-            )
-        )
-        incident = next(
-            (item for item in snapshot.incidents if item.event_id == incident_id),
-            None,
-        )
-        if incident is None:
+        try:
+            incident = await self._incidents.lookup(incident_id)
+        except LookupError:
             return None
 
         evidence: list[RegionEvidence] = []
@@ -121,6 +110,7 @@ class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
             )
         return IncidentImageryContext(
             incident_id=incident.event_id,
+            provider_ids=incident.provider_ids,
             disaster=incident.disaster,
             country_code=(incident.country.country_code if incident.country else None),
             event_time=incident.event_time,
@@ -149,11 +139,18 @@ class EarthquakeProductImageryContextReader(IncidentImageryContextReader):
         context = await self._base.get_imagery_context(incident_id)
         if context is None or context.disaster is not Disaster.EARTHQUAKE:
             return context
-        usgs_event_id = incident_id.removeprefix("usgs:")
-        if not incident_id.startswith("usgs:") or not usgs_event_id.isalnum():
+        identifier = next(
+            (
+                value
+                for value in (context.incident_id, *context.provider_ids)
+                if value.startswith("usgs:")
+            ),
+            None,
+        )
+        if identifier is None or not identifier.removeprefix("usgs:").isalnum():
             return context
         try:
-            products = await self._earthquake_context.execute(incident_id)
+            products = await self._earthquake_context.execute(identifier)
         except Exception:
             logger.exception(
                 "USGS earthquake products were unavailable for Ground region planning"

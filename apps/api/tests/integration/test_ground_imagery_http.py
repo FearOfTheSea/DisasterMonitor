@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -176,6 +177,7 @@ def _service(
     rate_limiter: GroundImageryRequestLimiter | None = None,
     catalog: FakeCatalog | None = None,
     clock=None,
+    renderer=None,
 ) -> GroundImageryService:
     source = RegionSource(
         source_id="fixture:impact",
@@ -216,7 +218,7 @@ def _service(
         ),
         InMemoryGroundImageryRequestStore(),
         clock=clock or (lambda: datetime(2024, 5, 20, tzinfo=UTC)),
-        renderer=None if artifact_store is None else FakeRenderer(),
+        renderer=renderer or (None if artifact_store is None else FakeRenderer()),
         raster_validator=None if artifact_store is None else RasterioCogValidator(),
         artifact_store=artifact_store,
         tile_renderer=(
@@ -227,6 +229,75 @@ def _service(
         job_queue=job_queue,
         rate_limiter=rate_limiter,
     )
+
+
+async def test_manual_preparation_records_interrupted_work_before_processing(tmp_path):
+    started = asyncio.Event()
+
+    class BlockingRenderer:
+        async def render(self, request):
+            started.set()
+            await asyncio.Event().wait()
+
+    service = _service(tmp_path, renderer=BlockingRenderer())
+    request = await service.create_request(
+        GroundImageryRequestInput(
+            incident_id="incident-1",
+            reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+        )
+    )
+    preparation = asyncio.create_task(
+        service.prepare_selection(
+            request.request_id,
+            sensor=Sensor.SENTINEL_1,
+            role="latest_useful",
+            overview=True,
+        )
+    )
+    try:
+        await asyncio.wait_for(started.wait(), timeout=2)
+        stored = await service.get_request(request.request_id)
+        assert stored.state.value == "queued"
+        assert "artifact_preparation_in_progress" in stored.reason_codes
+    finally:
+        preparation.cancel()
+        await asyncio.gather(preparation, return_exceptions=True)
+
+
+async def test_successful_other_sensor_recovers_a_failed_preparation_as_partial(
+    tmp_path,
+):
+    class FlakyRenderer(FakeRenderer):
+        calls = 0
+
+        async def render(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Radar product unavailable")
+            return await super().render(request)
+
+    service = _service(tmp_path, renderer=FlakyRenderer())
+    request = await service.create_request(
+        GroundImageryRequestInput(
+            incident_id="incident-1",
+            reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+        )
+    )
+    with pytest.raises(RuntimeError):
+        await service.prepare_selection(
+            request.request_id,
+            sensor=Sensor.SENTINEL_1,
+            role="latest_useful",
+            overview=True,
+        )
+    updated = await service.prepare_selection(
+        request.request_id,
+        sensor=Sensor.SENTINEL_2,
+        role="latest_useful",
+        overview=True,
+    )
+    assert updated.artifacts
+    assert updated.state.value == "partial"
 
 
 @pytest.mark.asyncio

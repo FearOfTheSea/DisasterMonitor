@@ -9,6 +9,7 @@ import {
   fetchOperatorWorkspace,
 } from '@/features/operations/api/operatorWorkspaceClient';
 import type { OperatorWorkspaceState } from '@/shared/types/operatorWorkspace';
+import { NotebookEditor } from '@/features/operations/ui/NotebookEditor';
 
 type OperatorWorkspaceProps = {
   selectedIncidentId?: string;
@@ -19,6 +20,7 @@ export function OperatorWorkspace({
   selectedIncidentId,
   section = 'all',
 }: OperatorWorkspaceProps) {
+  const queryIncidentId = section === 'bookmarks' ? undefined : selectedIncidentId;
   const [workspace, setWorkspace] = useState<OperatorWorkspaceState | null>(null);
   const [note, setNote] = useState('');
   const [tags, setTags] = useState('');
@@ -34,10 +36,7 @@ export function OperatorWorkspace({
     const controller = new AbortController();
     async function refresh() {
       try {
-        const next = await fetchOperatorWorkspace(
-          selectedIncidentId,
-          controller.signal,
-        );
+        const next = await fetchOperatorWorkspace(queryIncidentId, controller.signal);
         if (controller.signal.aborted) return;
         setWorkspace(next);
         setError(null);
@@ -54,10 +53,10 @@ export function OperatorWorkspace({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [selectedIncidentId, refreshRevision]);
+  }, [queryIncidentId, refreshRevision]);
 
   const scopedWorkspace =
-    workspace?.incident_id === (selectedIncidentId ?? null) ? workspace : null;
+    workspace?.incident_id === (queryIncidentId ?? null) ? workspace : null;
 
   async function saveNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -233,6 +232,13 @@ export function OperatorWorkspace({
           ))}
       </div>
       {status && <p role="status">{status}</p>}
+      {section !== 'bookmarks' && (
+        <NotebookEditor
+          notebooks={scopedWorkspace?.notebooks ?? []}
+          incidentId={selectedIncidentId}
+          onSaved={() => setRefreshRevision((value) => value + 1)}
+        />
+      )}
       {error && <p role="alert">{error}</p>}
     </section>
   );

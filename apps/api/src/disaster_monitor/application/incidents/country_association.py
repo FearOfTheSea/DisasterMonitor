@@ -33,12 +33,16 @@ class IncidentCountryResolver:
         region_catalog: GeographicRegionCatalog | None = None,
         *,
         maximum_nearby_distance_km: float = 100.0,
+        maximum_mentioned_distance_km: float = 1000.0,
     ) -> None:
         if maximum_nearby_distance_km <= 0:
             raise ValueError("maximum_nearby_distance_km must be positive.")
         self._countries = country_catalog
         self._regions = region_catalog
         self._maximum_nearby_distance_km = maximum_nearby_distance_km
+        if maximum_mentioned_distance_km <= 0:
+            raise ValueError("maximum_mentioned_distance_km must be positive.")
+        self._maximum_mentioned_distance_km = maximum_mentioned_distance_km
 
     def resolve(
         self, event: WorldwideDisasterEvent
@@ -51,21 +55,38 @@ class IncidentCountryResolver:
                 for country in self._countries.countries()
                 if self._countries.contains(country, latitude, longitude)
             )
+            if len(containing) > 1:
+                return None
             if containing:
                 return _association(
-                    min(containing, key=lambda country: country.alpha3_code),
+                    containing[0],
                     CountryAssociationBasis.COORDINATE_POLYGON,
                 )
-
-        mentioned = self._countries.find_mentions(event.location)
-        if mentioned:
-            return _association(mentioned[0], CountryAssociationBasis.SOURCE_MENTION)
 
         region_match = self._regions.find(event.location) if self._regions else None
         if region_match is not None:
             country = self._countries.get_by_alpha3(region_match.country_code)
             if country is not None:
                 return _association(country, CountryAssociationBasis.NAMED_REGION)
+
+        mentioned = self._countries.find_mentions(event.location)
+        if coordinate is not None:
+            latitude, longitude = coordinate
+            mentioned = tuple(
+                country
+                for country in mentioned
+                if (
+                    distance := country.geographic_area.distance_to_boundary_km(
+                        latitude, longitude
+                    )
+                )
+                is not None
+                and distance <= self._maximum_mentioned_distance_km
+            )
+        if len(mentioned) == 1:
+            return _association(mentioned[0], CountryAssociationBasis.SOURCE_MENTION)
+        if len(mentioned) > 1:
+            return None
 
         if coordinate is None:
             return None

@@ -15,21 +15,15 @@ import {
   type RegionalSelection,
 } from '@/features/map/model/regionalPresets';
 import {
-  observationTimeForSource,
   SATELLITE_IMAGERY_SOURCES,
   type SatelliteMapState,
 } from '@/features/map/model/satelliteImagery';
 import { DEFAULT_MAP_VIEW } from '@/shared/config/runtime';
 import type { MapView } from '@/shared/types/assistant';
 
-import type { ActiveIncidentsStatus } from '@/features/incidents/hooks/useActiveIncidents';
-import type { ActiveIncidentsSnapshot } from '@/features/incidents/model/activeIncidents';
 import { useWorkspaceUrlState } from './useWorkspaceUrlState';
 
-export function useMapWorkspace(activeIncidents: {
-  status: ActiveIncidentsStatus;
-  snapshot?: ActiveIncidentsSnapshot;
-}) {
+export function useMapWorkspace() {
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>();
   const [watchFocusIncident, setWatchFocusIncident] = useState<IncidentMapRecord>();
   const [mapLayerState, setMapLayerState] = useState(createDefaultMapLayerState);
@@ -41,7 +35,6 @@ export function useMapWorkspace(activeIncidents: {
     const source = SATELLITE_IMAGERY_SOURCES[0];
     return {
       sourceId: source.id,
-      observationTime: observationTimeForSource(source),
     };
   });
   const [focusRequestToken, setFocusRequestToken] = useState(0);
@@ -56,15 +49,7 @@ export function useMapWorkspace(activeIncidents: {
       satelliteObservationTime: satelliteState.observationTime,
     };
   });
-  const usableSelectedIncidentId =
-    activeIncidents.status === 'success' &&
-    selectedIncidentId &&
-    !watchFocusIncident &&
-    !activeIncidents.snapshot?.incidents.some(
-      (incident) => incident.event_id === selectedIncidentId,
-    )
-      ? undefined
-      : selectedIncidentId;
+  const usableSelectedIncidentId = selectedIncidentId;
   const handleViewChange = useCallback((view: MapView) => {
     setMapView(view);
     setRegionalSelection((current) => regionalPresetAfterViewChange(current, view));

@@ -30,6 +30,9 @@ from disaster_monitor.presentation.http.interoperability_routes import (
 from disaster_monitor.presentation.http.operator_interop_routes import (
     router as operator_interop_router,
 )
+from disaster_monitor.presentation.http.standalone_evidence_routes import (
+    router as standalone_evidence_router,
+)
 from disaster_monitor.presentation.http.system_routes import (
     get_operational_metrics,
 )
@@ -45,6 +48,7 @@ router.include_router(earthquake_context_router)
 router.include_router(field_report_router)
 router.include_router(ground_imagery_router)
 router.include_router(incident_router)
+router.include_router(standalone_evidence_router)
 router.include_router(interoperability_router)
 router.include_router(operator_interop_router)
 router.include_router(assistant_router)

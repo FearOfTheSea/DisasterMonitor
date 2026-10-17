@@ -1,4 +1,7 @@
-import type { ActiveIncidentsSnapshot } from '@/features/incidents/model/activeIncidents';
+import type {
+  ActiveIncident,
+  ActiveIncidentsSnapshot,
+} from '@/features/incidents/model/activeIncidents';
 import type { DisasterType } from '@/features/incidents/model/activeIncidents';
 import { API_BASE_URL } from '@/shared/config/runtime';
 import { readJsonResponse } from '@/shared/api/http';
@@ -16,6 +19,7 @@ type ActiveIncidentsRequest = {
   occurrenceStart?: string;
   occurrenceEnd?: string;
   signal?: AbortSignal;
+  refresh?: boolean;
 };
 
 export async function fetchActiveIncidents({
@@ -30,6 +34,7 @@ export async function fetchActiveIncidents({
   occurrenceStart,
   occurrenceEnd,
   signal,
+  refresh,
 }: ActiveIncidentsRequest = {}): Promise<ActiveIncidentsSnapshot> {
   const parameters = new URLSearchParams({
     time_window_days: String(timeWindowDays),
@@ -43,6 +48,7 @@ export async function fetchActiveIncidents({
   if (cursor) parameters.set('cursor', cursor);
   if (occurrenceStart) parameters.set('occurrence_start', occurrenceStart);
   if (occurrenceEnd) parameters.set('occurrence_end', occurrenceEnd);
+  if (refresh) parameters.set('refresh', 'true');
   const response = await fetch(`${API_BASE_URL}/incidents?${parameters}`, { signal });
   const body = await readJsonResponse<unknown>(
     response,
@@ -59,4 +65,18 @@ export async function fetchActiveIncidents({
       source_ids: correlation.source_ids ?? [],
     })),
   };
+}
+
+export async function fetchActiveIncident(
+  identifier: string,
+  signal?: AbortSignal,
+): Promise<ActiveIncident> {
+  const response = await fetch(
+    `${API_BASE_URL}/incidents/${encodeURIComponent(identifier)}`,
+    { signal },
+  );
+  const body = await readJsonResponse<unknown>(response);
+  if (!matchesApiSchema('ActiveIncidentResponse', body))
+    throw new Error('Incident lookup returned an invalid response.');
+  return body as ActiveIncident;
 }

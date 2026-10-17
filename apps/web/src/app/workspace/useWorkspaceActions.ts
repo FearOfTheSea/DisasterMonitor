@@ -74,14 +74,14 @@ export function useWorkspaceActions({
   const selectIncident = useCallback(
     (incidentId: string) => {
       selectActiveIncident(incidentId);
-      openPane('ground', incidentId);
+      openPane('event', incidentId);
     },
     [selectActiveIncident, openPane],
   );
   const selectWatchIncident = useCallback(
     (incident: IncidentMapRecord) => {
       selectWatchOnMap(incident);
-      openPane('ground', incident.event_id);
+      openPane('event', incident.event_id);
     },
     [selectWatchOnMap, openPane],
   );

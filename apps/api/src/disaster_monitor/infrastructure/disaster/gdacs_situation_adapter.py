@@ -3,7 +3,7 @@
 import hashlib
 import re
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
@@ -436,6 +436,8 @@ def _observation(
         or end is None
         or end < onset
         or onset > now
+        or onset < event.event_time - timedelta(days=query.time_window_days)
+        or published < onset
     ):
         return None
     category, label = meaning

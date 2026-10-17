@@ -13,7 +13,10 @@ def normalize_timestamp(value: object) -> datetime | None:
         number = float(value)
         if number > 100_000_000_000:
             number /= 1_000
-        return datetime.fromtimestamp(number, tz=UTC)
+        try:
+            return datetime.fromtimestamp(number, tz=UTC)
+        except (ValueError, OverflowError, OSError):
+            return None
     if not isinstance(value, str):
         return None
     text = value.strip()

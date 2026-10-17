@@ -63,7 +63,7 @@ class _MetadataParser(HTMLParser):
             self._figure_image = next(
                 (
                     values.get(name)
-                    for name in ("src", "data-src", "data-lazy-src")
+                    for name in ("data-src", "data-lazy-src", "src")
                     if values.get(name)
                 ),
                 None,
@@ -107,6 +107,20 @@ def _article_metadata(html: str, page_url: str) -> _ArticleMetadata | None:
     image_object, article_object = _json_ld_objects(parser.json_ld)
     if not image_url and image_object is not None:
         image_url = _object_url(image_object)
+    if not image_url:
+        image_url = (
+            next(
+                (
+                    figure.image_url
+                    for figure in parser.figures
+                    if figure.image_url and figure.caption
+                ),
+                "",
+            )
+            or ""
+        )
+    if not image_url.strip():
+        return None
     image_url = urljoin(page_url, unescape(image_url.strip()))
     if not image_url or urlsplit(image_url).scheme != "https":
         return None
@@ -119,7 +133,9 @@ def _article_metadata(html: str, page_url: str) -> _ArticleMetadata | None:
         or title
     )
     credit_context = " ".join(
-        value for value in (caption, figure.caption if figure else "") if value
+        value
+        for value in dict.fromkeys((caption, figure.caption if figure else ""))
+        if value
     )
     credit, credit_kind = _credit(image_object, credit_context)
     published_at = _first_datetime(
@@ -204,7 +220,7 @@ def _matching_figure(
             image_path and image_path in urlsplit(candidate).path.rsplit("/", 1)[-1]
         ):
             return figure
-    return next((item for item in figures if item.caption), None)
+    return None
 
 
 def _credit(

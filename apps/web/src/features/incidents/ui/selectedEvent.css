@@ -206,6 +206,27 @@
 .event-brief-disclosures > details > :not(summary) {
   margin-top: 14px;
 }
+
+.exposure-inspection form,
+.exposure-inspection label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.exposure-inspection form {
+  margin-top: 12px;
+}
+
+.exposure-inspection input {
+  background: var(--surface-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  padding: 8px 10px;
+  width: 100%;
+}
 .event-brief-disclosures dd,
 .event-brief-disclosures p,
 .event-brief-disclosures li {

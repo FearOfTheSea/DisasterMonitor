@@ -1,8 +1,24 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { EventBrief } from '@/features/event-brief/ui/EventBrief';
 import type { IncidentMapRecord } from '@/features/incidents/model/activeIncidents';
+
+vi.mock('@/features/event-brief/api/sectionEvidenceClient', () => ({
+  fetchSectionEvidence: vi.fn().mockResolvedValue({
+    section: 'exposure',
+    state: 'empty',
+    retrieved_at: '2026-10-11T00:00:00Z',
+    facts: [],
+    narratives: [],
+    warnings: [],
+    forecast_layers: [],
+    reason_codes: [],
+    limitations: [
+      'Population and assets intersecting a source-backed area are not verified as affected.',
+    ],
+  }),
+}));
 
 const incident: IncidentMapRecord = {
   event_id: 'usgs:us7000fixture',
@@ -49,7 +65,7 @@ const incident: IncidentMapRecord = {
 afterEach(cleanup);
 
 describe('EventBrief', () => {
-  it('provides every evidence-native section and keeps exposure wording conservative', () => {
+  it('provides every evidence-native section and keeps exposure wording conservative', async () => {
     render(<EventBrief incident={incident} onGroundView={() => undefined} />);
 
     for (const name of [
@@ -69,7 +85,9 @@ describe('EventBrief', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Exposure' }));
     expect(
-      screen.getByText(/population and assets intersecting a source-backed area/i),
+      await screen.findByText(
+        /population and assets intersecting a source-backed area/i,
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText(/not verified as affected/i)).toBeInTheDocument();
   });

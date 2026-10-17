@@ -29,6 +29,11 @@ class PopulationRasterExposure:
     ) -> None:
         if not raster_path.is_file():
             raise ValueError(f"Population raster does not exist: {raster_path}")
+        with rasterio.open(raster_path) as source:
+            if source.count != 1 or source.crs is None or source.crs.to_epsg() != 4326:
+                raise ValueError(
+                    "Population rasters require one georeferenced EPSG:4326 band."
+                )
         self._path = raster_path
         self._dataset = dataset
         self._clock = clock
@@ -51,6 +56,10 @@ class PopulationRasterExposure:
             )
         values = np.ma.array(clipped, copy=False)
         valid = values.compressed()
+        if valid.size == 0:
+            raise ValueError(
+                "The requested area has no valid population cells; coverage is missing."
+            )
         if np.any(~np.isfinite(valid)) or np.any(valid < 0):
             raise ValueError("Population raster contains invalid admitted values.")
         population = float(valid.sum(dtype=np.float64))

@@ -24,7 +24,10 @@ NOW = datetime(2026, 9, 14, tzinfo=UTC)
 
 
 @pytest.mark.asyncio
-async def test_population_raster_sums_only_source_geometry_pixels(tmp_path) -> None:
+@pytest.mark.parametrize("nodata_only", [False, True])
+async def test_population_raster_sums_only_source_geometry_pixels(
+    tmp_path, nodata_only
+) -> None:
     raster_path = tmp_path / "worldpop.tif"
     with rasterio.open(
         raster_path,
@@ -38,7 +41,12 @@ async def test_population_raster_sums_only_source_geometry_pixels(tmp_path) -> N
         transform=from_origin(0, 2, 1, 1),
         nodata=-9999,
     ) as target:
-        target.write(np.array([[10, 20], [30, 40]], dtype="float32"), 1)
+        target.write(
+            np.full((2, 2), -9999, dtype="float32")
+            if nodata_only
+            else np.array([[10, 20], [30, 40]], dtype="float32"),
+            1,
+        )
     geometry = ExposureGeometry(
         polygon_from_geojson(
             {
@@ -67,6 +75,10 @@ async def test_population_raster_sums_only_source_geometry_pixels(tmp_path) -> N
         clock=lambda: NOW,
     )
 
+    if nodata_only:
+        with pytest.raises(ValueError, match="no valid population cells"):
+            await provider.estimate(geometry)
+        return
     estimate = await provider.estimate(geometry)
 
     assert estimate.population == pytest.approx(40)

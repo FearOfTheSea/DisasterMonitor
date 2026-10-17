@@ -3,6 +3,7 @@
 import asyncio
 import re
 import unicodedata
+from collections import Counter
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
 
@@ -201,6 +202,7 @@ class DisasterMediaService:
         now = _aware(self._clock())
         accepted: list[tuple[EventMediaProvider, MediaCandidateAssessment]] = []
         rejected_count = 0
+        rejection_reasons: Counter[str] = Counter()
         provider_ids: list[str] = []
         warnings: list[str] = []
         for provider in self._providers:
@@ -216,6 +218,7 @@ class DisasterMediaService:
                 assessment = self._association.assess(candidate, context, now=now)
                 if assessment.status == MediaAssociationStatus.REJECTED:
                     rejected_count += 1
+                    rejection_reasons[assessment.rule_ids[-1].rsplit(".", 1)[-1]] += 1
                     continue
                 accepted.append((provider, assessment))
 
@@ -241,14 +244,17 @@ class DisasterMediaService:
                     break
                 if isinstance(retrieved, BaseException):
                     rejected_count += 1
+                    rejection_reasons["delivery_failed"] += 1
                     continue
                 try:
                     stored = self._store.put(retrieved)
                 except Exception:
                     rejected_count += 1
+                    rejection_reasons["storage_failed"] += 1
                     continue
                 if stored.content_sha256 in checksums:
                     rejected_count += 1
+                    rejection_reasons["duplicate_content"] += 1
                     continue
                 checksums.add(stored.content_sha256)
                 candidate = assessment.candidate
@@ -298,6 +304,7 @@ class DisasterMediaService:
             rejected_count=rejected_count,
             provider_ids=tuple(dict.fromkeys(provider_ids)),
             warnings=tuple(dict.fromkeys(warnings)),
+            rejection_reasons=tuple(sorted(rejection_reasons.items())),
         )
 
     async def aclose(self) -> None:

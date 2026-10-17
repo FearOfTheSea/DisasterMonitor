@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from disaster_monitor.application.disaster import WorldwideDisasterEvent
@@ -57,7 +57,10 @@ class FakeCountryCatalog:
         return tuple(
             country
             for country in self._countries
-            if country.canonical_name.casefold() in text.casefold()
+            if any(
+                term.casefold() in text.casefold()
+                for term in (country.canonical_name, *country.aliases)
+            )
         )
 
     def get_by_alpha3(self, alpha3_code: str) -> Country | None:
@@ -188,3 +191,61 @@ def test_nearby_country_keeps_short_segments_across_the_antimeridian() -> None:
     )
 
     assert dateline_area.distance_to_boundary_km(0.1, 179.8) < 100
+
+
+def test_faraway_country_mention_does_not_override_ocean_location() -> None:
+    resolver = IncidentCountryResolver(FakeCountryCatalog((ITALY, NEW_ZEALAND)))
+    assert resolver.resolve(_event("Offshore Italy", -37.17, -95.37)) is None
+
+
+def test_overlapping_country_geometry_remains_countryless() -> None:
+    first = _country("ITA", "Italy", (0, 2, 0, 2))
+    second = _country("NZL", "New Zealand", (1, 3, 1, 3))
+    resolver = IncidentCountryResolver(FakeCountryCatalog((first, second)))
+
+    assert resolver.resolve(_event("Unresolved border", 1.5, 1.5)) is None
+
+
+def test_new_ireland_resolves_to_png_instead_of_first_country_mention() -> None:
+    ireland = _country("IRL", "Ireland", (51, 55, -10, -6))
+    png = replace(
+        _country("PNG", "Papua New Guinea", (-5, -3, 150, 151)), aliases=("P.N.G.",)
+    )
+    association = IncidentCountryResolver(FakeCountryCatalog((ireland, png))).resolve(
+        _event("NEW IRELAND REGION, P.N.G.", -3.7668, 151.9827)
+    )
+    assert association is not None
+    assert association.country_code == "PNG"
+
+
+def test_island_alias_is_not_a_free_text_country_mention() -> None:
+    from disaster_monitor.infrastructure.geography.static_country_catalog import (
+        StaticCountryCatalog,
+    )
+
+    catalog = StaticCountryCatalog()
+    catalog.activate_payload(
+        {
+            "metadata": {},
+            "countries": [
+                {
+                    "alpha3": "ISL",
+                    "name": "Iceland",
+                    "aliases": ["Island"],
+                    "bounds": [63, 67, -25, -13],
+                }
+            ],
+        }
+    )
+    assert "ISL" not in {
+        country.alpha3_code
+        for country in catalog.find_mentions("SOUTHEAST OF EASTER ISLAND")
+    }
+    assert catalog.find_mentions("Island") == ()
+    assert catalog.resolve_exact_name("Island")[0].alpha3_code == "ISL"
+    assert (
+        IncidentCountryResolver(catalog).resolve(
+            replace(_event("Island", 0, 0), geometry=None)
+        )
+        is None
+    )

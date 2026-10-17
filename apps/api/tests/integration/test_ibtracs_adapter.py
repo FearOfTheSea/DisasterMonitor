@@ -256,3 +256,51 @@ async def test_ibtracs_preserves_retryable_provider_failure() -> None:
     assert raised.value.failure.retryable is True
     assert len(requests) == 2
     await client.aclose()
+
+
+async def test_ibtracs_normalizes_eastern_longitudes_without_losing_track_points():
+    from dataclasses import replace
+
+    event = cyclone_event()
+    event = replace(event, geometry=point_event_geometry(22.6, -139.4, event.source))
+    payload = (
+        FIXTURE.replace(b"154.9", b"205.1")
+        .replace(b"143.6", b"216.4")
+        .replace(b"142.3", b"217.7")
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200, headers={"content-type": "text/csv"}, content=payload
+            )
+        )
+    ) as client:
+        batch = await IbtracsTrackAdapter(client=client).get_situation_reports(
+            event, cyclone_query(), now=NOW
+        )
+    assert len(batch.records) == 1
+    points = batch.records[0].supplemental_geometry[0].coordinates
+    assert len(points) == 3
+    assert points[-1].longitude == pytest.approx(-142.3)
+
+
+async def test_authoritative_atcf_identity_allows_different_provider_start_times():
+    from dataclasses import replace
+
+    event = replace(
+        cyclone_event(),
+        event_time=datetime(2026, 8, 21, 12, tzinfo=UTC),
+        provider_ids=("atcf:WP172026",),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200, headers={"content-type": "text/csv"}, content=FIXTURE
+            )
+        )
+    ) as client:
+        batch = await IbtracsTrackAdapter(client=client).get_situation_reports(
+            event, cyclone_query(), now=NOW
+        )
+    assert len(batch.records) == 1
+    assert "authoritative storm identifier" in batch.records[0].narrative

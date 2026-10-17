@@ -26,6 +26,7 @@ import type {
 } from '@/shared/api/generated/assistant';
 import { API_BASE_URL } from '@/shared/config/runtime';
 import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
+import { useMonitoringReadiness } from '@/shared/hooks/useMonitoringReadiness';
 
 type GroundImageryPanelProps = {
   incidentId: string;
@@ -36,12 +37,17 @@ type GroundImageryPanelProps = {
 
 const DISPLAY_SENSORS: Sensor[] = ['sentinel-1', 'sentinel-2'];
 
-export function GroundImageryPanel({
+export function GroundImageryPanel(props: GroundImageryPanelProps) {
+  return <GroundImageryView key={props.incidentId} {...props} />;
+}
+
+function GroundImageryView({
   incidentId,
   incidentLabel,
   incidentTime,
   onClose,
 }: GroundImageryPanelProps) {
+  const monitoring = useMonitoringReadiness();
   const {
     request,
     readiness,
@@ -54,7 +60,7 @@ export function GroundImageryPanel({
     handleRegion,
     handleWatch,
     handlePrepare,
-  } = useGroundImageryWorkflow(incidentId);
+  } = useGroundImageryWorkflow(incidentId, monitoring.available);
 
   return (
     <aside
@@ -79,6 +85,17 @@ export function GroundImageryPanel({
 
       <div className="ground-imagery-scroll">
         <div className="ground-settings">
+          {loadState === 'idle' ? (
+            <div className="ground-imagery-section">
+              <p>
+                Search for dated radar and optical observations. A catalogue match does
+                not guarantee usable imagery or a post-event view.
+              </p>
+              <button type="button" onClick={() => void load()}>
+                Search satellite acquisitions
+              </button>
+            </div>
+          ) : null}
           {loadState === 'loading' ? (
             <div className="ground-imagery-loading" role="status" aria-live="polite">
               <span className="loading-indicator" />
@@ -132,6 +149,13 @@ export function GroundImageryPanel({
 
           {request ? (
             <>
+              {request.reason_codes?.includes('interrupted_restart') ? (
+                <p role="status" className="ground-imagery-note">
+                  Preparation was interrupted by a restart. Completed artifacts are
+                  retained. Refresh the catalog and explicitly prepare another capture
+                  to continue.
+                </p>
+              ) : null}
               <section className="ground-imagery-section">
                 <div className="ground-imagery-section-heading">
                   <div>
@@ -282,13 +306,20 @@ export function GroundImageryPanel({
                 >
                   {action === 'refresh' ? 'Refreshing…' : 'Refresh catalog'}
                 </button>
-                <button type="button" onClick={handleWatch} disabled={Boolean(action)}>
+                <button
+                  type="button"
+                  onClick={handleWatch}
+                  disabled={
+                    Boolean(action) || (!request.watch_enabled && !monitoring.available)
+                  }
+                >
                   {action === 'watch'
                     ? 'Saving…'
                     : request.watch_enabled
                       ? 'Stop watching'
                       : 'Watch for new captures'}
                 </button>
+                {!monitoring.available ? <p>{monitoring.detail}</p> : null}
                 {request.watch_enabled ? (
                   <p>Next check: {formatImageryTime(request.next_check_at)}</p>
                 ) : null}

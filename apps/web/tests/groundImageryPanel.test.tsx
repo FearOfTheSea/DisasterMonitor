@@ -1,4 +1,11 @@
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +28,12 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock('@/features/imagery/api/groundImageryClient', () => api);
+vi.mock('@/shared/hooks/useMonitoringReadiness', () => ({
+  useMonitoringReadiness: () => ({
+    available: true,
+    detail: 'Test scheduler is available.',
+  }),
+}));
 
 describe('GroundImageryPanel', () => {
   beforeEach(() => {
@@ -49,6 +62,23 @@ describe('GroundImageryPanel', () => {
     vi.unstubAllGlobals();
   });
 
+  it('waits for an explicit search and does not automatically prepare imagery', async () => {
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+    await screen.findByText('Credentials required');
+    expect(api.createGroundImageryRequest).not.toHaveBeenCalled();
+    expect(api.prepareGroundImagerySelection).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    ).toBeVisible();
+  });
+
   it('shows readiness and slow-provider guidance while catalog search continues', async () => {
     vi.useFakeTimers();
     api.createGroundImageryRequest.mockImplementation(
@@ -62,6 +92,9 @@ describe('GroundImageryPanel', () => {
         incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
 
     await act(async () => vi.advanceTimersByTimeAsync(0));
@@ -86,7 +119,11 @@ describe('GroundImageryPanel', () => {
       />,
     );
 
-    expect(await screen.findByText('Credentials required')).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
+    expect(await screen.findByText('Region basis')).toBeVisible();
+    expect(screen.getByText('Credentials required')).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Ground view' })).toBeVisible();
     expect(screen.getByText('Flood · River basin')).toBeVisible();
     expect(
@@ -134,6 +171,9 @@ describe('GroundImageryPanel', () => {
         onClose={vi.fn()}
       />,
     );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
 
     expect(await screen.findByText('Latest capture')).toBeVisible();
     expect(screen.queryByText('Latest useful view')).not.toBeInTheDocument();
@@ -164,6 +204,9 @@ describe('GroundImageryPanel', () => {
         incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
 
     expect(await screen.findByText('The event point is only a locator.')).toBeVisible();
@@ -200,6 +243,9 @@ describe('GroundImageryPanel', () => {
         onClose={vi.fn()}
       />,
     );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
 
     await user.type(await screen.findByLabelText('Center latitude'), '35');
     await user.type(screen.getByLabelText('Center longitude'), '179.99');
@@ -220,6 +266,9 @@ describe('GroundImageryPanel', () => {
       />,
     );
 
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
     expect(await screen.findByText('Region basis')).toBeVisible();
 
     api.createGroundImageryRequest.mockImplementation(
@@ -235,6 +284,9 @@ describe('GroundImageryPanel', () => {
         incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
 
     expect(await screen.findByText('Searching Sentinel acquisitions')).toBeVisible();
@@ -252,6 +304,9 @@ describe('GroundImageryPanel', () => {
         incidentTime="2024-05-19T12:00:00Z"
         onClose={vi.fn()}
       />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
     );
     await screen.findByText('Refresh catalog');
 

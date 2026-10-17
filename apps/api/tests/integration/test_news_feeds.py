@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
+from disaster_monitor.infrastructure.disaster.errors import DisasterProviderError
 from disaster_monitor.infrastructure.news.feeds import (
     GdeltDocNewsFeed,
 )
@@ -53,3 +54,18 @@ async def test_news_feed_rejects_oversized_responses() -> None:
         await feed.fetch_since(since=NOW - timedelta(minutes=30), now=NOW)
 
     await client.aclose()
+
+
+async def test_gdelt_retry_after_defers_followup_network_requests():
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(429, headers={"Retry-After": "120"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        feed = GdeltDocNewsFeed(client=client)
+        for _ in range(2):
+            with pytest.raises((httpx.HTTPStatusError, DisasterProviderError)):
+                await feed.fetch_since(since=NOW - timedelta(minutes=30), now=NOW)
+        assert len(calls) == 1

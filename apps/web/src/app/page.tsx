@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState, useCallback } from 'react';
 
+import type { CycloneMapLayer } from '@/shared/types/assistant';
 import { useAssistantConversation } from '@/features/assistant/hooks/useAssistantConversation';
 import { AssistantPanel } from '@/features/assistant/ui/AssistantPanel';
 import {
@@ -64,6 +65,10 @@ function PositionIcon({ className }: IconProps) {
 }
 
 export default function Home() {
+  const [forecast, setForecast] = useState<{
+    identifier: string;
+    layers: CycloneMapLayer[];
+  }>();
   const conversation = useAssistantConversation();
   const activeIncidents = useActiveIncidents();
   const weatherAlerts = useWeatherAlerts();
@@ -89,7 +94,7 @@ export default function Home() {
     handleSelectRegion,
     handleSelectActiveIncident,
     handleSelectWatchIncident,
-  } = useMapWorkspace(activeIncidents);
+  } = useMapWorkspace();
 
   const presentation = useWorkspacePresentation({
     messages: conversation.messages,
@@ -98,6 +103,15 @@ export default function Home() {
     watchFocusIncident,
     selectedIncidentId: usableSelectedIncidentId,
   });
+  const forecastIdentifier =
+    presentation.selectedIncident?.physical_event_id ??
+    presentation.selectedIncident?.event_id;
+  const onForecastLayers = useCallback(
+    (layers: CycloneMapLayer[]) => {
+      if (forecastIdentifier) setForecast({ identifier: forecastIdentifier, layers });
+    },
+    [forecastIdentifier],
+  );
   const {
     areaOfInterest,
     commonOperationalPicture,
@@ -108,6 +122,9 @@ export default function Home() {
     displayedSnapshot,
     mapIncidents,
     selectedIncident,
+    selectionOutsideView,
+    selectionError,
+    selectionLoading,
   } = presentation;
   const actions = useWorkspaceActions({
     submit: conversation.submit,
@@ -139,7 +156,7 @@ export default function Home() {
     closeAssistant,
     askAboutEvent,
   } = actions;
-  const explorePane = navigation.explorePane ?? (selectedIncident ? 'ground' : null);
+  const explorePane = navigation.explorePane ?? (selectedIncident ? 'event' : null);
   const eventPaneOpen = explorePane === 'event' && Boolean(selectedIncident);
   const assistantOpen = explorePane === 'assistant';
   const groundOpen = explorePane === 'ground' && Boolean(selectedIncident);
@@ -255,6 +272,13 @@ export default function Home() {
             activeIncidents={mapIncidents}
             selectedIncidentId={usableSelectedIncidentId}
             selectedEvent={selectedEvent}
+            standaloneCycloneLayers={
+              forecastIdentifier
+                ? forecast?.identifier === forecastIdentifier
+                  ? forecast.layers
+                  : []
+                : undefined
+            }
             layerState={mapLayerState}
             onLayerStateChange={setMapLayerState}
             correlationCount={displayedCorrelations.length}
@@ -286,6 +310,22 @@ export default function Home() {
               <span>zoom {mapView.zoom.toFixed(1)}</span>
             </div>
           </details>
+          {selectionLoading || selectionError || selectionOutsideView ? (
+            <div className="incident-selection-status">
+              {selectionLoading ? (
+                <p role="status">
+                  Loading the selected incident independently of the current page…
+                </p>
+              ) : null}
+              {selectionError ? <p role="alert">{selectionError}</p> : null}
+              {selectionOutsideView ? (
+                <p role="status">
+                  Selected incident retained; it is outside the displayed page or
+                  filters.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         {eventPaneOpen && selectedIncident && (
           <SelectedEventPane
@@ -298,6 +338,7 @@ export default function Home() {
             warnings={weatherAlerts.snapshot}
             onClose={closeEvent}
             onAsk={askAboutEvent}
+            onForecastLayers={onForecastLayers}
             onGroundView={() => openPane('ground')}
           />
         )}
