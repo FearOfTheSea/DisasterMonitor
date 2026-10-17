@@ -38,6 +38,7 @@ class OpenSocialSignalLane:
                 source_terms=self._source_terms,
             )
             for item in items
+            if item.published_at is not None
         )
 
 

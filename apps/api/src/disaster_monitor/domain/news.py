@@ -31,8 +31,9 @@ class NewsFeedItem:
     publisher: str
     title: str
     canonical_url: str
-    published_at: datetime
+    published_at: datetime | None
     updated_at: datetime | None
+    indexed_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not all(
@@ -49,6 +50,7 @@ class NewsFeedItem:
             raise ValueError("News feed items require a canonical HTTPS URL.")
         _require_aware("published_at", self.published_at)
         _require_aware("updated_at", self.updated_at)
+        _require_aware("indexed_at", self.indexed_at)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +66,10 @@ class NewsObservation:
         if not self.observation_id.strip() or not self.source_id.strip():
             raise ValueError("News observations require stable identity.")
         _require_aware("observed_at", self.observed_at)
-        if self.observed_at < self.item.published_at:
+        if (
+            self.item.published_at is not None
+            and self.observed_at < self.item.published_at
+        ):
             raise ValueError("A news observation cannot precede publication.")
 
 

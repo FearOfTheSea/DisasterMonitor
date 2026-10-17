@@ -44,6 +44,11 @@ class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
             incident = await self._incidents.lookup(incident_id)
         except LookupError:
             return None
+        if (
+            incident.discovery_event is not None
+            and incident.discovery_event.event_time is None
+        ):
+            return None
 
         evidence: list[RegionEvidence] = []
         verified_point: Coordinate | None = None

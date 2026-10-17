@@ -16,7 +16,8 @@ import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 type Tab = 'overview' | 'evidence' | 'timeline';
 const TABS: readonly Tab[] = ['overview', 'evidence', 'timeline'];
 
-function dateTime(value: string): string {
+function dateTime(value: string | null): string {
+  if (!value) return 'Unknown';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
@@ -73,7 +74,10 @@ export function SelectedEventPane({
     ? incident.evidence_sources
     : [incident.source];
   const timeline = [
-    { label: 'Source-reported event time', time: incident.event_time },
+    {
+      label: 'Source-reported event time',
+      time: incident.event_time_basis === 'unknown' ? undefined : incident.event_time,
+    },
     { label: 'News first published', time: incident.detection?.news_break_at },
     {
       label: 'First observed by monitoring',
@@ -98,8 +102,14 @@ export function SelectedEventPane({
         </h2>
         {context ? <p className="event-source-location">{context}</p> : null}
         <p className="event-time-line">
-          Event:{' '}
-          <time dateTime={incident.event_time}>{dateTime(incident.event_time)}</time>
+          {incident.event_time_basis === 'unknown'
+            ? 'Event time unresolved. Article published: '
+            : 'Event: '}
+          <time
+            dateTime={incident.event_time ?? incident.source.published_at ?? undefined}
+          >
+            {dateTime(incident.event_time ?? incident.source.published_at)}
+          </time>
         </p>
         <p className="event-time-line">
           Snapshot retrieved:{' '}
@@ -159,7 +169,10 @@ export function SelectedEventPane({
               <h3>What is known</h3>
               <p>
                 {incident.source.publisher} reports {hazardArticle} {hazardLabel} at{' '}
-                {incident.location}. The source records the event time above.
+                {incident.location}.{' '}
+                {incident.event_time_basis === 'unknown'
+                  ? 'The event time is unresolved; the timestamp above is publication time.'
+                  : 'The source records the event time above.'}
               </p>
               {incident.measurements.length > 0 ? (
                 <dl className="event-measurements">
@@ -210,7 +223,7 @@ export function SelectedEventPane({
               <h3>Sources</h3>
               <ul className="event-source-list">
                 {sources.map((source) => (
-                  <li key={source.source_id}>
+                  <li key={`${source.source_id}:${source.canonical_url}`}>
                     <a href={source.canonical_url} target="_blank" rel="noreferrer">
                       {source.publisher}: {source.title}
                     </a>
@@ -218,6 +231,66 @@ export function SelectedEventPane({
                 ))}
               </ul>
             </section>
+            {incident.discovery_reports?.length ? (
+              <section aria-label="Discovery reporting">
+                <h3>Attributed discovery reports</h3>
+                <p>
+                  Reporting is evidence of a claim, not automatic confirmation. Shared
+                  origins are not independent confirmation; unknown lineage remains
+                  uncertain.
+                </p>
+                <ul className="event-source-list">
+                  {incident.discovery_reports.map((report) => (
+                    <li key={report.source.canonical_url}>
+                      <a
+                        href={report.source.canonical_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {report.source.publisher}: {report.source.title}
+                      </a>
+                      <p>
+                        Published:{' '}
+                        {report.source.published_at
+                          ? dateTime(report.source.published_at)
+                          : 'Unknown'}{' '}
+                        · Updated:{' '}
+                        {report.source.updated_at
+                          ? dateTime(report.source.updated_at)
+                          : 'Unknown'}{' '}
+                        · Indexed:{' '}
+                        {report.indexed_at ? dateTime(report.indexed_at) : 'Unknown'} ·
+                        Retrieved: {dateTime(report.source.retrieved_at)}
+                      </p>
+                      {report.origin ? (
+                        <p>Shared reporting origin: {report.origin}</p>
+                      ) : (
+                        <p>Reporting independence unknown.</p>
+                      )}
+                      {report.fatality_evidence?.length ? (
+                        report.fatality_evidence.map((claim) => (
+                          <blockquote key={claim}>
+                            {claim}
+                            <br />
+                            Reported by {report.source.publisher}; unverified claim.
+                          </blockquote>
+                        ))
+                      ) : (
+                        <p>
+                          No affirmative fatality evidence extracted. Unknown does not
+                          mean zero.
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {!incident.geometry ? (
+                  <p>
+                    Location unresolved. This event remains inspectable in the list.
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
             <div className="event-actions">
               <button type="button" onClick={onAsk}>
                 {relatedInvestigation(incident).label}
@@ -228,14 +301,21 @@ export function SelectedEventPane({
             </div>
           </>
         )}
-        {tab === 'evidence' && (
-          <EventBrief
-            incident={incident}
-            warnings={warnings}
-            onGroundView={onGroundView}
-            onForecastLayers={onForecastLayers}
-            presentation="disclosures"
-          />
+        {tab === 'evidence' && incident.event_time_basis === 'unknown' ? (
+          <p>
+            Event time is unresolved. Inspect the attributed discovery reports in
+            Overview. Publication time cannot target event evidence or imagery.
+          </p>
+        ) : (
+          tab === 'evidence' && (
+            <EventBrief
+              incident={incident}
+              warnings={warnings}
+              onGroundView={onGroundView}
+              onForecastLayers={onForecastLayers}
+              presentation="disclosures"
+            />
+          )
         )}
         {tab === 'timeline' &&
           (timeline.length ? (

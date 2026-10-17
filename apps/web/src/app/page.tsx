@@ -10,6 +10,8 @@ import {
   type CommandPaletteHandle,
 } from '@/features/commands/ui/CommandPalette';
 import { useActiveIncidents } from '@/features/incidents/hooks/useActiveIncidents';
+import { useDiscoveryScan } from '@/features/incidents/hooks/useDiscoveryScan';
+import { DiscoveryScanControls } from '@/features/incidents/ui/DiscoveryScanControls';
 import { ActiveIncidentsPanel } from '@/features/incidents/ui/ActiveIncidentsPanel';
 import { SelectedEventPane } from '@/features/incidents/ui/SelectedEventPane';
 import { disasterLabel } from '@/features/incidents/ui/incidentPresentation';
@@ -70,7 +72,20 @@ export default function Home() {
     layers: CycloneMapLayer[];
   }>();
   const conversation = useAssistantConversation();
-  const activeIncidents = useActiveIncidents();
+  const providerIncidents = useActiveIncidents();
+  const discovery = useDiscoveryScan();
+  const activeIncidents = discovery.run
+    ? {
+        ...providerIncidents,
+        snapshot: discovery.snapshot,
+        status: 'success' as const,
+        error: undefined,
+        search: discovery.search,
+        setSearch: discovery.setSearch,
+        hazard: discovery.hazard,
+        setHazard: discovery.setHazard,
+      }
+    : providerIncidents;
   const weatherAlerts = useWeatherAlerts();
   const navigation = useWorkspaceNavigation();
   const { navigate, openPane } = navigation;
@@ -232,6 +247,17 @@ export default function Home() {
         hidden={navigation.destination !== 'explore' || groundOpen}
       >
         <ActiveIncidentsPanel
+          discoveryControls={
+            <DiscoveryScanControls
+              days={discovery.days}
+              onDaysChange={discovery.setDays}
+              onScan={discovery.start}
+              run={discovery.run}
+              error={discovery.error}
+              submitting={discovery.submitting}
+              onClear={discovery.clear}
+            />
+          }
           compact
           snapshot={displayedSnapshot}
           coverageSnapshot={activeIncidents.snapshot}

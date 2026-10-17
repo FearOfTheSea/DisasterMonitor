@@ -12,7 +12,7 @@ NOW = datetime(2026, 9, 9, 12, tzinfo=UTC)
 
 
 @pytest.mark.asyncio
-async def test_gdelt_feed_preserves_publisher_and_publication_metadata() -> None:
+async def test_gdelt_feed_keeps_indexing_distinct_from_unknown_publication() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.params["mode"] == "artlist"
         assert request.url.params["startdatetime"] == "20260909113000"
@@ -38,7 +38,8 @@ async def test_gdelt_feed_preserves_publisher_and_publication_metadata() -> None
 
     assert len(items) == 1
     assert items[0].publisher == "reuters.com"
-    assert items[0].published_at == datetime(2026, 9, 9, 11, 45, tzinfo=UTC)
+    assert items[0].published_at is None
+    assert items[0].indexed_at == datetime(2026, 9, 9, 11, 45, tzinfo=UTC)
 
 
 @pytest.mark.asyncio

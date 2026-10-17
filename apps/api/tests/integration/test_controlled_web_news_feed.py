@@ -25,6 +25,20 @@ RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 </item></channel></rss>"""
 
 
+def test_atom_update_time_does_not_substitute_for_publication():
+    from disaster_monitor.infrastructure.news.web_metadata_parser import (
+        parse_web_metadata,
+    )
+
+    body = b"""<feed><entry><id>story</id><title>Major flood</title>
+    <link href="https://news.example/articles/story" />
+    <updated>2026-09-10T07:30:00Z</updated></entry></feed>"""
+    assert (
+        parse_web_metadata(_source(), body, since=NOW - timedelta(days=1), now=NOW)
+        == ()
+    )
+
+
 def _source(**overrides: object) -> ApprovedWebSource:
     values = {
         "source_id": "approved-test-news",

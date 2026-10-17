@@ -31,7 +31,7 @@ import { useMonitoringReadiness } from '@/shared/hooks/useMonitoringReadiness';
 type GroundImageryPanelProps = {
   incidentId: string;
   incidentLabel: string;
-  incidentTime: string;
+  incidentTime: string | null;
   onClose: () => void;
 };
 
@@ -75,7 +75,11 @@ function GroundImageryView({
           <p>{incidentLabel}</p>
           <p>
             Event onset:{' '}
-            <time dateTime={incidentTime}>{formatImageryTime(incidentTime)}</time>
+            {incidentTime ? (
+              <time dateTime={incidentTime}>{formatImageryTime(incidentTime)}</time>
+            ) : (
+              'Event time unresolved'
+            )}
           </p>
         </div>
         <button type="button" className="ground-return-button" onClick={onClose}>

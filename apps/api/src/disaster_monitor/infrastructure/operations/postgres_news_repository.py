@@ -29,8 +29,8 @@ class PostgresNewsRepository(PostgresRepositoryBase):
                     """
                     INSERT INTO news_observation(
                         observation_id, source_id, external_id, publisher, title,
-                        canonical_url, published_at, updated_at, observed_at
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        canonical_url, published_at, updated_at, observed_at, indexed_at
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (observation_id) DO NOTHING
                     """,
                     (
@@ -43,6 +43,7 @@ class PostgresNewsRepository(PostgresRepositoryBase):
                         item.published_at,
                         item.updated_at,
                         observation.observed_at,
+                        item.indexed_at,
                     ),
                 )
                 return cursor.rowcount == 1

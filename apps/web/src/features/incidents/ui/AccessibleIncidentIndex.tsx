@@ -14,7 +14,8 @@ type AccessibleIncidentIndexProps = {
   retrievedAt: string;
 };
 
-function formatDateTime(value: string): string {
+function formatDateTime(value: string | null): string {
+  if (!value) return 'Unknown';
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
@@ -55,7 +56,12 @@ export function AccessibleIncidentIndex({
                 <td>
                   {incident.provider_tier === 'primary' ? 'Primary' : 'Secondary'}
                 </td>
-                <td>{formatDateTime(incident.event_time)}</td>
+                <td>
+                  {incident.event_time_basis === 'unknown'
+                    ? 'Event time unknown; published '
+                    : ''}
+                  {formatDateTime(incident.event_time ?? incident.source.published_at)}
+                </td>
               </tr>
             ))}
           </tbody>

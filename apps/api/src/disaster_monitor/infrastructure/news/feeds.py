@@ -14,7 +14,8 @@ from disaster_monitor.infrastructure.disaster.http_backoff import (
 )
 
 _DISASTER_QUERY = (
-    "(earthquake OR flood OR wildfire OR landslide OR hurricane OR typhoon OR cyclone "
+    "(earthquake OR flood OR wildfire OR landslide OR drought "
+    "OR hurricane OR typhoon OR cyclone "
     'OR "volcanic eruption") '
     "(major OR emergency OR evacuation OR killed OR deaths OR missing OR thousands)"
 )
@@ -96,8 +97,9 @@ def _gdelt_item(value: object, index: int) -> NewsFeedItem | None:
         publisher=publisher,
         title=title,
         canonical_url=url,
-        published_at=seen,
+        published_at=None,
         updated_at=None,
+        indexed_at=seen,
     )
 
 

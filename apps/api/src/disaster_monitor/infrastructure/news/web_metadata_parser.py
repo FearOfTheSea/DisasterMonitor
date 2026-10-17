@@ -49,10 +49,8 @@ def _parse_rss_atom(
         title = _child_text(element, "title")
         link = _entry_link(element)
         identity = _child_text(element, "guid") or _child_text(element, "id") or link
-        published_text = (
-            _child_text(element, "pubDate")
-            or _child_text(element, "published")
-            or _child_text(element, "updated")
+        published_text = _child_text(element, "pubDate") or _child_text(
+            element, "published"
         )
         published_at = _publication_time(published_text)
         if not title or not link or not identity or published_at is None:
@@ -66,7 +64,7 @@ def _parse_rss_atom(
                 title=title,
                 canonical_url=link,
                 published_at=published_at,
-                updated_at=None,
+                updated_at=_publication_time(_child_text(element, "updated")),
             )
         )
     return tuple(records)

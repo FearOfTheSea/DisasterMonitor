@@ -27,6 +27,7 @@ from disaster_monitor.application.incidents.active_incidents import (
 from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
 )
+from disaster_monitor.application.ports.discovery import DiscoveryStore
 from disaster_monitor.application.sources.provider_registry import (
     ProviderCapabilities,
     ProviderRegistration,
@@ -487,7 +488,9 @@ class FakeSystemWorldwideProvider:
         )
 
 
-def build_system_active_incidents_service() -> ActiveIncidentsService:
+def build_system_active_incidents_service(
+    *, discovery_store: DiscoveryStore | None = None
+) -> ActiveIncidentsService:
     provider = FakeSystemWorldwideProvider()
     registry = ProviderRegistry(
         (
@@ -512,6 +515,7 @@ def build_system_active_incidents_service() -> ActiveIncidentsService:
         registry,
         country_catalog=CATALOG,
         clock=lambda: NOW,
+        discovery_store=discovery_store,
     )
 
 

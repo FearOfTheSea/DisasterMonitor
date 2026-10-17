@@ -17,6 +17,7 @@ from system_test_backend import (
     FakeSystemSituationProvider,
     build_system_active_incidents_service,
 )
+from system_test_discovery import build_system_discovery
 
 from disaster_monitor.application.agent.operator_actions import OPERATOR_ACTION_IDS
 from disaster_monitor.application.incidents.active_incidents import (
@@ -51,6 +52,9 @@ from disaster_monitor.infrastructure.geography.static_country_catalog import (
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
     StructuredAgentModel,
 )
+from disaster_monitor.infrastructure.operations.file_discovery_store import (
+    FileDiscoveryStore,
+)
 from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
 )
@@ -65,7 +69,10 @@ def main() -> int:
         prefix="disaster-monitor-system-country-catalog-"
     )
     repository = InMemoryOperationalRepository()
-    active_incidents = build_system_active_incidents_service()
+    discovery_store = FileDiscoveryStore(Path(catalog_directory.name) / "scans")
+    active_incidents = build_system_active_incidents_service(
+        discovery_store=discovery_store
+    )
     fake_model = FakeSystemModel()
     app = create_app(
         settings=Settings(
@@ -74,6 +81,7 @@ def main() -> int:
             country_catalog_root=Path(catalog_directory.name),
         ),
         overrides=AppDependencyOverrides(
+            discovery_scans=build_system_discovery(discovery_store),
             model=fake_model,
             agent_model=StructuredAgentModel(
                 fake_model,

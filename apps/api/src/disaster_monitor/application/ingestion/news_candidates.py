@@ -42,24 +42,6 @@ _EVENT_NOISE = frozenset(
     "cyclone tropical storm volcano "
     "eruption erupts hit hits strike strikes".split()
 )
-MAJOR_NEWS_PUBLISHERS_V1 = frozenset(
-    {
-        "associated press",
-        "apnews.com",
-        "reuters",
-        "reuters.com",
-        "bbc",
-        "bbc.com",
-        "bbc.co.uk",
-        "aljazeera.com",
-        "cnn.com",
-        "dw.com",
-        "france24.com",
-        "theguardian.com",
-        "earthobservatory.nasa.gov",
-        "science.nasa.gov",
-    }
-)
 
 
 class NewsCandidateIngestion:
@@ -72,15 +54,11 @@ class NewsCandidateIngestion:
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         lookback: timedelta = timedelta(minutes=30),
-        major_publishers: frozenset[str] = MAJOR_NEWS_PUBLISHERS_V1,
     ) -> None:
         self._feed = feed
         self._store = store
         self._clock = clock
         self._lookback = lookback
-        self._major_publishers = frozenset(
-            publisher.casefold() for publisher in major_publishers
-        )
 
     async def refresh(self) -> NewsIngestionResult:
         now = self._clock()
@@ -92,7 +70,7 @@ class NewsCandidateIngestion:
             if not await self._store.append_news_observation(observation):
                 continue
             observations_inserted += 1
-            if not _is_major_publisher(item.publisher, self._major_publishers):
+            if item.published_at is None:
                 continue
             disaster = classify_major_disaster_headline(item.title)
             if disaster is None:
@@ -111,6 +89,7 @@ class NewsCandidateIngestion:
         self, observation: NewsObservation, disaster: Disaster
     ) -> IncidentCandidate:
         item = observation.item
+        assert item.published_at is not None
         location = _location(item.title)
         candidate_id = _candidate_id(
             disaster, location, item.title, published_at=item.published_at
@@ -202,10 +181,3 @@ def _candidate_id(
         :24
     ]
     return f"news-candidate:{digest}"
-
-
-def _is_major_publisher(publisher: str, allowlist: frozenset[str]) -> bool:
-    normalized = publisher.casefold().removeprefix("www.")
-    return normalized in allowlist or any(
-        normalized.endswith(f".{allowed}") for allowed in allowlist if "." in allowed
-    )

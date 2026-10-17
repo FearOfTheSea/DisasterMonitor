@@ -91,7 +91,7 @@ export function filterIncidentsForDisplay(
   if (!Number.isFinite(retrievedAt)) return [];
   const cutoff = retrievedAt - WINDOW_MILLISECONDS[timeWindow];
   return incidents.filter((incident) => {
-    const eventTime = Date.parse(incident.event_time);
+    const eventTime = Date.parse(incident.event_time ?? '');
     return (
       Number.isFinite(eventTime) && eventTime >= cutoff && eventTime <= retrievedAt
     );

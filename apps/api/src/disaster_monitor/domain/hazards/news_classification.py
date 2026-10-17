@@ -9,6 +9,7 @@ _HAZARD_PATTERNS = (
     (Disaster.FLOOD, re.compile(r"\b(?:flood|flooding|inundation)\b", re.I)),
     (Disaster.WILDFIRE, re.compile(r"\b(?:wildfire|bushfire|forest fire)\b", re.I)),
     (Disaster.LANDSLIDE, re.compile(r"\b(?:landslide|mudslide)\b", re.I)),
+    (Disaster.DROUGHT, re.compile(r"\b(?:drought)\b", re.I)),
     (
         Disaster.TROPICAL_CYCLONE,
         re.compile(r"\b(?:hurricane|typhoon|cyclone|tropical storm)\b", re.I),
@@ -30,6 +31,11 @@ def classify_major_disaster_headline(title: str) -> Disaster | None:
     """Return one unambiguous supported hazard with major-impact language."""
     if not _MAJOR_IMPACT.search(title):
         return None
+    return classify_disaster_text(title)
+
+
+def classify_disaster_text(title: str) -> Disaster | None:
+    """Classify a hazard independently of severity and casualty claims."""
     matches = [
         disaster for disaster, pattern in _HAZARD_PATTERNS if pattern.search(title)
     ]

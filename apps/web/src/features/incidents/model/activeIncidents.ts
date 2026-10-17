@@ -91,7 +91,10 @@ export type ActiveIncident = {
   disaster: DisasterType;
   country: IncidentCountry | null;
   location: string;
-  event_time: string;
+  event_time: string | null;
+  event_time_basis?: 'reported' | 'unknown';
+  discovery_reports?: import('@/shared/api/generated/assistant').DiscoveryReportResponse[];
+  independent_origins?: number | null;
   event_time_end?: string | null;
   event_time_precision?: EventTimePrecision;
   geometry: IncidentGeometry | null;
@@ -166,6 +169,8 @@ export type DisasterIncidentCoverage = {
 };
 
 export type ActiveIncidentsSnapshot = {
+  publication_scan?: boolean;
+  scan_status?: 'running' | 'completed' | 'incomplete' | 'failed';
   retrieved_at: string;
   incidents: ActiveIncident[];
   coverage: DisasterIncidentCoverage[];

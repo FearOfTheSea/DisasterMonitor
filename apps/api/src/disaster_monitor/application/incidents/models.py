@@ -23,6 +23,7 @@ from disaster_monitor.domain.disaster import (
     SourceReference,
 )
 from disaster_monitor.domain.disaster_types import validate_event_temporality
+from disaster_monitor.domain.discovery import DiscoveryEvent
 from disaster_monitor.domain.news import (
     IncidentCandidateStatus,
     IncidentDetectionTimeline,
@@ -141,6 +142,7 @@ class ActiveIncident:
     verification_status: IncidentCandidateStatus = IncidentCandidateStatus.SOURCE_BACKED
     detection: IncidentDetectionTimeline = IncidentDetectionTimeline()
     last_meaningful_change_at: datetime | None = None
+    discovery_event: DiscoveryEvent | None = None
 
     def __post_init__(self) -> None:
         validate_event_temporality(

@@ -47,13 +47,15 @@ export function useWorkspacePresentation({
     ?.decisionSupport?.evidence_state_version;
   const displayedIncidents = useMemo(
     () =>
-      snapshot
-        ? filterIncidentsForDisplay(
-            snapshot.incidents,
-            snapshot.retrieved_at,
-            mapLayerState.timeWindow,
-          )
-        : [],
+      snapshot?.publication_scan
+        ? snapshot.incidents
+        : snapshot
+          ? filterIncidentsForDisplay(
+              snapshot.incidents,
+              snapshot.retrieved_at,
+              mapLayerState.timeWindow,
+            )
+          : [],
     [snapshot, mapLayerState.timeWindow],
   );
   const timeFilteredCorrelations = useMemo(

@@ -20,6 +20,7 @@ from disaster_monitor.application.humanitarian.context import HumanitarianContex
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
+from disaster_monitor.application.incidents.discovery_scan import DiscoveryScanService
 from disaster_monitor.application.investigation.current_disaster_report import (
     CurrentDisasterReportService,
 )
@@ -79,6 +80,7 @@ class AppDependencyOverrides:
     """Typed test and embedding overrides for the application object graph."""
 
     model: LanguageModel | None = None
+    discovery_scans: DiscoveryScanService | None = None
     current_disaster_report: CurrentDisasterReportService | None = None
     disaster_query_parser: DisasterQueryParser | None = None
     agent_model: AgentModel | None = None

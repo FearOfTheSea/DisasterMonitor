@@ -60,11 +60,28 @@ const apiSchemas = {
       disaster: {
         $ref: '#/components/schemas/Disaster',
       },
+      discovery_reports: {
+        items: {
+          $ref: '#/components/schemas/DiscoveryReportResponse',
+        },
+        type: 'array',
+      },
       event_id: {
         type: 'string',
       },
       event_time: {
-        format: 'date-time',
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      event_time_basis: {
+        enum: ['reported', 'unknown'],
         type: 'string',
       },
       event_time_end: {
@@ -91,6 +108,16 @@ const apiSchemas = {
         anyOf: [
           {
             $ref: '#/components/schemas/EventGeometryResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      independent_origins: {
+        anyOf: [
+          {
+            type: 'integer',
           },
           {
             type: 'null',
@@ -2199,6 +2226,133 @@ const apiSchemas = {
       'content_sha256',
       'width',
       'height',
+    ],
+    type: 'object',
+  },
+  DiscoveryReportResponse: {
+    properties: {
+      event_time: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      fatality_evidence: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      indexed_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      origin: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source: {
+        $ref: '#/components/schemas/SourceResponse',
+      },
+    },
+    required: ['source'],
+    type: 'object',
+  },
+  DiscoveryScanResponse: {
+    properties: {
+      coverage_notice: {
+        type: 'string',
+      },
+      failed_operations: {
+        type: 'integer',
+      },
+      finished_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      interval_end: {
+        format: 'date-time',
+        type: 'string',
+      },
+      interval_start: {
+        format: 'date-time',
+        type: 'string',
+      },
+      issues: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      reporting_days: {
+        type: 'integer',
+      },
+      reports_seen: {
+        type: 'integer',
+      },
+      scan_id: {
+        type: 'string',
+      },
+      snapshot: {
+        $ref: '#/components/schemas/ActiveIncidentsSnapshotResponse',
+      },
+      status: {
+        enum: ['running', 'completed', 'incomplete', 'failed'],
+        type: 'string',
+      },
+      successful_operations: {
+        type: 'integer',
+      },
+      truncated: {
+        type: 'boolean',
+      },
+      unknown_publication_count: {
+        type: 'integer',
+      },
+      unlocated_count: {
+        type: 'integer',
+      },
+    },
+    required: [
+      'scan_id',
+      'reporting_days',
+      'interval_start',
+      'interval_end',
+      'status',
+      'finished_at',
+      'issues',
+      'truncated',
+      'reports_seen',
+      'unknown_publication_count',
+      'unlocated_count',
+      'successful_operations',
+      'failed_operations',
+      'snapshot',
     ],
     type: 'object',
   },
@@ -6626,12 +6780,15 @@ export type ActiveIncidentResponse = {
   country?: ActiveIncidentCountryResponse | null;
   detection?: IncidentDetectionTimelineResponse;
   disaster: Disaster;
+  discovery_reports?: Array<DiscoveryReportResponse>;
   event_id: string;
-  event_time: string;
+  event_time: string | null;
+  event_time_basis?: 'reported' | 'unknown';
   event_time_end?: string | null;
   event_time_precision?: EventTimePrecision;
   evidence_sources?: Array<SourceResponse>;
   geometry?: EventGeometryResponse | null;
+  independent_origins?: number | null;
   last_meaningful_change_at?: string | null;
   lineage_ids?: Array<string>;
   location: string;
@@ -7130,6 +7287,36 @@ export type DisasterMediaItemResponse = {
   source_page_url: string;
   uncertainty: string;
   width: number;
+};
+
+export type DiscoveryReportResponse = {
+  event_time?: string | null;
+  fatality_evidence?: Array<string>;
+  indexed_at?: string | null;
+  origin?: string | null;
+  source: SourceResponse;
+};
+
+export type DiscoveryScanRequest = {
+  reporting_days?: 1 | 3 | 7 | 14 | 30;
+};
+
+export type DiscoveryScanResponse = {
+  coverage_notice?: string;
+  failed_operations: number;
+  finished_at: string | null;
+  interval_end: string;
+  interval_start: string;
+  issues: Array<string>;
+  reporting_days: number;
+  reports_seen: number;
+  scan_id: string;
+  snapshot: ActiveIncidentsSnapshotResponse;
+  status: 'running' | 'completed' | 'incomplete' | 'failed';
+  successful_operations: number;
+  truncated: boolean;
+  unknown_publication_count: number;
+  unlocated_count: number;
 };
 
 export type EventCoordinateResponse = {

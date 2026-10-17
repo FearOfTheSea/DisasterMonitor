@@ -18,7 +18,8 @@ const DISASTER_LABELS: Record<DisasterType, string> = {
   volcanic_eruption: 'Volcanic eruption',
 };
 
-function relativeEventTime(value: string, reference: string): string {
+function relativeEventTime(value: string | null, reference: string): string {
+  if (!value) return 'Event time unknown';
   const eventTime = new Date(value).getTime();
   const referenceTime = new Date(reference).getTime();
   if (Number.isNaN(eventTime) || Number.isNaN(referenceTime)) return value;
@@ -74,8 +75,12 @@ export function SelectedIncidentSummary({
         <h3>{displayActiveIncidentCountry(incident)}</h3>
         {context ? <small>{context}</small> : null}
         <p>
-          {relativeEventTime(incident.event_time, snapshotRetrievedAt)} · {sourceCount}{' '}
-          {sourceCount === 1 ? 'trusted source' : 'trusted sources'}
+          {incident.event_time_basis === 'unknown' ? 'Reported ' : ''}
+          {relativeEventTime(
+            incident.event_time ?? incident.source.published_at,
+            snapshotRetrievedAt,
+          )}{' '}
+          · {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
         </p>
         <div className="selected-incident-actions">
           <button type="button" onClick={onAsk}>

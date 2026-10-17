@@ -28,6 +28,7 @@ from disaster_monitor.application.humanitarian.context import (
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
+from disaster_monitor.application.incidents.discovery_scan import DiscoveryScanService
 from disaster_monitor.application.incidents.manage_incident_watches import (
     ManageIncidentWatches,
 )
@@ -123,6 +124,7 @@ class AppDependencies:
     country_catalog_automation: CountryCatalogUpdateAutomation
     agent_diagnostics: AgentDiagnostics | None
     standalone_evidence: StandaloneEvidenceService | None = None
+    discovery_scans: DiscoveryScanService | None = None
     provider_budget: ProviderBudgetLedger | None = None
     route_access: RouteAccessContextService | None = None
     lifecycle: AppLifecycle = field(default_factory=AppLifecycle)

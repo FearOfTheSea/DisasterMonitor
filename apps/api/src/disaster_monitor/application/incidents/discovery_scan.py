@@ -1,0 +1,166 @@
+"""Bounded, shared worldwide publication scans with incremental persistence."""
+
+import asyncio
+from collections.abc import Callable
+from dataclasses import replace
+from datetime import UTC, datetime
+from typing import Literal
+from uuid import uuid4
+
+from disaster_monitor.application.ports.discovery import DiscoveryFeed, DiscoveryStore
+from disaster_monitor.domain.discovery import (
+    DiscoveryRun,
+    ReportingInterval,
+    assess_article,
+    group_reports,
+    supplement_events,
+)
+
+
+class DiscoveryScanService:
+    def __init__(
+        self,
+        feeds: tuple[DiscoveryFeed, ...],
+        store: DiscoveryStore,
+        *,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        provider_timeout_seconds: float = 600,
+        maximum_reports: int = 400,
+    ) -> None:
+        self._feeds = feeds
+        self._store = store
+        self._clock = clock
+        self._timeout = provider_timeout_seconds
+        self._maximum_reports = maximum_reports
+        self._tasks: dict[str, asyncio.Task[None]] = {}
+        self._active: dict[int, DiscoveryRun] = {}
+        self._lock = asyncio.Lock()
+
+    async def start(self, days: int = 7) -> DiscoveryRun:
+        interval = ReportingInterval.at_start(days, self._clock())
+        async with self._lock:
+            # Reuse only running work with the same period, started within 60s.
+            active = self._active.get(days)
+            if active and (interval.end - active.interval.end).total_seconds() <= 60:
+                return await self.get(active.scan_id)
+            if len(self._tasks) >= 5:
+                raise ValueError(
+                    "Five scans are already running. Please wait for one to finish."
+                )
+            run = DiscoveryRun(scan_id=str(uuid4()), interval=interval)
+            await self._store.save(run)
+            self._active[days] = run
+            task = asyncio.create_task(self._execute(run))
+            self._tasks[run.scan_id] = task
+            task.add_done_callback(
+                lambda done: None if done.cancelled() else done.exception()
+            )
+            return run
+
+    async def get(self, scan_id: str) -> DiscoveryRun:
+        run = await self._store.read(scan_id)
+        if run is None:
+            raise LookupError("Scan not found or retained scan expired.")
+        return run
+
+    async def wait(self, scan_id: str) -> None:
+        if task := self._tasks.get(scan_id):
+            await asyncio.shield(task)
+
+    async def _execute(self, run: DiscoveryRun) -> None:
+        try:
+            for feed in self._feeds:
+                try:
+                    async with asyncio.timeout(self._timeout):
+                        async for batch in feed.discover(interval=run.interval):
+                            reports = {
+                                r.article.source.canonical_url: r for r in run.reports
+                            }
+                            for article in batch.articles:
+                                reports[article.source.canonical_url] = assess_article(
+                                    article, run.interval
+                                )
+                            capped = len(reports) > self._maximum_reports
+                            retained = tuple(reports.values())[: self._maximum_reports]
+                            supplemental = (*run.supplemental, *batch.supplemental)
+                            run = replace(
+                                run,
+                                reports=retained,
+                                events=supplement_events(
+                                    group_reports(retained), supplemental
+                                ),
+                                supplemental=supplemental,
+                                issues=tuple(
+                                    dict.fromkeys(
+                                        (
+                                            *run.issues,
+                                            *batch.issues,
+                                            *(
+                                                ("Article collection limit reached.",)
+                                                if capped
+                                                else ()
+                                            ),
+                                        )
+                                    )
+                                ),
+                                successful_operations=run.successful_operations
+                                + batch.successful_operations,
+                                failed_operations=run.failed_operations
+                                + batch.failed_operations,
+                                truncated=run.truncated or batch.truncated or capped,
+                            )
+                            await self._store.save(run)
+                            if capped:
+                                break
+                except Exception:
+                    run = replace(
+                        run,
+                        failed_operations=run.failed_operations + 1,
+                        issues=(
+                            *run.issues,
+                            f"{feed.source_id}: acquisition failed or timed out; "
+                            "available results retained.",
+                        ),
+                    )
+            status: Literal["completed", "incomplete", "failed"] = "completed"
+            if not run.successful_operations:
+                status = "failed"
+            elif run.failed_operations or run.truncated or run.issues:
+                status = "incomplete"
+            unknown = sum(r.eligibility == "unknown_publication" for r in run.reports)
+            if unknown:
+                run = replace(
+                    run,
+                    issues=(
+                        *run.issues,
+                        f"{unknown} reports have unknown publication times "
+                        "and are excluded from window results.",
+                    ),
+                )
+                if status == "completed":
+                    status = "incomplete"
+            run = replace(run, status=status, finished_at=self._clock())
+            await self._store.save(run)
+        except asyncio.CancelledError:
+            await self._store.save(
+                replace(
+                    run,
+                    status="incomplete",
+                    finished_at=self._clock(),
+                    issues=(
+                        *run.issues,
+                        "Scan interrupted; retained results available.",
+                    ),
+                )
+            )
+            raise
+        finally:
+            self._tasks.pop(run.scan_id, None)
+            if self._active.get(run.interval.days, run).scan_id == run.scan_id:
+                self._active.pop(run.interval.days, None)
+
+    async def aclose(self) -> None:
+        tasks = tuple(self._tasks.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)

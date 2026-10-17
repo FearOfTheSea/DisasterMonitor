@@ -207,6 +207,9 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
         },
         "location": "Fixture reserve",
         "event_time": "2026-08-20T03:00:00Z",
+        "event_time_basis": "reported",
+        "discovery_reports": [],
+        "independent_origins": None,
         "event_time_end": None,
         "event_time_precision": "exact",
         "geometry": {

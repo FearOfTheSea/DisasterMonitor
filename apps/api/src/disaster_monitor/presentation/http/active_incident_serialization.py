@@ -5,6 +5,7 @@ from disaster_monitor.presentation.http.common_response_serialization import (
     _event_geometry_response,
     _source_response,
 )
+from disaster_monitor.presentation.http.event_schemas import DiscoveryReportResponse
 from disaster_monitor.presentation.http.schemas import (
     ActiveIncidentCountryResponse,
     ActiveIncidentResponse,
@@ -30,7 +31,27 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
             )
         ),
         location=incident.location,
-        event_time=incident.event_time,
+        event_time=incident.discovery_event.event_time
+        if incident.discovery_event
+        else incident.event_time,
+        event_time_basis="unknown"
+        if incident.discovery_event and incident.discovery_event.event_time is None
+        else "reported",
+        independent_origins=incident.discovery_event.independent_origins
+        if incident.discovery_event
+        else None,
+        discovery_reports=[
+            DiscoveryReportResponse(
+                source=_source_response(report.article.source),
+                indexed_at=report.article.indexed_at,
+                event_time=report.article.event_time,
+                origin=report.article.origin,
+                fatality_evidence=list(report.fatality_evidence),
+            )
+            for report in incident.discovery_event.reports
+        ]
+        if incident.discovery_event
+        else [],
         event_time_end=incident.event_time_end,
         event_time_precision=incident.event_time_precision,
         geometry=_event_geometry_response(incident.geometry),

@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     ground_imagery_enabled: bool = True
     evidence_dataset_manifest: Path | None = None
     incident_identity_store_path: Path = Path("data/incidents/identities.json")
+    discovery_scan_store_path: Path = Path("data/discovery-scans")
     ground_imagery_catalog_max_response_bytes: int = Field(
         default=8_000_000, ge=10_000, le=8_388_608
     )

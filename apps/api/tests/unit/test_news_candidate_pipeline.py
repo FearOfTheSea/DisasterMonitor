@@ -120,7 +120,7 @@ async def test_news_scheduler_enqueues_each_feed_once_per_interval() -> None:
 
 
 @pytest.mark.asyncio
-async def test_discovery_feed_requires_a_versioned_major_publisher() -> None:
+async def test_discovery_feed_accepts_traceable_unfamiliar_publishers() -> None:
     class LocalOutletFeed:
         source_id = "gdelt-news"
 
@@ -142,7 +142,7 @@ async def test_discovery_feed_requires_a_versioned_major_publisher() -> None:
     ).refresh()
 
     assert result.observations_inserted == 1
-    assert result.candidates_inserted == 0
+    assert result.candidates_inserted == 1
 
 
 @pytest.mark.asyncio

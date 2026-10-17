@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import type { ActiveIncidentsStatus } from '@/features/incidents/hooks/useActiveIncidents';
 import {
@@ -25,6 +25,7 @@ import type { MapTimeWindow } from '@/shared/model/displayTimeWindow';
 import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 
 type ActiveIncidentsPanelProps = {
+  discoveryControls?: ReactNode;
   snapshot?: ActiveIncidentsSnapshot;
   coverageSnapshot?: ActiveIncidentsSnapshot;
   status: ActiveIncidentsStatus;
@@ -65,12 +66,14 @@ function ChevronIcon() {
   );
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string | null): string {
+  if (!value) return 'Unknown';
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
-function formatRelativeTime(value: string, reference?: string): string {
+function formatRelativeTime(value: string | null, reference?: string): string {
+  if (!value) return 'Unknown';
   const eventTime = new Date(value).getTime();
   const referenceTime = reference ? new Date(reference).getTime() : Date.now();
   if (Number.isNaN(eventTime) || Number.isNaN(referenceTime)) return formatTime(value);
@@ -89,6 +92,7 @@ function formatDuration(seconds: number): string {
 }
 
 function formatObservationPeriod(observation: ActiveIncident): string {
+  if (!observation.event_time) return 'Event time unknown';
   if (observation.event_time_precision !== 'week' || !observation.event_time_end) {
     return formatTime(observation.event_time);
   }
@@ -137,6 +141,7 @@ function sourceTimestamp(incident: ActiveIncident): { label: string; value: stri
 }
 
 export function ActiveIncidentsPanel({
+  discoveryControls,
   snapshot,
   coverageSnapshot,
   status,
@@ -193,23 +198,65 @@ export function ActiveIncidentsPanel({
           </p>
         </div>
       </header>
-      <IncidentPanelControls
-        snapshot={snapshot}
-        status={status}
-        error={error}
-        search={currentSearch}
-        serverSearch={isServerSearch}
-        onSearchChange={updateSearch}
-        view={view}
-        onViewChange={onViewChange}
-        hazard={hazard}
-        onHazardChange={onHazardChange}
-        occurrenceStart={occurrenceStart}
-        occurrenceEnd={occurrenceEnd}
-        onOccurrenceStartChange={onOccurrenceStartChange}
-        onOccurrenceEndChange={onOccurrenceEndChange}
-        onRefresh={onRefresh}
-      />
+      {discoveryControls}
+      {snapshot?.publication_scan ? (
+        <div className="incident-query-controls">
+          <label>
+            Search scan results
+            <input
+              type="search"
+              aria-label="Search scan results"
+              value={currentSearch}
+              onChange={(event) => updateSearch(event.target.value)}
+            />
+          </label>
+          <label>
+            Hazard
+            <select
+              aria-label="Hazard filter"
+              value={hazard ?? ''}
+              onChange={(event) =>
+                onHazardChange?.(
+                  event.target.value ? (event.target.value as DisasterType) : undefined,
+                )
+              }
+            >
+              <option value="">All hazards</option>
+              {[
+                'earthquake',
+                'flood',
+                'wildfire',
+                'landslide',
+                'drought',
+                'tropical_cyclone',
+                'volcanic_eruption',
+              ].map((value) => (
+                <option key={value} value={value}>
+                  {disasterLabel(value as DisasterType)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : (
+        <IncidentPanelControls
+          snapshot={snapshot}
+          status={status}
+          error={error}
+          search={currentSearch}
+          serverSearch={isServerSearch}
+          onSearchChange={updateSearch}
+          view={view}
+          onViewChange={onViewChange}
+          hazard={hazard}
+          onHazardChange={onHazardChange}
+          occurrenceStart={occurrenceStart}
+          occurrenceEnd={occurrenceEnd}
+          onOccurrenceStartChange={onOccurrenceStartChange}
+          onOccurrenceEndChange={onOccurrenceEndChange}
+          onRefresh={onRefresh}
+        />
+      )}
       <div className="active-incidents-scroll">
         {snapshot ? (
           <IncidentCoverageStatus
@@ -295,7 +342,9 @@ export function ActiveIncidentsPanel({
             aria-labelledby="incident-list-heading"
           >
             <div className="incident-section-heading">
-              <h3 id="incident-list-heading">{VIEW_LABELS[view]}</h3>
+              <h3 id="incident-list-heading">
+                {snapshot.publication_scan ? 'Discovered events' : VIEW_LABELS[view]}
+              </h3>
               <span className="incident-result-count">
                 Showing {incidents.length}
                 {snapshot.total_incident_count !== undefined &&
@@ -308,7 +357,9 @@ export function ActiveIncidentsPanel({
                   : 'incidents'}
               </span>
             </div>
-            {displayTimeWindow && displayTimeWindow !== '7d' ? (
+            {!snapshot.publication_scan &&
+            displayTimeWindow &&
+            displayTimeWindow !== '7d' ? (
               <p className="incident-display-filter-note">
                 Showing records in the {displayTimeWindow} display window. Provider
                 coverage above is unchanged.
@@ -323,15 +374,21 @@ export function ActiveIncidentsPanel({
             {incidents.length === 0 ? (
               <div className="incident-empty">
                 <strong>
-                  {query
-                    ? isServerSearch
-                      ? 'No records match your server-side search.'
-                      : 'No loaded records match your search.'
-                    : 'No incident records matched this bounded retrieval.'}
+                  {snapshot.scan_status === 'running'
+                    ? 'Collected events will appear here as the scan runs.'
+                    : snapshot.scan_status === 'failed'
+                      ? 'Discovery failed. No successful empty result is available.'
+                      : query
+                        ? isServerSearch
+                          ? 'No records match your server-side search.'
+                          : 'No loaded records match your search.'
+                        : 'No incident records matched this bounded retrieval.'}
                 </strong>
-                <p>
-                  A successful empty result does not prove that no disaster occurred.
-                </p>
+                {!snapshot.scan_status || snapshot.scan_status === 'completed' ? (
+                  <p>
+                    A successful empty result does not prove that no disaster occurred.
+                  </p>
+                ) : null}
               </div>
             ) : (
               <div className="incident-list">
@@ -348,7 +405,11 @@ export function ActiveIncidentsPanel({
                     >
                       <button
                         type="button"
-                        aria-label={`Focus ${title} on map`}
+                        aria-label={
+                          snapshot.publication_scan && !incident.geometry
+                            ? `Inspect ${title}`
+                            : `Focus ${title} on map`
+                        }
                         aria-pressed={selectedIncidentId === incident.event_id}
                         onClick={() => onSelectIncident(incident.event_id)}
                       >
@@ -395,11 +456,22 @@ export function ActiveIncidentsPanel({
                           >
                             {activityStatusLabel(incident.activity_status)}
                           </small>
-                          <time dateTime={incident.event_time}>
+                          <time
+                            dateTime={
+                              incident.event_time ??
+                              incident.source.published_at ??
+                              undefined
+                            }
+                          >
+                            {incident.event_time_basis === 'unknown'
+                              ? 'Reported: '
+                              : ''}
                             {snapshot.availability === 'offline-cache'
-                              ? formatTime(incident.event_time)
+                              ? formatTime(
+                                  incident.event_time ?? incident.source.published_at,
+                                )
                               : formatRelativeTime(
-                                  incident.event_time,
+                                  incident.event_time ?? incident.source.published_at,
                                   snapshot.retrieved_at,
                                 )}
                           </time>

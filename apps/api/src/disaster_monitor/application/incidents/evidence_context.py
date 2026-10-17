@@ -25,6 +25,11 @@ class IncidentEvidenceContextReader:
 
     async def read(self, identifier: str) -> IncidentEvidenceContext:
         incident = await self._incidents.lookup(identifier)
+        if incident.discovery_event and incident.discovery_event.event_time is None:
+            raise LookupError(
+                "Event time is unresolved; "
+                "publication time cannot target event evidence."
+            )
         country = (
             self._catalog.get_by_alpha3(incident.country.country_code)
             if incident.country

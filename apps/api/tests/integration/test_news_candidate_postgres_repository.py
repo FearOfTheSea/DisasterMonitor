@@ -1,10 +1,16 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import psycopg
 import pytest
 
 from disaster_monitor.domain.disaster import Disaster, SourceReference
-from disaster_monitor.domain.news import IncidentCandidate, IncidentCandidateStatus
+from disaster_monitor.domain.news import (
+    IncidentCandidate,
+    IncidentCandidateStatus,
+    NewsFeedItem,
+    NewsObservation,
+)
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
 )
@@ -47,3 +53,36 @@ async def test_postgres_news_candidate_survives_repository_recreation(
     assert candidate in await reopened.latest_incident_candidates(
         since=now - timedelta(days=1)
     )
+
+
+@pytest.mark.postgres
+async def test_postgres_persists_unknown_publication_and_distinct_indexing(
+    postgres_dsn,
+):
+    repository = PostgresOperationalRepository(postgres_dsn)
+    await repository.migrate()
+    now = datetime.now(UTC)
+    identity = uuid4().hex
+    observation = NewsObservation(
+        identity,
+        "gdelt-news",
+        NewsFeedItem(
+            identity,
+            "Unfamiliar News",
+            "Drought reporting",
+            f"https://news.example/{identity}",
+            published_at=None,
+            updated_at=None,
+            indexed_at=now,
+        ),
+        now,
+    )
+    assert await repository.append_news_observation(observation)
+    async with await psycopg.AsyncConnection.connect(postgres_dsn) as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                "SELECT published_at,indexed_at,observed_at FROM news_observation "
+                "WHERE observation_id=%s",
+                (identity,),
+            )
+            assert await cursor.fetchone() == (None, now, now)

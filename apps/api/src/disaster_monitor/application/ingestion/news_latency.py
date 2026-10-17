@@ -54,7 +54,7 @@ def _latencies(
     return tuple(
         max(0.0, (item.observed_at - item.item.published_at).total_seconds())
         for item in observations
-        if item.source_id == source_id
+        if item.source_id == source_id and item.item.published_at is not None
     )
 
 

@@ -47,6 +47,7 @@ from disaster_monitor.application.incidents.watch_observation import observe_wat
 from disaster_monitor.application.ports.disaster_information import (
     DisasterEventProvider,
 )
+from disaster_monitor.application.ports.discovery import DiscoveryStore
 from disaster_monitor.application.ports.geographic_regions import (
     GeographicRegionCatalog,
 )
@@ -98,8 +99,10 @@ class ActiveIncidentsService:
         provider_attempt_recorder: ProviderAttemptWriter | None = None,
         candidate_store: NewsCandidateStore | None = None,
         identity_store: IncidentIdentityStore | None = None,
+        discovery_store: DiscoveryStore | None = None,
     ) -> None:
         self._clock = clock
+        self._discovery_store = discovery_store
         self._retrieval = IncidentRetrieval(
             provider_registry,
             clock=clock,
@@ -205,6 +208,16 @@ class ActiveIncidentsService:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def lookup(self, identifier: str) -> ActiveIncident:
+        if self._discovery_store is not None and identifier.startswith("discovery:"):
+            from disaster_monitor.application.incidents.discovery_projection import (
+                discovery_incident,
+            )
+
+            for run in await self._discovery_store.recent():
+                for event in run.events:
+                    if event.event_id == identifier:
+                        return discovery_incident(event, run.interval.end)
+            raise LookupError("Discovered event is no longer retained. Run a new scan.")
         snapshot = await self.execute()
         matches = tuple(
             item

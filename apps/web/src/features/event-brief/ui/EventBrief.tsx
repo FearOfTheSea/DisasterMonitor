@@ -21,7 +21,7 @@ type EventBriefIncident = {
     distance_km: number | null;
   } | null;
   location: string;
-  event_time: string;
+  event_time: string | null;
   measurements: Array<{
     kind: string;
     value: string | number;
@@ -288,8 +288,12 @@ function SectionContent({
       return (
         <ol className="event-brief-timeline">
           <li>
-            <time>{incident.event_time}</time>
-            <span>Source-reported event time</span>
+            <time>{incident.event_time ?? 'Unknown'}</time>
+            <span>
+              {incident.event_time
+                ? 'Source-reported event time'
+                : 'Event time unresolved'}
+            </span>
           </li>
           {incident.source.published_at ? (
             <li>

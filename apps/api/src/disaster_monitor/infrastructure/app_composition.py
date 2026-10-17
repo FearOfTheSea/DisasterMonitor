@@ -49,6 +49,10 @@ from disaster_monitor.application.humanitarian.context import HumanitarianContex
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
+from disaster_monitor.application.incidents.discovery_catalog import (
+    SupplementalIncidentCatalog,
+)
+from disaster_monitor.application.incidents.discovery_scan import DiscoveryScanService
 from disaster_monitor.application.incidents.evidence_context import (
     IncidentEvidenceContextReader,
 )
@@ -137,6 +141,10 @@ from disaster_monitor.infrastructure.humanitarian.hdx_hapi import HdxHapiContext
 from disaster_monitor.infrastructure.humanitarian.iom_dtm import IomDtmContextAdapter
 from disaster_monitor.infrastructure.media.filesystem_store import (
     FilesystemMediaAssetStore,
+)
+from disaster_monitor.infrastructure.news.discovery_feed import GdeltDiscoveryFeed
+from disaster_monitor.infrastructure.operations.file_discovery_store import (
+    FileDiscoveryStore,
 )
 from disaster_monitor.infrastructure.operations.file_incident_identity_store import (
     FileIncidentIdentityStore,
@@ -325,6 +333,7 @@ def build_app_dependencies(
         )
     )
     retrieval = investigation.dependencies
+    discovery_store = FileDiscoveryStore(settings.discovery_scan_store_path)
     configured_active_incidents = (
         configured.active_incidents_service
         or ActiveIncidentsService(
@@ -343,6 +352,7 @@ def build_app_dependencies(
             ),
             provider_attempt_recorder=operational.repository,
             candidate_store=operational.repository,
+            discovery_store=discovery_store,
             identity_store=FileIncidentIdentityStore(
                 settings.incident_identity_store_path
             ),
@@ -360,6 +370,15 @@ def build_app_dependencies(
     )
     source_catalog = build_source_catalog(settings)
     breaking_news_feeds = build_breaking_news_feeds(settings, operational.repository)
+    discovery_feed = GdeltDiscoveryFeed(
+        timeout_seconds=settings.news_feed_timeout_seconds
+    )
+    discovery_scans = configured.discovery_scans or DiscoveryScanService(
+        (discovery_feed, SupplementalIncidentCatalog(configured_active_incidents))
+        if settings.news_sensing_enabled and settings.gdelt_news_enabled
+        else (),
+        discovery_store,
+    )
     configured_news_ids = {feed.source_id for feed in breaking_news_feeds}
     configured_weather_alerts = (
         configured.weather_alerts_service
@@ -553,6 +572,7 @@ def build_app_dependencies(
         clock=clock,
     )
     return AppDependencies(
+        discovery_scans=discovery_scans,
         standalone_evidence=standalone_evidence,
         conversation_queries=ConversationQueries(conversations),
         evidence_history=EvidenceHistoryQuery(operational.repository),
@@ -608,8 +628,18 @@ def build_app_dependencies(
         provider_budget=operational.provider_budget,
         route_access=humanitarian_field.route_access,
         lifecycle=AppLifecycle(
-            startup_hooks=(migrate_operational_repository, catalog_automation.start),
+            startup_hooks=(
+                migrate_operational_repository,
+                discovery_store.recover,
+                catalog_automation.start,
+            ),
             shutdown_hooks=(
+                discovery_scans.aclose,
+                discovery_feed.aclose,
+                *(
+                    lambda feed=feed: close_resource(feed)
+                    for feed in breaking_news_feeds
+                ),
                 catalog_automation.aclose,
                 standalone_evidence.aclose,
                 lambda: close_resource(configured_active_incidents),

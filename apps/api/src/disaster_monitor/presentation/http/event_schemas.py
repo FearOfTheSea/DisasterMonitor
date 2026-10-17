@@ -128,6 +128,14 @@ class IncidentDetectionTimelineResponse(BaseModel):
     assistant_ready_at: datetime | None = None
 
 
+class DiscoveryReportResponse(BaseModel):
+    source: SourceResponse
+    indexed_at: datetime | None = None
+    event_time: datetime | None = None
+    origin: str | None = None
+    fatality_evidence: list[str] = Field(default_factory=list)
+
+
 class ActiveIncidentResponse(BaseModel):
     """One worldwide event or observation with source-backed evidence."""
 
@@ -136,7 +144,10 @@ class ActiveIncidentResponse(BaseModel):
     disaster: Disaster
     country: ActiveIncidentCountryResponse | None = None
     location: str
-    event_time: datetime
+    event_time: datetime | None
+    event_time_basis: Literal["reported", "unknown"] = "reported"
+    discovery_reports: list[DiscoveryReportResponse] = Field(default_factory=list)
+    independent_origins: int | None = None
     event_time_end: datetime | None = None
     event_time_precision: EventTimePrecision = EventTimePrecision.EXACT
     geometry: EventGeometryResponse | None = None
