@@ -223,6 +223,15 @@ export function IncidentClusterPicker({
           <li key={incidentId}>
             <button type="button" onClick={() => onSelectIncident(incidentId)}>
               {displayActiveIncidentCountry(incident)} — {incident.location}
+              {incident.discovery_reports?.length ? (
+                <small>
+                  {incident.event_time
+                    ? ` · Event ${incident.event_time.slice(0, 10)}`
+                    : ' · Event date unknown'}
+                  {' · '}
+                  {incident.source.title}
+                </small>
+              ) : null}
             </button>
           </li>
         ))}

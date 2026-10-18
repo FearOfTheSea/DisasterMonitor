@@ -148,6 +148,27 @@ def test_cdse_rejects_unregistered_authority() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cdse_html_access_rejection_is_not_empty_coverage_or_a_schema_change():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html; charset=utf-8"},
+            text="<html><title>Request Rejected</title></html>",
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        catalog = CDSEStacCatalog(client=client)
+        with pytest.raises(CatalogSearchError) as failure:
+            await catalog.search(_query())
+    assert failure.value.reason_code == "catalog_access_rejected"
+    assert not failure.value.retryable
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_cdse_retries_short_rate_limit_before_reporting_missing_imagery() -> None:
     responses = iter(
         [

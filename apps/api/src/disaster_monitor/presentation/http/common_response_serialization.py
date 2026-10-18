@@ -75,4 +75,5 @@ def _source_response(source: SourceReference) -> SourceResponse:
         authority=source.authority,
         source_age_seconds=source_age_seconds,
         snapshot_id=source.snapshot_id,
+        publication_precision=source.publication_precision,
     )

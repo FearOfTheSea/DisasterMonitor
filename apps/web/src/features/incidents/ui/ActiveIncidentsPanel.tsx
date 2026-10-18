@@ -11,6 +11,7 @@ import {
   displayActiveIncidentCountry,
   displayActiveIncidentContext,
   IncidentView,
+  isContextOnlyIncident,
 } from '@/features/incidents/model/activeIncidents';
 import { AccessibleIncidentIndex } from '@/features/incidents/ui/AccessibleIncidentIndex';
 import { IncidentCoverageStatus } from '@/features/incidents/ui/IncidentCoverageStatus';
@@ -20,6 +21,7 @@ import {
   activityStatusLabel,
   AUTHORITY_LABELS,
   disasterLabel,
+  incidentDateOnly,
 } from '@/features/incidents/ui/incidentPresentation';
 import type { MapTimeWindow } from '@/shared/model/displayTimeWindow';
 import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
@@ -165,10 +167,11 @@ export function ActiveIncidentsPanel({
   compact = false,
 }: ActiveIncidentsPanelProps) {
   const [localSearch, setLocalSearch] = useState('');
+  const [contextLimit, setContextLimit] = useState(20);
   const isServerSearch = search !== undefined;
   const currentSearch = search ?? localSearch;
   const query = currentSearch.trim().toLocaleLowerCase();
-  const incidents = isServerSearch
+  const matching = isServerSearch
     ? (snapshot?.incidents ?? [])
     : (snapshot?.incidents ?? []).filter((incident) =>
         [
@@ -181,6 +184,8 @@ export function ActiveIncidentsPanel({
           .filter((value): value is string => Boolean(value))
           .some((value) => value.toLocaleLowerCase().includes(query)),
       );
+  const incidents = matching.filter((incident) => !isContextOnlyIncident(incident));
+  const context = matching.filter(isContextOnlyIncident);
   const updateSearch = (value: string) => {
     setLocalSearch(value);
     onSearchChange?.(value);
@@ -258,6 +263,37 @@ export function ActiveIncidentsPanel({
         />
       )}
       <div className="active-incidents-scroll">
+        {context.length ? (
+          <details className="incident-context-evidence">
+            <summary>Context and unresolved evidence ({context.length})</summary>
+            <p>
+              Forecasts, preparedness, historical references and fragments remain source
+              evidence. They do not establish a current physical occurrence.
+            </p>
+            {context.slice(0, contextLimit).map((item) => (
+              <article key={item.event_id}>
+                <button
+                  type="button"
+                  aria-label={`Inspect retained ${item.location}`}
+                  onClick={() => onSelectIncident(item.event_id)}
+                >
+                  {disasterLabel(item.disaster)} · {item.location}
+                </button>
+                <small>
+                  {item.discovery_reports?.[0]?.mention_role} · {item.source.publisher}
+                </small>
+              </article>
+            ))}
+            {context.length > contextLimit ? (
+              <button
+                type="button"
+                onClick={() => setContextLimit((value) => value + 20)}
+              >
+                Show more retained evidence
+              </button>
+            ) : null}
+          </details>
+        ) : null}
         {snapshot ? (
           <IncidentCoverageStatus
             snapshot={coverageSnapshot ?? snapshot}
@@ -343,7 +379,9 @@ export function ActiveIncidentsPanel({
           >
             <div className="incident-section-heading">
               <h3 id="incident-list-heading">
-                {snapshot.publication_scan ? 'Discovered events' : VIEW_LABELS[view]}
+                {snapshot.publication_scan
+                  ? 'Events and candidates'
+                  : VIEW_LABELS[view]}
               </h3>
               <span className="incident-result-count">
                 Showing {incidents.length}
@@ -466,14 +504,15 @@ export function ActiveIncidentsPanel({
                             {incident.event_time_basis === 'unknown'
                               ? 'Reported: '
                               : ''}
-                            {snapshot.availability === 'offline-cache'
-                              ? formatTime(
-                                  incident.event_time ?? incident.source.published_at,
-                                )
-                              : formatRelativeTime(
-                                  incident.event_time ?? incident.source.published_at,
-                                  snapshot.retrieved_at,
-                                )}
+                            {incidentDateOnly(incident) ??
+                              (snapshot.availability === 'offline-cache'
+                                ? formatTime(
+                                    incident.event_time ?? incident.source.published_at,
+                                  )
+                                : formatRelativeTime(
+                                    incident.event_time ?? incident.source.published_at,
+                                    snapshot.retrieved_at,
+                                  ))}
                           </time>
                         </span>
                       </button>

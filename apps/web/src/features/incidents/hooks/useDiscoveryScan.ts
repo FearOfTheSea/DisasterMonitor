@@ -26,6 +26,33 @@ export function useDiscoveryScan() {
   useEffect(() => () => controller.current?.abort(), []);
 
   useEffect(() => {
+    const retainedId = new URLSearchParams(window.location.search).get('scan');
+    if (
+      !retainedId ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(retainedId)
+    )
+      return;
+    const restoring = new AbortController();
+    controller.current = restoring;
+    void fetchDiscoveryScan(
+      retainedId,
+      AbortSignal.any([restoring.signal, AbortSignal.timeout(20_000)]),
+    )
+      .then((value) => {
+        if (restoring.signal.aborted) return;
+        setRun(value);
+        setDays(value.reporting_days as ReportingDays);
+      })
+      .catch(() => {
+        if (!restoring.signal.aborted)
+          setError(
+            'The retained scan could not be restored. Start a new scan or browse provider catalogs.',
+          );
+      });
+    return () => restoring.abort();
+  }, []);
+
+  useEffect(() => {
     if (!id || !running) return;
     const polling = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
@@ -67,6 +94,9 @@ export function useDiscoveryScan() {
       );
       if (!nextController.signal.aborted) {
         setRun(next);
+        const url = new URL(window.location.href);
+        url.searchParams.set('scan', next.scan_id);
+        window.history.replaceState(null, '', url);
         setSearch('');
         setHazard(undefined);
       }
@@ -90,7 +120,7 @@ export function useDiscoveryScan() {
         (item) =>
           (!hazard || item.disaster === hazard) &&
           (!query ||
-            `${item.location} ${item.source.title} ${item.source.publisher}`
+            `${item.location} ${item.source.title} ${item.source.publisher} ${(item.discovery_reports ?? []).map((report) => `${report.mention_excerpt ?? ''} ${report.location ?? ''} ${report.event_date_wording ?? ''}`).join(' ')}`
               .toLowerCase()
               .includes(query)),
       ),
@@ -112,6 +142,9 @@ export function useDiscoveryScan() {
       controller.current?.abort();
       setSubmitting(false);
       setRun(undefined);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('scan');
+      window.history.replaceState(null, '', url);
     },
   };
 }

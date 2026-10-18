@@ -110,11 +110,33 @@ class ActiveIncidentImageryContextReader(IncidentImageryContextReader):
                 verified_point = Coordinate(coordinate.latitude, coordinate.longitude)
 
         onset = None
+        if incident.discovery_event:
+            time = next(
+                (
+                    r.mention.time
+                    for r in incident.discovery_event.reports
+                    if r.mention and r.mention.time and r.mention.time.start
+                ),
+                None,
+            )
+            if time and time.start:
+                if time.precision == "day":
+                    onset = ImpactOnset.from_date(
+                        time.start.date(), source_id=incident.source.source_id
+                    )
+                elif time.precision == "range" and time.end:
+                    from datetime import timedelta
+
+                    onset = ImpactOnset.interval(
+                        time.start - timedelta(hours=14),
+                        time.end + timedelta(hours=12),
+                        source_id=incident.source.source_id,
+                    )
         if (
             incident.observation_kind is ObservationKind.PHYSICAL_EVENT
             and incident.disaster is not Disaster.TROPICAL_CYCLONE
         ):
-            onset = ImpactOnset.exact(
+            onset = onset or ImpactOnset.exact(
                 incident.event_time,
                 source_id=incident.source.source_id,
             )

@@ -193,3 +193,40 @@ async def test_reported_discovery_area_is_context_not_a_damage_perimeter():
     assert context.evidence[0].source.source_kind is RegionSourceKind.REPORTED_PLACE
     assert context.evidence[0].source.reference == source.canonical_url
     assert "not a measured damage" in context.evidence[0].semantic_role
+
+
+async def test_mention_day_onset_is_expanded_without_inventing_exact_midnight():
+    from disaster_monitor.domain.discovery import (
+        DiscoveryArticle,
+        ReportingInterval,
+        assess_article,
+        group_reports,
+    )
+
+    now = datetime(2026, 10, 18, 12, tzinfo=UTC)
+    source = SourceReference(
+        "news",
+        "Daily",
+        "Earthquake in Riverton",
+        "https://daily.example/quake",
+        now,
+        None,
+        now,
+    )
+    article = DiscoveryArticle(
+        source, "An earthquake struck Riverton on 9 October 2026."
+    )
+    event = group_reports(
+        (assess_article(article, ReportingInterval.at_start(7, now)),)
+    )[0]
+    incident = discovery_incident(event, now)
+
+    class Incidents:
+        async def lookup(self, identifier):
+            return incident
+
+    context = await ActiveIncidentImageryContextReader(
+        cast(ActiveIncidentsService, Incidents())
+    ).get_imagery_context(event.event_id)
+    assert context.onset.precision == "date_only_unknown_timezone"
+    assert context.onset.earliest < event.event_time < context.onset.latest

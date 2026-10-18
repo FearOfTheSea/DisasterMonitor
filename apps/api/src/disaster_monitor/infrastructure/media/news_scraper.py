@@ -206,15 +206,12 @@ class NewsEventMediaProvider:
                             "No eligible article photograph metadata found.",
                         )
                     )
-            except Exception:
+            except Exception as error:
                 unavailable.append(
                     MediaUnavailableSource(
                         source.canonical_url,
                         source.publisher,
-                        (
-                            "Publisher media access failed or was restricted; source "
-                            "article remains available."
-                        ),
+                        _media_access_notice(error),
                     )
                 )
         for source in context.collected_articles[self._candidate_limit :]:
@@ -439,6 +436,12 @@ class NewsEventMediaProvider:
                     current = urljoin(current, location)
                     continue
                 response.raise_for_status()
+                if response.status_code != 200:
+                    raise httpx.HTTPStatusError(
+                        "Publisher has not returned completed media content.",
+                        request=response.request,
+                        response=response,
+                    )
                 content_length = response.headers.get("content-length")
                 if content_length and int(content_length) > maximum_bytes:
                     raise ValueError("The source response exceeds its byte limit.")
@@ -452,6 +455,20 @@ class NewsEventMediaProvider:
                 response_type = response.headers.get("content-type", "")
                 return b"".join(chunks), response_type.split(";", 1)[0].casefold()
         raise ValueError("The source exceeded the redirect limit.")
+
+
+def _media_access_notice(error: Exception) -> str:
+    if isinstance(error, httpx.HTTPStatusError):
+        reason = f"Publisher HTTP {error.response.status_code}"
+    elif isinstance(error, httpx.TimeoutException):
+        reason = "Publisher request timed out"
+    elif isinstance(error, httpx.TransportError):
+        reason = "Publisher transport unavailable"
+    elif isinstance(error, ValueError):
+        reason = "Publisher media response rejected by access/content bounds"
+    else:
+        reason = "Publisher media access failed or was restricted"
+    return f"{reason}; open the source article to inspect publisher-hosted media."
 
 
 def _load_policies() -> tuple[PublisherMediaPolicy, ...]:

@@ -46,14 +46,48 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
         independent_origins=incident.discovery_event.independent_origins
         if incident.discovery_event
         else None,
+        identity_status=incident.discovery_event.identity_status
+        if incident.discovery_event
+        else None,
+        association_reasons=list(incident.discovery_event.association_reasons)
+        if incident.discovery_event
+        else [],
         discovery_reports=[
             DiscoveryReportResponse(
                 source=_source_response(report.article.source),
+                original_url=report.article.original_url,
                 indexed_at=report.article.indexed_at,
-                event_time=report.article.event_time,
+                event_time=report.mention.time.start
+                if report.mention and report.mention.time
+                else report.article.event_time,
+                mention_id=report.mention.mention_id if report.mention else None,
+                mention_excerpt=report.mention.excerpt if report.mention else None,
+                mention_role=report.mention.role if report.mention else "reported",
+                event_date_wording=report.mention.time.wording
+                if report.mention and report.mention.time
+                else None,
+                event_date_precision=report.mention.time.precision
+                if report.mention and report.mention.time
+                else "unknown",
+                event_date_end=report.mention.time.end
+                if report.mention and report.mention.time
+                else None,
+                event_year_inferred=report.mention.time.year_inferred
+                if report.mention and report.mention.time
+                else False,
+                location_precision=report.mention.place.precision
+                if report.mention and report.mention.place
+                else "unresolved",
+                mention_notices=list(report.mention.notices) if report.mention else [],
                 origin=report.article.origin,
                 fatality_evidence=list(
-                    fatality_accounts(report.article, report.disaster)
+                    (
+                        claim.excerpt
+                        for claim in report.mention.claims
+                        if claim.fact.category == "fatalities"
+                    )
+                    if report.mention
+                    else fatality_accounts(report.article, report.disaster)
                 ),
                 claims=[
                     ReportedImpactResponse.model_validate(
@@ -65,18 +99,28 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                             "qualifiers": list(claim.qualifiers),
                         }
                     )
-                    for claim in extract_reported_impacts(
-                        scoped_disaster_text(
-                            report.article.text,
-                            report.article.source.title,
-                            report.disaster,
-                        ),
-                        report.article.source,
-                        location=report.article.location,
+                    for claim in (
+                        report.mention.claims
+                        if report.mention
+                        else extract_reported_impacts(
+                            scoped_disaster_text(
+                                report.article.text,
+                                report.article.source.title,
+                                report.disaster,
+                            ),
+                            report.article.source,
+                            location=report.article.location,
+                        )
                     )
                 ],
-                location=report.article.location,
-                geometry=_event_geometry_response(report.article.geometry),
+                location=report.mention.place.wording
+                if report.mention and report.mention.place
+                else report.article.location,
+                geometry=_event_geometry_response(
+                    report.mention.geometry
+                    if report.mention
+                    else report.article.geometry
+                ),
                 access_issue=report.article.access_issue
                 or (
                     "Article content was not available for extraction."

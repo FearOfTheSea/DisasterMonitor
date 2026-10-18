@@ -109,6 +109,46 @@ def test_association_rejects_an_old_unrelated_disaster_photo() -> None:
     assert result.rule_ids == ("media.association.explicit_year_mismatch",)
 
 
+def test_collected_multi_event_article_does_not_make_every_photo_match():
+    candidate = _candidate(
+        "multi",
+        title="Weekly earthquake and hurricane update",
+        caption="Crews clear trees after Hurricane Arlen in Florida.",
+    )
+    source = SourceReference(
+        "news",
+        "Daily",
+        candidate.article_title,
+        candidate.source_page_url,
+        NOW,
+        None,
+        NOW,
+    )
+    context = replace(
+        _context(),
+        collected_articles=(source,),
+        multi_event_article_urls=(source.canonical_url,),
+    )
+    result = EventMediaAssociationPolicy().assess(candidate, context, now=NOW)
+    assert result.status == MediaAssociationStatus.REJECTED
+    assert "multi_event" in result.rule_ids[-1]
+
+
+@pytest.mark.parametrize(
+    "caption",
+    [
+        "Stock image of a flood.",
+        "Illustration of an earthquake.",
+        "Archival rescue photo.",
+        "File photograph of a flood.",
+    ],
+)
+def test_stock_archive_and_illustrative_lead_images_are_excluded(caption):
+    candidate = _candidate("illustrative", caption=caption)
+    result = EventMediaAssociationPolicy().assess(candidate, _context(), now=NOW)
+    assert result.status == MediaAssociationStatus.REJECTED
+
+
 @pytest.mark.asyncio
 async def test_expanded_gallery_retains_duplicate_sources_and_delivery_failures():
     candidates = tuple(_candidate(str(i)) for i in range(9))

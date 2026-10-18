@@ -134,6 +134,9 @@ from disaster_monitor.infrastructure.field_reports.filesystem_media_store import
 from disaster_monitor.infrastructure.field_reports.json_store import (
     JsonFieldReportStore,
 )
+from disaster_monitor.infrastructure.geography.nominatim_mentions import (
+    NominatimMentionResolver,
+)
 from disaster_monitor.infrastructure.geography.static_geographic_region_catalog import (
     StaticGeographicRegionCatalog,
 )
@@ -380,6 +383,13 @@ def build_app_dependencies(
         app_name=settings.reliefweb_app_name,
         timeout_seconds=settings.news_feed_timeout_seconds,
     )
+    mention_resolver = (
+        NominatimMentionResolver(
+            settings.discovery_place_endpoint, settings.discovery_place_cache_path
+        )
+        if settings.discovery_place_endpoint
+        else None
+    )
     discovery_scans = configured.discovery_scans or DiscoveryScanService(
         (
             reliefweb_discovery,
@@ -389,6 +399,12 @@ def build_app_dependencies(
         if settings.news_sensing_enabled
         else (),
         discovery_store,
+        place_resolver=mention_resolver,
+        country_names=frozenset(
+            name.casefold()
+            for country in country_catalog.countries()
+            for name in (country.canonical_name, *country.aliases)
+        ),
     )
     configured_news_ids = {feed.source_id for feed in breaking_news_feeds}
     configured_weather_alerts = (
@@ -648,6 +664,7 @@ def build_app_dependencies(
                 discovery_scans.aclose,
                 discovery_feed.aclose,
                 reliefweb_discovery.aclose,
+                *((mention_resolver.aclose,) if mention_resolver else ()),
                 *(
                     lambda feed=feed: close_resource(feed)
                     for feed in breaking_news_feeds

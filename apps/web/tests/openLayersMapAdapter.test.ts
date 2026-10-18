@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fromLonLat } from 'ol/proj';
+import Feature from 'ol/Feature';
+import Layer from 'ol/layer/Layer';
+import type Map from 'ol/Map';
 
 import {
   OpenLayersMapAdapter,
@@ -74,6 +77,40 @@ afterEach(() => {
 });
 
 describe('OpenLayers map interaction performance', () => {
+  it('offers every overlapping area instead of selecting the last drawn record', () => {
+    const select = vi.fn();
+    const choose = vi.fn();
+    const target = document.createElement('div');
+    document.body.append(target);
+    const adapter = new OpenLayersMapAdapter({
+      target,
+      initialView: { centerLatitude: 0, centerLongitude: 0, zoom: 5 },
+      onViewChange: vi.fn(),
+      onSelectIncident: select,
+      onSelectIncidentCluster: choose,
+    });
+    adapters.push(adapter);
+    const map = (adapter as unknown as { map: Map }).map;
+    const layer = map
+      .getLayers()
+      .getArray()
+      .find((l) => l.get('dmIncidentRepresentation') === 'source-geometry')!;
+    if (!(layer instanceof Layer)) throw new Error('Missing incident layer');
+    vi.spyOn(map, 'forEachFeatureAtPixel').mockImplementation((_pixel, callback) => {
+      for (const id of ['undated', 'principal']) {
+        const result = callback(
+          new Feature({ incidentId: id }),
+          layer,
+          undefined as never,
+        );
+        if (result) return result;
+      }
+      return undefined;
+    });
+    map.dispatchEvent({ type: 'singleclick', pixel: [20, 20] } as never);
+    expect(select).not.toHaveBeenCalled();
+    expect(choose).toHaveBeenCalledWith(['principal', 'undated']);
+  });
   it('does not publish center or resolution changes until moveend', () => {
     const onViewChange = vi.fn();
     const adapter = createAdapter(undefined, onViewChange);

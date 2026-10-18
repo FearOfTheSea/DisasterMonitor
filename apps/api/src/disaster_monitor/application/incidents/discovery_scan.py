@@ -9,7 +9,11 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
+from disaster_monitor.application.incidents.mention_geography import (
+    resolve_event_places,
+)
 from disaster_monitor.application.ports.discovery import DiscoveryFeed, DiscoveryStore
+from disaster_monitor.application.ports.mention_geography import MentionPlaceResolver
 from disaster_monitor.domain.discovery import (
     DiscoveryRun,
     ReportingInterval,
@@ -30,12 +34,16 @@ class DiscoveryScanService:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         provider_timeout_seconds: float = 600,
         maximum_reports: int = 400,
+        place_resolver: MentionPlaceResolver | None = None,
+        country_names: frozenset[str] = frozenset(),
     ) -> None:
         self._feeds = feeds
         self._store = store
         self._clock = clock
         self._timeout = provider_timeout_seconds
         self._maximum_reports = maximum_reports
+        self._place_resolver = place_resolver
+        self._country_names = country_names
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._active: dict[int, DiscoveryRun] = {}
         self._lock = asyncio.Lock()
@@ -85,17 +93,23 @@ class DiscoveryScanService:
                             }
                             for article in batch.articles:
                                 reports[article.source.canonical_url] = assess_article(
-                                    article, run.interval
+                                    article,
+                                    run.interval,
+                                    country_names=self._country_names,
                                 )
                             capped = len(reports) > self._maximum_reports
                             retained = tuple(reports.values())[: self._maximum_reports]
                             supplemental = (*run.supplemental, *batch.supplemental)
+                            grouped = await asyncio.to_thread(
+                                group_reports, retained, run.events
+                            )
+                            projected = await asyncio.to_thread(
+                                supplement_events, grouped, supplemental
+                            )
                             run = replace(
                                 run,
                                 reports=retained,
-                                events=supplement_events(
-                                    group_reports(retained), supplemental
-                                ),
+                                events=projected,
                                 supplemental=supplemental,
                                 acquisition=(*run.acquisition, *batch.acquisition),
                                 issues=tuple(
@@ -137,6 +151,11 @@ class DiscoveryScanService:
                             "available results retained.",
                         ),
                     )
+            if self._place_resolver:
+                run = replace(
+                    run,
+                    events=await resolve_event_places(run.events, self._place_resolver),
+                )
             status: Literal["completed", "incomplete", "failed"] = "completed"
             if not run.successful_operations:
                 status = "failed"
@@ -158,7 +177,12 @@ class DiscoveryScanService:
             run = replace(
                 run,
                 events=tuple(
-                    replace(event, collection_notices=run.issues)
+                    replace(
+                        event,
+                        collection_notices=tuple(
+                            dict.fromkeys((*event.collection_notices, *run.issues))
+                        ),
+                    )
                     for event in run.events
                 ),
             )

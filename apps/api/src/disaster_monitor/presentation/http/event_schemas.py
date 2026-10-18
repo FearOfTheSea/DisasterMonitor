@@ -31,6 +31,7 @@ class SourceResponse(BaseModel):
     authority: SourceAuthority = SourceAuthority.SECONDARY
     source_age_seconds: float | None = None
     snapshot_id: str | None = None
+    publication_precision: Literal["exact", "day", "unknown"] = "exact"
 
 
 class EventCoordinateResponse(BaseModel):
@@ -138,6 +139,20 @@ class DiscoveryReportResponse(BaseModel):
     location: str | None = None
     geometry: EventGeometryResponse | None = None
     access_issue: str | None = None
+    mention_id: str | None = None
+    original_url: str | None = None
+    mention_excerpt: str | None = None
+    mention_role: Literal[
+        "reported", "ongoing", "historical", "forecast", "uncertain"
+    ] = "reported"
+    event_date_wording: str | None = None
+    event_date_precision: Literal["exact", "day", "range", "unknown"] = "unknown"
+    event_date_end: datetime | None = None
+    event_year_inferred: bool = False
+    location_precision: Literal["named_place", "country_context", "unresolved"] = (
+        "unresolved"
+    )
+    mention_notices: list[str] = Field(default_factory=list)
 
 
 class ReportedImpactResponse(BaseModel):
@@ -169,6 +184,8 @@ class ActiveIncidentResponse(BaseModel):
     discovery_reports: list[DiscoveryReportResponse] = Field(default_factory=list)
     collection_notices: list[str] = Field(default_factory=list)
     independent_origins: int | None = None
+    identity_status: Literal["candidate", "associated"] | None = None
+    association_reasons: list[str] = Field(default_factory=list)
     event_time_end: datetime | None = None
     event_time_precision: EventTimePrecision = EventTimePrecision.EXACT
     geometry: EventGeometryResponse | None = None

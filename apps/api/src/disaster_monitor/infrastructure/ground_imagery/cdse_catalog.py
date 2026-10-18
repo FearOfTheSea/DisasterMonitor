@@ -168,6 +168,16 @@ class CDSEStacCatalog:
                     reason_code="catalog_response_too_large",
                     retryable=False,
                 )
+            if response.headers.get("content-type", "").split(";", 1)[0].lower() in {
+                "text/html",
+                "application/xhtml+xml",
+            }:
+                raise CatalogSearchError(
+                    "The CDSE endpoint returned an HTML access page "
+                    "instead of catalog data.",
+                    reason_code="catalog_access_rejected",
+                    retryable=False,
+                )
             return response
         raise CatalogSearchError(
             "The CDSE catalog remained unavailable after bounded retries.",

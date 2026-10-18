@@ -18,8 +18,10 @@ import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 type Tab = 'overview' | 'evidence' | 'timeline';
 const TABS: readonly Tab[] = ['overview', 'evidence', 'timeline'];
 
-function dateTime(value: string | null): string {
+function dateTime(value: string | null, precision?: string): string {
   if (!value) return 'Unknown';
+  if (precision === 'day')
+    return `${value.slice(0, 10)} (date only; exact time unknown)`;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
@@ -111,7 +113,12 @@ export function SelectedEventPane({
           <time
             dateTime={incident.event_time ?? incident.source.published_at ?? undefined}
           >
-            {dateTime(incident.event_time ?? incident.source.published_at)}
+            {dateTime(
+              incident.event_time ?? incident.source.published_at,
+              incident.event_time
+                ? incident.event_time_precision
+                : incident.source.publication_precision,
+            )}
           </time>
         </p>
         <p className="event-time-line">
@@ -178,6 +185,24 @@ export function SelectedEventPane({
             </div>
             <section>
               <h3>What is known</h3>
+              {incident.identity_status ? (
+                <p className="event-uncertainty">
+                  {incident.identity_status === 'candidate'
+                    ? 'Unresolved event candidate'
+                    : 'Associated physical event'}{' '}
+                  · Source reporting remains unverified.
+                </p>
+              ) : null}
+              {incident.association_reasons?.length ? (
+                <details>
+                  <summary>Why reports are associated</summary>
+                  <ul>
+                    {incident.association_reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
               <p>
                 {incident.source.publisher} reports {hazardArticle} {hazardLabel} at{' '}
                 {incident.location}.{' '}
@@ -216,6 +241,25 @@ export function SelectedEventPane({
                 <p className="event-uncertainty">
                   Mapped position is estimated from the source record.
                 </p>
+              ) : null}
+              {incident.discovery_reports?.length && incident.geometry ? (
+                <section aria-label="Mapped context">
+                  <p>{incident.geometry.description}</p>
+                  {sources
+                    .filter(
+                      (source) => source.source_id === incident.geometry?.source_id,
+                    )
+                    .map((source) => (
+                      <a
+                        key={source.canonical_url}
+                        href={source.canonical_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Map source: {source.publisher}
+                      </a>
+                    ))}
+                </section>
               ) : null}
               {incident.verification_status === 'provisional_news_detected' ? (
                 <p className="event-uncertainty">

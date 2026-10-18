@@ -85,6 +85,22 @@ describe('GroundImageryPanel', () => {
     ).toBe(request.reference_time);
   });
 
+  it('preserves date-only event precision in the Ground header', () => {
+    render(
+      <GroundImageryPanel
+        incidentId="day-event"
+        incidentLabel="Reported flood"
+        incidentTime="2026-10-09T00:00:00Z"
+        incidentTimePrecision="day"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText('2026-10-09 (date only; exact time unknown)'),
+    ).toBeVisible();
+    expect(screen.queryByText(/7:00 AM/)).not.toBeInTheDocument();
+  });
+
   it('waits for an explicit search and does not automatically prepare imagery', async () => {
     render(
       <GroundImageryPanel

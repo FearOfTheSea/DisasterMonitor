@@ -26,6 +26,14 @@ export function disasterLabel(disaster: DisasterType): string {
   return HAZARD_OPTIONS.find((item) => item.value === disaster)?.label ?? disaster;
 }
 
+export function incidentDateOnly(incident: IncidentMapRecord): string | undefined {
+  const value = incident.event_time ?? incident.source.published_at;
+  const precision = incident.event_time
+    ? incident.event_time_precision
+    : incident.source.publication_precision;
+  return value && precision === 'day' ? `${value.slice(0, 10)} (date only)` : undefined;
+}
+
 export function relatedInvestigation(
   incident: Pick<IncidentMapRecord, 'disaster' | 'country'>,
 ): { label: string; question: string } {

@@ -1,6 +1,5 @@
 """Publication-window discovery, attributed claims, and conservative association."""
 
-import hashlib
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -8,7 +7,8 @@ from typing import Literal
 
 from disaster_monitor.domain.disaster_types import Disaster
 from disaster_monitor.domain.discovery_claim_scope import scoped_disaster_text
-from disaster_monitor.domain.events import EventGeometry, EventGeometryKind
+from disaster_monitor.domain.event_mentions import EventMention
+from disaster_monitor.domain.events import EventGeometry
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import classify_disaster_text
 
@@ -47,6 +47,7 @@ class DiscoveryArticle:
     event_key: str | None = None
     origin: str | None = None
     access_issue: str | None = None
+    original_url: str | None = None
 
     def __post_init__(self) -> None:
         for value in (
@@ -67,9 +68,16 @@ class AssessedReport:
     article: DiscoveryArticle
     disaster: Disaster | None
     eligibility: Literal[
-        "eligible", "unknown_publication", "outside_interval", "unclassified"
+        "eligible",
+        "unknown_publication",
+        "outside_interval",
+        "unclassified",
+        "uncertain_publication",
     ]
     fatality_evidence: tuple[str, ...]
+    mentions: tuple[EventMention, ...] = ()
+    mention: EventMention | None = None
+    mention_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +91,8 @@ class DiscoveryEvent:
     independent_origins: int
     supplemental_sources: tuple[SourceReference, ...] = ()
     collection_notices: tuple[str, ...] = ()
+    identity_status: Literal["candidate", "associated"] = "candidate"
+    association_reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,23 +150,56 @@ _NEGATED = re.compile(
 
 
 def assess_article(
-    article: DiscoveryArticle, interval: ReportingInterval
+    article: DiscoveryArticle,
+    interval: ReportingInterval,
+    *,
+    country_names: frozenset[str] = frozenset(),
 ) -> AssessedReport:
+    from disaster_monitor.domain.mention_extraction import extract_mentions
+
+    mentions = extract_mentions(
+        article.text,
+        article.source,
+        location=article.location,
+        event_time=article.event_time,
+        geometry=article.geometry,
+        country_names=country_names,
+    )
     disaster = classify_disaster_text(article.source.title) or classify_disaster_text(
         article.text
     )
     publication = article.source.published_at
     eligibility: Literal[
-        "eligible", "unknown_publication", "outside_interval", "unclassified"
+        "eligible",
+        "unknown_publication",
+        "outside_interval",
+        "unclassified",
+        "uncertain_publication",
     ] = "eligible"
-    if publication is None:
+    if publication is None or article.source.publication_precision == "unknown":
         eligibility = "unknown_publication"
+    elif article.source.publication_precision == "day":
+        day = publication.astimezone(UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        end = day + timedelta(days=1)
+        if day > interval.end or end <= interval.start:
+            eligibility = "outside_interval"
+        elif not (interval.start <= day and end <= interval.end):
+            eligibility = "uncertain_publication"
+        elif not mentions:
+            eligibility = "unclassified"
     elif not interval.start <= publication <= interval.end:
         eligibility = "outside_interval"
-    elif disaster is None:
+    elif not mentions:
         eligibility = "unclassified"
     return AssessedReport(
-        article, disaster, eligibility, fatality_accounts(article, disaster)
+        article,
+        disaster,
+        eligibility,
+        fatality_accounts(article, disaster),
+        mentions,
+        mention_count=len(mentions),
     )
 
 
@@ -174,63 +217,12 @@ def fatality_accounts(
     )[:10]
 
 
-def _association_key(report: AssessedReport) -> str:
-    article = report.article
-    # Country, category, and even identical generic headlines cannot establish
-    # shared physical identity. Require stronger evidence or retain separate leads.
-    if article.event_key:
-        return f"{report.disaster}|event:{article.event_key}"
-    if article.origin:
-        return f"{report.disaster}|origin:{article.origin}"
-    if (
-        article.event_time
-        and article.geometry
-        and article.geometry.kind is EventGeometryKind.POINT
-    ):
-        point = article.geometry.coordinates[0]
-        onset = article.event_time.astimezone(UTC).isoformat()
-        return (
-            f"{report.disaster}|point:{float(point.latitude)!r},"
-            f"{float(point.longitude)!r}|onset:{onset}"
-        )
-    return f"{report.disaster}|url:{article.source.canonical_url}"
+def group_reports(
+    reports: tuple[AssessedReport, ...], previous: tuple[DiscoveryEvent, ...] = ()
+) -> tuple[DiscoveryEvent, ...]:
+    from disaster_monitor.domain.event_association import associate_mentions
 
-
-def group_reports(reports: tuple[AssessedReport, ...]) -> tuple[DiscoveryEvent, ...]:
-    groups: dict[str, dict[str, AssessedReport]] = {}
-    for report in reports:
-        if report.eligibility != "eligible" or report.disaster is None:
-            continue
-        groups.setdefault(_association_key(report), {})[
-            report.article.source.canonical_url
-        ] = report
-    # Undated reports cannot create window events. Strongly associated retained
-    # accounts can still be inspected separately under an eligible event.
-    for report in reports:
-        if report.eligibility == "unknown_publication" and report.disaster is not None:
-            retained_group = groups.get(_association_key(report))
-            if retained_group is not None:
-                retained_group[report.article.source.canonical_url] = report
-    events = []
-    for key, values in groups.items():
-        group = tuple(values.values())
-        first = group[0]
-        assert first.disaster is not None
-        located = next((r.article for r in group if r.article.geometry), first.article)
-        # Unknown origin is not counted as independent confirmation.
-        origins = {r.article.origin for r in group if r.article.origin}
-        events.append(
-            DiscoveryEvent(
-                event_id="discovery:" + hashlib.sha256(key.encode()).hexdigest()[:24],
-                disaster=first.disaster,
-                location=located.location or first.article.source.title,
-                event_time=located.event_time,
-                geometry=located.geometry,
-                reports=group,
-                independent_origins=len(origins),
-            )
-        )
-    return tuple(events)
+    return associate_mentions(reports, previous)
 
 
 def supplement_events(
@@ -239,13 +231,17 @@ def supplement_events(
     """Attach catalog geometry only with explicit identity or precise place/time."""
     from dataclasses import replace
 
+    catalogs: dict[Disaster, list[DiscoveryArticle]] = {}
+    for item in catalog:
+        hazard = classify_disaster_text(item.source.title)
+        if hazard is not None:
+            catalogs.setdefault(hazard, []).append(item)
     result = []
     for event in events:
         matches = [
             item
-            for item in catalog
-            if classify_disaster_text(item.source.title) == event.disaster
-            and any(
+            for item in catalogs.get(event.disaster, ())
+            if any(
                 (
                     report.article.event_key
                     and report.article.event_key == item.event_key

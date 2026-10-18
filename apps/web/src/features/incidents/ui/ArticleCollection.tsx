@@ -62,14 +62,22 @@ function Pages<T>({
 }
 
 function ReportTimes({ report }: { report: DiscoveryReportResponse }) {
+  const published =
+    report.source.publication_precision === 'day' && report.source.published_at
+      ? `${report.source.published_at.slice(0, 10)} (date only; exact time unknown)`
+      : time(report.source.published_at);
+  const eventDate = report.event_date_wording
+    ? `${report.event_date_wording} (${report.event_date_precision}${report.event_year_inferred ? '; year inferred from publication context' : ''})`
+    : time(report.event_time);
   return (
     <p className="event-report-times">
-      Published: {time(report.source.published_at)} · Updated:{' '}
-      {time(report.source.updated_at)} · Indexed: {time(report.indexed_at)} · Retrieved:{' '}
-      {time(report.source.retrieved_at)}
+      Published: {published} · Updated: {time(report.source.updated_at)} · Indexed:{' '}
+      {time(report.indexed_at)} · Retrieved: {time(report.source.retrieved_at)}
       <br />
-      Reported event time: {time(report.event_time)} · Reported place:{' '}
-      {report.location ?? 'Unknown'}
+      Reported event time: {eventDate} · Reported place: {report.location ?? 'Unknown'}
+      {report.mention_id
+        ? ` · ${report.location_precision} · ${report.mention_role} mention`
+        : ''}
     </p>
   );
 }
@@ -93,7 +101,20 @@ function Article({ report }: { report: DiscoveryReportResponse }) {
         </a>
       </h4>
       <ReportTimes report={report} />
+      {report.original_url ? (
+        <p>
+          <a href={report.original_url} target="_blank" rel="noreferrer">
+            Original publisher article
+          </a>
+        </p>
+      ) : null}
       <Lineage report={report} />
+      {report.mention_excerpt ? (
+        <blockquote>{report.mention_excerpt}</blockquote>
+      ) : null}
+      {report.mention_notices?.map((notice) => (
+        <p key={notice}>{notice}</p>
+      ))}
       {report.access_issue ? <p>{report.access_issue}</p> : null}
       {!report.claims?.length
         ? report.fatality_evidence?.map((excerpt) => (
@@ -115,14 +136,17 @@ export function ArticleCollection({
   reports: DiscoveryReportResponse[];
   notices?: string[];
 }) {
-  const dated = reports
+  const articles = [
+    ...new Map(reports.map((report) => [report.source.canonical_url, report])).values(),
+  ];
+  const dated = articles
     .filter((r) => r.source.published_at)
     .toSorted(
       (a, b) =>
         Date.parse(b.source.published_at!) - Date.parse(a.source.published_at!) ||
         a.source.canonical_url.localeCompare(b.source.canonical_url),
     );
-  const undated = reports.filter((r) => !r.source.published_at);
+  const undated = articles.filter((r) => !r.source.published_at);
   const claims = reports.flatMap((report) =>
     (report.claims ?? []).map((claim) => ({ report, claim })),
   );
@@ -201,7 +225,7 @@ export function ArticleCollection({
         })}
       </section>
       <section aria-label="Discovery reporting">
-        <h3>Collected articles · {reports.length}</h3>
+        <h3>Collected articles · {articles.length}</h3>
         <p>
           The five latest dated collected articles appear first. Every retained report
           is accessible below.
@@ -248,7 +272,7 @@ export function ArticleCollection({
           items={reports.filter((r) => r.location || r.geometry)}
           label="locations"
           render={(report) => (
-            <article key={report.source.canonical_url}>
+            <article key={report.mention_id ?? report.source.canonical_url}>
               <p>
                 {report.location ?? report.geometry?.description ?? 'Source geometry'} ·{' '}
                 {report.geometry?.kind ?? 'Descriptive place; coordinates unavailable'}

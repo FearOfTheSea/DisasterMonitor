@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import 'ol/ol.css';
 
 import {
@@ -201,6 +208,7 @@ export function DisasterMap({
   const [missingTilesFor, setMissingTilesFor] = useState<string>();
   const satelliteTileKey = `${satelliteSourceId}:${requestedObservationTime}`;
   const initialView = useRef(view ?? DEFAULT_MAP_VIEW);
+  const selectMapIncident = useEffectEvent(onSelectIncident);
   const lastReportedView = useRef(view ?? DEFAULT_MAP_VIEW);
   const handleViewChange = useCallback(
     (nextView: MapView) => {
@@ -209,6 +217,7 @@ export function DisasterMap({
     },
     [onViewChange],
   );
+  const reportMapView = useEffectEvent(handleViewChange);
   const satelliteLayerConfiguration = useMemo<
     SatelliteLayerConfiguration | undefined
   >(() => {
@@ -255,8 +264,8 @@ export function DisasterMap({
     adapter.current = new OpenLayersMapAdapter({
       target: mapElement.current,
       initialView: initialView.current,
-      onViewChange: handleViewChange,
-      onSelectIncident,
+      onViewChange: (next) => reportMapView(next),
+      onSelectIncident: (identifier) => selectMapIncident(identifier),
       onSelectIncidentCluster: setClusterIncidentIds,
       onAtlasError: () => {
         setAtlasError(true);
@@ -278,7 +287,7 @@ export function DisasterMap({
       adapter.current = null;
       fittedAreaKey.current = undefined;
     };
-  }, [handleViewChange, onSelectIncident]);
+  }, []);
 
   useEffect(() => {
     const target = mapElement.current;

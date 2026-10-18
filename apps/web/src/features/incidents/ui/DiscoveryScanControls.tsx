@@ -2,6 +2,7 @@
 
 import type { ReportingDays } from '@/features/incidents/api/discoveryClient';
 import type { DiscoveryScanResponse } from '@/shared/api/generated/assistant';
+import { isContextOnlyIncident } from '@/features/incidents/model/activeIncidents';
 
 export function DiscoveryScanControls({
   days,
@@ -21,6 +22,8 @@ export function DiscoveryScanControls({
   onClear?: () => void;
 }) {
   const running = submitting || run?.status === 'running';
+  const contextCount =
+    run?.snapshot.incidents?.filter(isContextOnlyIncident).length ?? 0;
   const title = submitting
     ? 'Starting scan…'
     : !run
@@ -70,16 +73,29 @@ export function DiscoveryScanControls({
                 {new Date(run.interval_end).toLocaleString()}
               </p>
               <p>
-                {run.snapshot.incidents?.length ?? 0} events from {run.reports_seen}{' '}
-                collected reports.
+                {run.associated_event_count ?? 0} associated physical events ·{' '}
+                {Math.max(
+                  0,
+                  (run.candidate_count ?? run.snapshot.incidents?.length ?? 0) -
+                    contextCount,
+                )}{' '}
+                unresolved event candidates · {contextCount} context/fragment records ·{' '}
+                {run.reports_seen} collected reports.
               </p>
+              {run.uncertain_publication_count ? (
+                <p>
+                  {run.uncertain_publication_count} reports overlap the window boundary
+                  with date-only publication. Their candidates remain inspectable;
+                  window eligibility is uncertain.
+                </p>
+              ) : null}
               <p>{run.coverage_notice}</p>
               {run.unlocated_count > 0 ? (
                 <p>
                   {run.unlocated_count}{' '}
                   {run.unlocated_count === 1
-                    ? 'event has an unresolved location and remains'
-                    : 'events have unresolved locations and remain'}{' '}
+                    ? 'record has an unresolved location and remains'
+                    : 'records have unresolved locations and remain'}{' '}
                   accessible in the list.
                 </p>
               ) : null}

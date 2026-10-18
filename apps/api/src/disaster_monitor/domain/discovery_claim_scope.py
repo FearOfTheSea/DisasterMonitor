@@ -11,7 +11,8 @@ from disaster_monitor.domain.hazards.news_classification import disasters_in_tex
 
 _OTHER_CAUSE = re.compile(
     r"\b(?:conflict|violence|cholera|ebola|measles|covid-?19|war|warfare|"
-    r"airstrikes?|bombing|gunfire|shootings?|armed attacks?)\b",
+    r"airstrikes?|bombing|gunfire|shootings?|armed attacks?|"
+    r"chronic conditions?|diabetes|hypertension|COPD)\b",
     re.I,
 )
 

@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from disaster_monitor.application.incidents.models import ActiveIncident
-from disaster_monitor.domain.disaster_types import ProviderTier
+from disaster_monitor.domain.disaster_types import EventTimePrecision, ProviderTier
 from disaster_monitor.domain.discovery import DiscoveryEvent
 from disaster_monitor.domain.news import IncidentCandidateStatus
 
@@ -22,6 +22,12 @@ def discovery_incident(event: DiscoveryEvent, retrieved_at: datetime) -> ActiveI
         # explicit; unknown onset must never be used for evidence or imagery targeting.
         event_time=event.event_time or sources[0].published_at or retrieved_at,
         geometry=event.geometry,
+        event_time_precision=EventTimePrecision.DAY
+        if any(
+            r.mention and r.mention.time and r.mention.time.precision != "exact"
+            for r in event.reports
+        )
+        else EventTimePrecision.EXACT,
         measurements=(),
         provider_ids=(),
         provider_tier=ProviderTier.SECONDARY,

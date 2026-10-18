@@ -34,7 +34,16 @@ _CATEGORIES = (
     "Tropical Cyclone",
     "Volcano",
 )
-_FIELDS = ("title", "url", "body", "date", "source", "disaster", "primary_country")
+_FIELDS = (
+    "title",
+    "url",
+    "body",
+    "date",
+    "source",
+    "disaster",
+    "primary_country",
+    "origin",
+)
 
 
 class ReliefWebDiscoveryFeed:
@@ -96,11 +105,12 @@ class ReliefWebDiscoveryFeed:
                 "filter[conditions][0][field]": "disaster_type.name",
                 "filter[conditions][0][value]": category,
                 "filter[conditions][1][field]": "date.original",
-                "filter[conditions][1][value][from]": interval.start.isoformat(
-                    timespec="seconds"
-                ),
+                "filter[conditions][1][value][from]": interval.start.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ).isoformat(timespec="seconds"),
                 "filter[conditions][1][value][to]": (
-                    interval.end + timedelta(seconds=1)
+                    interval.end.replace(hour=0, minute=0, second=0, microsecond=0)
+                    + timedelta(days=1)
                 ).isoformat(timespec="seconds"),
                 "sort[]": "date.original:desc",
                 "limit": str(self._limit),
@@ -205,10 +215,18 @@ def _article(item: Any, *, retrieved_at: datetime) -> DiscoveryArticle | None:
         if isinstance(source, dict) and isinstance(source.get("name"), str)
     ]
     body = fields.get("body")
-    text = sanitize_provider_text(body, limit=20_000) if isinstance(body, str) else ""
+    text = (
+        "\n".join(
+            sanitize_provider_text(line, limit=20_000)
+            for line in body[:40_000].splitlines()
+        )[:20_000]
+        if isinstance(body, str)
+        else ""
+    )
     country = fields.get("primary_country")
     country = country if isinstance(country, dict) else {}
     publication = _date(dates.get("original"))
+    date_only = publication is not None and publication.time().isoformat() == "00:00:00"
     notices = [
         "ReliefWeb-supplied report text; source link retained."
         if text
@@ -237,6 +255,11 @@ def _article(item: Any, *, retrieved_at: datetime) -> DiscoveryArticle | None:
             title=title,
             canonical_url=url,
             published_at=publication,
+            publication_precision="day"
+            if date_only
+            else "exact"
+            if publication
+            else "unknown",
             updated_at=_date(dates.get("changed")),
             retrieved_at=retrieved_at,
         ),
@@ -244,6 +267,26 @@ def _article(item: Any, *, retrieved_at: datetime) -> DiscoveryArticle | None:
         indexed_at=_date(dates.get("created")),
         location=country.get("name") if isinstance(country.get("name"), str) else None,
         access_issue=" ".join(notices),
+        original_url=_original_url(fields.get("origin")),
         # Each report URL remains separate unless explicit physical identity is
         # supplied by a source. A broad disaster taxonomy tag is insufficient.
     )
+
+
+def _original_url(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme == "https"
+            and parsed.hostname
+            and not parsed.username
+            and not parsed.password
+            and parsed.port in (None, 443)
+            and parsed.path not in ("", "/")
+        ):
+            return value
+    except ValueError:
+        pass
+    return None

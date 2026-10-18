@@ -3,6 +3,7 @@ import type {
   IncidentMapRecord,
   IncidentGeometry,
 } from '@/features/incidents/public';
+import { isContextOnlyIncident } from '@/features/incidents/public';
 
 export type RenderableIncidentGeometry = IncidentGeometry & {
   kind: 'point' | 'area' | 'track';
@@ -27,7 +28,7 @@ export function activeIncidentMapFeatures(
   incidents: readonly IncidentMapRecord[],
 ): ActiveIncidentMapFeature[] {
   return incidents.flatMap((incident) =>
-    isRenderableGeometry(incident.geometry)
+    !isContextOnlyIncident(incident) && isRenderableGeometry(incident.geometry)
       ? [
           {
             incidentId: incident.event_id,

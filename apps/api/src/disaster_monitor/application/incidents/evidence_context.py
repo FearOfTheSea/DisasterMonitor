@@ -1,5 +1,7 @@
 """Adapt admitted incident projections to the standalone evidence reader."""
 
+from dataclasses import replace
+
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
@@ -61,11 +63,36 @@ class IncidentEvidenceContextReader:
             first.latitude if first else None,
             first.longitude if first else None,
             collected_articles=tuple(
-                r.article.source for r in incident.discovery_event.reports
+                {
+                    s.canonical_url: s
+                    for r in incident.discovery_event.reports
+                    for s in (
+                        r.article.source,
+                        *(
+                            (
+                                replace(
+                                    r.article.source,
+                                    canonical_url=r.article.original_url,
+                                ),
+                            )
+                            if r.article.original_url
+                            else ()
+                        ),
+                    )
+                }.values()
             )
             if incident.discovery_event
             else (),
             event_time_known=time_known,
+            multi_event_article_urls=tuple(
+                url
+                for r in incident.discovery_event.reports
+                if (r.mention_count or len(r.mentions)) > 1
+                for url in (r.article.source.canonical_url, r.article.original_url)
+                if url
+            )
+            if incident.discovery_event
+            else (),
         )
         event = (
             DisasterEvent(

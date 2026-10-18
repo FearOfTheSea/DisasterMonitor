@@ -103,6 +103,10 @@ class PublicDocumentReader:
                     "Publisher redirect requires separate access validation."
                 )
             response.raise_for_status()
+            if response.status_code != 200:
+                raise ValueError(
+                    "Publisher returned a challenge or incomplete document."
+                )
             media_type = (
                 response.headers.get("content-type", "").split(";", 1)[0].lower()
             )

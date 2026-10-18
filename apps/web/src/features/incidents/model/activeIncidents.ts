@@ -41,6 +41,7 @@ export type IncidentSource = {
   title: string;
   canonical_url: string;
   published_at: string | null;
+  publication_precision?: 'exact' | 'day' | 'unknown';
   updated_at: string | null;
   retrieved_at: string;
   authority?: IncidentSourceAuthority;
@@ -96,6 +97,8 @@ export type ActiveIncident = {
   discovery_reports?: import('@/shared/api/generated/assistant').DiscoveryReportResponse[];
   collection_notices?: string[];
   independent_origins?: number | null;
+  identity_status?: 'candidate' | 'associated' | null;
+  association_reasons?: string[];
   event_time_end?: string | null;
   event_time_precision?: EventTimePrecision;
   geometry: IncidentGeometry | null;
@@ -116,6 +119,18 @@ export type ActiveIncident = {
 export type IncidentMapRecord = Omit<ActiveIncident, 'country'> & {
   country?: IncidentCountry | null;
 };
+
+export function isContextOnlyIncident(
+  incident: Pick<IncidentMapRecord, 'discovery_reports'>,
+): boolean {
+  const reports = incident.discovery_reports ?? [];
+  return (
+    reports.length > 0 &&
+    reports.every(
+      (report) => !['reported', 'ongoing'].includes(report.mention_role ?? 'reported'),
+    )
+  );
+}
 
 export function displayActiveIncidentCountry(incident: IncidentMapRecord): string {
   return incident.country?.name ?? incident.location;

@@ -32,6 +32,7 @@ type GroundImageryPanelProps = {
   incidentId: string;
   incidentLabel: string;
   incidentTime: string | null;
+  incidentTimePrecision?: 'exact' | 'day' | 'week';
   onClose: () => void;
   findOnOpen?: boolean;
   children?: ReactNode;
@@ -47,6 +48,7 @@ function GroundImageryView({
   incidentId,
   incidentLabel,
   incidentTime,
+  incidentTimePrecision,
   onClose,
   findOnOpen = false,
   children,
@@ -83,9 +85,15 @@ function GroundImageryView({
           <h2 id="ground-imagery-heading">Ground view</h2>
           <p>{incidentLabel}</p>
           <p>
-            Event onset:{' '}
+            {incidentTimePrecision === 'day'
+              ? 'Reported event date: '
+              : 'Event onset: '}
             {incidentTime ? (
-              <time dateTime={incidentTime}>{formatImageryTime(incidentTime)}</time>
+              <time dateTime={incidentTime}>
+                {incidentTimePrecision === 'day'
+                  ? `${incidentTime.slice(0, 10)} (date only; exact time unknown)`
+                  : formatImageryTime(incidentTime)}
+              </time>
             ) : (
               'Event time unresolved'
             )}

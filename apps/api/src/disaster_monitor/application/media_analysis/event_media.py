@@ -88,7 +88,8 @@ class EventMediaAssociationPolicy:
         now: datetime,
     ) -> MediaCandidateAssessment:
         if re.search(
-            r"\b(?:file photo|archive|advertisement|unrelated|recommended|logo)\b",
+            r"\b(?:file photo(?:graph)?|archiv\w*|stock (?:photo|image)|illustrat\w*|"
+            r"advertisement|unrelated|recommended|logo)\b",
             candidate.caption,
             re.I,
         ):
@@ -98,6 +99,21 @@ class EventMediaAssociationPolicy:
             for source in context.collected_articles
         )
         if linked:
+            if candidate.source_page_url in context.multi_event_article_urls:
+                caption = _normalized(candidate.caption)
+                hazard_match = any(
+                    _contains_term(caption, _normalized(term))
+                    for term in _DISASTER_TERMS[context.disaster]
+                )
+                places = _location_terms(context.location)
+                if (
+                    not hazard_match
+                    or not places
+                    or not any(_contains_term(caption, term) for term in places)
+                ):
+                    return self._rejected(
+                        candidate, "media.association.multi_event_caption_unresolved"
+                    )
             if context.event_time_known:
                 years = {
                     int(y) for y in re.findall(r"\b(?:19|20)\d{2}\b", candidate.caption)

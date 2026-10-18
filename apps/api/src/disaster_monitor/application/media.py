@@ -55,6 +55,7 @@ class MediaEventContext:
     longitude: float | None
     collected_articles: tuple[SourceReference, ...] = ()
     event_time_known: bool = True
+    multi_event_article_urls: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

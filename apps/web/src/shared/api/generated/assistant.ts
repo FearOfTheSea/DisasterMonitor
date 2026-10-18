@@ -74,6 +74,12 @@ const apiSchemas = {
       activity_status: {
         $ref: '#/components/schemas/IncidentActivityStatus',
       },
+      association_reasons: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
       collection_notices: {
         items: {
           type: 'string',
@@ -144,6 +150,17 @@ const apiSchemas = {
         anyOf: [
           {
             $ref: '#/components/schemas/EventGeometryResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      identity_status: {
+        anyOf: [
+          {
+            enum: ['candidate', 'associated'],
+            type: 'string',
           },
           {
             type: 'null',
@@ -2324,6 +2341,31 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      event_date_end: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      event_date_precision: {
+        enum: ['exact', 'day', 'range', 'unknown'],
+        type: 'string',
+      },
+      event_date_wording: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       event_time: {
         anyOf: [
           {
@@ -2334,6 +2376,9 @@ const apiSchemas = {
             type: 'null',
           },
         ],
+      },
+      event_year_inferred: {
+        type: 'boolean',
       },
       fatality_evidence: {
         items: {
@@ -2372,7 +2417,51 @@ const apiSchemas = {
           },
         ],
       },
+      location_precision: {
+        enum: ['named_place', 'country_context', 'unresolved'],
+        type: 'string',
+      },
+      mention_excerpt: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      mention_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      mention_notices: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      mention_role: {
+        enum: ['reported', 'ongoing', 'historical', 'forecast', 'uncertain'],
+        type: 'string',
+      },
       origin: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      original_url: {
         anyOf: [
           {
             type: 'string',
@@ -2402,6 +2491,12 @@ const apiSchemas = {
           type: 'integer',
         },
         type: 'object',
+      },
+      associated_event_count: {
+        type: 'integer',
+      },
+      candidate_count: {
+        type: 'integer',
       },
       coverage_notice: {
         type: 'string',
@@ -2455,6 +2550,9 @@ const apiSchemas = {
       },
       truncated: {
         type: 'boolean',
+      },
+      uncertain_publication_count: {
+        type: 'integer',
       },
       unknown_publication_count: {
         type: 'integer',
@@ -6278,6 +6376,10 @@ const apiSchemas = {
       canonical_url: {
         type: 'string',
       },
+      publication_precision: {
+        enum: ['exact', 'day', 'unknown'],
+        type: 'string',
+      },
       published_at: {
         anyOf: [
           {
@@ -6341,6 +6443,10 @@ const apiSchemas = {
         $ref: '#/components/schemas/SourceAuthority',
       },
       canonical_url: {
+        type: 'string',
+      },
+      publication_precision: {
+        enum: ['exact', 'day', 'unknown'],
         type: 'string',
       },
       published_at: {
@@ -7040,6 +7146,7 @@ export type ActiveIncidentCountryResponse = {
 
 export type ActiveIncidentResponse = {
   activity_status?: IncidentActivityStatus;
+  association_reasons?: Array<string>;
   collection_notices?: Array<string>;
   country?: ActiveIncidentCountryResponse | null;
   detection?: IncidentDetectionTimelineResponse;
@@ -7052,6 +7159,7 @@ export type ActiveIncidentResponse = {
   event_time_precision?: EventTimePrecision;
   evidence_sources?: Array<SourceResponse>;
   geometry?: EventGeometryResponse | null;
+  identity_status?: 'candidate' | 'associated' | null;
   independent_origins?: number | null;
   last_meaningful_change_at?: string | null;
   lineage_ids?: Array<string>;
@@ -7562,12 +7670,22 @@ export type DisasterMediaItemResponse = {
 export type DiscoveryReportResponse = {
   access_issue?: string | null;
   claims?: Array<ReportedImpactResponse>;
+  event_date_end?: string | null;
+  event_date_precision?: 'exact' | 'day' | 'range' | 'unknown';
+  event_date_wording?: string | null;
   event_time?: string | null;
+  event_year_inferred?: boolean;
   fatality_evidence?: Array<string>;
   geometry?: EventGeometryResponse | null;
   indexed_at?: string | null;
   location?: string | null;
+  location_precision?: 'named_place' | 'country_context' | 'unresolved';
+  mention_excerpt?: string | null;
+  mention_id?: string | null;
+  mention_notices?: Array<string>;
+  mention_role?: 'reported' | 'ongoing' | 'historical' | 'forecast' | 'uncertain';
   origin?: string | null;
+  original_url?: string | null;
   source: SourceResponse;
 };
 
@@ -7580,6 +7698,8 @@ export type DiscoveryScanResponse = {
   assessment_counts?: {
     [key: string]: number;
   };
+  associated_event_count?: number;
+  candidate_count?: number;
   coverage_notice?: string;
   failed_operations: number;
   finished_at: string | null;
@@ -7593,6 +7713,7 @@ export type DiscoveryScanResponse = {
   status: 'running' | 'completed' | 'incomplete' | 'failed';
   successful_operations: number;
   truncated: boolean;
+  uncertain_publication_count?: number;
   unknown_publication_count: number;
   unlocated_count: number;
 };
@@ -8837,6 +8958,7 @@ export type SourceOperationalStateResponse = {
 export type SourceReference = {
   authority?: SourceAuthority;
   canonical_url: string;
+  publication_precision?: 'exact' | 'day' | 'unknown';
   published_at: string | null;
   publisher: string;
   retrieved_at: string;
@@ -8849,6 +8971,7 @@ export type SourceReference = {
 export type SourceResponse = {
   authority?: SourceAuthority;
   canonical_url: string;
+  publication_precision?: 'exact' | 'day' | 'unknown';
   published_at?: string | null;
   publisher: string;
   retrieved_at: string;

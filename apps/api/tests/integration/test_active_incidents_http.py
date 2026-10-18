@@ -211,6 +211,8 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
         "discovery_reports": [],
         "collection_notices": [],
         "independent_origins": None,
+        "identity_status": None,
+        "association_reasons": [],
         "event_time_end": None,
         "event_time_precision": "exact",
         "geometry": {
@@ -242,6 +244,7 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
                 "authority": "scientific_authority",
                 "source_age_seconds": 3600.0,
                 "snapshot_id": "snapshot:fire-1",
+                "publication_precision": "exact",
             },
             {
                 "source_id": "fixture-secondary",
@@ -254,6 +257,7 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
                 "authority": "secondary",
                 "source_age_seconds": 3600.0,
                 "snapshot_id": "snapshot:fire-1-secondary",
+                "publication_precision": "exact",
             },
         ],
         "source": {
@@ -267,6 +271,7 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
             "authority": "scientific_authority",
             "source_age_seconds": 3600.0,
             "snapshot_id": "snapshot:fire-1",
+            "publication_precision": "exact",
         },
         "observation_kind": "physical_event",
         "activity_status": "unknown",

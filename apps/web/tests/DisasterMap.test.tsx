@@ -78,6 +78,19 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
 }));
 
 describe('DisasterMap assistant focus', () => {
+  it('retains rendered layers when selection callbacks change and calls the latest callback', () => {
+    const first = vi.fn();
+    const next = vi.fn();
+    const view = vi.fn();
+    const props = { onSelectIncident: first, onViewChange: view };
+    const rendered = render(<DisasterMap {...props} />);
+    const selection = adapterMocks.onSelectIncident;
+    rendered.rerender(<DisasterMap {...props} onSelectIncident={next} />);
+    expect(adapterMocks.destroy).not.toHaveBeenCalled();
+    selection?.('discovery:current');
+    expect(first).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith('discovery:current');
+  });
   afterEach(cleanup);
 
   beforeEach(() => {

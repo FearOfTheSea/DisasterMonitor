@@ -105,7 +105,7 @@ it('keeps old-onset scanned events on the map and unlocated events inspectable i
     );
   }
   render(<Workflow />);
-  expect(screen.getByRole('heading', { name: 'Discovered events' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Events and candidates' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Inspect Riverton' }));
   expect(screen.getByRole('heading', { name: 'Drought', level: 2 })).toBeVisible();
   expect(screen.getByText(/Event time unresolved. Article published:/)).toBeVisible();
@@ -131,3 +131,65 @@ it.each(['running', 'failed', 'incomplete'] as const)(
     expect(screen.queryByText(/A successful empty result/)).not.toBeInTheDocument();
   },
 );
+
+it('keeps forecast evidence inspectable outside the occurred-event list', () => {
+  const select = vi.fn();
+  const forecast: ActiveIncident = {
+    ...incident,
+    event_id: 'discovery:forecast',
+    location: 'Lakeview',
+    discovery_reports: [
+      { ...incident.discovery_reports![0], mention_role: 'forecast' },
+    ],
+  };
+  render(
+    <ActiveIncidentsPanel
+      compact
+      snapshot={{ ...snapshot, incidents: [incident, forecast] }}
+      status="success"
+      onSelectIncident={select}
+      onRefresh={vi.fn()}
+    />,
+  );
+  expect(
+    screen.queryByRole('button', { name: 'Inspect Lakeview' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText(/Context and unresolved evidence/));
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect retained Lakeview' }));
+  expect(select).toHaveBeenCalledWith('discovery:forecast');
+  expect(activeIncidentMapFeatures([forecast])).toEqual([]);
+});
+
+it('shows partial administrative scope and the actual map source', () => {
+  render(
+    <SelectedEventPane
+      incident={{
+        ...located,
+        geometry: {
+          ...located.geometry!,
+          estimated: true,
+          source_id: 'osm',
+          description: 'Only River Province is mapped; partial administrative context.',
+        },
+        evidence_sources: [
+          {
+            ...source,
+            source_id: 'osm',
+            publisher: 'OpenStreetMap contributors',
+            canonical_url: 'https://www.openstreetmap.org/relation/123',
+          },
+        ],
+      }}
+      snapshotRetrievedAt={snapshot.retrieved_at}
+      onClose={vi.fn()}
+      onAsk={vi.fn()}
+      onGroundView={vi.fn()}
+    />,
+  );
+  expect(
+    screen.getByText('Only River Province is mapped; partial administrative context.'),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('link', { name: 'Map source: OpenStreetMap contributors' }),
+  ).toHaveAttribute('href', 'https://www.openstreetmap.org/relation/123');
+});

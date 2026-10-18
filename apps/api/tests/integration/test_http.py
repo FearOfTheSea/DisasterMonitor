@@ -205,6 +205,7 @@ async def test_current_cyclone_serializes_supplemental_forecast_geometry() -> No
                 "authority": "national_authority",
                 "source_age_seconds": 0.0,
                 "snapshot_id": None,
+                "publication_precision": "exact",
             },
             "issued_at": "2026-08-05T12:00:00Z",
             "valid_from": "2026-08-06T00:00:00Z",

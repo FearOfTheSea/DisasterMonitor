@@ -1,7 +1,8 @@
 """Article text, explicit publication metadata, and reported event metadata."""
 
 import json
-from datetime import datetime
+import re
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urlsplit
@@ -22,47 +23,89 @@ class ArticleParser(HTMLParser):
         self.objects: list[dict[str, Any]] = []
         self.parts: list[str] = []
         self.article_parts: list[str] = []
+        self.main_parts: list[str] = []
+        self._main_depth = 0
         self._article_depth = 0
         self._json: list[str] | None = None
         self._hidden = 0
         self._paragraph = 0
+        self._excluded: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
+        void = tag in {"img", "meta", "br", "hr", "input", "link", "source", "wbr"}
+        excluded = (
+            values.get("aria-hidden") == "true"
+            or values.get("role") == "dialog"
+            or bool(
+                re.search(
+                    r"(?:^|\s)(?:entry-footer|post-tags|tags-links|republish\S*|related-posts|recommended-posts|sharing\S*)(?:\s|$)",
+                    values.get("class") or "",
+                )
+            )
+        )
+        if (self._excluded or excluded) and not void:
+            self._excluded.append(tag)
         if tag == "article":
             self._article_depth += 1
+        if tag == "main":
+            self._main_depth += 1
         if tag == "meta":
             key = values.get("property") or values.get("name")
             if key and values.get("content"):
                 self.meta[key.casefold()] = values["content"] or ""
-        if tag in {"script", "style", "nav", "footer", "header"}:
+        if tag in {"script", "style", "nav", "footer", "header", "aside", "textarea"}:
             self._hidden += 1
         if tag == "script" and values.get("type") == "application/ld+json":
             self._json = []
-        if tag == "p":
+        if tag in {"p", "h1", "h2", "h3", "h4", "li"}:
             self._paragraph += 1
+            if tag.startswith("h") and not self._hidden and not self._excluded:
+                self.parts.append("\n## ")
+                if self._article_depth:
+                    self.article_parts.append("\n## ")
+                if self._main_depth:
+                    self.main_parts.append("\n## ")
 
     def handle_endtag(self, tag: str) -> None:
+        if tag in self._excluded:
+            index = len(self._excluded) - 1 - self._excluded[::-1].index(tag)
+            self._excluded = self._excluded[:index]
         if tag == "article":
             self._article_depth = max(0, self._article_depth - 1)
+        if tag == "main":
+            self._main_depth = max(0, self._main_depth - 1)
         if tag == "script" and self._json is not None:
             try:
                 self.objects.extend(_objects(json.loads("".join(self._json))))
             except (ValueError, RecursionError):
                 pass
             self._json = None
-        if tag in {"script", "style", "nav", "footer", "header"}:
+        if tag in {"script", "style", "nav", "footer", "header", "aside", "textarea"}:
             self._hidden = max(0, self._hidden - 1)
-        if tag == "p":
+        if tag in {"p", "h1", "h2", "h3", "h4", "li"}:
             self._paragraph = max(0, self._paragraph - 1)
+            self.parts.append("\n")
+            if self._article_depth:
+                self.article_parts.append("\n")
+            if self._main_depth:
+                self.main_parts.append("\n")
 
     def handle_data(self, data: str) -> None:
         if self._json is not None:
             self._json.append(data)
-        if self._paragraph and not self._hidden and len(self.parts) < 2000:
+        if (
+            self._paragraph
+            and not self._hidden
+            and not self._excluded
+            and len(self.parts) < 2000
+        ):
+            data = " ".join(data.split())
             self.parts.append(data)
             if self._article_depth:
                 self.article_parts.append(data)
+            if self._main_depth:
+                self.main_parts.append(data)
 
 
 def _objects(value: Any, depth: int = 0) -> list[dict[str, Any]]:
@@ -146,20 +189,39 @@ def parse_discovery_article(
         or urlsplit(origin).path in ("", "/")
     ):
         origin = None
+    raw_publication = parser.meta.get("article:published_time") or news.get(
+        "datePublished"
+    )
+    day_publication = (
+        isinstance(raw_publication, str) and len(raw_publication.strip()) == 10
+    )
+    publication = _date(raw_publication)
+    if day_publication and isinstance(raw_publication, str):
+        try:
+            publication = datetime.fromisoformat(raw_publication).replace(tzinfo=UTC)
+        except ValueError:
+            pass
     source = SourceReference(
         source_id="open-news",
         publisher=publisher,
         title=title,
         canonical_url=url,
-        published_at=_date(parser.meta.get("article:published_time"))
-        or _date(news.get("datePublished")),
+        published_at=publication,
+        publication_precision="day"
+        if publication and day_publication
+        else "exact"
+        if publication
+        else "unknown",
         updated_at=_date(parser.meta.get("article:modified_time"))
         or _date(news.get("dateModified")),
         retrieved_at=retrieved_at,
     )
     return DiscoveryArticle(
         source=source,
-        text=" ".join(" ".join(parser.article_parts).split())[:20_000]
+        text="\n".join(
+            " ".join(line.split())
+            for line in " ".join(parser.article_parts or parser.main_parts).splitlines()
+        )[:20_000]
         or str(news.get("articleBody") or parser.meta.get("og:description") or "")[
             :20_000
         ],

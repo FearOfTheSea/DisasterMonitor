@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 
 class FactStatus(StrEnum):
@@ -84,6 +85,7 @@ class SourceReference:
     retrieved_at: datetime
     authority: SourceAuthority = SourceAuthority.SECONDARY
     snapshot_id: str | None = None
+    publication_precision: Literal["exact", "day", "unknown"] = "exact"
 
     def __post_init__(self) -> None:
         if not self.source_id.strip():

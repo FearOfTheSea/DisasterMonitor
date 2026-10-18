@@ -81,3 +81,48 @@ async def test_collected_photos_preserve_dates_and_access_restrictions():
     }
     assert len(requested) == 2
     assert result.warnings
+    assert any("HTTP 403" in s.detail for s in result.unavailable_sources)
+
+
+async def test_challenge_response_is_not_a_successful_photo_collection():
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                202,
+                headers={"content-type": "text/html"},
+                text='<meta property="og:image" content="https://media-cldnry.s-nbcnews.com/challenge.jpg">',
+            )
+        )
+    ) as client:
+        provider = NewsEventMediaProvider(
+            timeout_seconds=1,
+            maximum_page_bytes=20_000,
+            maximum_image_bytes=20_000,
+            client=client,
+        )
+        source = SourceReference(
+            "news",
+            "Daily",
+            "Flood in Riverton",
+            "https://www.nbcnews.com/report",
+            NOW,
+            None,
+            NOW,
+        )
+        context = MediaEventContext(
+            "event",
+            "event",
+            Disaster.FLOOD,
+            "Riverton",
+            NOW,
+            (),
+            None,
+            (),
+            None,
+            None,
+            (source,),
+            True,
+        )
+        result = await provider.discover(context, now=NOW)
+    assert not result.candidates
+    assert "HTTP 202" in result.unavailable_sources[0].detail

@@ -40,6 +40,9 @@ class DiscoveryScanResponse(BaseModel):
     reports_seen: int
     unknown_publication_count: int
     unlocated_count: int
+    candidate_count: int = 0
+    associated_event_count: int = 0
+    uncertain_publication_count: int = 0
     successful_operations: int
     failed_operations: int
     acquisition: list[AcquisitionAudit] = Field(default_factory=list)
@@ -75,6 +78,13 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
         issues=list(run.issues),
         truncated=run.truncated,
         reports_seen=len(run.reports),
+        candidate_count=sum(e.identity_status == "candidate" for e in run.events),
+        associated_event_count=sum(
+            e.identity_status == "associated" for e in run.events
+        ),
+        uncertain_publication_count=sum(
+            r.eligibility == "uncertain_publication" for r in run.reports
+        ),
         unknown_publication_count=sum(
             r.eligibility == "unknown_publication" for r in run.reports
         ),
@@ -90,6 +100,7 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
                     "unknown_publication",
                     "outside_interval",
                     "unclassified",
+                    "uncertain_publication",
                 )
             },
             "empty_extracted_text": sum(
@@ -98,7 +109,13 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
             "reports_with_fatality_evidence": sum(
                 bool(report.fatality_evidence) for report in run.reports
             ),
-            "associated_events": len(run.events),
+            "associated_events": sum(
+                e.identity_status == "associated" for e in run.events
+            ),
+            "event_candidates": sum(
+                e.identity_status == "candidate" for e in run.events
+            ),
+            "extracted_mentions": sum(len(r.mentions) for r in run.reports),
             "events_with_geometry": sum(
                 event.geometry is not None for event in run.events
             ),

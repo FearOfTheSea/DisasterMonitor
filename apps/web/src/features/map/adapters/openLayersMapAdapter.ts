@@ -179,34 +179,35 @@ export class OpenLayersMapAdapter {
       view,
     });
     this.map.on('singleclick', (event) => {
-      const hit = this.map.forEachFeatureAtPixel(
+      const hitFeatures: Feature<Geometry>[] = [];
+      this.map.forEachFeatureAtPixel(
         event.pixel,
-        (feature, layer) => ({ feature, layer }),
+        (feature, layer) => {
+          if (!(feature instanceof Feature)) return;
+          hitFeatures.push(
+            ...(layer === this.clusteredIncidentLayer
+              ? clusterMembers(feature)
+              : [feature]),
+          );
+        },
         {
+          hitTolerance: 5,
           layerFilter: (layer) =>
             layer === this.clusteredIncidentLayer ||
             layer === this.sourceGeometryIncidentLayer,
         },
       );
-      if (!hit) return;
-      if (!(hit.feature instanceof Feature)) return;
-      if (hit.layer === this.clusteredIncidentLayer) {
-        const members = clusterMembers(hit.feature);
-        const incidentIds = members
-          .map((feature) => feature.get('incidentId'))
-          .filter((value): value is string => typeof value === 'string')
-          .toSorted();
-        if (incidentIds.length === 1) {
-          options.onSelectIncident(incidentIds[0]);
-        } else if (incidentIds.length > 1) {
-          this.expandIncidentCluster(members);
-          options.onSelectIncidentCluster?.(incidentIds);
-        }
-        return;
-      }
-      const incidentId = hit.feature.get('incidentId');
-      if (typeof incidentId === 'string') {
-        options.onSelectIncident(incidentId);
+      const incidentIds = [
+        ...new Set(
+          hitFeatures
+            .map((feature) => feature.get('incidentId'))
+            .filter((value): value is string => typeof value === 'string'),
+        ),
+      ].toSorted();
+      if (incidentIds.length === 1) options.onSelectIncident(incidentIds[0]);
+      else if (incidentIds.length > 1) {
+        this.expandIncidentCluster(hitFeatures);
+        options.onSelectIncidentCluster?.(incidentIds);
       }
     });
     this.map.on('change:size', () => {

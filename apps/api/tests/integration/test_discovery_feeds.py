@@ -159,6 +159,28 @@ async def test_public_article_reader_blocks_private_destinations_and_robots_deni
         assert len(calls) == 1
 
 
+async def test_challenge_response_is_not_successful_article_access():
+    def respond(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(
+                200,
+                text="User-agent: *\nDisallow:",
+                headers={"content-type": "text/plain"},
+            )
+        return httpx.Response(
+            202,
+            text='<div id="challenge-container"></div>',
+            headers={"content-type": "text/html"},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        reader = PublicDocumentReader(
+            client=client, resolver=lambda host: ("93.184.216.34",)
+        )
+        with pytest.raises(ValueError, match="challenge|incomplete"):
+            await reader.read("https://publisher.example/report")
+
+
 async def test_gdelt_partitions_caps_and_preserves_partial_batches():
     queries = []
 
