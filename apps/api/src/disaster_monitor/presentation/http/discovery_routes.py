@@ -12,7 +12,7 @@ from disaster_monitor.application.incidents.discovery_projection import (
 )
 from disaster_monitor.application.incidents.discovery_scan import DiscoveryScanService
 from disaster_monitor.domain.disaster_types import Disaster
-from disaster_monitor.domain.discovery import DiscoveryRun
+from disaster_monitor.domain.discovery import AcquisitionAudit, DiscoveryRun
 from disaster_monitor.presentation.http.active_incident_serialization import (
     active_incident_response,
 )
@@ -42,6 +42,8 @@ class DiscoveryScanResponse(BaseModel):
     unlocated_count: int
     successful_operations: int
     failed_operations: int
+    acquisition: list[AcquisitionAudit] = Field(default_factory=list)
+    assessment_counts: dict[str, int] = Field(default_factory=dict)
     snapshot: ActiveIncidentsSnapshotResponse
     coverage_notice: str = Field(
         default="Completion describes this scan process. Worldwide coverage is not "
@@ -79,6 +81,31 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
         unlocated_count=sum(item.geometry is None for item in incidents),
         successful_operations=run.successful_operations,
         failed_operations=run.failed_operations,
+        acquisition=list(run.acquisition),
+        assessment_counts={
+            **{
+                status: sum(report.eligibility == status for report in run.reports)
+                for status in (
+                    "eligible",
+                    "unknown_publication",
+                    "outside_interval",
+                    "unclassified",
+                )
+            },
+            "empty_extracted_text": sum(
+                not report.article.text for report in run.reports
+            ),
+            "reports_with_fatality_evidence": sum(
+                bool(report.fatality_evidence) for report in run.reports
+            ),
+            "associated_events": len(run.events),
+            "events_with_geometry": sum(
+                event.geometry is not None for event in run.events
+            ),
+            "events_with_onset": sum(
+                event.event_time is not None for event in run.events
+            ),
+        },
         snapshot=ActiveIncidentsSnapshotResponse(
             retrieved_at=retrieved_at,
             incidents=[active_incident_response(item) for item in incidents],

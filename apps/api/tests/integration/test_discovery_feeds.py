@@ -85,7 +85,11 @@ async def test_article_budget_attempts_every_category_and_marks_dropped_partitio
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
         feed = GdeltDiscoveryFeed(
-            client=client, reader=Reader(), maximum_records=1, maximum_articles=7
+            client=client,
+            reader=Reader(),
+            maximum_records=1,
+            maximum_articles=7,
+            minimum_request_interval=0,
         )
         batches = [
             batch
@@ -183,7 +187,11 @@ async def test_gdelt_partitions_caps_and_preserves_partial_batches():
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
         feed = GdeltDiscoveryFeed(
-            client=client, reader=Reader(), maximum_records=1, maximum_queries=8
+            client=client,
+            reader=Reader(),
+            maximum_records=1,
+            maximum_queries=8,
+            minimum_request_interval=0,
         )
         batches = [
             batch

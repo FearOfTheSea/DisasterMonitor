@@ -39,6 +39,8 @@ async def run(seconds: float, base: str) -> dict[str, Any]:
     errors: list[str] = []
     isolation: list[str] = []
     expected: Counter[str] = Counter()
+    outcomes: Counter[str] = Counter()
+    delivered: set[tuple[int, str, str]] = set()
     iterations: list[float] = []
     imagery_ids: dict[tuple[str, int], str] = {}
     initial_scans: list[str] = []
@@ -132,6 +134,7 @@ async def run(seconds: float, base: str) -> dict[str, Any]:
                         )
                     imagery: dict[str, Any] | None
                     if event["event_time"] is not None:
+                        outcomes["catalog_attempted"] += 1
                         imagery = await request(
                             "POST",
                             "/ground-imagery/requests",
@@ -146,11 +149,29 @@ async def run(seconds: float, base: str) -> dict[str, Any]:
                         )
                         if "request_id" not in imagery:
                             expected["imagery_catalog_quota"] += 1
+                            outcomes["catalog_quota_refused"] += 1
                             imagery = None
                     else:
                         expected["unresolved_time_skips_imagery"] += 1
                         imagery = None
                     if imagery is not None:
+                        outcomes["catalog_accepted"] += 1
+                        if "catalog_snapshot_reused" in imagery["reason_codes"]:
+                            outcomes["catalog_cached_or_shared"] += 1
+                        if imagery["state"] == "needs_region":
+                            outcomes["catalog_unavailable_target"] += 1
+                        elif any(
+                            sensor["failure_code"] for sensor in imagery["sensors"]
+                        ):
+                            outcomes["catalog_failed_or_partial"] += 1
+                        elif not any(
+                            selection["observation"]
+                            for sensor in imagery["sensors"]
+                            for selection in sensor["selections"]
+                        ):
+                            outcomes["catalog_unavailable_coverage"] += 1
+                        else:
+                            outcomes["catalog_completed_with_observations"] += 1
                         assert imagery["incident_id"] == identifier
                         rid = imagery["request_id"]
                         for (other_event, other_user), other_id in imagery_ids.items():
@@ -174,6 +195,11 @@ async def run(seconds: float, base: str) -> dict[str, Any]:
                             None,
                         )
                         if selection and round_number < 7:
+                            outcomes["preparation_attempted"] += 1
+                            existed = any(
+                                artifact["selection_id"] == selection["selection_id"]
+                                for artifact in imagery["artifacts"]
+                            )
                             prepared = await request(
                                 "POST",
                                 f"/ground-imagery/requests/{rid}/prepare",
@@ -187,8 +213,62 @@ async def run(seconds: float, base: str) -> dict[str, Any]:
                             )
                             if "request_id" in prepared:
                                 assert prepared["incident_id"] == identifier
+                                outcomes["preparation_accepted"] += 1
+                                if prepared["state"] == "queued":
+                                    outcomes["preparation_queued"] += 1
+                                    until = time.perf_counter() + 15
+                                    while (
+                                        prepared["state"] == "queued"
+                                        and time.perf_counter() < until
+                                    ):
+                                        await asyncio.sleep(0.2)
+                                        prepared = await request(
+                                            "GET",
+                                            f"/ground-imagery/requests/{rid}",
+                                            "imagery_completion_poll",
+                                        )
+                                artifact = next(
+                                    (
+                                        a
+                                        for a in prepared["artifacts"]
+                                        if a["selection_id"]
+                                        == selection["selection_id"]
+                                    ),
+                                    None,
+                                )
+                                if artifact is not None:
+                                    outcomes["preparation_completed"] += 1
+                                    if (
+                                        existed
+                                        or "artifact_cache_reused"
+                                        in prepared["reason_codes"]
+                                    ):
+                                        outcomes["preparation_cached_or_shared"] += 1
+                                    before = time.perf_counter()
+                                    preview = await client.get(
+                                        f"/ground-imagery/artifacts/{artifact['artifact_id']}/preview.png"
+                                    )
+                                    durations["imagery_preview"].append(
+                                        (time.perf_counter() - before) * 1000
+                                    )
+                                    statuses[
+                                        f"imagery_preview:{preview.status_code}"
+                                    ] += 1
+                                    assert preview.status_code == 200
+                                    assert preview.content.startswith(
+                                        b"\x89PNG\r\n\x1a\n"
+                                    )
+                                    outcomes["rendered_preview_delivered"] += 1
+                                    delivered.add(
+                                        (user, identifier, artifact["artifact_id"])
+                                    )
+                                elif prepared["state"] == "queued":
+                                    outcomes["preparation_pending_at_deadline"] += 1
+                                else:
+                                    outcomes["preparation_failed"] += 1
                             else:
                                 expected["imagery_render_quota"] += 1
+                                outcomes["preparation_quota_refused"] += 1
                     await request(
                         "GET",
                         "/incidents/not-a-retained-event",
@@ -228,6 +308,10 @@ async def run(seconds: float, base: str) -> dict[str, Any]:
     await asyncio.gather(*tasks)
     elapsed = time.perf_counter() - started
     all_requests = [value for group in durations.values() for value in group]
+    async with httpx.AsyncClient(base_url=base, timeout=10, trust_env=False) as client:
+        metrics_response = await client.get("/__inspection/metrics")
+        metrics_response.raise_for_status()
+        provider_work = metrics_response.json()
     request_stats = percentiles(all_requests)
     iteration_stats = percentiles(iterations)
     result = {
@@ -250,6 +334,14 @@ async def run(seconds: float, base: str) -> dict[str, Any]:
         },
         "statuses": dict(statuses),
         "expected_failures_and_states": dict(expected),
+        "user_outcomes": dict(outcomes),
+        "controlled_provider_work": provider_work,
+        "distinct_session_event_image_deliveries": len(delivered),
+        "sessions_with_rendered_previews": len({user for user, _, _ in delivered}),
+        "delivery_definition": (
+            "Validated prepared artifact AND successfully fetched PNG preview; "
+            "a catalog 202 or fast refusal is not delivery."
+        ),
         "initial_compatible_scan_ids": initial_scans,
         "shared_initial_scan": len(set(initial_scans)) == 1,
         "distinct_session_imagery_requests": len(set(imagery_ids.values())),

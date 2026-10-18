@@ -54,7 +54,7 @@ def record_failure(
             if defer or response.status_code == 429
             else _request_key(str(response.url)),
             failure,
-            min(900, max(1, delay if defer and delay is not None else 30)),
+            max(1, delay if defer and delay is not None else 30),
         )
     return defer
 

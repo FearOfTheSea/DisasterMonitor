@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from disaster_monitor.domain.disaster_types import Disaster
+from disaster_monitor.domain.discovery_claim_scope import scoped_disaster_text
 from disaster_monitor.domain.events import EventGeometry, EventGeometryKind
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import classify_disaster_text
@@ -85,6 +86,18 @@ class DiscoveryEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class AcquisitionAudit:
+    provider: str
+    partition: str
+    leads_received: int = 0
+    invalid_leads: int = 0
+    duplicate_urls: int = 0
+    budget_excluded: int = 0
+    article_attempts: int = 0
+    article_failures: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class DiscoveryBatch:
     articles: tuple[DiscoveryArticle, ...] = ()
     issues: tuple[str, ...] = ()
@@ -92,6 +105,7 @@ class DiscoveryBatch:
     failed_operations: int = 0
     truncated: bool = False
     supplemental: tuple[DiscoveryArticle, ...] = ()
+    acquisition: tuple[AcquisitionAudit, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +121,7 @@ class DiscoveryRun:
     truncated: bool = False
     finished_at: datetime | None = None
     supplemental: tuple[DiscoveryArticle, ...] = ()
+    acquisition: tuple[AcquisitionAudit, ...] = ()
 
 
 # Provisional extraction: retain attributed affirmative sentences, never infer deaths
@@ -140,12 +155,23 @@ def assess_article(
         eligibility = "outside_interval"
     elif disaster is None:
         eligibility = "unclassified"
-    evidence = tuple(
+    return AssessedReport(
+        article, disaster, eligibility, fatality_accounts(article, disaster)
+    )
+
+
+def fatality_accounts(
+    article: DiscoveryArticle, disaster: Disaster | None
+) -> tuple[str, ...]:
+    """Project current source-scoping policy, including for older retained scans."""
+    return tuple(
         sentence.strip()[:600]
-        for sentence in re.split(r"(?<=[.!?])\s+", article.text)
+        for sentence in re.split(
+            r"(?<=[.!?])\s+",
+            scoped_disaster_text(article.text, article.source.title, disaster),
+        )
         if _FATALITY.search(sentence) and not _NEGATED.search(sentence)
     )[:10]
-    return AssessedReport(article, disaster, eligibility, evidence)
 
 
 def _association_key(report: AssessedReport) -> str:

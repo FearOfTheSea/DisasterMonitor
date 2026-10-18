@@ -21,6 +21,7 @@ from disaster_monitor.application.ground_imagery.resolve_region import (
 from disaster_monitor.application.ground_imagery.service import GroundImageryService
 from disaster_monitor.application.ground_imagery.temporal_policy import ImpactOnset
 from disaster_monitor.application.ports.ground_imagery.catalog import (
+    CatalogSearchError,
     GroundImageryCatalogPage,
     GroundImageryCatalogQuery,
 )
@@ -229,6 +230,185 @@ def _service(
         job_queue=job_queue,
         rate_limiter=rate_limiter,
     )
+
+
+async def test_ten_owners_share_catalog_snapshot_but_keep_mutable_requests_isolated():
+    now = datetime(2024, 5, 20, tzinfo=UTC)
+    catalog = FakeCatalog((_observation(Sensor.SENTINEL_2, "shared-product"),))
+    service = _service(
+        catalog=catalog,
+        rate_limiter=GroundImageryRequestLimiter(clock=lambda: now),
+        clock=lambda: now,
+    )
+    requests = await asyncio.gather(
+        *(
+            service.create_request(
+                GroundImageryRequestInput(
+                    incident_id="incident-1",
+                    reference_time=now + timedelta(seconds=user),
+                    owner_scope=f"user-{user}",
+                    idempotency_key="selected-event",
+                )
+            )
+            for user in range(10)
+        )
+    )
+    assert len({request.request_id for request in requests}) == 10
+    assert len({request.temporal_plan.reference_time for request in requests}) == 1
+    assert any(
+        "catalog_snapshot_reused" in request.reason_codes for request in requests
+    )
+    calls = len(catalog.queries)
+    await service.cancel(requests[0].request_id)
+    assert (await service.get_request(requests[1].request_id)).state != "cancelled"
+    now += timedelta(hours=1, seconds=1)
+    await service.create_request(
+        GroundImageryRequestInput(
+            incident_id="incident-1", reference_time=now, owner_scope="later"
+        )
+    )
+    assert len(catalog.queries) > calls
+
+
+async def test_partial_catalog_failure_is_shared_briefly_with_its_failure_state():
+    class FailedCatalog(FakeCatalog):
+        async def search(self, query):
+            raise CatalogSearchError(
+                "Provider unavailable", reason_code="provider_error", retryable=True
+            )
+
+    now = datetime(2024, 5, 20, tzinfo=UTC)
+    service = _service(
+        catalog=FailedCatalog(()),
+        rate_limiter=GroundImageryRequestLimiter(clock=lambda: now),
+    )
+    requests = [
+        await service.create_request(
+            GroundImageryRequestInput(
+                incident_id="incident-1",
+                reference_time=now,
+                owner_scope=f"failed-{user}",
+            )
+        )
+        for user in range(2)
+    ]
+    assert all(request.state == "partial" for request in requests)
+    assert all(
+        status.failure_code == "provider_error"
+        for request in requests
+        for status in request.search_status
+    )
+    assert "catalog_snapshot_reused" in requests[1].reason_codes
+
+
+async def test_cached_raster_never_invents_provider_quality_metadata(tmp_path):
+    service = _service(tmp_path)
+    prepared = []
+    for user in range(2):
+        request = await service.create_request(
+            GroundImageryRequestInput(
+                incident_id="incident-1",
+                reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+                owner_scope=f"quality-{user}",
+            )
+        )
+        prepared.append(
+            await service.prepare_selection(
+                request.request_id,
+                sensor=Sensor.SENTINEL_1,
+                role="first_useful_after_onset",
+            )
+        )
+    assert (
+        prepared[0].artifacts[0].observation.quality
+        == prepared[1].artifacts[0].observation.quality
+    )
+
+
+async def test_cancelling_one_shared_preparation_preserves_other_owner(tmp_path):
+    started, release = asyncio.Event(), asyncio.Event()
+
+    class WaitingRenderer(FakeRenderer):
+        async def render(self, request):
+            started.set()
+            await release.wait()
+            return await super().render(request)
+
+    service = _service(tmp_path, renderer=WaitingRenderer())
+    requests = [
+        await service.create_request(
+            GroundImageryRequestInput(
+                incident_id="incident-1",
+                reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+                owner_scope=f"cancel-{user}",
+            )
+        )
+        for user in range(2)
+    ]
+    tasks = [
+        asyncio.create_task(
+            service.prepare_selection(
+                request.request_id,
+                sensor=Sensor.SENTINEL_2,
+                role="first_useful_after_onset",
+            )
+        )
+        for request in requests
+    ]
+    await started.wait()
+    await service.cancel(requests[0].request_id)
+    release.set()
+    first, second = await asyncio.gather(*tasks)
+    assert first.state == "cancelled"
+    assert not first.artifacts
+    assert len(second.artifacts) == 1
+    assert second.state != "cancelled"
+
+
+async def test_ten_owners_reuse_immutable_raster_without_spending_ten_preparations(
+    tmp_path,
+):
+    class CountingRenderer(FakeRenderer):
+        calls = 0
+
+        async def render(self, request):
+            self.calls += 1
+            await asyncio.sleep(0)
+            return await super().render(request)
+
+    renderer = CountingRenderer()
+    now = datetime(2024, 5, 20, tzinfo=UTC)
+    limiter = GroundImageryRequestLimiter(clock=lambda: now)
+    service = _service(tmp_path, renderer=renderer, rate_limiter=limiter)
+    requests = [
+        await service.create_request(
+            GroundImageryRequestInput(
+                incident_id="incident-1",
+                reference_time=now,
+                owner_scope=f"user-{user}",
+            )
+        )
+        for user in range(10)
+    ]
+    prepared = await asyncio.gather(
+        *(
+            service.prepare_selection(
+                request.request_id,
+                sensor=Sensor.SENTINEL_2,
+                role="first_useful_after_onset",
+            )
+            for request in requests
+        )
+    )
+    assert renderer.calls == 1
+    assert all(len(request.artifacts) == 1 for request in prepared)
+    assert len({request.artifacts[0].artifact_id for request in prepared}) == 1
+    assert len({request.artifacts[0].selection_id for request in prepared}) == 10
+    # Actual work still consumes the unchanged deployment preparation budget.
+    for _ in range(3):
+        await limiter.claim_preparation()
+    with pytest.raises(GroundImageryRateLimitExceeded):
+        await limiter.claim_preparation()
 
 
 async def test_manual_preparation_records_interrupted_work_before_processing(tmp_path):
@@ -638,6 +818,7 @@ async def test_ground_imagery_http_reuses_request_without_refresh_quota() -> Non
     assert duplicate.json()["request_id"] == request_id
     assert limited.status_code == 429
     assert limited.headers["retry-after"] == "3600"
+    assert "Retry in 3600 seconds" in limited.json()["detail"]
     assert refreshed.status_code == 202
 
 

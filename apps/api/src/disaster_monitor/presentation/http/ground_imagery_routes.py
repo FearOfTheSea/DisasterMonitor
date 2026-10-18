@@ -57,7 +57,7 @@ def get_ground_imagery_service(request: Request) -> GroundImageryService:
 def _rate_limit_error(error: GroundImageryRateLimitExceeded) -> HTTPException:
     return HTTPException(
         status_code=429,
-        detail=str(error),
+        detail=f"{error} Retry in {error.retry_after_seconds} seconds.",
         headers={"Retry-After": str(error.retry_after_seconds)},
     )
 

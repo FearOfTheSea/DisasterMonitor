@@ -1,27 +1,34 @@
 """Partitioned GDELT leads enriched from public publisher article metadata."""
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections import OrderedDict
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
+from time import monotonic
 from typing import Protocol
 
 import httpx
 
 from disaster_monitor.domain.discovery import (
+    AcquisitionAudit,
     DiscoveryArticle,
     DiscoveryBatch,
     ReportingInterval,
 )
 from disaster_monitor.domain.evidence_types import SourceReference
+from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.infrastructure.news.discovery_parser import (
     parse_discovery_article,
 )
 from disaster_monitor.infrastructure.news.feeds import (
     _gdelt_item,
     _gdelt_time,
-    _get_json,
 )
 from disaster_monitor.infrastructure.news.public_documents import PublicDocumentReader
+from disaster_monitor.infrastructure.news.request_schedule import (
+    NewsRequestError,
+    ScheduledNewsJson,
+)
 
 _QUERIES = (
     "earthquake",
@@ -51,6 +58,8 @@ class GdeltDiscoveryFeed:
         maximum_queries: int = 35,
         maximum_articles: int = 400,
         timeout_seconds: float = 15,
+        minimum_request_interval: float = 5.2,
+        clock: Callable[[], float] = monotonic,
     ) -> None:
         self._client = client or httpx.AsyncClient(
             timeout=timeout_seconds, trust_env=False
@@ -61,8 +70,23 @@ class GdeltDiscoveryFeed:
         self._maximum_queries = maximum_queries
         self._maximum_articles = maximum_articles
         self._timeout = timeout_seconds
+        self._clock = clock
+        self._article_cache: OrderedDict[str, tuple[float, DiscoveryArticle]] = (
+            OrderedDict()
+        )
+        self._article_tasks: dict[str, asyncio.Task[DiscoveryArticle]] = {}
+        self._schedule = ScheduledNewsJson(
+            self._client,
+            minimum_interval=minimum_request_interval,
+            timeout_seconds=timeout_seconds,
+        )
 
     async def aclose(self) -> None:
+        article_tasks = tuple(self._article_tasks.values())
+        for task in article_tasks:
+            task.cancel()
+        await asyncio.gather(*article_tasks, return_exceptions=True)
+        await self._schedule.aclose()
         if self._owns_client:
             await self._client.aclose()
 
@@ -80,12 +104,9 @@ class GdeltDiscoveryFeed:
             calls += 1
             try:
                 async with asyncio.timeout(self._timeout):
-                    payload = await _get_json(
-                        self._client,
+                    snapshot = await self._schedule.get(
                         self.endpoint,
-                        timeout_seconds=self._timeout,
-                        maximum_response_bytes=1_000_000,
-                        params={
+                        {
                             "query": query,
                             "mode": "artlist",
                             "format": "json",
@@ -95,6 +116,7 @@ class GdeltDiscoveryFeed:
                             "enddatetime": _gdelt_time(end),
                         },
                     )
+                    payload = snapshot.payload
                 if not isinstance(payload, dict) or not isinstance(
                     payload.get("articles"), list
                 ):
@@ -107,6 +129,7 @@ class GdeltDiscoveryFeed:
                     pending.extend(((query, start, middle), (query, middle, end)))
                 items = []
                 invalid_leads = 0
+                duplicates = 0
                 for index, value in enumerate(raw):
                     item = _gdelt_item(value, index)
                     if item is None:
@@ -114,7 +137,10 @@ class GdeltDiscoveryFeed:
                     if item and item.canonical_url not in seen:
                         seen.add(item.canonical_url)
                         items.append(item)
+                    elif item:
+                        duplicates += 1
                 remaining = category_limit - category_counts[query]
+                excluded = max(0, len(items) - max(0, remaining))
                 limited = len(items) > max(0, remaining)
                 items = items[: max(0, remaining)]
                 category_counts[query] += len(items)
@@ -126,6 +152,8 @@ class GdeltDiscoveryFeed:
                 # Four publisher requests at a time; every request has a wall timeout.
                 articles: list[DiscoveryArticle] = []
                 issues: list[str] = []
+                failures = 0
+                access_failures: dict[str, str] = {}
                 if invalid_leads:
                     issues.append(
                         f"{invalid_leads} invalid or non-HTTPS leads excluded."
@@ -135,10 +163,16 @@ class GdeltDiscoveryFeed:
                         *(self._article(item) for item in items[offset : offset + 4]),
                         return_exceptions=True,
                     )
-                    for result in results:
+                    for item, result in zip(
+                        items[offset : offset + 4], results, strict=True
+                    ):
                         if isinstance(result, BaseException):
+                            failures += 1
+                            access_failures[item.canonical_url] = _access_failure(
+                                result
+                            )
                             issues.append(
-                                "Publisher content unavailable or access rejected; "
+                                f"{access_failures[item.canonical_url]}; "
                                 "lead retained with unknown publication time."
                             )
                         else:
@@ -159,13 +193,26 @@ class GdeltDiscoveryFeed:
                                 ),
                                 text="",
                                 indexed_at=item.indexed_at,
-                                access_issue=(
-                                    "Publisher content unavailable or restricted; "
-                                    "article lead retained."
+                                access_issue=access_failures.get(
+                                    item.canonical_url,
+                                    "Publisher content unavailable; "
+                                    "article lead retained.",
                                 ),
                             )
                         )
                 yield DiscoveryBatch(
+                    acquisition=(
+                        AcquisitionAudit(
+                            provider=self.source_id,
+                            partition=query,
+                            leads_received=len(raw),
+                            invalid_leads=invalid_leads,
+                            duplicate_urls=duplicates,
+                            budget_excluded=excluded,
+                            article_attempts=len(items),
+                            article_failures=failures,
+                        ),
+                    ),
                     articles=tuple(articles),
                     issues=tuple(
                         dict.fromkeys(
@@ -185,10 +232,22 @@ class GdeltDiscoveryFeed:
                     successful_operations=1,
                     truncated=limited or budget_truncated or (capped and not can_split),
                 )
-            except Exception:
+            except NewsRequestError as error:
                 yield DiscoveryBatch(
                     failed_operations=1,
-                    issues=(f"GDELT {query}: partition failed or timed out.",),
+                    issues=(
+                        f"GDELT {query}: {error}; "
+                        f"{len(pending)} partitions unattempted. "
+                        "Other configured discovery sources continue.",
+                    ),
+                )
+                return
+            except Exception as error:
+                yield DiscoveryBatch(
+                    failed_operations=1,
+                    issues=(
+                        f"GDELT {query}: partition failed ({type(error).__name__}).",
+                    ),
                 )
         if pending:
             yield DiscoveryBatch(
@@ -196,10 +255,32 @@ class GdeltDiscoveryFeed:
                 issues=("GDELT query budget reached; capped partitions remain.",),
             )
 
-    async def _article(self, item: object) -> DiscoveryArticle:
-        from disaster_monitor.domain.news import NewsFeedItem
+    async def _article(self, item: NewsFeedItem) -> DiscoveryArticle:
+        key = item.canonical_url
+        cached = self._article_cache.get(key)
+        if cached and self._clock() - cached[0] < 300:
+            return cached[1]
+        task = self._article_tasks.get(key)
+        if task is None:
+            task = asyncio.create_task(self._read_article(item))
+            self._article_tasks[key] = task
+            task.add_done_callback(
+                lambda done: None if done.cancelled() else done.exception()
+            )
+        return await asyncio.shield(task)
 
-        assert isinstance(item, NewsFeedItem)
+    async def _read_article(self, item: NewsFeedItem) -> DiscoveryArticle:
+        try:
+            article = await self._parse_article(item)
+            self._article_cache[item.canonical_url] = (self._clock(), article)
+            self._article_cache.move_to_end(item.canonical_url)
+            while len(self._article_cache) > 128:
+                self._article_cache.popitem(last=False)
+            return article
+        finally:
+            self._article_tasks.pop(item.canonical_url, None)
+
+    async def _parse_article(self, item: NewsFeedItem) -> DiscoveryArticle:
         async with asyncio.timeout(self._timeout):
             html = await self._reader.read(item.canonical_url)
         return parse_discovery_article(
@@ -210,3 +291,11 @@ class GdeltDiscoveryFeed:
             retrieved_at=datetime.now(UTC),
             indexed_at=item.indexed_at,
         )
+
+
+def _access_failure(error: BaseException) -> str:
+    if isinstance(error, httpx.HTTPStatusError):
+        return f"Publisher HTTP {error.response.status_code}: content unavailable"
+    if isinstance(error, ValueError):
+        return f"Publisher access rejected: {str(error)[:180]}"
+    return f"Publisher transport or parsing failed ({type(error).__name__})"

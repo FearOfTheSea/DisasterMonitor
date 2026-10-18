@@ -97,6 +97,7 @@ class DiscoveryScanService:
                                     group_reports(retained), supplemental
                                 ),
                                 supplemental=supplemental,
+                                acquisition=(*run.acquisition, *batch.acquisition),
                                 issues=tuple(
                                     dict.fromkeys(
                                         (

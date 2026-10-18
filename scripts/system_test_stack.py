@@ -75,6 +75,7 @@ def main() -> int:
     )
     fake_model = FakeSystemModel()
     inspection = os.environ.get("INSPECTION_ACCEPTANCE") == "1"
+    inspection_metrics = {"catalog_provider_calls": 0, "render_provider_calls": 0}
     if inspection:
         from inspection_acceptance_fixtures import (
             inspection_discovery,
@@ -103,6 +104,7 @@ def main() -> int:
                 active_incidents,
                 Path(catalog_directory.name) / "imagery",
                 rate_limited=os.environ.get("INSPECTION_RATE_LIMITS", "1") != "0",
+                metrics=inspection_metrics,
             )
             if inspection
             else None,
@@ -140,6 +142,15 @@ def main() -> int:
             clock=lambda: NOW,
         ),
     )
+    if inspection:
+        # This route exists only in the explicitly synthetic external-port stack.
+        # Normal app composition never registers a test instrumentation endpoint.
+        app.add_api_route(
+            "/api/v1/__inspection/metrics",
+            lambda: inspection_metrics,
+            methods=["GET"],
+            include_in_schema=False,
+        )
     api_server = uvicorn.Server(
         uvicorn.Config(
             app,

@@ -27,6 +27,7 @@ from disaster_monitor.application.ground_imagery.request_lifecycle import (
     GroundImageryRequestLifecycle,
 )
 from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRateLimitExceeded,
     GroundImageryRequestLimiter,
 )
 from disaster_monitor.application.ground_imagery.resolve_region import (
@@ -52,6 +53,7 @@ from disaster_monitor.application.ports.ground_imagery.jobs import (
     GroundImageryJob,
     GroundImageryJobQueue,
     GroundImageryJobStatus,
+    GroundImageryQueueFull,
     preparation_job,
 )
 from disaster_monitor.application.ports.ground_imagery.rendering import (
@@ -112,6 +114,7 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             artifact_store=artifact_store,
             tile_renderer=tile_renderer,
             authenticated_processing_available=authenticated_processing_available,
+            rate_limiter=rate_limiter,
         )
         self._job_queue = job_queue
         self._artifact_access = GroundImageryArtifactAccess(
@@ -258,9 +261,10 @@ class GroundImageryService(GroundImageryRequestLifecycle):
                 for existing in await self._job_queue.jobs_for_request(request_id)
             ):
                 return request
-            if self._rate_limiter is not None:
-                await self._rate_limiter.claim_preparation()
-            await self._job_queue.enqueue(job)
+            try:
+                await self._job_queue.enqueue(job)
+            except GroundImageryQueueFull as error:
+                raise GroundImageryRateLimitExceeded(str(error), 10) from error
             queued = replace(
                 request,
                 state=GroundImageryRequestState.QUEUED,
@@ -271,8 +275,6 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             )
             await self._store.save_request(queued)
             return queued
-        if self._rate_limiter is not None:
-            await self._rate_limiter.claim_preparation()
         preparing = replace(
             request,
             state=GroundImageryRequestState.QUEUED,
@@ -293,6 +295,11 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         except Exception:
             await self.mark_preparation_failed(request_id, detail="Preparation failed.")
             raise
+        if (
+            updated.state is GroundImageryRequestState.CANCELLED
+            or updated.request_version != request.request_version
+        ):
+            return updated
         completed = replace(
             updated,
             state=GroundImageryRequestState.PARTIAL
@@ -324,6 +331,11 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             overview=job.overview,
             output_kind=job.output_kind,
         )
+        if (
+            updated.state is GroundImageryRequestState.CANCELLED
+            or updated.request_version != job.request_version
+        ):
+            return updated
         final_state = await self._preparation_state(updated)
         completed = replace(updated, state=final_state)
         await self._store.save_request(completed)
@@ -376,6 +388,12 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             overview=overview,
             output_kind=output_kind,
         )
+        current = await self.get_request(request.request_id)
+        if (
+            current.state is GroundImageryRequestState.CANCELLED
+            or current.request_version != request.request_version
+        ):
+            return current
         await self._store.save_request(updated)
         return updated
 
@@ -426,6 +444,7 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         return await self._artifact_access.manifest_for_selection(selection_id_value)
 
     async def aclose(self) -> None:
+        await self._shared_catalog.aclose()
         await self._catalog.aclose()
         await self._region_resolver.aclose()
         await self._artifact_access.aclose()

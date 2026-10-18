@@ -8,6 +8,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRateLimitExceeded,
+)
 from disaster_monitor.application.ports.ground_imagery.jobs import (
     GroundImageryJob,
     GroundImageryJobQueue,
@@ -100,9 +103,16 @@ class GroundImageryWorker:
                 if job.attempt < job.max_attempts
                 else None
             )
+            if (
+                isinstance(error, GroundImageryRateLimitExceeded)
+                and retry_at is not None
+            ):
+                retry_at = failed_at + timedelta(seconds=error.retry_after_seconds)
             error_code = (
                 "provider_budget_exceeded"
                 if isinstance(error, ProviderBudgetExceeded)
+                else "application_preparation_quota"
+                if isinstance(error, GroundImageryRateLimitExceeded)
                 else "ground_preparation_failed"
             )
             try:

@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -14,6 +15,67 @@ from disaster_monitor.infrastructure.operations.file_discovery_store import (
 from disaster_monitor.presentation.http.api import create_schema_app
 
 NOW = datetime(2026, 10, 17, 12, tzinfo=UTC)
+
+
+async def test_multitopic_report_only_projects_hazard_linked_impact_sentences(tmp_path):
+    class Feed:
+        source_id = "fixture"
+
+        async def discover(self, *, interval):
+            yield DiscoveryBatch(
+                articles=(
+                    DiscoveryArticle(
+                        source=SourceReference(
+                            "open-news",
+                            "Humanitarian source",
+                            "Country humanitarian snapshot",
+                            "https://fixture.example/snapshot",
+                            NOW,
+                            None,
+                            NOW,
+                        ),
+                        text=(
+                            "Drought displaced 200 people. "
+                            "Violence killed dozens of people. "
+                            "Cholera caused 17 deaths."
+                        ),
+                    ),
+                ),
+                successful_operations=1,
+            )
+
+    store = FileDiscoveryStore(tmp_path)
+    service = DiscoveryScanService((Feed(),), store, clock=lambda: NOW)
+    app = create_schema_app()
+    app.state.dependencies = SimpleNamespace(discovery_scans=service)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        started = await client.post(
+            "/api/v1/discovery-scans", json={"reporting_days": 7}
+        )
+        identifier = started.json()["scan_id"]
+        await service.wait(identifier)
+        # A scan retained before the scope fix can contain obsolete extracted
+        # fatality excerpts. Current projection must not revive those claims.
+        run = await service.get(identifier)
+        legacy_report = replace(
+            run.reports[0], fatality_evidence=("Cholera caused 17 deaths.",)
+        )
+        await store.save(
+            replace(
+                run,
+                reports=(legacy_report,),
+                events=(replace(run.events[0], reports=(legacy_report,)),),
+            )
+        )
+        result = (await client.get(f"/api/v1/discovery-scans/{identifier}")).json()
+    report = result["snapshot"]["incidents"][0]["discovery_reports"][0]
+    assert report["fatality_evidence"] == []
+    assert [(claim["category"], claim["value"]) for claim in report["claims"]] == [
+        ("displacement", "200")
+    ]
+    await service.aclose()
 
 
 @pytest.mark.asyncio

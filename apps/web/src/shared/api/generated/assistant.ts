@@ -4,6 +4,36 @@
 import { matchesOpenApiSchema } from '@/shared/api/openapiSchema';
 
 const apiSchemas = {
+  AcquisitionAudit: {
+    properties: {
+      article_attempts: {
+        type: 'integer',
+      },
+      article_failures: {
+        type: 'integer',
+      },
+      budget_excluded: {
+        type: 'integer',
+      },
+      duplicate_urls: {
+        type: 'integer',
+      },
+      invalid_leads: {
+        type: 'integer',
+      },
+      leads_received: {
+        type: 'integer',
+      },
+      partition: {
+        type: 'string',
+      },
+      provider: {
+        type: 'string',
+      },
+    },
+    required: ['provider', 'partition'],
+    type: 'object',
+  },
   ActiveIncidentCountryResponse: {
     properties: {
       association_basis: {
@@ -2361,6 +2391,18 @@ const apiSchemas = {
   },
   DiscoveryScanResponse: {
     properties: {
+      acquisition: {
+        items: {
+          $ref: '#/components/schemas/AcquisitionAudit',
+        },
+        type: 'array',
+      },
+      assessment_counts: {
+        additionalProperties: {
+          type: 'integer',
+        },
+        type: 'object',
+      },
       coverage_notice: {
         type: 'string',
       },
@@ -6977,6 +7019,17 @@ export function matchesApiSchema(name: ApiSchemaName, value: unknown): boolean {
   return matchesOpenApiSchema(value, apiSchemas[name], apiSchemas);
 }
 
+export type AcquisitionAudit = {
+  article_attempts?: number;
+  article_failures?: number;
+  budget_excluded?: number;
+  duplicate_urls?: number;
+  invalid_leads?: number;
+  leads_received?: number;
+  partition: string;
+  provider: string;
+};
+
 export type ActiveIncidentCountryResponse = {
   association_basis:
     'coordinate_polygon' | 'source_mention' | 'named_region' | 'nearby_boundary';
@@ -7523,6 +7576,10 @@ export type DiscoveryScanRequest = {
 };
 
 export type DiscoveryScanResponse = {
+  acquisition?: Array<AcquisitionAudit>;
+  assessment_counts?: {
+    [key: string]: number;
+  };
   coverage_notice?: string;
   failed_operations: number;
   finished_at: string | null;

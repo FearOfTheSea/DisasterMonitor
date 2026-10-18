@@ -11,6 +11,10 @@ from typing import Protocol
 from disaster_monitor.domain.imagery.observations import Sensor, TemporalRole
 
 
+class GroundImageryQueueFull(RuntimeError):
+    """The bounded preparation queue cannot admit another distinct job."""
+
+
 class GroundImageryJobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"

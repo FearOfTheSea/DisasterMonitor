@@ -15,11 +15,17 @@ from disaster_monitor.application.ground_imagery.models import (
     GroundImageryRequest,
     ImageryArtifactReference,
 )
+from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRequestLimiter,
+)
 from disaster_monitor.application.ground_imagery.resolve_region import (
     GroundImageryRegionResolver,
 )
 from disaster_monitor.application.ground_imagery.select_observations import (
     SelectionReason,
+)
+from disaster_monitor.application.ground_imagery.shared_rasters import (
+    SharedRasterPreparation,
 )
 from disaster_monitor.application.ports.ground_imagery.artifacts import (
     ImageryArtifactStore,
@@ -54,6 +60,7 @@ class GroundImageryArtifactWorkflow:
         artifact_store: ImageryArtifactStore | None = None,
         tile_renderer: GroundImageryTileRenderer | None = None,
         authenticated_processing_available: bool = True,
+        rate_limiter: GroundImageryRequestLimiter | None = None,
     ) -> None:
         self._region_resolver = region_resolver
         self._clock = clock
@@ -62,6 +69,15 @@ class GroundImageryArtifactWorkflow:
         self._artifact_store = artifact_store
         self._tile_renderer = tile_renderer
         self._authenticated_processing_available = authenticated_processing_available
+        self._shared_rasters = (
+            SharedRasterPreparation(
+                renderer, raster_validator, artifact_store, rate_limiter
+            )
+            if renderer is not None
+            and raster_validator is not None
+            and artifact_store is not None
+            else None
+        )
 
     async def prepare(
         self,
@@ -97,8 +113,9 @@ class GroundImageryArtifactWorkflow:
             sensor
         )
         requested_output_kind = output_kind or _identifiers.default_output_kind(sensor)
+        assert self._shared_rasters is not None
         try:
-            rendered = await self._renderer.render(
+            stored, normalized, reused = await self._shared_rasters.prepare(
                 RenderRequest(
                     observation=observation,
                     region=region.inspection,
@@ -109,35 +126,14 @@ class GroundImageryArtifactWorkflow:
             )
         except GroundImageryRenderError as error:
             raise GroundImageryError(f"{error.reason_code}: {error}") from error
-        normalized = self._raster_validator.normalize(
-            rendered,
-            grid=grid,
-            source_product_id=observation.identity.product_id,
-        )
+        except ImageryArtifactStoreError as error:
+            raise GroundImageryError(str(error)) from error
         assessed_quality = self._raster_validator.assess_core_quality(
             normalized, region.core, sensor
         )
         current_selection_id = _identifiers.selection_id(
             request.request_id, sensor, temporal_role, observation
         )
-        artifact_id = _identifiers.artifact_id(
-            request,
-            current_selection_id,
-            sensor,
-            temporal_role,
-            recipe_version,
-            requested_output_kind,
-            grid,
-        )
-        try:
-            stored = await self._artifact_store.put_bytes(
-                artifact_id=artifact_id,
-                content_type=normalized.media_type,
-                content=normalized.content,
-                maximum_bytes=128 * 1024 * 1024,
-            )
-        except ImageryArtifactStoreError as error:
-            raise GroundImageryError(str(error)) from error
         artifact = ImageryArtifactReference(
             artifact_id=stored.artifact_id,
             selection_id=current_selection_id,
@@ -167,10 +163,22 @@ class GroundImageryArtifactWorkflow:
         return replace(
             updated_request,
             artifacts=tuple(
-                item for item in request.artifacts if item.artifact_id != artifact_id
+                item
+                for item in request.artifacts
+                if not (
+                    item.selection_id == current_selection_id
+                    and item.grid == grid
+                    and item.output_kind == requested_output_kind
+                )
             )
             + (artifact,),
             updated_at=self._clock(),
+            reason_codes=_identifiers.unique_reasons(
+                (
+                    *updated_request.reason_codes,
+                    *(("artifact_cache_reused",) if reused else ()),
+                )
+            ),
         )
 
     async def read_artifact(
@@ -273,6 +281,8 @@ class GroundImageryArtifactWorkflow:
         }
 
     async def aclose(self) -> None:
+        if self._shared_rasters is not None:
+            await self._shared_rasters.aclose()
         for resource in (self._renderer, self._artifact_store, self._tile_renderer):
             close = getattr(resource, "aclose", None)
             if close is not None:

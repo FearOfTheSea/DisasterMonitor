@@ -12,6 +12,7 @@ from disaster_monitor.application.ports.ground_imagery.jobs import (
     GroundImageryJob,
     GroundImageryJobQueue,
     GroundImageryJobStatus,
+    GroundImageryQueueFull,
 )
 from disaster_monitor.domain.imagery.observations import Sensor, TemporalRole
 from disaster_monitor.infrastructure.operations.postgres_repository_base import (
@@ -22,14 +23,33 @@ from disaster_monitor.infrastructure.operations.postgres_repository_base import 
 class PostgresGroundImageryJobQueue(PostgresRepositoryBase, GroundImageryJobQueue):
     durable = True
 
-    def __init__(self, dsn: str) -> None:
+    def __init__(self, dsn: str, *, maximum_pending: int = 64) -> None:
         if not dsn.strip():
             raise ValueError("PostgreSQL DSN must not be empty.")
         self._dsn = dsn
+        if maximum_pending < 1:
+            raise ValueError("The preparation queue bound must be positive.")
+        self._maximum_pending = maximum_pending
 
     async def enqueue(self, job: GroundImageryJob) -> bool:
         async with await self._connection() as connection:
             async with connection.cursor() as cursor:
+                # Serialize admission across API processes without table-wide locks.
+                await cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext('ground-job-admission'))"
+                )
+                await cursor.execute(
+                    "SELECT 1 FROM imagery_jobs WHERE job_id=%s", (job.job_id,)
+                )
+                if await cursor.fetchone() is not None:
+                    return False
+                await cursor.execute(
+                    "SELECT count(*) FROM imagery_jobs "
+                    "WHERE status IN ('queued','running','retry_wait')"
+                )
+                count = await cursor.fetchone()
+                if count is not None and count[0] >= self._maximum_pending:
+                    raise GroundImageryQueueFull("Image preparation queue is full.")
                 await cursor.execute(
                     """
                     INSERT INTO imagery_jobs(

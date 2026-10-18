@@ -82,9 +82,12 @@ class RasterioCogValidator(GroundImageryRasterValidator):
     def assess_core_quality(
         self, raster: RenderedRaster, core: MultiPolygon, sensor: Sensor
     ) -> ObservationQuality | None:
-        if dict(raster.provider_metadata).get("sensor") != sensor.value:
-            return None
         with MemoryFile(raster.content) as memory, memory.open() as dataset:
+            declared_sensor = dict(raster.provider_metadata).get("sensor") or (
+                dataset.tags().get("sensor")
+            )
+            if declared_sensor != sensor.value:
+                return None
             mask_band = 5 if sensor is Sensor.SENTINEL_2 else 3
             if dataset.count < mask_band or dataset.crs is None:
                 return None

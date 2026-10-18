@@ -62,6 +62,29 @@ describe('GroundImageryPanel', () => {
     vi.unstubAllGlobals();
   });
 
+  it('labels reused catalog cutoffs and previously retrieved imagery', async () => {
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...request,
+      reason_codes: ['catalog_snapshot_reused', 'artifact_cache_reused'],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="River basin"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
+    expect(await screen.findByText(/Recent catalog snapshot reused/)).toBeVisible();
+    expect(screen.getByText(/Previously retrieved imagery reused/)).toBeVisible();
+    expect(
+      screen.getByLabelText('Catalog snapshot cutoff').getAttribute('dateTime'),
+    ).toBe(request.reference_time);
+  });
+
   it('waits for an explicit search and does not automatically prepare imagery', async () => {
     render(
       <GroundImageryPanel

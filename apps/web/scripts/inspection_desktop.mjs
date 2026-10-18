@@ -13,9 +13,17 @@ const page = await browser.newPage({
   reducedMotion: 'reduce',
 });
 const errors = [];
+const consoleErrors = [];
+const quotaResponses = [];
 const warnings = [];
 const checks = [];
 page.on('pageerror', (error) => errors.push(error.message));
+page.on('response', async (response) => {
+  if (response.status() === 429 && response.url().includes('/ground-imagery/')) {
+    const payload = await response.json();
+    quotaResponses.push({ url: response.url(), status: 429, detail: payload.detail });
+  }
+});
 page.on('console', (message) => {
   if (message.type() === 'warning') warnings.push(message.text());
   if (
@@ -23,7 +31,7 @@ page.on('console', (message) => {
     (message.type() === 'warning' &&
       !message.text().startsWith('Canvas2D: Multiple readback operations'))
   )
-    errors.push(message.text());
+    consoleErrors.push({ text: message.text(), url: message.location().url });
 });
 const capture = async (name) =>
   page.screenshot({ path: join(output, `${name}.png`), fullPage: false });
@@ -128,7 +136,9 @@ try {
       response.request().method() === 'POST',
   );
   await page.getByRole('button', { name: 'Find imagery', exact: true }).press('Enter');
-  assert.equal((await searching).status(), 202);
+  const originalResponse = await searching;
+  assert.equal(originalResponse.status(), 202);
+  const originalRequest = await originalResponse.json();
   await expect(
     page
       .getByRole('heading', { name: 'Prepared observation' })
@@ -207,11 +217,71 @@ try {
     'Missing location/time',
     'Unlocated drought remains inspectable; no fabricated imagery target or onset.',
   );
+  const metricsUrl = 'http://127.0.0.1:8787/api/v1/__inspection/metrics';
+  const beforeShared = await (await page.request.get(metricsUrl)).json();
+  const secondContext = await browser.newContext({
+    viewport: { width: 1536, height: 1024 },
+    reducedMotion: 'reduce',
+  });
+  const secondPage = await secondContext.newPage();
+  secondPage.on('pageerror', (error) => errors.push(error.message));
+  await secondPage.goto('http://127.0.0.1:4173', { waitUntil: 'domcontentloaded' });
+  await secondPage.getByRole('button', { name: 'Scan the world', exact: true }).click();
+  await expect(
+    secondPage.getByRole('button', { name: 'Focus Region 1 on map', exact: true }),
+  ).toBeVisible({ timeout: 20000 });
+  await secondPage
+    .getByRole('button', { name: 'Focus Region 1 on map', exact: true })
+    .click();
+  const reusedResponse = secondPage.waitForResponse(
+    (response) =>
+      response.url().endsWith('/ground-imagery/requests') &&
+      response.request().method() === 'POST',
+  );
+  await secondPage.getByRole('button', { name: 'Find imagery', exact: true }).click();
+  const reused = await (await reusedResponse).json();
+  assert.notEqual(reused.request_id, originalRequest.request_id);
+  await expect(secondPage.getByText(/Recent catalog snapshot reused/)).toBeVisible();
+  await expect(secondPage.getByText(/Previously retrieved imagery reused/)).toBeVisible(
+    { timeout: 20000 },
+  );
+  await expect
+    .poll(() =>
+      secondPage
+        .locator('.ground-single-preview img')
+        .evaluate((img) => img.complete && img.naturalWidth > 0),
+    )
+    .toBe(true);
+  await secondPage.screenshot({
+    path: join(output, 'inspection-shared-cache.png'),
+    fullPage: false,
+  });
+  const afterShared = await (await secondPage.request.get(metricsUrl)).json();
+  assert.deepEqual(afterShared, beforeShared);
+  await secondContext.close();
+  check(
+    'Independent session cache reuse',
+    'Second browser context has a distinct mutable request, original catalog cutoff and cache notices, and a decoded preview with zero additional catalog/render provider calls.',
+  );
   assert.equal(await page.locator('nextjs-portal').count(), 0);
+  const expectedQuotaConsole = consoleErrors.filter(
+    (entry) =>
+      entry.text.includes('status of 429') &&
+      quotaResponses.some(
+        (response) =>
+          response.url === entry.url &&
+          response.detail.includes('Ground view limit for image preparations'),
+      ),
+  );
+  errors.push(
+    ...consoleErrors
+      .filter((entry) => !expectedQuotaConsole.includes(entry))
+      .map((entry) => entry.text),
+  );
   assert.deepEqual(errors, []);
   check(
     'Console health and framework overlay',
-    'No console errors, page exceptions, or Next.js overlay. Chromium Canvas2D performance hints are recorded separately.',
+    `No unexpected console errors, page exceptions, or Next.js overlay. ${expectedQuotaConsole.length} confirmed preparation quota network messages are recorded as refusals; no delivery credit.`,
   );
   await writeFile(
     join(output, 'inspection-browser-results.json'),
@@ -223,6 +293,8 @@ try {
         checks,
         errors,
         warnings,
+        quotaResponses,
+        expectedQuotaConsole,
       },
       null,
       2,

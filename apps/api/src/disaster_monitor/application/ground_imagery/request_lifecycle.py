@@ -40,6 +40,9 @@ from disaster_monitor.application.ground_imagery.select_observations import (
     SelectionReason,
     select_observations,
 )
+from disaster_monitor.application.ground_imagery.shared_catalog import (
+    SharedCatalogSearch,
+)
 from disaster_monitor.application.ground_imagery.temporal_policy import (
     build_temporal_plan,
     watch_check_interval,
@@ -81,6 +84,9 @@ class GroundImageryRequestLifecycle:
         self._clock = clock
         self._enabled = enabled
         self._rate_limiter = rate_limiter
+        self._shared_catalog = SharedCatalogSearch(
+            catalog_searcher, rate_limiter, clock
+        )
         self._monitoring_available = False
 
     async def create_request(
@@ -189,12 +195,12 @@ class GroundImageryRequestLifecycle:
             self._indexes.index(request)
             return request
 
-        if self._rate_limiter is not None:
-            await self._rate_limiter.claim_catalog_search(context.incident_id)
-        search = await self._catalog_searcher.search(
+        plan, search, reused = await self._shared_catalog.search(
+            context.incident_id,
             region.region.inspection,
             plan,
             request_input.sensors,
+            allow_cached=request_version == 1,
         )
         candidates_by_sensor = search.candidates
         statuses = search.statuses
@@ -216,6 +222,8 @@ class GroundImageryRequestLifecycle:
             },
         )
         reasons = list(search_reasons)
+        if reused:
+            reasons.append("catalog_snapshot_reused")
         for sensor in request_input.sensors:
             for outcome in selection.for_sensor(sensor).selections:
                 if outcome.reason is not SelectionReason.SELECTED:
@@ -234,7 +242,7 @@ class GroundImageryRequestLifecycle:
             request_version=request_version,
             incident_id=context.incident_id,
             disaster=context.disaster,
-            reference_time=request_input.reference_time,
+            reference_time=plan.reference_time,
             requested_sensors=request_input.sensors,
             region_resolution=region,
             temporal_plan=plan,

@@ -1,6 +1,8 @@
 """Shared serialization for list, lookup, and standalone incident evidence."""
 
 from disaster_monitor.application.incidents.models import ActiveIncident
+from disaster_monitor.domain.discovery import fatality_accounts
+from disaster_monitor.domain.discovery_claim_scope import scoped_disaster_text
 from disaster_monitor.domain.reported_impacts import extract_reported_impacts
 from disaster_monitor.presentation.http.common_response_serialization import (
     _event_geometry_response,
@@ -50,7 +52,9 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                 indexed_at=report.article.indexed_at,
                 event_time=report.article.event_time,
                 origin=report.article.origin,
-                fatality_evidence=list(report.fatality_evidence),
+                fatality_evidence=list(
+                    fatality_accounts(report.article, report.disaster)
+                ),
                 claims=[
                     ReportedImpactResponse.model_validate(
                         {
@@ -62,7 +66,11 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                         }
                     )
                     for claim in extract_reported_impacts(
-                        report.article.text,
+                        scoped_disaster_text(
+                            report.article.text,
+                            report.article.source.title,
+                            report.disaster,
+                        ),
                         report.article.source,
                         location=report.article.location,
                     )
@@ -89,6 +97,11 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                 "Impact extraction uses English source sentences up to 600 "
                 "characters from retained text (at most 20,000 characters "
                 "per article); missing claims remain unknown."
+            ),
+            (
+                "Structured impacts exclude explicit competing causes and other "
+                "hazards. Broad multi-topic reports require a hazard-linked "
+                "sentence; unscoped accounts remain unknown. Source links are retained."
             ),
             *incident.discovery_event.collection_notices,
         ]

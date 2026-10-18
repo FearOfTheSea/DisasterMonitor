@@ -4,9 +4,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from disaster_monitor.application.ground_imagery.jobs import GroundImageryWorker
+from disaster_monitor.application.ground_imagery.request_limits import (
+    GroundImageryRateLimitExceeded,
+)
 from disaster_monitor.application.ingestion.jobs import scheduled_job
 from disaster_monitor.application.ports.ground_imagery.jobs import (
     GroundImageryJobStatus,
+    GroundImageryQueueFull,
     preparation_job,
 )
 from disaster_monitor.application.ports.provider_budget import ProviderBudgetExceeded
@@ -23,6 +27,62 @@ from disaster_monitor.infrastructure.operations.memory_repository import (
 )
 
 NOW = datetime(2026, 9, 13, 10, tzinfo=UTC)
+
+
+async def test_worker_quota_wait_preserves_actual_admission_retry_time():
+    queue = InMemoryGroundImageryJobQueue()
+    job = preparation_job(
+        request_id="waiting-owner",
+        request_version=1,
+        sensor=Sensor.SENTINEL_2,
+        role=TemporalRole.LATEST_USEFUL,
+        overview=True,
+        output_kind=None,
+        now=NOW,
+    )
+    await queue.enqueue(job)
+
+    class LimitedExecutor:
+        async def execute_preparation_job(self, job):
+            raise GroundImageryRateLimitExceeded("Preparation admission full.", 3600)
+
+        async def mark_preparation_failed(self, request_id, *, detail):
+            pass
+
+    await GroundImageryWorker(queue, LimitedExecutor(), clock=lambda: NOW).run_once(
+        "worker"
+    )
+    waiting = (await queue.jobs_for_request("waiting-owner"))[0]
+    assert waiting.status is GroundImageryJobStatus.RETRY_WAIT
+    assert waiting.next_attempt_at == NOW + timedelta(hours=1)
+    assert waiting.error_code == "application_preparation_quota"
+
+
+async def test_ground_preparation_queue_bounds_pending_work_and_keeps_idempotence():
+    queue = InMemoryGroundImageryJobQueue(maximum_pending=2)
+    jobs = [
+        preparation_job(
+            request_id=f"owner-{i}",
+            request_version=1,
+            sensor=Sensor.SENTINEL_2,
+            role=TemporalRole.LATEST_USEFUL,
+            overview=True,
+            output_kind=None,
+            now=NOW,
+        )
+        for i in range(3)
+    ]
+    assert await queue.enqueue(jobs[0])
+    assert await queue.enqueue(jobs[1])
+    assert not await queue.enqueue(jobs[0])
+    with pytest.raises(GroundImageryQueueFull):
+        await queue.enqueue(jobs[2])
+    claimed = await queue.claim("worker", now=NOW)
+    assert claimed is not None
+    await queue.complete(
+        claimed.job_id, completed_at=NOW, fencing_token=claimed.fencing_token
+    )
+    assert await queue.enqueue(jobs[2])
 
 
 @pytest.mark.asyncio

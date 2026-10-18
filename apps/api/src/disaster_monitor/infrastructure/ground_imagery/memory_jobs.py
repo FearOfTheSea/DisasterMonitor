@@ -6,18 +6,33 @@ from datetime import datetime, timedelta
 from disaster_monitor.application.ports.ground_imagery.jobs import (
     GroundImageryJob,
     GroundImageryJobStatus,
+    GroundImageryQueueFull,
 )
 
 
 class InMemoryGroundImageryJobQueue:
     durable = False
 
-    def __init__(self) -> None:
+    def __init__(self, *, maximum_pending: int = 64) -> None:
+        if maximum_pending < 1:
+            raise ValueError("The preparation queue bound must be positive.")
+        self._maximum_pending = maximum_pending
         self.jobs: dict[str, GroundImageryJob] = {}
 
     async def enqueue(self, job: GroundImageryJob) -> bool:
         if job.job_id in self.jobs:
             return False
+        pending = sum(
+            item.status
+            in {
+                GroundImageryJobStatus.QUEUED,
+                GroundImageryJobStatus.RUNNING,
+                GroundImageryJobStatus.RETRY_WAIT,
+            }
+            for item in self.jobs.values()
+        )
+        if pending >= self._maximum_pending:
+            raise GroundImageryQueueFull("Image preparation queue is full.")
         self.jobs[job.job_id] = job
         return True
 

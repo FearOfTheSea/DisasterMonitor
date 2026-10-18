@@ -162,6 +162,24 @@ function GroundImageryView({
 
           {request ? (
             <>
+              {request.reason_codes?.includes('catalog_snapshot_reused') ? (
+                <p className="ground-imagery-note" role="status">
+                  Recent catalog snapshot reused. Search cutoff:{' '}
+                  <time
+                    aria-label="Catalog snapshot cutoff"
+                    dateTime={request.reference_time}
+                  >
+                    {formatImageryTime(request.reference_time)}
+                  </time>
+                  . Newer acquisitions may not be included yet.
+                </p>
+              ) : null}
+              {request.reason_codes?.includes('artifact_cache_reused') ? (
+                <p className="ground-imagery-note">
+                  Previously retrieved imagery reused. Acquisition dates are shown with
+                  each observation.
+                </p>
+              ) : null}
               {request.reason_codes?.includes('interrupted_restart') ? (
                 <p role="status" className="ground-imagery-note">
                   Preparation was interrupted by a restart. Completed artifacts are

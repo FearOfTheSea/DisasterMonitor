@@ -17,6 +17,30 @@ from disaster_monitor.domain.evidence_types import SourceReference
 NOW = datetime(2026, 10, 17, 12, tzinfo=UTC)
 
 
+@pytest.mark.parametrize(
+    "headline, expected",
+    [
+        ("Drought in Riverton", ("Three people died.",)),
+        ("Humanitarian situation report", ()),
+    ],
+)
+def test_disaster_accounts_do_not_promote_other_hazards_conflict_or_disease(
+    headline, expected
+):
+    report = replace(
+        article(headline),
+        text=(
+            "Drought disrupted the water supply. Three people died. "
+            "Violence killed 40 people. Cholera caused 17 deaths. "
+            "Floods killed five people."
+        ),
+    )
+    # The headline-independent case has both flood and drought and cannot admit
+    # one unambiguous event, but neither branch may attribute those unrelated deaths.
+    assessed = assess_article(report, ReportingInterval.at_start(7, NOW))
+    assert assessed.fatality_evidence == expected
+
+
 def article(title="Flood in Riverton", **kwargs):
     source = SourceReference(
         source_id="open-news",
@@ -72,11 +96,16 @@ def test_publication_interval_is_fixed_and_inclusive(days):
     ],
 )
 def test_open_discovery_all_categories_and_attributed_body_fatalities(hazard, title):
-    assessed = assess_article(article(title), ReportingInterval.at_start(7, NOW))
-    assert assessed.disaster == hazard
-    assert assessed.fatality_evidence == (
-        "Officials said two people died in the flood.",
+    # Every category needs its own source context; a flood sentence cannot serve
+    # as death evidence for an earthquake, wildfire, or another hazard.
+    sentence = (
+        f"Officials said two people died in the {hazard.value.replace('_', ' ')}."
     )
+    assessed = assess_article(
+        replace(article(title), text=sentence), ReportingInterval.at_start(7, NOW)
+    )
+    assert assessed.disaster == hazard
+    assert assessed.fatality_evidence == (sentence,)
     assert assessed.article.source.publisher == "Unfamiliar News"
 
 
@@ -265,6 +294,26 @@ async def test_timeout_retains_results_and_restart_marks_interruption(
     await FileDiscoveryStore(tmp_path).recover()
     assert (await store.read(run.scan_id)).status == "incomplete"
     await service.aclose()
+
+
+@pytest.mark.parametrize(
+    "headline",
+    [
+        "Venezuela Earthquakes Situation Report",
+        "Floods damage roads in Riverton",
+        "Wildfires force evacuations",
+        "Landslides block bridges",
+        "Droughts threaten rural water supplies",
+        "Tropical storms damage electricity networks",
+        "Volcanic eruptions disrupt communications",
+    ],
+)
+def test_plural_hazard_reporting_is_not_lost_at_classification(headline):
+    assessed = assess_article(
+        replace(article(headline), text=""), ReportingInterval.at_start(7, NOW)
+    )
+    assert assessed.eligibility == "eligible"
+    assert assessed.disaster is not None
 
 
 def test_recent_retrospective_article_qualifies_without_claiming_recent_onset():

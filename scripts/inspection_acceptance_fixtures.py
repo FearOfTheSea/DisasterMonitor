@@ -239,9 +239,13 @@ class InspectionMediaProvider:
 
 
 class InspectionCatalog:
+    def __init__(self, metrics: dict[str, int]) -> None:
+        self._metrics = metrics
+
     async def search(
         self, query: GroundImageryCatalogQuery
     ) -> GroundImageryCatalogPage:
+        self._metrics["catalog_provider_calls"] += 1
         await asyncio.sleep(0.02)
         west = query.geometry.bounds[0]
         if 109 < west < 111:
@@ -275,7 +279,11 @@ class InspectionCatalog:
 
 
 class InspectionRenderer:
+    def __init__(self, metrics: dict[str, int]) -> None:
+        self._metrics = metrics
+
     async def render(self, request: RenderRequest) -> RenderedRaster:
+        self._metrics["render_provider_calls"] += 1
         grid = request.grid
         await asyncio.sleep(0.02)
         radar = request.observation.sensor is Sensor.SENTINEL_1
@@ -333,16 +341,25 @@ def inspection_media(store: InMemoryMediaAssetStore) -> DisasterMediaService:
 
 
 def inspection_ground(
-    incidents: ActiveIncidentsService, root: Path, *, rate_limited: bool = True
+    incidents: ActiveIncidentsService,
+    root: Path,
+    *,
+    rate_limited: bool = True,
+    metrics: dict[str, int] | None = None,
 ) -> GroundImageryService:
+    metrics = (
+        metrics
+        if metrics is not None
+        else {"catalog_provider_calls": 0, "render_provider_calls": 0}
+    )
     artifacts = FilesystemImageryArtifactStore(root)
     return GroundImageryService(
         ActiveIncidentImageryContextReader(incidents),
         GroundImageryRegionResolver(GeodesicGeometryEngine()),
-        InspectionCatalog(),
+        InspectionCatalog(metrics),
         InMemoryGroundImageryRequestStore(),
         clock=lambda: NOW,
-        renderer=InspectionRenderer(),
+        renderer=InspectionRenderer(metrics),
         raster_validator=RasterioCogValidator(),
         artifact_store=artifacts,
         tile_renderer=RasterioStoredArtifactTileRenderer(artifacts),

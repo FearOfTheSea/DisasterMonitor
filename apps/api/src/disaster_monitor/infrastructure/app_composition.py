@@ -143,6 +143,9 @@ from disaster_monitor.infrastructure.media.filesystem_store import (
     FilesystemMediaAssetStore,
 )
 from disaster_monitor.infrastructure.news.discovery_feed import GdeltDiscoveryFeed
+from disaster_monitor.infrastructure.news.reliefweb_discovery import (
+    ReliefWebDiscoveryFeed,
+)
 from disaster_monitor.infrastructure.operations.file_discovery_store import (
     FileDiscoveryStore,
 )
@@ -373,9 +376,17 @@ def build_app_dependencies(
     discovery_feed = GdeltDiscoveryFeed(
         timeout_seconds=settings.news_feed_timeout_seconds
     )
+    reliefweb_discovery = ReliefWebDiscoveryFeed(
+        app_name=settings.reliefweb_app_name,
+        timeout_seconds=settings.news_feed_timeout_seconds,
+    )
     discovery_scans = configured.discovery_scans or DiscoveryScanService(
-        (discovery_feed, SupplementalIncidentCatalog(configured_active_incidents))
-        if settings.news_sensing_enabled and settings.gdelt_news_enabled
+        (
+            reliefweb_discovery,
+            *((discovery_feed,) if settings.gdelt_news_enabled else ()),
+            SupplementalIncidentCatalog(configured_active_incidents),
+        )
+        if settings.news_sensing_enabled
         else (),
         discovery_store,
     )
@@ -636,6 +647,7 @@ def build_app_dependencies(
             shutdown_hooks=(
                 discovery_scans.aclose,
                 discovery_feed.aclose,
+                reliefweb_discovery.aclose,
                 *(
                     lambda feed=feed: close_resource(feed)
                     for feed in breaking_news_feeds
