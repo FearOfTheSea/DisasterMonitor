@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     evidence_dataset_manifest: Path | None = None
     incident_identity_store_path: Path = Path("data/incidents/identities.json")
     discovery_scan_store_path: Path = Path("data/discovery-scans")
+    discovery_collection_path: Path = Path("data/discovery-collection.sqlite")
+    discovery_page_budget: int = Field(default=28, ge=1, le=200)
+    discovery_pass_seconds: float = Field(default=180, ge=10, le=600)
+    discovery_capacity_records: int = Field(default=20_000, ge=100, le=100_000)
     discovery_place_endpoint: str | None = None
     discovery_place_cache_path: Path = Path("data/geography/mention-places.json")
     ground_imagery_catalog_max_response_bytes: int = Field(

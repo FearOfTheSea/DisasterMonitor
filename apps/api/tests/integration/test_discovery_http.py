@@ -17,6 +17,60 @@ from disaster_monitor.presentation.http.api import create_schema_app
 NOW = datetime(2026, 10, 17, 12, tzinfo=UTC)
 
 
+async def test_continue_http_retains_exact_interval_and_exposes_durable_progress(
+    tmp_path,
+):
+    from disaster_monitor.application.incidents.resumable_discovery import (
+        ResumableDiscovery,
+    )
+    from disaster_monitor.domain.collection import CollectionPage
+    from disaster_monitor.infrastructure.operations.sqlite_collection import (
+        SQLiteCollectionJournal,
+    )
+
+    class Provider:
+        source_id = "controlled"
+        queries = ("flood",)
+        supports_alternates = False
+
+        async def fetch_page(self, partition):
+            return CollectionPage(next_cursor="next" if not partition.cursor else None)
+
+    class Reader:
+        async def retrieve(self, lead):
+            raise AssertionError("No lead retrieval expected")
+
+    journal = SQLiteCollectionJournal(tmp_path / "jobs.sqlite")
+    runtime = ResumableDiscovery(
+        (Provider(),), Reader(), journal, clock=lambda: NOW, page_budget=1
+    )
+    service = DiscoveryScanService((), journal, collection=runtime)
+    app = create_schema_app()
+    app.state.dependencies = SimpleNamespace(discovery_scans=service)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        started = await client.post(
+            "/api/v1/discovery-scans", json={"reporting_days": 1}
+        )
+        assert started.status_code == 202
+        body = started.json()
+        await service.wait(body["scan_id"])
+        before = (await client.get(f"/api/v1/discovery-scans/{body['scan_id']}")).json()
+        assert before["collection"]["can_continue"]
+        continued = await client.post(
+            f"/api/v1/discovery-scans/{body['scan_id']}/continue"
+        )
+        assert continued.status_code == 202
+        assert continued.json()["interval_start"] == body["interval_start"]
+        assert continued.json()["interval_end"] == body["interval_end"]
+        await service.wait(body["scan_id"])
+        after = (await client.get(f"/api/v1/discovery-scans/{body['scan_id']}")).json()
+        assert after["status"] == "completed"
+        assert after["collection"]["pages_acquired"] == 2
+    await service.aclose()
+
+
 async def test_http_reprocessing_preserves_window_and_exposes_original_provenance(
     tmp_path,
 ):

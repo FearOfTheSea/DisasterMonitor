@@ -6,6 +6,45 @@ import type { DiscoveryScanResponse } from '@/shared/api/generated/assistant';
 afterEach(cleanup);
 
 describe('publication scan controls', () => {
+  it('continues pending acquisition separately from retained reprocessing', () => {
+    const resume = vi.fn();
+    const reprocess = vi.fn();
+    const run = {
+      status: 'incomplete',
+      scan_id: 'pending',
+      reports_seen: 2,
+      interval_start: '2026-09-19T12:00:00Z',
+      interval_end: '2026-10-19T12:00:00Z',
+      issues: [],
+      unlocated_count: 0,
+      snapshot: { incidents: [] },
+      collection: {
+        state: 'partial',
+        can_continue: true,
+        searches_pending: 5,
+        pages_acquired: 3,
+        leads_acquired: 2,
+        articles_pending: 1,
+        articles_unavailable: 1,
+        retry_at: '2026-10-19T13:00:00Z',
+      },
+    } as unknown as DiscoveryScanResponse;
+    render(
+      <DiscoveryScanControls
+        days={30}
+        onDaysChange={vi.fn()}
+        onScan={vi.fn()}
+        run={run}
+        onContinue={resume}
+        onReprocess={reprocess}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Continue collection' }));
+    expect(resume).toHaveBeenCalledOnce();
+    expect(reprocess).not.toHaveBeenCalled();
+    expect(screen.getByText(/5 planned searches remain/)).toBeVisible();
+    expect(screen.getByText(/News service retry/)).toBeVisible();
+  });
   it('reprocesses finished retained reporting without requesting another world scan', () => {
     const reprocess = vi.fn();
     const start = vi.fn();

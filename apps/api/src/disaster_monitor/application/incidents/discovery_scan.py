@@ -15,6 +15,7 @@ from disaster_monitor.application.incidents.discovery_reprocessing import (
 from disaster_monitor.application.incidents.mention_geography import (
     resolve_event_places,
 )
+from disaster_monitor.application.ports.collection import CollectionRuntime
 from disaster_monitor.application.ports.discovery import DiscoveryFeed, DiscoveryStore
 from disaster_monitor.application.ports.mention_geography import MentionPlaceResolver
 from disaster_monitor.domain.discovery import (
@@ -39,8 +40,10 @@ class DiscoveryScanService:
         maximum_reports: int = 400,
         place_resolver: MentionPlaceResolver | None = None,
         country_names: frozenset[str] = frozenset(),
+        collection: CollectionRuntime | None = None,
     ) -> None:
         self._feeds = feeds
+        self._collection = collection
         self._store = store
         self._clock = clock
         self._timeout = provider_timeout_seconds
@@ -53,6 +56,8 @@ class DiscoveryScanService:
         self._persistence_failures: OrderedDict[str, DiscoveryRun] = OrderedDict()
 
     async def start(self, days: int = 7) -> DiscoveryRun:
+        if self._collection:
+            return await self._collection.start(days)
         interval = ReportingInterval.at_start(days, self._clock())
         async with self._lock:
             # Reuse only running work with the same period, started within 60s.
@@ -74,6 +79,8 @@ class DiscoveryScanService:
             return run
 
     async def get(self, scan_id: str) -> DiscoveryRun:
+        if self._collection:
+            return await self._collection.get(scan_id)
         if scan_id in self._persistence_failures:
             return self._persistence_failures[scan_id]
         run = await self._store.read(scan_id)
@@ -101,6 +108,9 @@ class DiscoveryScanService:
             return result
 
     async def wait(self, scan_id: str) -> None:
+        if self._collection:
+            await self._collection.wait(scan_id)
+            return
         if task := self._tasks.get(scan_id):
             await asyncio.shield(task)
 
@@ -248,7 +258,21 @@ class DiscoveryScanService:
                 self._active.pop(run.interval.days, None)
 
     async def aclose(self) -> None:
+        if self._collection:
+            await self._collection.aclose()
         tasks = tuple(self._tasks.values())
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def continue_collection(self, scan_id: str) -> DiscoveryRun:
+        if self._collection is None:
+            raise ValueError(
+                "This historical scan has no resumable collection "
+                "journal. Start a new scan."
+            )
+        return await self._collection.continue_collection(scan_id)
+
+    async def recover(self) -> None:
+        if self._collection:
+            await self._collection.recover()

@@ -257,6 +257,7 @@ export default function Home() {
               error={discovery.error}
               submitting={discovery.submitting}
               onClear={discovery.clear}
+              onContinue={discovery.continueCollection}
               onReprocess={() => {
                 clearSelectedIncident();
                 return discovery.reprocess();

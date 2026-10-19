@@ -13,6 +13,7 @@ export function DiscoveryScanControls({
   submitting = false,
   onClear,
   onReprocess,
+  onContinue,
 }: {
   days: ReportingDays;
   onDaysChange: (days: ReportingDays) => void;
@@ -22,6 +23,7 @@ export function DiscoveryScanControls({
   submitting?: boolean;
   onClear?: () => void;
   onReprocess?: () => void | Promise<void>;
+  onContinue?: () => void | Promise<void>;
 }) {
   const running = submitting || run?.status === 'running';
   const contextCount =
@@ -30,15 +32,17 @@ export function DiscoveryScanControls({
     ? 'Updating reporting…'
     : !run
       ? undefined
-      : run.status === 'running'
-        ? 'Scanning the world…'
-        : run.status === 'failed'
-          ? 'Scan failed'
-          : run.status === 'incomplete'
-            ? 'Scan incomplete — available results retained'
-            : run.snapshot.incidents?.length
-              ? 'Scan completed'
-              : 'No matching events were found in this scan';
+      : run.collection?.state === 'waiting'
+        ? 'Waiting for a news service — available results retained'
+        : run.status === 'running'
+          ? 'Scanning the world…'
+          : run.status === 'failed'
+            ? 'Scan failed'
+            : run.status === 'incomplete'
+              ? 'Scan incomplete — available results retained'
+              : run.snapshot.incidents?.length
+                ? 'Scan completed'
+                : 'No matching events were found in this scan';
   return (
     <section className="discovery-scan-controls" aria-label="Worldwide discovery">
       <label>
@@ -92,6 +96,28 @@ export function DiscoveryScanControls({
                 </p>
               ) : null}
               <p>{run.coverage_notice}</p>
+              {run.collection ? (
+                <>
+                  <p>
+                    {run.collection.pages_acquired} pages collected ·{' '}
+                    {run.collection.searches_pending} planned searches remain ·{' '}
+                    {run.collection.articles_pending} articles awaiting retrieval.
+                  </p>
+                  {run.collection.articles_unavailable ? (
+                    <p>
+                      {run.collection.articles_unavailable} articles could not be
+                      retrieved. Their leads and access outcomes remain retained.
+                    </p>
+                  ) : null}
+                  {run.collection.retry_at ? (
+                    <p>
+                      News service retry:{' '}
+                      {new Date(run.collection.retry_at).toLocaleString()}. Continuing
+                      respects this wait.
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
               {run.reprocessed_from ? (
                 <p>
                   These results reprocess retained reports. No new news search was
@@ -122,6 +148,17 @@ export function DiscoveryScanControls({
         </div>
       ) : null}
       {error ? <p role="alert">{error}</p> : null}
+      {run?.collection?.can_continue && !run.reprocessed_from && onContinue ? (
+        <>
+          <button type="button" disabled={running} onClick={() => void onContinue()}>
+            Continue collection
+          </button>
+          <p>
+            Resume remaining news searches and article retrieval for this same reporting
+            interval.
+          </p>
+        </>
+      ) : null}
       {run && onReprocess ? (
         <>
           <button type="button" disabled={running} onClick={() => void onReprocess()}>

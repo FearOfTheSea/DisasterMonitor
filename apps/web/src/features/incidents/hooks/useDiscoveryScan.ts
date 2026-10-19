@@ -5,6 +5,7 @@ import {
   fetchDiscoveryScan,
   requestDiscoveryScan,
   reprocessDiscoveryScan,
+  continueDiscoveryScan,
   type ReportingDays,
 } from '@/features/incidents/api/discoveryClient';
 import type {
@@ -118,6 +119,9 @@ export function useDiscoveryScan() {
   const reprocess = useCallback(async () => {
     if (id) await update((signal) => reprocessDiscoveryScan(id, signal));
   }, [id, update]);
+  const continueCollection = useCallback(async () => {
+    if (id) await update((signal) => continueDiscoveryScan(id, signal));
+  }, [id, update]);
 
   const snapshot = useMemo(() => {
     if (!run) return undefined;
@@ -146,6 +150,7 @@ export function useDiscoveryScan() {
     submitting,
     start,
     reprocess,
+    continueCollection,
     search,
     setSearch,
     hazard,

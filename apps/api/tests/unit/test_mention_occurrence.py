@@ -262,3 +262,28 @@ def test_storm_intensity_update_does_not_establish_impact_onset():
     )
     assert mention.role == "reported"
     assert mention.time is None or mention.time.start is None
+
+
+def test_dated_weather_cause_establishes_the_reported_flood_occurrence():
+    (mention,) = extract_mentions(
+        "On 9 October 2026, heavy rainfall caused flooding in Lakeview. "
+        "Two people died.",
+        SOURCE,
+    )
+    assert mention.role == "reported"
+    assert mention.time.start == datetime(2026, 10, 9, tzinfo=UTC)
+    assert mention.place.wording == "Lakeview"
+    assert mention.claims[0].fact.value == "Two"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "On 9 October 2026, heavy rainfall could cause flooding in Lakeview.",
+        "Officials reported on 9 October 2026 that rain caused flooding in Lakeview.",
+        "The response on 9 October 2026 followed rain that caused flooding.",
+    ],
+)
+def test_cause_language_does_not_override_forecast_or_reporting_clocks(text):
+    mentions = extract_mentions(text, SOURCE)
+    assert all(mention.time is None for mention in mentions)

@@ -1242,6 +1242,78 @@ const apiSchemas = {
     enum: ['actual', 'exercise', 'system', 'test', 'draft'],
     type: 'string',
   },
+  CollectionProgress: {
+    properties: {
+      articles_pending: {
+        type: 'integer',
+      },
+      articles_retrieved: {
+        type: 'integer',
+      },
+      articles_unavailable: {
+        type: 'integer',
+      },
+      can_continue: {
+        type: 'boolean',
+      },
+      leads_acquired: {
+        type: 'integer',
+      },
+      notices: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      pages_acquired: {
+        type: 'integer',
+      },
+      provider_requests: {
+        items: {
+          maxItems: 2,
+          minItems: 2,
+          prefixItems: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'integer',
+            },
+          ],
+          type: 'array',
+        },
+        type: 'array',
+      },
+      retry_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      searches_completed: {
+        type: 'integer',
+      },
+      searches_pending: {
+        type: 'integer',
+      },
+      searches_refused: {
+        type: 'integer',
+      },
+      searches_saturated: {
+        type: 'integer',
+      },
+      state: {
+        enum: ['collecting', 'waiting', 'partial', 'finished'],
+        type: 'string',
+      },
+    },
+    type: 'object',
+  },
   CommonOperationalPictureResponse: {
     properties: {
       cop_id: {
@@ -2497,6 +2569,16 @@ const apiSchemas = {
       },
       candidate_count: {
         type: 'integer',
+      },
+      collection: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/CollectionProgress',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       coverage_notice: {
         type: 'string',
@@ -7398,6 +7480,23 @@ export type CaseNotebookRequest = {
   title: string;
 };
 
+export type CollectionProgress = {
+  articles_pending?: number;
+  articles_retrieved?: number;
+  articles_unavailable?: number;
+  can_continue?: boolean;
+  leads_acquired?: number;
+  notices?: Array<string>;
+  pages_acquired?: number;
+  provider_requests?: Array<[string, number]>;
+  retry_at?: string | null;
+  searches_completed?: number;
+  searches_pending?: number;
+  searches_refused?: number;
+  searches_saturated?: number;
+  state?: 'collecting' | 'waiting' | 'partial' | 'finished';
+};
+
 export type CommonOperationalPictureResponse = {
   cop_id: string;
   created_at: string;
@@ -7710,6 +7809,7 @@ export type DiscoveryScanResponse = {
   };
   associated_event_count?: number;
   candidate_count?: number;
+  collection?: CollectionProgress | null;
   coverage_notice?: string;
   failed_operations: number;
   finished_at: string | null;

@@ -15,8 +15,8 @@ _PREPARATION = re.compile(
 )
 _OCCURRENCE = re.compile(
     r"\b(?:struck|hit|occurred|erupted|killed|died|injured|damaged|destroyed|"
-    r"affected|impacted|tore through|displaced|swept|flooded|triggered|devastated|"
-    r"strengthened|intensifies|"
+    r"affected|impacted|tore through|displaced|swept|flooded|triggered|caused|"
+    r"devastated|strengthened|intensifies|"
     r"has moved|brought|bringing|began|started|onset|reported|recorded|"
     r"survived|survivors)\b",
     re.I,

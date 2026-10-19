@@ -49,9 +49,6 @@ from disaster_monitor.application.humanitarian.context import HumanitarianContex
 from disaster_monitor.application.incidents.active_incidents import (
     ActiveIncidentsService,
 )
-from disaster_monitor.application.incidents.discovery_catalog import (
-    SupplementalIncidentCatalog,
-)
 from disaster_monitor.application.incidents.discovery_scan import DiscoveryScanService
 from disaster_monitor.application.incidents.evidence_context import (
     IncidentEvidenceContextReader,
@@ -60,6 +57,9 @@ from disaster_monitor.application.incidents.manage_incident_watches import (
     ManageIncidentWatches,
 )
 from disaster_monitor.application.incidents.map_navigation import MapNavigationService
+from disaster_monitor.application.incidents.resumable_discovery import (
+    ResumableDiscovery,
+)
 from disaster_monitor.application.ingestion.provider_freshness import (
     ProviderFreshnessService,
 )
@@ -145,9 +145,10 @@ from disaster_monitor.infrastructure.humanitarian.iom_dtm import IomDtmContextAd
 from disaster_monitor.infrastructure.media.filesystem_store import (
     FilesystemMediaAssetStore,
 )
-from disaster_monitor.infrastructure.news.discovery_feed import GdeltDiscoveryFeed
-from disaster_monitor.infrastructure.news.reliefweb_discovery import (
-    ReliefWebDiscoveryFeed,
+from disaster_monitor.infrastructure.news.collection_providers import (
+    GdeltCollectionProvider,
+    PublicCollectionArticleReader,
+    ReliefWebCollectionProvider,
 )
 from disaster_monitor.infrastructure.operations.file_discovery_store import (
     FileDiscoveryStore,
@@ -157,6 +158,9 @@ from disaster_monitor.infrastructure.operations.file_incident_identity_store imp
 )
 from disaster_monitor.infrastructure.operations.postgres_repository import (
     PostgresOperationalRepository,
+)
+from disaster_monitor.infrastructure.operations.sqlite_collection import (
+    SQLiteCollectionJournal,
 )
 from disaster_monitor.infrastructure.operator_workspace.json_store import (
     JsonOperatorWorkspaceStore,
@@ -339,7 +343,12 @@ def build_app_dependencies(
         )
     )
     retrieval = investigation.dependencies
-    discovery_store = FileDiscoveryStore(settings.discovery_scan_store_path)
+    discovery_store = SQLiteCollectionJournal(
+        settings.discovery_collection_path,
+        legacy=FileDiscoveryStore(settings.discovery_scan_store_path),
+        pass_seconds=settings.discovery_pass_seconds,
+        maximum_leads=settings.discovery_capacity_records,
+    )
     mention_resolver = (
         NominatimMentionResolver(
             settings.discovery_place_endpoint, settings.discovery_place_cache_path
@@ -384,27 +393,38 @@ def build_app_dependencies(
     )
     source_catalog = build_source_catalog(settings)
     breaking_news_feeds = build_breaking_news_feeds(settings, operational.repository)
-    discovery_feed = GdeltDiscoveryFeed(
+    discovery_feed = GdeltCollectionProvider(
         timeout_seconds=settings.news_feed_timeout_seconds
     )
-    reliefweb_discovery = ReliefWebDiscoveryFeed(
+    reliefweb_discovery = ReliefWebCollectionProvider(
         app_name=settings.reliefweb_app_name,
         timeout_seconds=settings.news_feed_timeout_seconds,
     )
-    discovery_scans = configured.discovery_scans or DiscoveryScanService(
+    discovery_providers = (
         (
             reliefweb_discovery,
             *((discovery_feed,) if settings.gdelt_news_enabled else ()),
-            SupplementalIncidentCatalog(configured_active_incidents),
         )
         if settings.news_sensing_enabled
-        else (),
+        else ()
+    )
+    discovery_countries = frozenset(
+        name.casefold()
+        for country in country_catalog.countries()
+        for name in (country.canonical_name, *country.aliases)
+    )
+    discovery_scans = configured.discovery_scans or DiscoveryScanService(
+        (),
         discovery_store,
         place_resolver=mention_resolver,
-        country_names=frozenset(
-            name.casefold()
-            for country in country_catalog.countries()
-            for name in (country.canonical_name, *country.aliases)
+        country_names=discovery_countries,
+        collection=ResumableDiscovery(
+            discovery_providers,
+            PublicCollectionArticleReader(),
+            discovery_store,
+            page_budget=settings.discovery_page_budget,
+            pass_seconds=settings.discovery_pass_seconds,
+            country_names=discovery_countries,
         ),
     )
     configured_news_ids = {feed.source_id for feed in breaking_news_feeds}
@@ -658,7 +678,7 @@ def build_app_dependencies(
         lifecycle=AppLifecycle(
             startup_hooks=(
                 migrate_operational_repository,
-                discovery_store.recover,
+                discovery_scans.recover,
                 catalog_automation.start,
             ),
             shutdown_hooks=(

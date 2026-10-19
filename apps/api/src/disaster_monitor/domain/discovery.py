@@ -120,6 +120,24 @@ class DiscoveryBatch:
 
 
 @dataclass(frozen=True, slots=True)
+class CollectionProgress:
+    state: Literal["collecting", "waiting", "partial", "finished"] = "collecting"
+    searches_pending: int = 0
+    searches_completed: int = 0
+    searches_refused: int = 0
+    searches_saturated: int = 0
+    pages_acquired: int = 0
+    leads_acquired: int = 0
+    articles_pending: int = 0
+    articles_retrieved: int = 0
+    articles_unavailable: int = 0
+    retry_at: datetime | None = None
+    can_continue: bool = False
+    notices: tuple[str, ...] = ()
+    provider_requests: tuple[tuple[str, int], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class DiscoveryRun:
     scan_id: str
     interval: ReportingInterval
@@ -134,6 +152,7 @@ class DiscoveryRun:
     supplemental: tuple[DiscoveryArticle, ...] = ()
     acquisition: tuple[AcquisitionAudit, ...] = ()
     reprocessed_from: str | None = None
+    collection: CollectionProgress | None = None
 
 
 # Provisional extraction: retain attributed affirmative sentences, never infer deaths
