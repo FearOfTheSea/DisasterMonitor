@@ -286,6 +286,11 @@ def _credit(
                 return _clean_text(name), MediaCreditKind.PHOTOGRAPHER
         if isinstance(creator, str) and _clean_text(creator):
             return _clean_text(creator), MediaCreditKind.PHOTOGRAPHER
+    parenthesized = re.search(
+        r"\(Photo(?:graph)?\s+by\s+([^()]{2,180})\)", caption, re.I
+    )
+    if parenthesized:
+        return _clean_text(parenthesized[1]), MediaCreditKind.PHOTOGRAPHER
     match = re.search(
         r"(?:photo(?:graph)?(?:\s+by|\s+credit)?|image(?:\s+by)?|credit)\s*[:\-]\s*"
         r"([^()]{2,100})",

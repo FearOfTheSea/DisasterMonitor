@@ -20,6 +20,27 @@ function snapshot(retrievedAt: string): ActiveIncidentsSnapshot {
 }
 
 describe('useActiveIncidents', () => {
+  it('suspends catalog acquisition while another reporting workflow is active', async () => {
+    vi.mocked(fetchActiveIncidents).mockResolvedValue(snapshot('catalog'));
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useActiveIncidents(enabled),
+      {
+        initialProps: { enabled: false },
+      },
+    );
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(fetchActiveIncidents).not.toHaveBeenCalled();
+    rerender({ enabled: true });
+    await waitFor(() => expect(result.current.snapshot?.retrieved_at).toBe('catalog'));
+    expect(fetchActiveIncidents).toHaveBeenCalledOnce();
+    rerender({ enabled: false });
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(fetchActiveIncidents).toHaveBeenCalledOnce();
+  });
   afterEach(() => cleanup());
   beforeEach(() => {
     vi.clearAllMocks();

@@ -25,27 +25,24 @@ from disaster_monitor.application.ports.event_media import (
     MediaAssetStore,
 )
 from disaster_monitor.domain.disaster import Disaster
+from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 
-_DISASTER_TERMS: dict[Disaster, tuple[str, ...]] = {
-    Disaster.EARTHQUAKE: ("earthquake", "quake", "tremor"),
-    Disaster.FLOOD: ("flood", "flooding", "inundation"),
-    Disaster.WILDFIRE: ("wildfire", "bushfire", "forest fire"),
-    Disaster.LANDSLIDE: ("landslide", "mudslide", "debris flow"),
-    Disaster.DROUGHT: ("drought", "dry spell", "water shortage"),
-    Disaster.TROPICAL_CYCLONE: (
-        "tropical cyclone",
-        "cyclone",
-        "hurricane",
-        "typhoon",
-        "tropical storm",
-    ),
-    Disaster.VOLCANIC_ERUPTION: (
-        "volcanic eruption",
-        "volcano eruption",
-        "eruptive activity",
-        "ash plume",
-    ),
+# Extra descriptive media terms supplement the canonical domain hazard vocabulary.
+_MEDIA_CONTEXT_TERMS: dict[Disaster, tuple[str, ...]] = {
+    Disaster.EARTHQUAKE: ("tremor",),
+    Disaster.LANDSLIDE: ("debris flow",),
+    Disaster.DROUGHT: ("dry spell", "water shortage"),
+    Disaster.VOLCANIC_ERUPTION: ("volcano eruption", "eruptive activity", "ash plume"),
 }
+
+
+def _mentions_disaster(text: str, disaster: Disaster) -> bool:
+    return disaster in disasters_in_text(text) or any(
+        _contains_term(_normalized(text), term)
+        for term in _MEDIA_CONTEXT_TERMS.get(disaster, ())
+    )
+
+
 _ROLE_TERMS: tuple[tuple[MediaContentRole, tuple[str, ...]], ...] = (
     (
         MediaContentRole.RESCUE_EFFORT,
@@ -101,10 +98,7 @@ class EventMediaAssociationPolicy:
         if linked:
             if candidate.source_page_url in context.multi_event_article_urls:
                 caption = _normalized(candidate.caption)
-                hazard_match = any(
-                    _contains_term(caption, _normalized(term))
-                    for term in _DISASTER_TERMS[context.disaster]
-                )
+                hazard_match = _mentions_disaster(candidate.caption, context.disaster)
                 places = _location_terms(context.location)
                 if (
                     not hazard_match
@@ -128,18 +122,36 @@ class EventMediaAssociationPolicy:
                     return self._rejected(
                         candidate, "media.association.capture_time_mismatch"
                     )
-            elif re.search(r"\b(?:19|20)\d{2}\b", candidate.caption):
-                return self._rejected(
-                    candidate, "media.association.unresolved_capture_context"
-                )
+            else:
+                years = {
+                    int(y) for y in re.findall(r"\b(?:19|20)\d{2}\b", candidate.caption)
+                }
+                if years and (
+                    candidate.published_at is None
+                    or years != {candidate.published_at.year}
+                ):
+                    return self._rejected(
+                        candidate, "media.association.unresolved_capture_context"
+                    )
             return MediaCandidateAssessment(
                 candidate,
                 MediaAssociationStatus.EXACT_EVENT_LINK,
-                ("media.association.collected_article",),
+                ("media.association.collected_article",)
+                + (
+                    ("media.association.event_time_unresolved",)
+                    if not context.event_time_known
+                    else ()
+                ),
                 (
                     "Photograph belongs to a retained event article; article "
                     "association does not independently verify the photographed "
                     "place or time."
+                    + (
+                        " Event time remains unresolved; "
+                        "the caption date is not event onset."
+                        if not context.event_time_known
+                        else ""
+                    )
                 ),
             )
         if not context.event_time_known:
@@ -174,10 +186,7 @@ class EventMediaAssociationPolicy:
         )
         context_text = _normalized(candidate.context_text)
         text = f"{primary_text} {context_text}".strip()
-        disaster_terms = tuple(
-            _normalized(item) for item in _DISASTER_TERMS[context.disaster]
-        )
-        if not any(_contains_term(primary_text, term) for term in disaster_terms):
+        if not _mentions_disaster(primary_text, context.disaster):
             return self._rejected(candidate, "media.association.disaster_missing")
         rules.append("media.association.disaster_text")
 

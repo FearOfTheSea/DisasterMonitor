@@ -150,7 +150,7 @@ def associate_mentions(
                 disaster=mention.disaster,
                 mention=mention,
                 mentions=(),
-                mention_count=len(mentions),
+                mention_count=sum(m.role in ("reported", "ongoing") for m in mentions),
             )
             if report.eligibility == "unknown_publication":
                 deferred.append(projected)

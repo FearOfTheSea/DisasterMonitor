@@ -25,7 +25,10 @@ _TERMS = {
     "displacement": r"displaced|displacement|homeless",
     "roads_bridges": r"roads?|bridges?|highways?",
     "electricity": r"electricity|power (?:grid|lines?|networks?|suppl\w+)",
-    "water": r"water (?:systems?|networks?|suppl\w+|pipes?)",
+    "water": (
+        r"water (?:systems?|networks?|suppl\w+|pipes?|"
+        r"(?:and [a-z]+ ){0,2}infrastructure)"
+    ),
     "communications": (
         r"communications? (?:networks?|systems?)|telecom\w*|phone networks?"
     ),
@@ -41,7 +44,7 @@ _LINK = (
 )
 _DAMAGE = re.compile(
     r"\b(?:damag\w*|destroy\w*|disrupt\w*|collaps\w*|washed away|"
-    r"outage\w*|down|cut off|unaffected|intact)\b",
+    r"outage\w*|block\w*|down|cut off|unaffected|intact)\b",
     re.I,
 )
 _QUALIFIERS = {
@@ -138,6 +141,11 @@ def extract_reported_impacts(
                 continue
             value = "Unknown"
             if category in ("fatalities", "injuries", "displacement"):
+                alternatives = bool(
+                    re.search(r"\beither\b.+\bor\b|\bdead or missing\b", sentence, re.I)
+                )
+                if alternatives:
+                    qualifiers = tuple(dict.fromkeys((*qualifiers, "uncertain")))
                 before = re.search(
                     rf"\b({_NUMBER}){_LINK}(?:{terms})\b", sentence, re.I
                 )
@@ -150,7 +158,9 @@ def extract_reported_impacts(
                     rf"\b(?:no|zero)(?:\s+one)?{_LINK}(?:{terms})\b", sentence, re.I
                 )
                 count = before or after
-                if zero:
+                if alternatives:
+                    value = "Unknown"
+                elif zero:
                     value = "0"
                 elif count:
                     value = count[1].replace(",", "")

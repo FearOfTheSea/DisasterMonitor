@@ -16,6 +16,17 @@ SOURCE = SourceReference(
 )
 
 
+def test_alternative_outcomes_are_retained_without_asserting_deaths_or_injuries():
+    (deaths, injuries) = extract_reported_impacts(
+        "The clinician said patients either did not have injuries "
+        "or were dead or missing.",
+        SOURCE,
+    )
+    assert deaths.fact.value == injuries.fact.value == "Unknown"
+    assert "uncertain" in deaths.qualifiers and "uncertain" in injuries.qualifiers
+    assert "dead or missing" in deaths.excerpt
+
+
 def test_retains_corrected_historical_uncertain_zero_and_scoped_accounts():
     text = (
         "Preliminary reports said 12 people died in North Province on Monday. "
@@ -77,6 +88,33 @@ def test_each_count_is_tied_to_its_impact_not_an_unrelated_number():
 def test_no_one_died_is_zero_not_one():
     claims = extract_reported_impacts("No one died. No people were injured.", SOURCE)
     assert [c.fact.value for c in claims] == ["0", "0"]
+
+
+def test_qualitative_blocked_roads_and_drinking_water_damage_remain_attributed():
+    road = "Rain and storm surge flooded coastal areas and blocked roads in Guerrero."
+    water = (
+        "The earthquake damaged essential drinking water and transportation "
+        "infrastructure in the affected provinces."
+    )
+    claims = extract_reported_impacts(
+        f"{road} {water}", SOURCE, location="Source region"
+    )
+    assert [(c.fact.category, c.fact.value) for c in claims] == [
+        ("roads_bridges", "Source account"),
+        ("water", "Source account"),
+    ]
+    assert [c.excerpt for c in claims] == [road, water]
+    assert all(c.fact.source == SOURCE for c in claims)
+    assert all(c.fact.reported_location == "Source region" for c in claims)
+
+
+def test_infrastructure_mentions_without_a_supported_impact_are_not_damage():
+    assert not extract_reported_impacts(
+        "Teams distributed drinking water and cleared rubbish near roads. "
+        "The water infrastructure inspection is planned. "
+        "Schools were damaged near a water distribution point.",
+        SOURCE,
+    )
 
 
 def test_provider_accounts_only_attach_matching_supporting_excerpts():

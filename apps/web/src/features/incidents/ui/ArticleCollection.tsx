@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { IncidentGeometry } from '@/features/incidents/model/activeIncidents';
 import type {
   DiscoveryReportResponse,
   ReportedImpactResponse,
@@ -132,10 +133,15 @@ function Article({ report }: { report: DiscoveryReportResponse }) {
 export function ArticleCollection({
   reports,
   notices = [],
+  mappedGeometry,
 }: {
   reports: DiscoveryReportResponse[];
   notices?: string[];
+  mappedGeometry?: IncidentGeometry | null;
 }) {
+  const mapped =
+    mappedGeometry?.kind !== 'descriptive' &&
+    Boolean(mappedGeometry?.coordinates.length);
   const articles = [
     ...new Map(reports.map((report) => [report.source.canonical_url, report])).values(),
   ];
@@ -295,7 +301,23 @@ export function ArticleCollection({
             </article>
           )}
         />
-        {!reports.some((r) => r.geometry) ? (
+        {mapped ? (
+          <p>
+            Selected event map geometry:{' '}
+            {(mappedGeometry?.description ?? mappedGeometry?.kind)?.replace(
+              /[.\s]+$/,
+              '',
+            )}
+            .
+            {mappedGeometry?.estimated
+              ? ' This estimated context is not an exact event location or measured affected area.'
+              : ' This retains the supplied source precision; it does not by itself establish a measured affected area.'}{' '}
+            Article place descriptions above retain their own source precision.
+          </p>
+        ) : !reports.some(
+            (r) =>
+              r.geometry?.kind !== 'descriptive' && r.geometry?.coordinates?.length,
+          ) ? (
           <p>
             Location unresolved for mapping. This event remains inspectable in the list.
           </p>

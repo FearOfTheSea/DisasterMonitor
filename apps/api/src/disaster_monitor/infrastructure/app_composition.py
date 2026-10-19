@@ -340,6 +340,13 @@ def build_app_dependencies(
     )
     retrieval = investigation.dependencies
     discovery_store = FileDiscoveryStore(settings.discovery_scan_store_path)
+    mention_resolver = (
+        NominatimMentionResolver(
+            settings.discovery_place_endpoint, settings.discovery_place_cache_path
+        )
+        if settings.discovery_place_endpoint
+        else None
+    )
     configured_active_incidents = (
         configured.active_incidents_service
         or ActiveIncidentsService(
@@ -359,6 +366,7 @@ def build_app_dependencies(
             provider_attempt_recorder=operational.repository,
             candidate_store=operational.repository,
             discovery_store=discovery_store,
+            discovery_place_resolver=mention_resolver,
             identity_store=FileIncidentIdentityStore(
                 settings.incident_identity_store_path
             ),
@@ -382,13 +390,6 @@ def build_app_dependencies(
     reliefweb_discovery = ReliefWebDiscoveryFeed(
         app_name=settings.reliefweb_app_name,
         timeout_seconds=settings.news_feed_timeout_seconds,
-    )
-    mention_resolver = (
-        NominatimMentionResolver(
-            settings.discovery_place_endpoint, settings.discovery_place_cache_path
-        )
-        if settings.discovery_place_endpoint
-        else None
     )
     discovery_scans = configured.discovery_scans or DiscoveryScanService(
         (

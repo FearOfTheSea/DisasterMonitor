@@ -18,6 +18,121 @@ SOURCE = SourceReference(
 )
 
 
+def test_response_references_do_not_turn_a_clinician_base_into_an_event_location():
+    mentions = extract_mentions(
+        "Floods hit Riverton and Lakeview districts on 26 August. "
+        "A physician based in Harbor City joined the response team. "
+        "After the floods, the organization asked her to provide medical care. "
+        "Aid was sent to partners responding in Exampleland's "
+        "flood-affected districts.",
+        SOURCE,
+    )
+    physical = [m for m in mentions if m.role in ("reported", "ongoing")]
+    assert len(physical) == 1
+    assert physical[0].place.wording == "Riverton and Lakeview districts"
+    assert all(not m.place or m.place.wording != "Harbor City" for m in mentions)
+    assert any("medical care" in m.text for m in mentions)
+    assert any("Aid was sent" in m.text for m in mentions)
+
+
+def test_undated_same_place_accounts_attach_to_the_unique_dated_article_anchor():
+    mentions = extract_mentions(
+        "In Lakeview district, patients struggled after floods cut off access. "
+        "Floods swept through the region after a medical team reached "
+        "Exampleland's Lakeview district. "
+        "The Aug. 26 floods devastated communities, with Riverton and Lakeview "
+        "among the hardest-hit districts. "
+        "Roads and bridges were destroyed.",
+        SOURCE,
+    )
+    physical = [m for m in mentions if m.role in ("reported", "ongoing")]
+    assert len(physical) == 1
+    assert physical[0].time.start.day == 26
+    assert physical[0].place.wording == "Riverton and Lakeview"
+    assert "patients struggled" in physical[0].text
+    assert "Roads and bridges" in physical[0].text
+
+
+def test_undated_other_places_and_multiple_dated_anchors_do_not_collapse():
+    mentions = extract_mentions(
+        "Floods hit Riverton on 26 August. Floods hit Lakeview on 28 August. "
+        "Floods hit Harbor City. Floods hit Riverton.",
+        SOURCE,
+    )
+    physical = [m for m in mentions if m.role in ("reported", "ongoing")]
+    assert len(physical) == 4
+
+
+def test_separate_undated_occurrence_is_not_joined_by_shared_response_words():
+    mentions = extract_mentions(
+        "Floods hit Riverton on 26 August. "
+        "A separate flood hit Riverton and medical teams responded.",
+        SOURCE,
+    )
+    assert len([m for m in mentions if m.role == "reported"]) == 2
+
+
+def test_explicit_human_impact_in_a_response_account_still_establishes_occurrence():
+    (mention,) = extract_mentions(
+        "After floods in Riverton, medical teams reported that three people died.",
+        SOURCE,
+    )
+    assert mention.role == "reported"
+    assert mention.claims[0].fact.value == "three"
+
+
+def test_response_continuity_does_not_allocate_combined_hazard_accounts():
+    mentions = extract_mentions(
+        "Floods hit Riverton on 26 August. "
+        "Floods and landslides affected Riverton while medical teams responded.",
+        SOURCE,
+    )
+    principal = next(m for m in mentions if m.time and m.time.start)
+    assert "landslides" not in principal.text
+    assert (
+        len([m for m in mentions if any(n.startswith("Combined") for n in m.notices)])
+        == 2
+    )
+
+
+@pytest.mark.parametrize("wording", ["Aug. 26", "Aug 26", "26 Aug.", "26 August"])
+def test_abbreviated_month_periods_remain_part_of_reported_event_date(wording):
+    mentions = extract_mentions(
+        f"The {wording} floods devastated communities in Riverton. "
+        "The response as of Oct. 2 included medical care.",
+        SOURCE,
+    )
+    timed = [m for m in mentions if m.time and m.time.start]
+    assert len(timed) == 1
+    assert timed[0].time.start == datetime(2026, 8, 26, tzinfo=UTC)
+    assert timed[0].time.wording == wording
+    assert all(m.time is None or m.time.start.month != 10 for m in mentions)
+
+
+def test_named_administrative_group_keeps_names_before_affected_descriptor():
+    mentions = extract_mentions(
+        "The Aug. 26 floods devastated northern Exampleland, with Riverton and "
+        "Lakeview among the hardest-hit districts.",
+        SOURCE,
+    )
+    assert len(mentions) == 1
+    assert mentions[0].place.wording == "Riverton and Lakeview"
+    assert mentions[0].place.role == "administrative_area"
+
+
+def test_distinct_hazard_clauses_keep_their_own_descriptive_place():
+    mentions = extract_mentions(
+        "Authorities reported flooding in North Valley, as well as a M6.1 "
+        "earthquake in South Island.",
+        SOURCE,
+    )
+    assert {m.disaster.value: m.place.wording for m in mentions} == {
+        "flood": "North Valley",
+        "earthquake": "South Island",
+    }
+    assert all(not m.claims for m in mentions)
+
+
 @pytest.mark.parametrize(
     "text",
     [

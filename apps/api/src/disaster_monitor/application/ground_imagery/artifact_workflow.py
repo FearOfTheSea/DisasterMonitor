@@ -275,9 +275,7 @@ class GroundImageryArtifactWorkflow:
             }
         return {
             "state": "ready",
-            "detail": (
-                "Public catalog discovery and authenticated rendering are configured."
-            ),
+            "detail": ("Catalog discovery and authenticated rendering are configured."),
         }
 
     async def aclose(self) -> None:

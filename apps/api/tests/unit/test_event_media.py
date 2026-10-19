@@ -135,6 +135,42 @@ def test_collected_multi_event_article_does_not_make_every_photo_match():
 
 
 @pytest.mark.parametrize(
+    "disaster,caption",
+    [
+        (Disaster.FLOOD, "Floods in Colombia left roads covered with debris."),
+        (Disaster.WILDFIRE, "Wildfires in Colombia left roads covered with debris."),
+        (Disaster.LANDSLIDE, "Landslides in Colombia left roads covered with debris."),
+        (
+            Disaster.EARTHQUAKE,
+            "Earthquakes in Colombia left roads covered with debris.",
+        ),
+    ],
+)
+def test_plural_hazard_in_caption_retains_collected_event_association(
+    disaster, caption
+):
+    candidate = _candidate("plural", title=caption, caption=caption)
+    source = SourceReference(
+        "news",
+        "Daily",
+        caption,
+        candidate.source_page_url,
+        candidate.published_at,
+        None,
+        NOW,
+    )
+    context = replace(
+        _context(disaster),
+        collected_articles=(source,),
+        multi_event_article_urls=(source.canonical_url,),
+    )
+    assert (
+        EventMediaAssociationPolicy().assess(candidate, context, now=NOW).status
+        == MediaAssociationStatus.EXACT_EVENT_LINK
+    )
+
+
+@pytest.mark.parametrize(
     "caption",
     [
         "Stock image of a flood.",
@@ -201,6 +237,28 @@ def test_linked_article_can_supply_media_without_an_invented_onset():
     result = EventMediaAssociationPolicy().assess(candidate, context, now=NOW)
     assert result.status == MediaAssociationStatus.EXACT_EVENT_LINK
     assert "media.association.collected_article" in result.rule_ids
+
+
+def test_caption_date_does_not_disqualify_explicitly_linked_contextual_photo():
+    candidate = _candidate(
+        "dated-context",
+        caption=("Rescue workers after the Colombia earthquake on August 11, 2026."),
+    )
+    source = SourceReference(
+        "news",
+        "Daily",
+        candidate.article_title,
+        candidate.source_page_url,
+        candidate.published_at,
+        None,
+        NOW,
+    )
+    context = replace(_context(), collected_articles=(source,), event_time_known=False)
+    result = EventMediaAssociationPolicy().assess(candidate, context, now=NOW)
+    assert result.status == MediaAssociationStatus.EXACT_EVENT_LINK
+    assert "media.association.event_time_unresolved" in result.rule_ids
+    assert "unresolved" in result.detail
+    assert not context.event_time_known
 
 
 @pytest.mark.asyncio

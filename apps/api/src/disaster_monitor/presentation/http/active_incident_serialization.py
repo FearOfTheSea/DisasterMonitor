@@ -61,7 +61,7 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                 if report.mention and report.mention.time
                 else report.article.event_time,
                 mention_id=report.mention.mention_id if report.mention else None,
-                mention_excerpt=report.mention.excerpt if report.mention else None,
+                mention_excerpt=report.mention.text if report.mention else None,
                 mention_role=report.mention.role if report.mention else "reported",
                 event_date_wording=report.mention.time.wording
                 if report.mention and report.mention.time

@@ -32,14 +32,22 @@ class FileDiscoveryStore:
         temporary.replace(path)
         # Never remove running work. Retain the latest eight finished scans.
         finished = []
+        sources = {}
         for entry in self._root.glob("*.json"):
             retained = _CODEC.validate_json(entry.read_bytes())
             if retained.status != "running":
                 finished.append(entry)
-        for entry in sorted(finished, key=lambda p: p.stat().st_mtime, reverse=True)[
-            8:
-        ]:
-            entry.unlink()
+                sources[retained.scan_id] = retained.reprocessed_from
+        ordered = sorted(finished, key=lambda p: p.stat().st_mtime, reverse=True)
+        keep = {entry.stem for entry in ordered[:8]}
+        # A derived result must not evict the original acquisition it references.
+        # Reprocessing always points at the original, so no unbounded chain grows.
+        keep.update(
+            source for identifier in tuple(keep) if (source := sources[identifier])
+        )
+        for entry in ordered[8:]:
+            if entry.stem not in keep:
+                entry.unlink()
 
     async def read(self, scan_id: str) -> DiscoveryRun | None:
         path = self._path(scan_id)

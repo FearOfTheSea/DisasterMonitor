@@ -349,11 +349,14 @@ export function DisasterMap({
     adapter.current?.setSatelliteOpacity(satelliteOpacity);
   }, [satelliteOpacity, satelliteLayerConfiguration]);
 
+  const selectedGeometryKey = JSON.stringify(
+    incidentFeatures.find((item) => item.incidentId === selectedIncidentId)?.geometry,
+  );
   useEffect(() => {
     if (selectedIncidentId) {
       adapter.current?.focusActiveIncident(selectedIncidentId);
     }
-  }, [selectedIncidentId]);
+  }, [selectedIncidentId, selectedGeometryKey]);
 
   useEffect(() => {
     if (!areaOfInterest || !adapter.current) {

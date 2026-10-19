@@ -13,6 +13,35 @@ from disaster_monitor.infrastructure.news.public_documents import PublicDocument
 NOW = datetime(2026, 10, 17, 12, tzinfo=UTC)
 
 
+@pytest.mark.parametrize(
+    "body_attribute", ['class="post-content clearfix"', 'itemprop="articleBody"']
+)
+def test_article_body_keeps_unwrapped_text_and_excludes_related_content(body_attribute):
+    article = parse_discovery_article(
+        f"""<meta property="article:published_time" content="2026-10-04T11:35:44Z">
+        <meta property="og:description" content="A short truncated summary...">
+        <p>Unrelated introductory page content.</p>
+        <div {body_attribute}>An earthquake struck North Coast on 4 October.
+        <br><br>Police reported one person dead from shock.
+        <div class="related-posts"><p>Two people died in a different flood.</p></div>
+        <span class="related-news">Related news: Hurricane Elsewhere kills five.</span>
+        Officials said roads remained open.</div>
+        <p>Subscribe to more unrelated news.</p>""",
+        url="https://publisher.example/earthquake",
+        title="Police report one fatality after earthquake",
+        publisher="Publisher",
+        retrieved_at=NOW,
+        indexed_at=None,
+    )
+    assert "one person dead from shock" in article.text
+    assert "roads remained open" in article.text
+    assert "truncated" not in article.text
+    assert "different flood" not in article.text
+    assert "Elsewhere" not in article.text
+    assert "Subscribe" not in article.text
+    assert "Unrelated introductory" not in article.text
+
+
 def test_unrelated_event_and_update_metadata_never_become_onset_or_publication():
     report = parse_discovery_article(
         """<meta property="article:modified_time" content="2026-10-17T10:00:00Z">

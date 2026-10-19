@@ -17,6 +17,60 @@ from disaster_monitor.presentation.http.api import create_schema_app
 NOW = datetime(2026, 10, 17, 12, tzinfo=UTC)
 
 
+async def test_http_reprocessing_preserves_window_and_exposes_original_provenance(
+    tmp_path,
+):
+    class Feed:
+        source_id = "fixture"
+        calls = 0
+
+        async def discover(self, *, interval):
+            self.calls += 1
+            yield DiscoveryBatch(
+                articles=(
+                    DiscoveryArticle(
+                        SourceReference(
+                            "news",
+                            "Daily",
+                            "Flood response",
+                            "https://fixture.example/report",
+                            NOW,
+                            None,
+                            NOW,
+                        ),
+                        "Floods hit Riverton on Aug. 26. Two people died.",
+                    ),
+                ),
+                successful_operations=1,
+            )
+
+    feed = Feed()
+    service = DiscoveryScanService(
+        (feed,), FileDiscoveryStore(tmp_path), clock=lambda: NOW
+    )
+    app = create_schema_app()
+    app.state.dependencies = SimpleNamespace(discovery_scans=service)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        started = (
+            await client.post("/api/v1/discovery-scans", json={"reporting_days": 30})
+        ).json()
+        await service.wait(started["scan_id"])
+        replay = await client.post(
+            f"/api/v1/discovery-scans/{started['scan_id']}/reprocess"
+        )
+        assert replay.status_code == 200
+        result = replay.json()
+        assert result["reprocessed_from"] == started["scan_id"]
+        assert result["interval_start"] == started["interval_start"]
+        assert result["interval_end"] == started["interval_end"]
+        assert result["scan_id"] != started["scan_id"]
+        assert result["snapshot"]["incidents"][0]["event_time"].startswith("2026-08-26")
+        assert feed.calls == 1
+    await service.aclose()
+
+
 async def test_multitopic_report_only_projects_hazard_linked_impact_sentences(tmp_path):
     class Feed:
         source_id = "fixture"

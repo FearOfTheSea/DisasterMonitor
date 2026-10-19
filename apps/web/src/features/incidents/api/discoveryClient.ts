@@ -30,6 +30,18 @@ export async function fetchDiscoveryScan(
   );
 }
 
+export async function reprocessDiscoveryScan(
+  id: string,
+  signal?: AbortSignal,
+): Promise<DiscoveryScanResponse> {
+  return readScan(
+    await fetch(`${API_BASE_URL}/discovery-scans/${encodeURIComponent(id)}/reprocess`, {
+      method: 'POST',
+      signal,
+    }),
+  );
+}
+
 async function readScan(response: Response): Promise<DiscoveryScanResponse> {
   const body = await readJsonResponse<unknown>(response);
   if (!matchesApiSchema('DiscoveryScanResponse', body))

@@ -73,8 +73,8 @@ export default function Home() {
     layers: CycloneMapLayer[];
   }>();
   const conversation = useAssistantConversation();
-  const providerIncidents = useActiveIncidents();
   const discovery = useDiscoveryScan();
+  const providerIncidents = useActiveIncidents(!discovery.run && !discovery.submitting);
   const activeIncidents = discovery.run
     ? {
         ...providerIncidents,
@@ -257,6 +257,10 @@ export default function Home() {
               error={discovery.error}
               submitting={discovery.submitting}
               onClear={discovery.clear}
+              onReprocess={() => {
+                clearSelectedIncident();
+                return discovery.reprocess();
+              }}
             />
           }
           compact
@@ -408,6 +412,7 @@ export default function Home() {
                 key={selectedIncident.event_id}
                 reports={selectedIncident.discovery_reports}
                 notices={selectedIncident.collection_notices}
+                mappedGeometry={selectedIncident.geometry}
               />
             ) : (
               <a

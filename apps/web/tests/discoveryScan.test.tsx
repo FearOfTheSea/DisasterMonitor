@@ -6,6 +6,33 @@ import type { DiscoveryScanResponse } from '@/shared/api/generated/assistant';
 afterEach(cleanup);
 
 describe('publication scan controls', () => {
+  it('reprocesses finished retained reporting without requesting another world scan', () => {
+    const reprocess = vi.fn();
+    const start = vi.fn();
+    const run = {
+      status: 'incomplete',
+      scan_id: 'retained',
+      reports_seen: 1,
+      interval_start: '2026-09-19T00:00:00Z',
+      interval_end: '2026-10-19T00:00:00Z',
+      issues: [],
+      unlocated_count: 0,
+      snapshot: { incidents: [] },
+    } as unknown as DiscoveryScanResponse;
+    render(
+      <DiscoveryScanControls
+        days={30}
+        onDaysChange={vi.fn()}
+        onScan={start}
+        run={run}
+        onReprocess={reprocess}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reprocess retained reports' }));
+    expect(reprocess).toHaveBeenCalledOnce();
+    expect(start).not.toHaveBeenCalled();
+    expect(screen.getByText(/without another news search/i)).toBeVisible();
+  });
   it('offers all five periods with seven days provisional default and starts a scan', () => {
     const start = vi.fn();
     render(<DiscoveryScanControls days={7} onDaysChange={vi.fn()} onScan={start} />);

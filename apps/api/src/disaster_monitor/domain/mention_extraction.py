@@ -19,19 +19,27 @@ from disaster_monitor.domain.event_mentions import (
 from disaster_monitor.domain.events import EventGeometry
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
+from disaster_monitor.domain.mention_context import consolidate_response_context
 from disaster_monitor.domain.mention_occurrence import (
     date_is_occurrence,
+    has_distinct_occurrence,
     occurrence_role,
 )
 from disaster_monitor.domain.reported_impacts import extract_reported_impacts
+from disaster_monitor.domain.source_sentences import source_sentences
 
 _MONTHS = (
     "January February March April May June July August September "
     "October November December"
 ).split()
-_MONTH = "|".join(_MONTHS)
+_MONTH = (
+    "|".join(
+        name + ("|" + name[:3] + r"\.?" if len(name) > 3 else "") for name in _MONTHS
+    )
+    + r"|Sept\.?"
+)
 _DATE = re.compile(
-    rf"\b(?P<day>\d{{1,2}})(?:(?:[-–]|\s+to\s+)(?P<last>\d{{1,2}}))?\s+(?P<month>{_MONTH})(?:\s+(?P<year>20\d{{2}}|19\d{{2}}))?\b",
+    rf"\b(?P<day>\d{{1,2}})(?:(?:[-–]|\s+to\s+)(?P<last>\d{{1,2}}))?\s+(?P<month>{_MONTH})(?:\s+(?P<year>20\d{{2}}|19\d{{2}}))?(?!\w)",
     re.I,
 )
 _US_DATE = re.compile(
@@ -45,6 +53,11 @@ _PLACE = re.compile(
 _ADMINISTRATIVE_PLACE = re.compile(
     r"\b(?P<place>[A-ZÀ-Ý][\wÀ-ž’'-]*(?:(?:,\s*|\s+and\s+|\s+)[A-ZÀ-Ý][\wÀ-ž’'-]*)*"
     r"\s+(?:districts?|provinces?|municipalit(?:y|ies)))\b",
+)
+_AFFECTED_ADMIN_GROUP = re.compile(
+    rf"\b(?P<place>{_WORD}(?:,\s*{_WORD})*)\s+among\s+(?:the\s+)?"
+    r"(?:hardest[- ]hit|worst[- ]affected|affected)\s+"
+    r"(?:districts|provinces|municipalities)\b"
 )
 _STORM = re.compile(r"\b(?:Hurricane|Typhoon|Cyclone|Tropical Storm)\s+([A-Z][a-z]+)\b")
 
@@ -90,7 +103,7 @@ def _time(text: str, source: SourceReference) -> MentionTime | None:
     month = next(
         i + 1
         for i, name in enumerate(_MONTHS)
-        if name.casefold() == match["month"].casefold()
+        if name[:3].casefold() == match["month"][:3].casefold()
     )
     try:
         start = datetime(
@@ -115,21 +128,42 @@ def _time(text: str, source: SourceReference) -> MentionTime | None:
 
 
 def _place(text: str) -> MentionPlace | None:
+    affected = _AFFECTED_ADMIN_GROUP.search(text)
+    if affected:
+        return MentionPlace(affected["place"], "named_place", "administrative_area")
     administrative = _ADMINISTRATIVE_PLACE.search(text)
     if administrative:
         return MentionPlace(
-            administrative["place"], "named_place", "administrative_area"
+            re.sub(r"^In\s+", "", administrative["place"]),
+            "named_place",
+            "administrative_area",
         )
-    matches = list(_PLACE.finditer(text))
+    matches = [
+        match
+        for match in _PLACE.finditer(text)
+        if not re.search(
+            r"\b(?:based|headquartered|born|trained)\s*$", text[: match.start()], re.I
+        )
+    ]
     if not matches:
         return None
     # An explicit named location is descriptive until a geographic source resolves it.
     value = matches[0]["place"].strip(" ,.;:&")
+    if value.endswith(("'s", "’s")):
+        return None
     if value.casefold() in {month.casefold() for month in _MONTHS}:
         return None
     if value in {"The", "National", "Government", "October", "November"}:
         return None
     return MentionPlace(value, "named_place")
+
+
+def _hazard_place(text: str, hazard: Disaster) -> MentionPlace | None:
+    clauses = re.split(r",\s*(?:as well as|whereas|while)\s+|;\s*", text, flags=re.I)
+    matching = [clause for clause in clauses if disasters_in_text(clause) == (hazard,)]
+    if len(clauses) > 1 and len(matching) == 1:
+        return _place(matching[0])
+    return _place(text)
 
 
 def extract_mentions(
@@ -152,12 +186,7 @@ def extract_mentions(
     )
     # Titles such as Dr. must not become standalone heading-inherited mentions.
     sentences = [
-        s.strip(" •-\n")
-        for s in re.split(
-            r"(?<!Dr\.)(?<!Mr\.)(?<!Mrs\.)(?<!Ms\.)(?<=[.!?])\s+|\n+|\s+[•]\s+|\s+-\s+",
-            normalized,
-        )
-        if s.strip(" •-\n")
+        s.strip(" •-\n") for s in source_sentences(normalized) if s.strip(" •-\n")
     ]
     mentions: list[EventMention] = []
     active: list[int] = []
@@ -232,7 +261,6 @@ def extract_mentions(
                             mention, text=f"{mention.text} {sentence}"
                         )
                 continue
-        place = _place(sentence)
         time = _time(sentence, source)
         names = tuple(dict.fromkeys(_STORM.findall(sentence))) or (
             heading_names if Disaster.TROPICAL_CYCLONE in hazards else ()
@@ -247,6 +275,7 @@ def extract_mentions(
         preceding_active = active
         active = []
         for hazard in hazards:
+            place = _hazard_place(sentence, hazard)
             if hazard is Disaster.DROUGHT and not re.search(
                 r"\b(?:since|began|started|onset)\b", sentence, re.I
             ):
@@ -278,6 +307,7 @@ def extract_mentions(
                 if m.disaster == hazard
                 and m.role == role
                 and not mixed
+                and not has_distinct_occurrence(sentence)
                 and place is not None
                 and m.place == place
                 and m.time == time
@@ -289,6 +319,7 @@ def extract_mentions(
                 previous
                 and previous.disaster == hazard
                 and not mixed
+                and not has_distinct_occurrence(sentence)
                 and (place is None or previous.place == place)
                 and (time is None or previous.time == time)
                 and (
@@ -387,7 +418,7 @@ def extract_mentions(
             )
         )
     result = []
-    for mention in mentions[:80]:
+    for mention in consolidate_response_context(mentions)[:80]:
         role = mention.role
         scoped = scoped_disaster_text(
             mention.text, mention.disaster.value.replace("_", " "), mention.disaster

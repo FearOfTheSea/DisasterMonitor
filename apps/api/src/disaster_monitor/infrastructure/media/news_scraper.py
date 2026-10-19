@@ -57,6 +57,11 @@ class PublisherMediaPolicy:
     asset_hosts: frozenset[str]
     priority: int
     search_preferred: bool
+    noncommercial_only: bool = False
+    required_credit: str | None = None
+    license_name: str | None = None
+    license_url: str | None = None
+    asset_path_prefixes: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +87,7 @@ class NewsEventMediaProvider:
         maximum_image_bytes: int,
         candidate_limit: int = 12,
         client: httpx.AsyncClient | None = None,
+        noncommercial_use: bool = False,
     ) -> None:
         self._timeout_seconds = timeout_seconds
         self._maximum_page_bytes = maximum_page_bytes
@@ -89,6 +95,7 @@ class NewsEventMediaProvider:
         self._candidate_limit = candidate_limit
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
+        self._noncommercial_use = noncommercial_use
         self._policies = _load_policies()
         self._by_page_host = {
             host: policy for policy in self._policies for host in policy.page_hosts
@@ -171,6 +178,16 @@ class NewsEventMediaProvider:
                     )
                 )
                 continue
+            if policy.noncommercial_only and not self._noncommercial_use:
+                unavailable.append(
+                    MediaUnavailableSource(
+                        source.canonical_url,
+                        source.publisher,
+                        "Publisher permits only noncommercial use; "
+                        "this deployment has not enabled that use.",
+                    )
+                )
+                continue
             try:
                 body, kind = await self._bounded_get(
                     source.canonical_url,
@@ -184,6 +201,7 @@ class NewsEventMediaProvider:
                     body.decode("utf-8", errors="replace"), source.canonical_url
                 )
                 truncated = truncated or len(photographs) > 6
+                accepted = 0
                 for metadata in photographs[:6]:
                     candidate = self._candidate(
                         _NewsItem(
@@ -198,12 +216,14 @@ class NewsEventMediaProvider:
                     )
                     if candidate is not None:
                         candidates.append(candidate)
-                if not photographs:
+                        accepted += 1
+                if not accepted:
                     unavailable.append(
                         MediaUnavailableSource(
                             source.canonical_url,
                             source.publisher,
-                            "No eligible article photograph metadata found.",
+                            "No photograph met publisher metadata, credit, "
+                            "and asset-access policy.",
                         )
                     )
             except Exception as error:
@@ -243,11 +263,18 @@ class NewsEventMediaProvider:
         policy = self._by_source_id.get(candidate.source_id)
         if policy is None:
             raise ValueError("The media candidate has no maintained source policy.")
+        if policy.noncommercial_only and not self._noncommercial_use:
+            raise ValueError("This publisher requires noncommercial use.")
+        if policy.required_credit and (
+            policy.required_credit.casefold() not in candidate.credit.casefold()
+        ):
+            raise ValueError("The photograph lacks the required publisher credit.")
         body, response_type = await self._bounded_get(
             candidate.image_url,
             allowed_hosts=policy.asset_hosts,
             maximum_bytes=self._maximum_image_bytes,
             accept="image/jpeg, image/png",
+            asset_policy=policy,
         )
         media_type, width, height = image_metadata(body)
         if response_type and response_type not in {
@@ -290,6 +317,8 @@ class NewsEventMediaProvider:
             policy = self._by_page_host.get(host)
             if policy is None:
                 continue
+            if policy.noncommercial_only and not self._noncommercial_use:
+                continue
             try:
                 published_at = parsedate_to_datetime(values.get("pubDate", ""))
             except (TypeError, ValueError):
@@ -328,7 +357,16 @@ class NewsEventMediaProvider:
         image_host = (
             (urlsplit(metadata.image_url).hostname or "").casefold().rstrip(".")
         )
-        if image_host not in item.policy.asset_hosts:
+        if image_host not in item.policy.asset_hosts or not _asset_path_allowed(
+            metadata.image_url, item.policy
+        ):
+            return None
+        if item.policy.noncommercial_only and not self._noncommercial_use:
+            return None
+        if item.policy.required_credit and (
+            metadata.credit is None
+            or item.policy.required_credit.casefold() not in metadata.credit.casefold()
+        ):
             return None
         lowered_image_url = metadata.image_url.casefold()
         if any(marker in lowered_image_url for marker in _GENERIC_IMAGE_MARKERS):
@@ -363,9 +401,11 @@ class NewsEventMediaProvider:
             credit_kind=credit_kind,
             published_at=published_at,
             captured_at=metadata.captured_at,
-            license_name=None,
-            license_url=None,
-            rights_status=MediaRightsStatus.SOURCE_PREVIEW,
+            license_name=item.policy.license_name,
+            license_url=item.policy.license_url,
+            rights_status=MediaRightsStatus.LICENSED_REUSE
+            if item.policy.license_url
+            else MediaRightsStatus.SOURCE_PREVIEW,
             source_priority=item.policy.priority,
         )
 
@@ -376,6 +416,7 @@ class NewsEventMediaProvider:
         allowed_hosts: frozenset[str],
         maximum_bytes: int,
         accept: str,
+        asset_policy: PublisherMediaPolicy | None = None,
     ) -> tuple[bytes, str]:
         check_cooldown(self._client, url)
         for attempt in range(2):
@@ -385,6 +426,7 @@ class NewsEventMediaProvider:
                     allowed_hosts=allowed_hosts,
                     maximum_bytes=maximum_bytes,
                     accept=accept,
+                    asset_policy=asset_policy,
                 )
             except (httpx.TimeoutException, httpx.TransportError):
                 if attempt == 0:
@@ -417,10 +459,15 @@ class NewsEventMediaProvider:
         allowed_hosts: frozenset[str],
         maximum_bytes: int,
         accept: str,
+        asset_policy: PublisherMediaPolicy | None = None,
     ) -> tuple[bytes, str]:
         current = url
         for _ in range(4):
             _validate_url(current, allowed_hosts)
+            if asset_policy and not _asset_path_allowed(current, asset_policy):
+                raise ValueError(
+                    "The asset escaped the publisher's registered CDN namespace."
+                )
             check_cooldown(self._client, current)
             headers = {
                 "Accept": accept,
@@ -489,6 +536,14 @@ def _load_policies() -> tuple[PublisherMediaPolicy, ...]:
             ),
             priority=int(cast(int, item["priority"])),
             search_preferred=bool(item.get("search_preferred", False)),
+            noncommercial_only=bool(item.get("noncommercial_only", False)),
+            required_credit=item.get("required_credit"),
+            license_name=item.get("license_name"),
+            license_url=item.get("license_url"),
+            asset_path_prefixes=tuple(
+                (host, prefix)
+                for host, prefix in item.get("asset_path_prefixes", {}).items()
+            ),
         )
         for item in raw_sources
     )
@@ -496,6 +551,14 @@ def _load_policies() -> tuple[PublisherMediaPolicy, ...]:
     if len(page_hosts) != len(set(page_hosts)):
         raise ValueError("Event-media source policies have duplicate page hosts.")
     return policies
+
+
+def _asset_path_allowed(url: str, policy: PublisherMediaPolicy) -> bool:
+    parsed = urlsplit(url)
+    prefixes = [
+        prefix for host, prefix in policy.asset_path_prefixes if parsed.hostname == host
+    ]
+    return not prefixes or any(parsed.path.startswith(prefix) for prefix in prefixes)
 
 
 def _search_queries(

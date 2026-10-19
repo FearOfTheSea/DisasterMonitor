@@ -12,6 +12,7 @@ export function DiscoveryScanControls({
   error,
   submitting = false,
   onClear,
+  onReprocess,
 }: {
   days: ReportingDays;
   onDaysChange: (days: ReportingDays) => void;
@@ -20,12 +21,13 @@ export function DiscoveryScanControls({
   error?: string;
   submitting?: boolean;
   onClear?: () => void;
+  onReprocess?: () => void | Promise<void>;
 }) {
   const running = submitting || run?.status === 'running';
   const contextCount =
     run?.snapshot.incidents?.filter(isContextOnlyIncident).length ?? 0;
   const title = submitting
-    ? 'Starting scan…'
+    ? 'Updating reporting…'
     : !run
       ? undefined
       : run.status === 'running'
@@ -57,7 +59,7 @@ export function DiscoveryScanControls({
         </select>
       </label>
       <button type="button" onClick={() => void onScan()} disabled={running}>
-        {running ? 'Scanning…' : 'Scan the world'}
+        {submitting ? 'Updating…' : running ? 'Scanning…' : 'Scan the world'}
       </button>
       <p>
         Scanning may take a while. The reporting interval is fixed at scan start and
@@ -90,6 +92,12 @@ export function DiscoveryScanControls({
                 </p>
               ) : null}
               <p>{run.coverage_notice}</p>
+              {run.reprocessed_from ? (
+                <p>
+                  These results reprocess retained reports. No new news search was
+                  performed.
+                </p>
+              ) : null}
               {run.unlocated_count > 0 ? (
                 <p>
                   {run.unlocated_count}{' '}
@@ -114,6 +122,17 @@ export function DiscoveryScanControls({
         </div>
       ) : null}
       {error ? <p role="alert">{error}</p> : null}
+      {run && onReprocess ? (
+        <>
+          <button type="button" disabled={running} onClick={() => void onReprocess()}>
+            Reprocess retained reports
+          </button>
+          <p>
+            Reassess collected reporting without another news search. The original scan
+            remains available.
+          </p>
+        </>
+      ) : null}
       {run && onClear ? (
         <button type="button" onClick={onClear}>
           Browse provider catalogs

@@ -77,6 +77,7 @@ class AssessedReport:
     fatality_evidence: tuple[str, ...]
     mentions: tuple[EventMention, ...] = ()
     mention: EventMention | None = None
+    # Physical occurrence mentions in the article, excluding response/forecast context.
     mention_count: int = 0
 
 
@@ -132,6 +133,7 @@ class DiscoveryRun:
     finished_at: datetime | None = None
     supplemental: tuple[DiscoveryArticle, ...] = ()
     acquisition: tuple[AcquisitionAudit, ...] = ()
+    reprocessed_from: str | None = None
 
 
 # Provisional extraction: retain attributed affirmative sentences, never infer deaths
@@ -199,7 +201,7 @@ def assess_article(
         eligibility,
         fatality_accounts(article, disaster),
         mentions,
-        mention_count=len(mentions),
+        mention_count=sum(m.role in ("reported", "ongoing") for m in mentions),
     )
 
 

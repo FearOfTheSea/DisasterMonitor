@@ -377,6 +377,14 @@
   }
   .observatory-explore .active-incidents-panel {
     max-height: 48dvh;
+    overflow-y: auto;
+  }
+  .observatory-explore .active-incidents-panel > * {
+    flex-shrink: 0;
+  }
+  .observatory-explore .active-incidents-scroll {
+    flex: none;
+    overflow: visible;
   }
   .observatory-explore .map-region {
     height: 62dvh;

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchDiscoveryScan,
   requestDiscoveryScan,
+  reprocessDiscoveryScan,
   type ReportingDays,
 } from '@/features/incidents/api/discoveryClient';
 import type {
@@ -81,32 +82,42 @@ export function useDiscoveryScan() {
     };
   }, [id, running]);
 
-  const start = useCallback(async () => {
-    controller.current?.abort();
-    const nextController = new AbortController();
-    controller.current = nextController;
-    setSubmitting(true);
-    setError(undefined);
-    try {
-      const next = await requestDiscoveryScan(
-        days,
-        AbortSignal.any([nextController.signal, AbortSignal.timeout(20_000)]),
-      );
-      if (!nextController.signal.aborted) {
-        setRun(next);
-        const url = new URL(window.location.href);
-        url.searchParams.set('scan', next.scan_id);
-        window.history.replaceState(null, '', url);
-        setSearch('');
-        setHazard(undefined);
+  const update = useCallback(
+    async (request: (signal: AbortSignal) => Promise<DiscoveryScanResponse>) => {
+      controller.current?.abort();
+      const nextController = new AbortController();
+      controller.current = nextController;
+      setSubmitting(true);
+      setError(undefined);
+      try {
+        const next = await request(
+          AbortSignal.any([nextController.signal, AbortSignal.timeout(20_000)]),
+        );
+        if (!nextController.signal.aborted) {
+          setRun(next);
+          const url = new URL(window.location.href);
+          url.searchParams.set('scan', next.scan_id);
+          window.history.replaceState(null, '', url);
+          setSearch('');
+          setHazard(undefined);
+        }
+      } catch (caught) {
+        if (!nextController.signal.aborted)
+          setError(caught instanceof Error ? caught.message : 'Scan could not start.');
+      } finally {
+        if (!nextController.signal.aborted) setSubmitting(false);
       }
-    } catch (caught) {
-      if (!nextController.signal.aborted)
-        setError(caught instanceof Error ? caught.message : 'Scan could not start.');
-    } finally {
-      if (!nextController.signal.aborted) setSubmitting(false);
-    }
-  }, [days]);
+    },
+    [],
+  );
+
+  const start = useCallback(
+    () => update((signal) => requestDiscoveryScan(days, signal)),
+    [days, update],
+  );
+  const reprocess = useCallback(async () => {
+    if (id) await update((signal) => reprocessDiscoveryScan(id, signal));
+  }, [id, update]);
 
   const snapshot = useMemo(() => {
     if (!run) return undefined;
@@ -134,6 +145,7 @@ export function useDiscoveryScan() {
     error,
     submitting,
     start,
+    reprocess,
     search,
     setSearch,
     hazard,

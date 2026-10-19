@@ -9,6 +9,9 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
+from disaster_monitor.application.incidents.discovery_reprocessing import (
+    reprocess_retained_run,
+)
 from disaster_monitor.application.incidents.mention_geography import (
     resolve_event_places,
 )
@@ -77,6 +80,25 @@ class DiscoveryScanService:
         if run is None:
             raise LookupError("Scan not found or retained scan expired.")
         return run
+
+    async def reprocess(self, scan_id: str) -> DiscoveryRun:
+        async with self._lock:
+            original = await self.get(scan_id)
+            if original.reprocessed_from:
+                original = await self.get(original.reprocessed_from)
+            if original.status == "running":
+                raise ValueError(
+                    "Wait until news acquisition has finished before reprocessing."
+                )
+            result = await asyncio.to_thread(
+                reprocess_retained_run,
+                original,
+                scan_id=str(uuid4()),
+                at=self._clock(),
+                country_names=self._country_names,
+            )
+            await self._store.save(result)
+            return result
 
     async def wait(self, scan_id: str) -> None:
         if task := self._tasks.get(scan_id):

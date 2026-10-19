@@ -86,7 +86,7 @@ export function useWorkspacePresentation({
         : undefined,
     [snapshot, displayedIncidents, displayedCorrelations],
   );
-  const mapIncidents = useMemo(
+  const listedMapIncidents = useMemo(
     () =>
       watchFocusIncident
         ? [
@@ -107,6 +107,10 @@ export function useWorkspacePresentation({
   );
   const selection = useIncidentSelection(selectedIncidentId, selectionRecords);
   const selectedIncident = selection.incident;
+  const mapIncidents = useMemo(
+    () => listedMapIncidents.map(selection.withResolvedLocation),
+    [listedMapIncidents, selection.withResolvedLocation],
+  );
   const selectionOutsideView = Boolean(
     selectedIncident &&
     selectedIncidentId &&

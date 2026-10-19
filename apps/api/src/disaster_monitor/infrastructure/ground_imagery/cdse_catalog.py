@@ -23,9 +23,15 @@ from disaster_monitor.domain.imagery.observations import (
     Sensor,
 )
 from disaster_monitor.domain.imagery.regions import polygon_from_geojson
+from disaster_monitor.infrastructure.ground_imagery.cdse_auth import (
+    DEFAULT_TOKEN_URL,
+    CDSEAuthenticationError,
+    CDSEClientCredentials,
+)
 
 DEFAULT_CDSE_STAC_URL = "https://stac.dataspace.copernicus.eu/v1/search"
 _ALLOWED_HOST = "stac.dataspace.copernicus.eu"
+AUTHENTICATED_CDSE_STAC_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/search"
 _MAX_PAGE_BYTES = 8 * 1024 * 1024
 _MAX_RETRY_DELAY_SECONDS = 15.0
 
@@ -41,6 +47,9 @@ class CDSEStacCatalog:
         timeout_seconds: float = 30,
         maximum_response_bytes: int = _MAX_PAGE_BYTES,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        token_url: str = DEFAULT_TOKEN_URL,
     ) -> None:
         _validate_endpoint(endpoint)
         if not 10_000 <= maximum_response_bytes <= _MAX_PAGE_BYTES:
@@ -50,6 +59,12 @@ class CDSEStacCatalog:
         self._owns_client = client is None
         self._maximum_response_bytes = maximum_response_bytes
         self._sleep = sleep
+        self._authenticated = endpoint == AUTHENTICATED_CDSE_STAC_URL
+        self._credentials = (
+            CDSEClientCredentials(self._client, client_id, client_secret, token_url)
+            if self._authenticated
+            else None
+        )
 
     async def search(
         self, query: GroundImageryCatalogQuery
@@ -85,7 +100,25 @@ class CDSEStacCatalog:
             observations = tuple(
                 _observation_from_feature(feature, query.sensor) for feature in features
             )
-            next_cursor = _next_cursor(document, self._endpoint)
+            if self._authenticated:
+                context = document.get("context", {})
+                next_value = context.get("next") if isinstance(context, dict) else None
+                if (
+                    isinstance(next_value, str)
+                    and next_value.isascii()
+                    and next_value.isdecimal()
+                    and len(next_value) <= 6
+                ):
+                    next_value = int(next_value)
+                if next_value is not None and (
+                    type(next_value) is not int or not 0 < next_value < 1_000_000
+                ):
+                    raise ValueError(
+                        "The authenticated catalog returned an invalid continuation."
+                    )
+                next_cursor = str(next_value) if next_value is not None else None
+            else:
+                next_cursor = _next_cursor(document, self._endpoint)
         except (ValueError, TypeError, KeyError) as error:
             raise CatalogSearchError(
                 "The CDSE catalog returned an unsupported STAC schema.",
@@ -117,21 +150,48 @@ class CDSEStacCatalog:
         self, payload: dict[str, object], cursor: str | None
     ) -> httpx.Response:
         for attempt in range(3):
-            if cursor is None or not cursor.startswith("https://"):
+            headers = {"Accept": "application/geo+json, application/json"}
+            if self._credentials is not None:
+                try:
+                    token = await self._credentials.access_token()
+                except CDSEAuthenticationError as error:
+                    raise CatalogSearchError(
+                        str(error),
+                        reason_code=error.reason_code,
+                        retryable=error.retryable,
+                    ) from error
+                headers["Authorization"] = f"Bearer {token}"
+                if cursor is not None and (
+                    not cursor.isdigit() or not 0 < int(cursor) < 1_000_000
+                ):
+                    raise CatalogSearchError(
+                        "Invalid catalog continuation.",
+                        reason_code="catalog_schema_invalid",
+                        retryable=False,
+                    )
+                response = await self._client.post(
+                    self._endpoint,
+                    json=payload
+                    if cursor is None
+                    else {**payload, "next": int(cursor)},
+                    headers=headers,
+                    follow_redirects=False,
+                )
+            elif cursor is None or not cursor.startswith("https://"):
                 next_payload = (
                     payload if cursor is None else {**payload, "token": cursor}
                 )
                 response = await self._client.post(
                     self._endpoint,
                     json=next_payload,
-                    headers={"Accept": "application/geo+json, application/json"},
+                    headers=headers,
                     follow_redirects=False,
                 )
             else:
                 _validate_endpoint(cursor)
                 response = await self._client.get(
                     cursor,
-                    headers={"Accept": "application/geo+json, application/json"},
+                    headers=headers,
                     follow_redirects=False,
                 )
             if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
@@ -145,7 +205,15 @@ class CDSEStacCatalog:
                     reason_code="catalog_rate_limited",
                     retryable=True,
                 )
-            if response.status_code >= 400:
+            if response.status_code in {401, 403}:
+                raise CatalogSearchError(
+                    "CDSE credentials cannot access the catalog.",
+                    reason_code="credentials_required"
+                    if response.status_code == 401
+                    else "permission_denied",
+                    retryable=False,
+                )
+            if response.status_code >= 300:
                 raise CatalogSearchError(
                     "The CDSE catalog rejected this search.",
                     reason_code="catalog_http_error",
@@ -206,6 +274,9 @@ def _observation_from_feature(feature: object, sensor: Sensor) -> Observation:
         or not isinstance(properties, dict)
     ):
         raise ValueError("A STAC feature is missing identity, geometry, or properties.")
+    # SAFE is the provider's container suffix, not part of the sensing identity.
+    # Process userdata normalizes the same suffix before verifying source identity.
+    product_id = product_id.removesuffix(".SAFE")
     start = _property_datetime(properties, "start_datetime", "datetime")
     end = _property_datetime(properties, "end_datetime", "datetime")
     if end < start:
@@ -393,7 +464,8 @@ def _validate_endpoint(value: str) -> None:
     parsed = urlparse(value)
     if (
         parsed.scheme != "https"
-        or parsed.hostname != _ALLOWED_HOST
+        or (parsed.hostname != _ALLOWED_HOST and value != AUTHENTICATED_CDSE_STAC_URL)
+        or parsed.port not in (None, 443)
         or parsed.username
         or parsed.password
     ):

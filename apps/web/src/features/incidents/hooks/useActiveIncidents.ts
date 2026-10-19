@@ -98,7 +98,7 @@ function appendUnique(
   ];
 }
 
-export function useActiveIncidents() {
+export function useActiveIncidents(enabled = true) {
   const [snapshotState, setSnapshotState] = useState<{
     key: string;
     version: number;
@@ -192,6 +192,7 @@ export function useActiveIncidents() {
     queryKeyRef.current = queryKey;
     pageController.current?.abort();
     pageLoading.current = false;
+    if (!enabled) return;
     const controller = createRefreshController(
       REFRESH_POLICIES['active-incidents'],
       load,
@@ -204,16 +205,18 @@ export function useActiveIncidents() {
       pageController.current?.abort();
       refreshController.current = undefined;
     };
-  }, [load, queryKey]);
+  }, [enabled, load, queryKey]);
 
   const refresh = useCallback(() => {
+    if (!enabled) return Promise.resolve();
     forceRefresh.current = true;
     return refreshController.current?.refreshNow() ?? Promise.resolve();
-  }, []);
+  }, [enabled]);
 
   const loadMore = useCallback(async () => {
     const cursor = snapshot?.next_cursor;
     if (
+      !enabled ||
       !cursor ||
       pageLoading.current ||
       !snapshotState ||
@@ -287,6 +290,7 @@ export function useActiveIncidents() {
       }
     }
   }, [
+    enabled,
     appliedSearch,
     hazard,
     occurrenceEnd,

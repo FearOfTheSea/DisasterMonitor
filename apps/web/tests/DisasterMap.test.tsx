@@ -78,6 +78,52 @@ vi.mock('@/features/map/adapters/openLayersMapAdapter', () => ({
 }));
 
 describe('DisasterMap assistant focus', () => {
+  it('focuses a selected event when its location arrives without refocusing identical geometry', () => {
+    const event: ActiveIncident = {
+      event_id: 'discovery:selected',
+      disaster: 'flood',
+      country: TEST_INCIDENT_COUNTRY,
+      location: 'Reported district',
+      event_time: '2026-08-26T00:00:00Z',
+      geometry: null,
+      measurements: [],
+      provider_ids: [],
+      provider_tier: 'secondary',
+      source_authority: 'secondary',
+      source: {
+        source_id: 'report',
+        publisher: 'Publisher',
+        title: 'Flood report',
+        canonical_url: 'https://example.test/report',
+        published_at: null,
+        updated_at: null,
+        retrieved_at: '2026-10-19T00:00:00Z',
+        snapshot_id: null,
+      },
+    };
+    const props = {
+      onViewChange: vi.fn(),
+      onSelectIncident: vi.fn(),
+      selectedIncidentId: event.event_id,
+    };
+    const { rerender } = render(<DisasterMap {...props} activeIncidents={[event]} />);
+    adapterMocks.focusActiveIncident.mockClear();
+    const located: ActiveIncident = {
+      ...event,
+      geometry: {
+        kind: 'point',
+        coordinates: [{ latitude: 28, longitude: 85 }],
+        source_id: 'report',
+        description: 'Administrative context',
+        estimated: true,
+      },
+    };
+    rerender(<DisasterMap {...props} activeIncidents={[located]} />);
+    expect(adapterMocks.focusActiveIncident).toHaveBeenCalledOnce();
+    expect(adapterMocks.focusActiveIncident).toHaveBeenLastCalledWith(event.event_id);
+    rerender(<DisasterMap {...props} activeIncidents={[structuredClone(located)]} />);
+    expect(adapterMocks.focusActiveIncident).toHaveBeenCalledOnce();
+  });
   it('retains rendered layers when selection callbacks change and calls the latest callback', () => {
     const first = vi.fn();
     const next = vi.fn();

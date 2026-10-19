@@ -2535,6 +2535,16 @@ const apiSchemas = {
       reports_seen: {
         type: 'integer',
       },
+      reprocessed_from: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       scan_id: {
         type: 'string',
       },
@@ -7708,6 +7718,7 @@ export type DiscoveryScanResponse = {
   issues: Array<string>;
   reporting_days: number;
   reports_seen: number;
+  reprocessed_from?: string | null;
   scan_id: string;
   snapshot: ActiveIncidentsSnapshotResponse;
   status: 'running' | 'completed' | 'incomplete' | 'failed';

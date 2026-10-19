@@ -222,6 +222,7 @@ def build_event_media_services(
         maximum_page_bytes=settings.disaster_provider_max_response_bytes,
         maximum_image_bytes=settings.event_media_max_image_bytes,
         candidate_limit=settings.event_media_candidate_limit,
+        noncommercial_use=settings.event_media_noncommercial_use,
     )
     return EventMediaServices(
         DisasterMediaService(
@@ -499,6 +500,9 @@ def build_ground_imagery_service(
         ),
         CDSEStacCatalog(
             endpoint=settings.cdse_stac_url,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_url=settings.cdse_token_url,
             timeout_seconds=settings.gdacs_provider_timeout_seconds,
             maximum_response_bytes=settings.ground_imagery_catalog_max_response_bytes,
         ),

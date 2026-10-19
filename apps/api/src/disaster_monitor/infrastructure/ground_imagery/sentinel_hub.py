@@ -10,9 +10,7 @@ from __future__ import annotations
 import io
 import json
 import tarfile
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from time import monotonic
 from typing import cast
 from urllib.parse import urlparse
 
@@ -28,12 +26,13 @@ from disaster_monitor.application.ports.ground_imagery.rendering import (
     RenderRequest,
 )
 from disaster_monitor.domain.imagery.observations import Observation, Sensor
+from disaster_monitor.infrastructure.ground_imagery.cdse_auth import (
+    DEFAULT_TOKEN_URL,
+    CDSEAuthenticationError,
+    CDSEClientCredentials,
+)
 
 DEFAULT_PROCESS_URL = "https://sh.dataspace.copernicus.eu/process/v1"
-DEFAULT_TOKEN_URL = (
-    "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/"
-    "protocol/openid-connect/token"
-)
 _PROCESS_HOST = "sh.dataspace.copernicus.eu"
 _TOKEN_HOST = "identity.dataspace.copernicus.eu"
 _ARCHIVE_TYPES = {"application/x-tar", "application/tar"}
@@ -41,12 +40,6 @@ _ARCHIVE_TYPES = {"application/x-tar", "application/tar"}
 
 class ProcessRenderingError(GroundImageryRenderError):
     """A Process request cannot produce a verified bounded raster."""
-
-
-@dataclass(frozen=True, slots=True)
-class _Token:
-    value: str
-    expires_at: float
 
 
 class CopernicusDataSpaceProcessRenderer(GroundImageryRenderer):
@@ -72,7 +65,9 @@ class CopernicusDataSpaceProcessRenderer(GroundImageryRenderer):
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._maximum_response_bytes = maximum_response_bytes
-        self._token: _Token | None = None
+        self._credentials = CDSEClientCredentials(
+            self._client, client_id, client_secret, token_url
+        )
 
     @property
     def available(self) -> bool:
@@ -181,55 +176,12 @@ class CopernicusDataSpaceProcessRenderer(GroundImageryRenderer):
         )
 
     async def _access_token(self, *, force_refresh: bool) -> str:
-        if (
-            not force_refresh
-            and self._token is not None
-            and self._token.expires_at > monotonic() + 30
-        ):
-            return self._token.value
         try:
-            response = await self._client.post(
-                self._token_url,
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": self._client_id,
-                    "client_secret": self._client_secret,
-                },
-                headers={"Accept": "application/json"},
-                follow_redirects=False,
-            )
-        except httpx.HTTPError as error:
+            return await self._credentials.access_token(force_refresh=force_refresh)
+        except CDSEAuthenticationError as error:
             raise ProcessRenderingError(
-                "The CDSE token request failed.",
-                reason_code="credentials_unavailable",
-                retryable=True,
+                str(error), reason_code=error.reason_code, retryable=error.retryable
             ) from error
-        if response.status_code >= 400:
-            raise ProcessRenderingError(
-                "The CDSE token endpoint rejected the configured credentials.",
-                reason_code="credentials_required"
-                if response.status_code in {401, 403}
-                else "token_http_error",
-                retryable=response.status_code >= 500,
-            )
-        try:
-            document = response.json()
-            value = document["access_token"]
-            expires = int(document.get("expires_in", 300))
-        except (ValueError, KeyError, TypeError) as error:
-            raise ProcessRenderingError(
-                "The CDSE token response has an unsupported schema.",
-                reason_code="token_schema_invalid",
-                retryable=False,
-            ) from error
-        if not isinstance(value, str) or not value.strip():
-            raise ProcessRenderingError(
-                "The CDSE token response did not contain a usable token.",
-                reason_code="credentials_required",
-                retryable=False,
-            )
-        self._token = _Token(value.strip(), monotonic() + max(1, expires))
-        return self._token.value
 
     async def aclose(self) -> None:
         if self._owns_client:

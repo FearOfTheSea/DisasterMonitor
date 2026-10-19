@@ -30,6 +30,7 @@ class DiscoveryScanRequest(BaseModel):
 
 class DiscoveryScanResponse(BaseModel):
     scan_id: str
+    reprocessed_from: str | None = None
     reporting_days: int
     interval_start: datetime
     interval_end: datetime
@@ -70,6 +71,7 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
     incidents = tuple(discovery_incident(event, retrieved_at) for event in run.events)
     return DiscoveryScanResponse(
         scan_id=run.scan_id,
+        reprocessed_from=run.reprocessed_from,
         reporting_days=run.interval.days,
         interval_start=run.interval.start,
         interval_end=run.interval.end,
@@ -182,3 +184,19 @@ async def get_scan(
         return scan_response(await scans.get(str(scan_id)))
     except LookupError as error:
         raise HTTPException(404, str(error)) from error
+
+
+@router.post(
+    "/discovery-scans/{scan_id}/reprocess",
+    response_model=DiscoveryScanResponse,
+    tags=["discovery"],
+)
+async def reprocess_scan(
+    scan_id: UUID, scans: Annotated[DiscoveryScanService, Depends(service)]
+) -> DiscoveryScanResponse:
+    try:
+        return scan_response(await scans.reprocess(str(scan_id)))
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error

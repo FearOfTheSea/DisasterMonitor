@@ -24,6 +24,8 @@ class ArticleParser(HTMLParser):
         self.parts: list[str] = []
         self.article_parts: list[str] = []
         self.main_parts: list[str] = []
+        self.body_parts: list[str] = []
+        self._body_stack: list[str] = []
         self._main_depth = 0
         self._article_depth = 0
         self._json: list[str] | None = None
@@ -34,12 +36,20 @@ class ArticleParser(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
         void = tag in {"img", "meta", "br", "hr", "input", "link", "source", "wbr"}
+        article_body = "articleBody" in (values.get("itemprop") or "").split() or bool(
+            re.search(
+                r"(?:^|\s)(?:post-content|entry-content|article-content|story-body)(?:\s|$)",
+                values.get("class") or "",
+            )
+        )
+        if not void and (self._body_stack or article_body):
+            self._body_stack.append(tag)
         excluded = (
             values.get("aria-hidden") == "true"
             or values.get("role") == "dialog"
             or bool(
                 re.search(
-                    r"(?:^|\s)(?:entry-footer|post-tags|tags-links|republish\S*|related-posts|recommended-posts|sharing\S*)(?:\s|$)",
+                    r"(?:^|\s)(?:entry-footer|post-tags|tags-links|republish\S*|related-(?:posts|news|links)|recommended-posts|sharing\S*)(?:\s|$)",
                     values.get("class") or "",
                 )
             )
@@ -66,8 +76,15 @@ class ArticleParser(HTMLParser):
                     self.article_parts.append("\n## ")
                 if self._main_depth:
                     self.main_parts.append("\n## ")
+                if self._body_stack:
+                    self.body_parts.append("\n## ")
+        if tag == "br" and self._body_stack and not self._hidden and not self._excluded:
+            self.body_parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
+        if tag in self._body_stack:
+            index = len(self._body_stack) - 1 - self._body_stack[::-1].index(tag)
+            self._body_stack = self._body_stack[:index]
         if tag in self._excluded:
             index = len(self._excluded) - 1 - self._excluded[::-1].index(tag)
             self._excluded = self._excluded[:index]
@@ -90,12 +107,14 @@ class ArticleParser(HTMLParser):
                 self.article_parts.append("\n")
             if self._main_depth:
                 self.main_parts.append("\n")
+            if self._body_stack:
+                self.body_parts.append("\n")
 
     def handle_data(self, data: str) -> None:
         if self._json is not None:
             self._json.append(data)
         if (
-            self._paragraph
+            (self._paragraph or self._body_stack)
             and not self._hidden
             and not self._excluded
             and len(self.parts) < 2000
@@ -106,6 +125,8 @@ class ArticleParser(HTMLParser):
                 self.article_parts.append(data)
             if self._main_depth:
                 self.main_parts.append(data)
+            if self._body_stack:
+                self.body_parts.append(data)
 
 
 def _objects(value: Any, depth: int = 0) -> list[dict[str, Any]]:
@@ -220,7 +241,9 @@ def parse_discovery_article(
         source=source,
         text="\n".join(
             " ".join(line.split())
-            for line in " ".join(parser.article_parts or parser.main_parts).splitlines()
+            for line in " ".join(
+                parser.body_parts or parser.article_parts or parser.main_parts
+            ).splitlines()
         )[:20_000]
         or str(news.get("articleBody") or parser.meta.get("og:description") or "")[
             :20_000

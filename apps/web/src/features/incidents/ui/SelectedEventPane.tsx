@@ -294,6 +294,7 @@ export function SelectedEventPane({
                   key={incident.event_id}
                   reports={incident.discovery_reports}
                   notices={incident.collection_notices}
+                  mappedGeometry={incident.geometry}
                 />
                 <details onToggle={(event) => setPhotosOpen(event.currentTarget.open)}>
                   <summary>Article photographs</summary>

@@ -3,6 +3,8 @@
 import re
 from typing import Literal
 
+from disaster_monitor.domain.source_sentences import source_clauses
+
 MentionRole = Literal["reported", "ongoing", "historical", "forecast", "uncertain"]
 
 _PREPARATION = re.compile(
@@ -13,10 +15,10 @@ _PREPARATION = re.compile(
 )
 _OCCURRENCE = re.compile(
     r"\b(?:struck|hit|occurred|erupted|killed|died|injured|damaged|destroyed|"
-    r"affected|impacted|tore through|displaced|swept|flooded|triggered|"
+    r"affected|impacted|tore through|displaced|swept|flooded|triggered|devastated|"
     r"strengthened|intensifies|"
     r"has moved|brought|bringing|began|started|onset|reported|recorded|"
-    r"following|after|survived|survivors|flood-affected)\b",
+    r"survived|survivors)\b",
     re.I,
 )
 _ONGOING = re.compile(
@@ -31,6 +33,34 @@ _ACTIVITY = re.compile(
     r"distributed|dispatched|as of|until)\b",
     re.I,
 )
+_RESPONSE_CONTEXT = re.compile(
+    r"\b(?:patients?|clinic|medical|physician|deployment|relief|"
+    r"response|responding|recovery|aid|treatment)\b",
+    re.I,
+)
+_PHYSICAL_OCCURRENCE = re.compile(
+    r"\b(?:floods?|flooding|earthquakes?|wildfires?|fires?|landslides?|"
+    r"tsunamis?|drought|eruption|hurricane|typhoon|cyclone)\s+"
+    r"(?:\w+\s+){0,2}(?:struck|hit|occurred|erupted|killed|damaged|"
+    r"destroyed|swept|flooded|triggered|devastated|cut off|tore through)\b",
+    re.I,
+)
+
+
+def is_response_context(text: str) -> bool:
+    return bool(_RESPONSE_CONTEXT.search(text))
+
+
+def has_distinct_occurrence(text: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:another|separate|different|new)\s+(?:\w+\s+){0,2}"
+            r"(?:flood|earthquake|wildfire|fire|landslide|tsunami|drought|"
+            r"eruption|hurricane|typhoon|cyclone)\b",
+            text,
+            re.I,
+        )
+    )
 
 
 def occurrence_role(text: str, *, historical: bool = False) -> MentionRole:
@@ -40,6 +70,14 @@ def occurrence_role(text: str, *, historical: bool = False) -> MentionRole:
         return "forecast"
     if _ONGOING.search(text):
         return "ongoing"
+    if (
+        is_response_context(text)
+        and not _PHYSICAL_OCCURRENCE.search(text)
+        and not re.search(
+            r"\b(?:killed|died|injured|destroyed|collapsed)\b", text, re.I
+        )
+    ):
+        return "uncertain"
     if _OCCURRENCE.search(text):
         return "reported"
     return "uncertain"
@@ -50,8 +88,8 @@ def date_is_occurrence(text: str, start: int, end: int) -> bool:
     before = text[:start]
     after = text[end:]
     # Scope at sentence/semicolon boundaries, allowing a leading dateline dash.
-    left = re.split(r"[!?;]|[.](?=\s)|[–—]", before)[-1]
-    right = re.split(r"[!?;]|[.](?=\s)|[–—]", after)[0]
+    left = source_clauses(before)[-1]
+    right = source_clauses(after)[0]
     context = left + " " + right
     if re.search(
         r"\b(?:strengthened|intensified|weakened|downgraded)\b", context, re.I

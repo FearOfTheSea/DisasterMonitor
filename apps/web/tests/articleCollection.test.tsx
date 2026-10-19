@@ -63,3 +63,42 @@ it('preserves all attributed conflicting accounts independently of article pages
   expect(screen.getAllByText(/corrected/).length).toBeGreaterThan(0);
   expect(screen.getByText(/Injuries: Unknown/)).toBeVisible();
 });
+
+it('distinguishes descriptive article locations from resolved administrative context', () => {
+  render(
+    <ArticleCollection
+      reports={[{ ...reports[0], location: 'North and South Province' }]}
+      mappedGeometry={{
+        kind: 'area',
+        coordinates: [
+          { latitude: 8, longitude: -81 },
+          { latitude: 9, longitude: -80 },
+          { latitude: 8, longitude: -80 },
+        ],
+        source_id: 'place_lookup',
+        estimated: true,
+        description: 'Partial administrative context: North Province only.',
+      }}
+    />,
+  );
+  const locations = screen.getByRole('region', { name: 'Reported locations' });
+  expect(
+    within(locations).getByText(/Descriptive place; coordinates unavailable/),
+  ).toBeVisible();
+  expect(
+    within(locations).getByText(/Partial administrative context: North Province only/),
+  ).toBeVisible();
+  expect(
+    within(locations).getByText(
+      /not an exact event location or measured affected area/,
+    ),
+  ).toBeVisible();
+  expect(within(locations).queryByText(/Location unresolved for mapping/)).toBeNull();
+});
+
+it('keeps an unresolved mapping notice when neither articles nor the selected event have geometry', () => {
+  render(
+    <ArticleCollection reports={[{ ...reports[0], location: 'Uncertain district' }]} />,
+  );
+  expect(screen.getByText(/Location unresolved for mapping/)).toBeVisible();
+});

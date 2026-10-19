@@ -1,6 +1,21 @@
 {
-  "version": "2026-08-15",
+  "version": "2026-10-19",
   "sources": [
+    {
+      "source_id": "event-media-direct-relief",
+      "display_name": "Direct Relief",
+      "page_hosts": ["www.directrelief.org"],
+      "asset_hosts": ["www.directrelief.org", "i0.wp.com"],
+      "asset_path_prefixes": {
+        "www.directrelief.org": "/wp-content/uploads/",
+        "i0.wp.com": "/www.directrelief.org/wp-content/uploads/"
+      },
+      "priority": 10,
+      "noncommercial_only": true,
+      "required_credit": "Direct Relief",
+      "license_name": "CC BY-NC-ND 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-nc-nd/4.0/"
+    },
     {
       "source_id": "event-media-international-rescue-committee",
       "display_name": "International Rescue Committee",

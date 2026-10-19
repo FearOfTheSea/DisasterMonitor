@@ -1,4 +1,5 @@
 import { exerciseGroundImagery } from './system_ground_imagery.mjs';
+import { exerciseDesktopIncidentAccess } from './system_desktop_incident_access.mjs';
 import { exerciseResponsiveWorkspaces } from './system_responsive_workspaces.mjs';
 import { spawn } from 'node:child_process';
 
@@ -245,6 +246,8 @@ try {
     const rail = document.querySelector('.active-incidents-scroll');
     if (rail) rail.scrollTop = 0;
   });
+  await exerciseDesktopIncidentAccess(page, 'Focus United States on map');
+  await page.setViewportSize({ width: 1536, height: 1024 });
   await page.getByRole('button', { name: 'Focus United States on map' }).click();
   await page.getByRole('button', { name: 'Find imagery', exact: true }).click();
   await page.getByRole('button', { name: 'Return to event' }).click();
