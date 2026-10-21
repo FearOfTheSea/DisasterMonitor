@@ -1,6 +1,7 @@
-FROM ghcr.io/astral-sh/uv:0.11.32 AS uv
+ARG PYTHON_VERSION=3.12
 
-FROM python:3.12.11-slim-bookworm AS builder
+FROM ghcr.io/astral-sh/uv:0.11.32 AS uv
+FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
@@ -11,7 +12,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.12.11-slim-bookworm AS runtime
+FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
 
 ENV PATH=/app/.venv/bin:$PATH \
     COUNTRY_CATALOG_ROOT=/var/lib/disaster-monitor/geography \
