@@ -7,7 +7,7 @@ on:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v9.0.0
@@ -17,7 +17,7 @@ jobs:
       - run: sh scripts/check_backend.sh
 
   postgres-persistence:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-ci-only@127.0.0.1:5432/disastermonitor
       REQUIRE_POSTGRES_TESTS: "true"
@@ -49,7 +49,7 @@ jobs:
         run: uv run --directory apps/api pytest tests/integration -m postgres -q
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -65,7 +65,7 @@ jobs:
       - run: sh scripts/check_frontend.sh
 
   containers:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - name: Build API runtime image
@@ -110,7 +110,7 @@ jobs:
           '
 
   repository:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - name: Verify migration sources are not tracked
@@ -119,7 +119,7 @@ jobs:
 
   system:
     needs: [backend, frontend, postgres-persistence]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-ci-only@127.0.0.1:5432/disastermonitor
       SCHEDULED_MONITORING_ENABLED: "true"
