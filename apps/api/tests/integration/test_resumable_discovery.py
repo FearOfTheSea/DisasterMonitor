@@ -4,6 +4,8 @@ import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from disaster_monitor.application.incidents.resumable_discovery import (
     ResumableDiscovery,
 )
@@ -31,6 +33,7 @@ def article(url="https://publisher.example/flood", at=NOW):
 class Provider:
     source_id = "controlled"
     supports_alternates = False
+    supports_time_filter = True
     queries = ("flood",)
 
     def __init__(self):
@@ -44,6 +47,43 @@ class Provider:
 class Reader:
     async def retrieve(self, lead):
         return article(lead.canonical_url)
+
+
+async def test_unexpected_worker_failure_pauses_scan_and_keeps_same_work_resumable(
+    tmp_path,
+):
+    class InterruptedJournal(SQLiteCollectionJournal):
+        interrupted = False
+
+        async def claim(self, kind, worker, *, now, provider=None):
+            if kind == "search" and not self.interrupted:
+                self.interrupted = True
+                raise RuntimeError("Controlled journal interruption")
+            return await super().claim(kind, worker, now=now, provider=provider)
+
+    store = InterruptedJournal(tmp_path / "jobs.sqlite")
+    provider = Provider()
+    service = ResumableDiscovery((provider,), Reader(), store, clock=lambda: NOW)
+    run = await service.start(1)
+    try:
+        with pytest.raises(RuntimeError, match="Controlled journal interruption"):
+            await service.wait(run.scan_id)
+        paused = await service.get(run.scan_id)
+        assert paused.status == "incomplete"
+        assert paused.collection.state == "partial"
+        assert paused.collection.can_continue
+        assert paused.collection.searches_pending == 1
+        assert not await store.active_scans()
+        assert not provider.calls
+
+        continued = await service.continue_collection(run.scan_id)
+        assert continued.interval == run.interval
+        await service.wait(run.scan_id)
+        finished = await service.get(run.scan_id)
+        assert finished.status == "completed"
+        assert len(finished.reports) == len(provider.calls) == 1
+    finally:
+        await service.aclose()
 
 
 async def test_compatible_users_share_acquisition_but_keep_each_exact_interval(

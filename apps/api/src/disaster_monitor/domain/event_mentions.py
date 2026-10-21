@@ -34,6 +34,18 @@ class MentionPlace:
 
 
 @dataclass(frozen=True, slots=True)
+class HazardEpisodeAccount:
+    """One report's joint impacts, never allocated to its component hazards."""
+
+    account_id: str
+    hazards: tuple[Disaster, ...]
+    place: MentionPlace
+    time: MentionTime
+    excerpt: str
+    claims: tuple[ReportedImpact, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class EventMention:
     mention_id: str
     source: SourceReference
@@ -49,6 +61,8 @@ class EventMention:
     notices: tuple[str, ...] = ()
     distinguishing_evidence: str | None = None
     country_context: str | None = None
+    occurrence_anchor_id: str | None = None
+    episode_account: HazardEpisodeAccount | None = None
 
     def __post_init__(self) -> None:
         if not self.mention_id or not self.excerpt.strip():

@@ -145,10 +145,16 @@ from disaster_monitor.infrastructure.humanitarian.iom_dtm import IomDtmContextAd
 from disaster_monitor.infrastructure.media.filesystem_store import (
     FilesystemMediaAssetStore,
 )
+from disaster_monitor.infrastructure.news.bing_collection import (
+    BingRssCollectionProvider,
+)
 from disaster_monitor.infrastructure.news.collection_providers import (
     GdeltCollectionProvider,
     PublicCollectionArticleReader,
     ReliefWebCollectionProvider,
+)
+from disaster_monitor.infrastructure.news.wikipedia_collection import (
+    WikipediaCitationCollectionProvider,
 )
 from disaster_monitor.infrastructure.operations.file_discovery_store import (
     FileDiscoveryStore,
@@ -348,6 +354,7 @@ def build_app_dependencies(
         legacy=FileDiscoveryStore(settings.discovery_scan_store_path),
         pass_seconds=settings.discovery_pass_seconds,
         maximum_leads=settings.discovery_capacity_records,
+        maximum_bytes=settings.discovery_storage_max_bytes,
     )
     mention_resolver = (
         NominatimMentionResolver(
@@ -400,9 +407,17 @@ def build_app_dependencies(
         app_name=settings.reliefweb_app_name,
         timeout_seconds=settings.news_feed_timeout_seconds,
     )
+    bing_discovery = BingRssCollectionProvider(
+        timeout_seconds=settings.news_feed_timeout_seconds
+    )
+    wikipedia_discovery = WikipediaCitationCollectionProvider(
+        timeout_seconds=settings.news_feed_timeout_seconds
+    )
     discovery_providers = (
         (
             reliefweb_discovery,
+            *((bing_discovery,) if settings.bing_news_rss_enabled else ()),
+            *((wikipedia_discovery,) if settings.wikipedia_news_enabled else ()),
             *((discovery_feed,) if settings.gdelt_news_enabled else ()),
         )
         if settings.news_sensing_enabled
@@ -685,6 +700,8 @@ def build_app_dependencies(
                 discovery_scans.aclose,
                 discovery_feed.aclose,
                 reliefweb_discovery.aclose,
+                bing_discovery.aclose,
+                wikipedia_discovery.aclose,
                 *((mention_resolver.aclose,) if mention_resolver else ()),
                 *(
                     lambda feed=feed: close_resource(feed)

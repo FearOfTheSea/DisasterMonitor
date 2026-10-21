@@ -18,6 +18,7 @@ from disaster_monitor.application.evidence.standalone_models import (
     EvidenceSection,
     StandaloneEvidenceResult,
 )
+from disaster_monitor.application.media import MediaContinuationError
 from disaster_monitor.application.ports.disaster_information import (
     SituationReportProvider,
 )
@@ -73,17 +74,21 @@ class StandaloneEvidenceService:
         self._media = media
         self._dataset_limitations = dataset_limitations
         self._clock = clock
-        self._cache: OrderedDict[tuple[str, str], StandaloneEvidenceResult] = (
-            OrderedDict()
-        )
+        self._cache: OrderedDict[
+            tuple[str, str, str | None], StandaloneEvidenceResult
+        ] = OrderedDict()
         self._inflight: dict[
-            tuple[str, str], asyncio.Task[StandaloneEvidenceResult]
+            tuple[str, str, str | None], asyncio.Task[StandaloneEvidenceResult]
         ] = {}
-        self._checked: dict[tuple[str, str], datetime] = {}
-        self._sizes: dict[tuple[str, str], int] = {}
+        self._checked: dict[tuple[str, str, str | None], datetime] = {}
+        self._sizes: dict[tuple[str, str, str | None], int] = {}
         self._cache_bytes = 0
 
-    async def execute(self, identifier: str, section: str) -> StandaloneEvidenceResult:
+    async def execute(
+        self, identifier: str, section: str, *, cursor: str | None = None
+    ) -> StandaloneEvidenceResult:
+        if cursor is not None and section != "media":
+            raise ValueError("Continuation is supported only for photographs.")
         if section not in (
             "impacts",
             "warnings",
@@ -94,7 +99,12 @@ class StandaloneEvidenceService:
         ):
             raise ValueError("Unsupported evidence section.")
         context = await self._contexts.read(identifier)
-        key = (context.media.physical_event_id, section)
+        cache_identity = (
+            context.media.collection_version
+            if section == "media"
+            else context.media.physical_event_id
+        )
+        key = (cache_identity, section, cursor)
         cached = self._cache.get(key)
         ttl = timedelta(
             minutes=1
@@ -108,7 +118,7 @@ class StandaloneEvidenceService:
         task = self._inflight.get(key)
         if task is None:
             task = asyncio.create_task(
-                self._load(context, cast(EvidenceSection, section))
+                self._load(context, cast(EvidenceSection, section), cursor=cursor)
             )
             self._inflight[key] = task
         try:
@@ -144,6 +154,12 @@ class StandaloneEvidenceService:
                 self._cache_bytes -= self._sizes.pop(removed)
                 self._checked.pop(removed, None)
             return result
+        except MediaContinuationError:
+            initial_key = (cache_identity, "media", None)
+            self._cache.pop(initial_key, None)
+            self._cache_bytes -= self._sizes.pop(initial_key, 0)
+            self._checked.pop(initial_key, None)
+            raise
         finally:
             if task.done():
                 self._inflight.pop(key, None)
@@ -227,7 +243,11 @@ class StandaloneEvidenceService:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _load(
-        self, context: IncidentEvidenceContext, section: EvidenceSection
+        self,
+        context: IncidentEvidenceContext,
+        section: EvidenceSection,
+        *,
+        cursor: str | None = None,
     ) -> StandaloneEvidenceResult:
         result = StandaloneEvidenceResult(
             context.media.event_id,
@@ -246,7 +266,11 @@ class StandaloneEvidenceService:
                         state="unconfigured",
                         reason_codes=("media_unconfigured",),
                     )
-                gallery = await self._media.discover(context.media)
+                gallery = (
+                    await self._media.discover(context.media, cursor=cursor)
+                    if cursor is not None
+                    else await self._media.discover(context.media)
+                )
                 return replace(
                     result,
                     state="available" if gallery and gallery.items else "empty",
@@ -401,6 +425,8 @@ class StandaloneEvidenceService:
                     "dates and geographic scopes may differ.",
                 ),
             )
+        except MediaContinuationError:
+            raise
         except Exception:
             return replace(
                 result,

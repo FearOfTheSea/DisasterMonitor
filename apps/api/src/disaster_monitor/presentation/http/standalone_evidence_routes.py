@@ -1,8 +1,8 @@
 """Typed section retrieval independent of assistant messages."""
 
-from typing import cast
+from typing import Annotated, cast
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from disaster_monitor.application.evidence.standalone import StandaloneEvidenceService
@@ -34,12 +34,15 @@ def _service(request: Request) -> StandaloneEvidenceService:
     tags=["incidents"],
 )
 async def section_evidence(
-    identifier: str, section: str, request: Request
+    identifier: str,
+    section: str,
+    request: Request,
+    cursor: Annotated[str | None, Query(min_length=1, max_length=8192)] = None,
 ) -> SectionEvidenceResponse:
     service = _service(request)
     try:
         return SectionEvidenceResponse(
-            evidence=await service.execute(identifier, section)
+            evidence=await service.execute(identifier, section, cursor=cursor)
         )
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

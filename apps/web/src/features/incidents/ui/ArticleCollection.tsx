@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { IncidentGeometry } from '@/features/incidents/model/activeIncidents';
+import { disasterLabel } from './incidentPresentation';
 import type {
   DiscoveryReportResponse,
   ReportedImpactResponse,
@@ -9,14 +10,14 @@ import type {
 
 const PAGE_SIZE = 5;
 const IMPACTS = [
-  'Fatalities',
-  'Injuries',
-  'Displacement',
-  'Roads and bridges',
-  'Electricity networks',
-  'Water systems',
-  'Communications networks',
-];
+  ['fatalities', 'Fatalities'],
+  ['injuries', 'Injuries'],
+  ['displacement', 'Displacement'],
+  ['roads_bridges', 'Roads and bridges'],
+  ['electricity', 'Electricity networks'],
+  ['water', 'Water systems'],
+  ['communications', 'Communications networks'],
+] as const;
 
 function time(value?: string | null) {
   return value ? new Date(value).toLocaleString() : 'Unknown';
@@ -156,18 +157,33 @@ export function ArticleCollection({
   const claims = reports.flatMap((report) =>
     (report.claims ?? []).map((claim) => ({ report, claim })),
   );
-  const differing = IMPACTS.some(
-    (label) =>
-      new Set(
-        claims
-          .filter(
-            (c) =>
-              c.claim.label === label &&
-              !c.claim.value.toLowerCase().includes('unknown'),
-          )
-          .map((c) => c.claim.value.toLowerCase()),
-      ).size > 1,
-  );
+  const episodes = [
+    ...new Map(
+      reports.flatMap((report) =>
+        report.episode_account
+          ? [
+              [
+                report.episode_account.account_id,
+                { report, account: report.episode_account },
+              ] as const,
+            ]
+          : [],
+      ),
+    ).values(),
+  ];
+  const comparableAccounts = new Map<string, Set<string>>();
+  for (const { claim } of claims) {
+    if (!IMPACTS.some(([category]) => category === claim.category)) continue;
+    const value = claim.value.toLowerCase();
+    if (value.includes('unknown')) continue;
+    // A subtype count and a broader injury account can overlap. Compare only
+    // accounts with the same category and label; keep every source separately.
+    const key = `${claim.category}:${claim.label.toLowerCase()}`;
+    const values = comparableAccounts.get(key) ?? new Set<string>();
+    values.add(value);
+    comparableAccounts.set(key, values);
+  }
+  const differing = [...comparableAccounts.values()].some((values) => values.size > 1);
   return (
     <>
       <section aria-label="Reported impacts">
@@ -183,8 +199,8 @@ export function ArticleCollection({
             is not automatically correct.
           </p>
         ) : null}
-        {IMPACTS.map((label) => {
-          const accounts = claims.filter((c) => c.claim.label === label);
+        {IMPACTS.map(([category, label]) => {
+          const accounts = claims.filter((c) => c.claim.category === category);
           return (
             <details key={label} className="event-impact-accounts">
               <summary>
@@ -207,7 +223,7 @@ export function ArticleCollection({
                   ) => (
                     <article key={`${report.source.canonical_url}:${index}`}>
                       <strong>
-                        {label}: {claim.value}
+                        {claim.label}: {claim.value}
                       </strong>{' '}
                       · {claim.qualifiers?.join(', ') || 'Qualification not extracted'}
                       <blockquote>{claim.excerpt}</blockquote>
@@ -230,6 +246,49 @@ export function ArticleCollection({
           );
         })}
       </section>
+      {episodes.length ? (
+        <section aria-label="Combined episode accounts">
+          <h3>Combined episode accounts</h3>
+          <p>
+            These source accounts cover a combined episode. They are not allocated to
+            individual hazards or localities. Counts may overlap other accounts; do not
+            add them.
+          </p>
+          <Pages
+            items={episodes}
+            label="combined accounts"
+            render={({ report, account }) => (
+              <article key={account.account_id}>
+                <h4>{account.hazards.map(disasterLabel).join(' + ')}</h4>
+                <p>
+                  Reported episode context: {account.location} · Source event date:{' '}
+                  {account.event_date_wording}
+                </p>
+                {account.claims.map((claim, index) => (
+                  <div key={index}>
+                    <strong>
+                      {claim.label}: {claim.value}
+                    </strong>
+                    <p>
+                      {claim.qualifiers?.join(', ') || 'Qualification not extracted'}
+                    </p>
+                    <blockquote>{claim.excerpt}</blockquote>
+                  </div>
+                ))}
+                <a href={report.source.canonical_url} target="_blank" rel="noreferrer">
+                  {report.source.publisher}: {report.source.title}
+                </a>
+                <ReportTimes report={report} />
+                <Lineage report={report} />
+                <details>
+                  <summary>Combined account source passages</summary>
+                  <blockquote>{account.excerpt}</blockquote>
+                </details>
+              </article>
+            )}
+          />
+        </section>
+      ) : null}
       <section aria-label="Discovery reporting">
         <h3>Collected articles · {articles.length}</h3>
         <p>

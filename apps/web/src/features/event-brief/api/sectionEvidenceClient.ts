@@ -10,9 +10,11 @@ export async function fetchSectionEvidence(
   identifier: string,
   section: EvidenceSection,
   signal?: AbortSignal,
+  cursor?: string,
 ): Promise<StandaloneEvidenceResult> {
+  const query = cursor ? `?${new URLSearchParams({ cursor })}` : '';
   const response = await fetch(
-    `${API_BASE_URL}/incidents/${encodeURIComponent(identifier)}/evidence/${section}`,
+    `${API_BASE_URL}/incidents/${encodeURIComponent(identifier)}/evidence/${section}${query}`,
     { signal },
   );
   const body = await readJsonResponse<unknown>(response);

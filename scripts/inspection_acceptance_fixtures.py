@@ -28,7 +28,9 @@ from disaster_monitor.application.incidents.imagery_context import (
 )
 from disaster_monitor.application.media import (
     DisasterMediaCandidate,
+    MediaContinuationError,
     MediaCreditKind,
+    MediaDiscoveryBatch,
     MediaEventContext,
     MediaRightsStatus,
     RetrievedMedia,
@@ -195,11 +197,16 @@ class InspectionMediaProvider:
     provider_id = "CONTROLLED-synthetic-images"
 
     async def discover(
-        self, context: MediaEventContext, *, now: datetime
-    ) -> tuple[DisasterMediaCandidate, ...]:
+        self,
+        context: MediaEventContext,
+        *,
+        now: datetime,
+        cursor: str | None = None,
+        maximum_candidates: int = 72,
+    ) -> MediaDiscoveryBatch:
         del now
         if not context.collected_articles:
-            return ()
+            return MediaDiscoveryBatch(())
         source = context.collected_articles[0]
         candidates = []
         for index in range(9):
@@ -225,7 +232,14 @@ class InspectionMediaProvider:
                     index,
                 )
             )
-        return tuple(candidates)
+        start = int(cursor or 0)
+        if not 0 <= start < len(candidates):
+            raise MediaContinuationError("CONTROLLED invalid media page.")
+        end = min(len(candidates), start + maximum_candidates)
+        return MediaDiscoveryBatch(
+            tuple(candidates[start:end]),
+            next_cursor=str(end) if end < len(candidates) else None,
+        )
 
     async def retrieve(self, candidate: DisasterMediaCandidate) -> RetrievedMedia:
         index = int(candidate.candidate_id.rsplit(":", 1)[-1])
@@ -336,8 +350,15 @@ def inspection_discovery(store: DiscoveryStore) -> DiscoveryScanService:
     return DiscoveryScanService((InspectionFeed(),), store, clock=lambda: NOW)
 
 
-def inspection_media(store: InMemoryMediaAssetStore) -> DisasterMediaService:
-    return DisasterMediaService((InspectionMediaProvider(),), store, clock=lambda: NOW)
+def inspection_media(
+    store: InMemoryMediaAssetStore, *, target_count: int = 72
+) -> DisasterMediaService:
+    return DisasterMediaService(
+        (InspectionMediaProvider(),),
+        store,
+        clock=lambda: NOW,
+        target_count=target_count,
+    )
 
 
 def inspection_ground(

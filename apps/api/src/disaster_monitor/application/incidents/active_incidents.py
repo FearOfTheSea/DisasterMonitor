@@ -16,14 +16,14 @@ from disaster_monitor.application.evidence.event_policies import (
 from disaster_monitor.application.evidence.event_resolution import (
     EventPolicyRegistry,
 )
+from disaster_monitor.application.incidents.discovery_lookup import (
+    DiscoveryIncidentLookup,
+)
 from disaster_monitor.application.incidents.identity_assignments import (
     IncidentIdentityAssignments,
 )
 from disaster_monitor.application.incidents.meaningful_change import (
     mark_meaningful_changes,
-)
-from disaster_monitor.application.incidents.mention_geography import (
-    resolve_event_places,
 )
 from disaster_monitor.application.incidents.models import (
     ActiveIncident,
@@ -107,8 +107,11 @@ class ActiveIncidentsService:
         discovery_place_resolver: MentionPlaceResolver | None = None,
     ) -> None:
         self._clock = clock
-        self._discovery_store = discovery_store
-        self._discovery_place_resolver = discovery_place_resolver
+        self._discovery_lookup = (
+            DiscoveryIncidentLookup(discovery_store, discovery_place_resolver)
+            if discovery_store
+            else None
+        )
         self._retrieval = IncidentRetrieval(
             provider_registry,
             clock=clock,
@@ -214,26 +217,8 @@ class ActiveIncidentsService:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def lookup(self, identifier: str) -> ActiveIncident:
-        if self._discovery_store is not None and identifier.startswith("discovery:"):
-            from disaster_monitor.application.incidents.discovery_projection import (
-                discovery_incident,
-            )
-
-            for run in await self._discovery_store.recent():
-                for event in run.events:
-                    if event.event_id == identifier:
-                        if (
-                            event.geometry is None
-                            and event.event_time is not None
-                            and self._discovery_place_resolver
-                        ):
-                            (event,) = await resolve_event_places(
-                                (event,), self._discovery_place_resolver, maximum=2
-                            )
-                        return discovery_incident(
-                            event, run.finished_at or run.interval.end
-                        )
-            raise LookupError("Discovered event is no longer retained. Run a new scan.")
+        if self._discovery_lookup is not None and identifier.startswith("discovery:"):
+            return await self._discovery_lookup.execute(identifier)
         snapshot = await self.execute()
         matches = tuple(
             item

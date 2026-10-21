@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     discovery_page_budget: int = Field(default=28, ge=1, le=200)
     discovery_pass_seconds: float = Field(default=180, ge=10, le=600)
     discovery_capacity_records: int = Field(default=20_000, ge=100, le=100_000)
+    discovery_storage_max_bytes: int = Field(
+        default=512 * 1024 * 1024, ge=16 * 1024 * 1024, le=4 * 1024 * 1024 * 1024
+    )
     discovery_place_endpoint: str | None = None
     discovery_place_cache_path: Path = Path("data/geography/mention-places.json")
     ground_imagery_catalog_max_response_bytes: int = Field(
@@ -97,6 +100,14 @@ class Settings(BaseSettings):
     self_hosted_osrm_data_version: str | None = None
     news_sensing_enabled: bool = True
     gdelt_news_enabled: bool = True
+    bing_news_rss_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable RSS discovery and additional photograph search only for use "
+            "covered by the RSS provider's permissions."
+        ),
+    )
+    wikipedia_news_enabled: bool = True
     news_feed_timeout_seconds: float = Field(default=15.0, gt=0, le=60)
     approved_web_source_registry_path: Path | None = _DEFAULT_APPROVED_WEB_SOURCES
     nasa_firms_map_key: SecretStr | None = Field(default=None, repr=False)

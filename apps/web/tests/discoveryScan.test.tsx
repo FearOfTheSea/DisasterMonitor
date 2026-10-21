@@ -6,6 +6,42 @@ import type { DiscoveryScanResponse } from '@/shared/api/generated/assistant';
 afterEach(cleanup);
 
 describe('publication scan controls', () => {
+  it('identifies a pending reassessment and keeps the original results accessible', () => {
+    const run = {
+      status: 'running',
+      scan_id: 'assessment',
+      reprocessed_from: 'original',
+      reports_seen: 2,
+      interval_start: '2026-09-19T00:00:00Z',
+      interval_end: '2026-10-19T00:00:00Z',
+      issues: [],
+      unlocated_count: 0,
+      snapshot: { incidents: [] },
+      collection: { state: 'waiting', can_continue: true },
+    } as unknown as DiscoveryScanResponse;
+    render(
+      <DiscoveryScanControls
+        days={30}
+        onDaysChange={vi.fn()}
+        onScan={vi.fn()}
+        run={run}
+        onContinue={vi.fn()}
+        onReprocess={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Reprocessing retained reports…')).toBeVisible();
+    expect(
+      screen.getByText(/Visible records are from the previous assessment/),
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Open original scan' })).toHaveAttribute(
+      'href',
+      '?scan=original',
+    );
+    expect(screen.queryByRole('button', { name: 'Continue collection' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Reprocess retained reports' }),
+    ).toBeDisabled();
+  });
   it('continues pending acquisition separately from retained reprocessing', () => {
     const resume = vi.fn();
     const reprocess = vi.fn();

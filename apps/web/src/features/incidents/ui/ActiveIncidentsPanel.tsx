@@ -418,7 +418,7 @@ export function ActiveIncidentsPanel({
                       ? 'Discovery failed. No successful empty result is available.'
                       : query
                         ? isServerSearch
-                          ? 'No records match your server-side search.'
+                          ? 'No records match your search.'
                           : 'No loaded records match your search.'
                         : 'No incident records matched this bounded retrieval.'}
                 </strong>

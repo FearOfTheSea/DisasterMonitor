@@ -203,15 +203,15 @@ async def test_fixed_replay_retains_reports_beyond_legacy_page_budget(tmp_path):
 
 
 async def test_provider_queue_wait_does_not_consume_the_network_timeout():
-    from disaster_monitor.infrastructure.news.collection_http import CollectionJsonHttp
+    from disaster_monitor.infrastructure.news.collection_http import CollectionHttp
 
     async def respond(request):
         await asyncio.sleep(0.4)
         return httpx.Response(200, json={"articles": []})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        http = CollectionJsonHttp(client=client, timeout_seconds=1, minimum_interval=0)
+        http = CollectionHttp(client=client, timeout_seconds=1, minimum_interval=0)
         responses = await asyncio.gather(
-            *(http.get("https://provider.example/search", {}) for _ in range(3))
+            *(http.get_json("https://provider.example/search", {}) for _ in range(3))
         )
         assert len(responses) == 3

@@ -34,6 +34,7 @@ class NewsFeedItem:
     published_at: datetime | None
     updated_at: datetime | None
     indexed_at: datetime | None = None
+    discovery_hint: str | None = None
 
     def __post_init__(self) -> None:
         if not all(
@@ -51,6 +52,8 @@ class NewsFeedItem:
         _require_aware("published_at", self.published_at)
         _require_aware("updated_at", self.updated_at)
         _require_aware("indexed_at", self.indexed_at)
+        if self.discovery_hint is not None and len(self.discovery_hint) > 2000:
+            raise ValueError("A discovery hint must not exceed 2000 characters.")
 
 
 @dataclass(frozen=True, slots=True)

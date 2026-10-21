@@ -8,12 +8,18 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
+from threading import Lock
 from typing import Any, TypeVar
 from uuid import uuid4
 
 from pydantic import TypeAdapter
 
-from disaster_monitor.application.ports.discovery import DiscoveryStore
+from disaster_monitor.application.ports.collection import ARTICLE_RETRIEVAL_PROVIDER
+from disaster_monitor.application.ports.discovery import (
+    DISCOVERY_CAPACITY_NOTICE,
+    DiscoveryCapacityError,
+    DiscoveryStore,
+)
 from disaster_monitor.domain.collection import (
     ClaimedCollectionWork,
     CollectionPage,
@@ -28,9 +34,20 @@ from disaster_monitor.domain.discovery import (
     DiscoveryRun,
 )
 from disaster_monitor.domain.news import NewsFeedItem
+from disaster_monitor.infrastructure.operations.collection_run_payloads import (
+    DiscoveryRunPayloads,
+)
+from disaster_monitor.infrastructure.operations.sqlite_collection_capacity import (
+    CollectionStorageBudget,
+    is_storage_full,
+)
+from disaster_monitor.infrastructure.operations.sqlite_request_schedule import (
+    CollectionRequestSchedule,
+    request_scope,
+    retained_publisher_refusals,
+)
 
 T = TypeVar("T")
-RUN = TypeAdapter(DiscoveryRun)
 PARTITION = TypeAdapter(CollectionPartition)
 LEAD = TypeAdapter(NewsFeedItem)
 PAGE = TypeAdapter(CollectionPage)
@@ -43,6 +60,9 @@ CREATE TABLE IF NOT EXISTS passes (
 );
 CREATE TABLE IF NOT EXISTS scans (
  id TEXT PRIMARY KEY, run BLOB NOT NULL, pass_id INTEGER
+);
+CREATE TABLE IF NOT EXISTS scan_capacity (
+ scan TEXT PRIMARY KEY, stopped REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS work (
  id TEXT PRIMARY KEY, kind TEXT NOT NULL, provider TEXT NOT NULL,
@@ -97,13 +117,17 @@ class SQLiteCollectionJournal:
         legacy: DiscoveryStore | None = None,
         lease_seconds: float = 90,
         maximum_leads: int = 20_000,
+        maximum_bytes: int = 512 * 1024 * 1024,
         pass_seconds: float = 180,
     ) -> None:
         self._path = path
         self._legacy = legacy
         self._lease_seconds = lease_seconds
         self._maximum_leads = maximum_leads
+        self._storage = CollectionStorageBudget(path, maximum_bytes)
         self._pass_seconds = pass_seconds
+        self._run_payloads = DiscoveryRunPayloads()
+        self._write_lock = Lock()
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
@@ -115,6 +139,7 @@ class SQLiteCollectionJournal:
                     " NULL DEFAULT 0"
                 )
             db.execute("PRAGMA user_version=1")
+            self._retained_refusals = retained_publisher_refusals(db)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -122,17 +147,30 @@ class SQLiteCollectionJournal:
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         try:
+            self._storage.configure(db)
             yield db
         finally:
             db.close()
 
     @contextmanager
-    def _transaction(self) -> Iterator[sqlite3.Connection]:
-        with self._connect() as db:
+    def _transaction(self, *, control: bool = False) -> Iterator[sqlite3.Connection]:
+        # Workers and projection share this adapter. Queue its writes before
+        # opening connections instead of spending SQLite's external busy timeout
+        # competing with another transaction already admitted by this instance.
+        with self._write_lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             try:
+                if not control:
+                    self._storage.check_admission(db)
                 yield db
+                if not control:
+                    self._storage.check_admission(db)
                 db.commit()
+            except sqlite3.Error as error:
+                db.rollback()
+                if is_storage_full(error):
+                    raise DiscoveryCapacityError() from error
+                raise
             except BaseException:
                 db.rollback()
                 raise
@@ -141,7 +179,7 @@ class SQLiteCollectionJournal:
         await asyncio.to_thread(self._save, run)
 
     def _save(self, run: DiscoveryRun) -> None:
-        payload = RUN.dump_json(run)
+        payload = self._run_payloads.encode(run)
         with self._transaction() as db:
             db.execute(
                 "INSERT INTO scans(id,run) VALUES (?,?) ON CONFLICT(id) "
@@ -156,7 +194,25 @@ class SQLiteCollectionJournal:
     def _read(self, scan_id: str) -> DiscoveryRun | None:
         with self._connect() as db:
             row = db.execute("SELECT run FROM scans WHERE id=?", (scan_id,)).fetchone()
-            return RUN.validate_json(row[0]) if row else None
+            if not row:
+                return None
+            return self._capacity_view(db, self._run_payloads.decode(row[0]))
+
+    def _capacity_view(self, db: sqlite3.Connection, run: DiscoveryRun) -> DiscoveryRun:
+        stopped = db.execute(
+            "SELECT stopped FROM scan_capacity WHERE scan=?", (run.scan_id,)
+        ).fetchone()
+        if not stopped:
+            return run
+        progress = run.collection or CollectionProgress()
+        return replace(
+            run,
+            status="incomplete",
+            finished_at=datetime.fromtimestamp(stopped[0], UTC),
+            collection=replace(progress, state="partial", can_continue=True),
+            truncated=True,
+            issues=tuple(dict.fromkeys((*run.issues, DISCOVERY_CAPACITY_NOTICE))),
+        )
 
     async def recent(self) -> tuple[DiscoveryRun, ...]:
         runs = await asyncio.to_thread(self._recent)
@@ -169,7 +225,8 @@ class SQLiteCollectionJournal:
     def _recent(self) -> tuple[DiscoveryRun, ...]:
         with self._connect() as db:
             return tuple(
-                RUN.validate_json(row[0]) for row in db.execute("SELECT run FROM scans")
+                self._capacity_view(db, self._run_payloads.decode(row[0]))
+                for row in db.execute("SELECT run FROM scans")
             )
 
     def _pass(self, db: sqlite3.Connection, now: datetime, budget: int) -> int:
@@ -221,7 +278,7 @@ class SQLiteCollectionJournal:
             pass_id = self._pass(db, now, budget)
             db.execute(
                 "INSERT INTO scans VALUES(?,?,?)",
-                (run.scan_id, RUN.dump_json(run), pass_id),
+                (run.scan_id, self._run_payloads.encode(run), pass_id),
             )
             for partition in partitions:
                 self._add_work(db, partition)
@@ -237,12 +294,13 @@ class SQLiteCollectionJournal:
                 raise LookupError(
                     "Historical scan has no resumable page journal. Start a new scan."
                 )
-            run = RUN.validate_json(row[0])
+            run = self._run_payloads.decode(row[0])
             if run.reprocessed_from:
                 raise ValueError(
                     "Continue the original collection, not a reprocessed result."
                 )
             pass_id = self._pass(db, now, budget)
+            db.execute("DELETE FROM scan_capacity WHERE scan=?", (scan_id,))
             db.execute(
                 "UPDATE work SET state='pending',attempts=0 WHERE state='capacity' "
                 "AND id IN (SELECT work FROM scan_work WHERE scan=?)",
@@ -252,7 +310,9 @@ class SQLiteCollectionJournal:
                 "UPDATE scans SET pass_id=?,run=? WHERE id=?",
                 (
                     pass_id,
-                    RUN.dump_json(replace(run, status="running", finished_at=None)),
+                    self._run_payloads.encode(
+                        replace(run, status="running", finished_at=None)
+                    ),
                     scan_id,
                 ),
             )
@@ -287,7 +347,10 @@ class SQLiteCollectionJournal:
                     timestamp - self._pass_seconds,
                 ),
             ).fetchall()
+            schedule = CollectionRequestSchedule(db, self._retained_refusals)
             for row in rows:
+                if schedule.ready_at(row) > timestamp:
+                    continue
                 if row["attempts"] >= 4:
                     db.execute(
                         "UPDATE work SET state='failed',outcome='attempts_exhausted',"
@@ -422,7 +485,7 @@ class SQLiteCollectionJournal:
                     "work(id,kind,provider,payload,sequence) "
                     "VALUES(?,'retrieve',?,?,"
                     "(SELECT COALESCE(MAX(sequence),0)+1 FROM work))",
-                    (key, "publisher-articles", LEAD.dump_json(item)),
+                    (key, ARTICLE_RETRIEVAL_PROVIDER, LEAD.dump_json(item)),
                 )
                 self._link_child(db, work.work_id, key)
                 if work.partition.alternate_for:
@@ -561,11 +624,14 @@ class SQLiteCollectionJournal:
             "UPDATE attempts SET finished=?,outcome=?,detail=? WHERE token=?",
             (now.timestamp(), outcome, detail[:300], work.token),
         )
-        if retry_at and work.kind == "search":
+        if retry_at:
+            row = db.execute(
+                "SELECT * FROM work WHERE id=?", (work.work_id,)
+            ).fetchone()
             db.execute(
                 "INSERT INTO cooldowns VALUES(?,?) ON CONFLICT(provider) DO UPDATE SET "
                 "until_time=MAX(until_time,excluded.until_time)",
-                (work.provider, retry_at.timestamp()),
+                (request_scope(row), retry_at.timestamp()),
             )
 
     async def active_scans(self) -> tuple[str, ...]:
@@ -585,7 +651,35 @@ class SQLiteCollectionJournal:
         await asyncio.to_thread(self._finish_pass)
 
     def _finish_pass(self) -> None:
-        with self._transaction() as db:
+        with self._transaction(control=True) as db:
+            db.execute("UPDATE passes SET active=0 WHERE active=1")
+
+    async def suspend_at_capacity(
+        self, *, now: datetime, scan_ids: tuple[str, ...] = ()
+    ) -> None:
+        await asyncio.to_thread(self._suspend_at_capacity, now, scan_ids)
+
+    def _suspend_at_capacity(self, now: datetime, scan_ids: tuple[str, ...]) -> None:
+        with self._transaction(control=True) as db:
+            db.execute(
+                "INSERT OR IGNORE INTO scan_capacity SELECT s.id,? FROM scans s "
+                "JOIN passes p ON p.id=s.pass_id WHERE p.active=1",
+                (now.timestamp(),),
+            )
+            db.executemany(
+                "INSERT OR IGNORE INTO scan_capacity SELECT id,? FROM scans WHERE id=?",
+                ((now.timestamp(), scan_id) for scan_id in scan_ids),
+            )
+            db.execute(
+                "UPDATE attempts SET finished=?,outcome='capacity_exhausted',detail=? "
+                "WHERE finished IS NULL AND token IN "
+                "(SELECT token FROM work WHERE state='leased')",
+                (now.timestamp(), "Discovery storage capacity reached."),
+            )
+            db.execute(
+                "UPDATE work SET state='capacity',outcome='capacity_exhausted',"
+                "token=NULL,lease_until=NULL WHERE state='leased'"
+            )
             db.execute("UPDATE passes SET active=0 WHERE active=1")
 
     async def next_retry(self, *, now: datetime) -> datetime | None:
@@ -593,10 +687,8 @@ class SQLiteCollectionJournal:
 
     def _next_retry(self, now: datetime) -> datetime | None:
         with self._connect() as db:
-            row = db.execute(
-                "SELECT "
-                "MIN(MAX(w.due,COALESCE(c.until_time,0),COALESCE(w.lease_until,0)))"
-                " "
+            rows = db.execute(
+                "SELECT w.* "
                 "FROM work w JOIN scan_work sw ON sw.work=w.id JOIN "
                 "scans s ON s.id=sw.scan "
                 "JOIN passes p ON p.id=s.pass_id AND p.active=1 "
@@ -607,17 +699,22 @@ class SQLiteCollectionJournal:
                 "w.state IN ('pending','leased') "
                 "AND COALESCE(b.remaining,p.budget)>0 AND p.started>?",
                 (now.timestamp() - self._pass_seconds,),
-            ).fetchone()
+            ).fetchall()
+            schedule = CollectionRequestSchedule(db, self._retained_refusals)
+            retry = min(
+                (max(schedule.ready_at(row), row["lease_until"] or 0) for row in rows),
+                default=None,
+            )
             return (
-                datetime.fromtimestamp(max(row[0], now.timestamp()), UTC)
-                if row and row[0] is not None
+                datetime.fromtimestamp(max(retry, now.timestamp()), UTC)
+                if retry is not None
                 else None
             )
 
-    async def snapshot(self, scan_id: str) -> CollectionSnapshot:
-        return await asyncio.to_thread(self._snapshot, scan_id)
+    async def snapshot(self, scan_id: str, *, now: datetime) -> CollectionSnapshot:
+        return await asyncio.to_thread(self._snapshot, scan_id, now)
 
-    def _snapshot(self, scan_id: str) -> CollectionSnapshot:
+    def _snapshot(self, scan_id: str, now: datetime) -> CollectionSnapshot:
         with self._connect() as db:
             db.execute("BEGIN")
             row = db.execute(
@@ -627,7 +724,8 @@ class SQLiteCollectionJournal:
             ).fetchone()
             if not row:
                 raise LookupError("Scan has no collection journal.")
-            run = RUN.validate_json(row[0])
+            run = self._capacity_view(db, self._run_payloads.decode(row[0]))
+            capacity_stopped = DISCOVERY_CAPACITY_NOTICE in run.issues
             work = db.execute(
                 "SELECT w.*,c.until_time FROM work w JOIN scan_work sw ON sw.work=w.id "
                 "LEFT JOIN cooldowns c ON c.provider=w.provider WHERE sw.scan=?",
@@ -675,15 +773,27 @@ class SQLiteCollectionJournal:
                 return w["state"] in ("pending", "leased", "capacity")
 
             remaining = sum(pending(w) for w in work)
+            schedule = CollectionRequestSchedule(db, self._retained_refusals)
             retries = [
-                max(w["due"], w["until_time"] or 0)
+                deadline
                 for w in work
-                if pending(w) and (w["due"] or w["until_time"])
+                if pending(w)
+                and (deadline := schedule.retry_deadline(w)) > now.timestamp()
             ]
+            progressing = any(
+                (w["state"] == "leased" and (w["lease_until"] or 0) > now.timestamp())
+                or (
+                    w["state"] in ("pending", "leased")
+                    and schedule.ready_at(w) <= now.timestamp()
+                    and (w["lease_until"] or 0) <= now.timestamp()
+                )
+                for w in work
+            )
             notices = tuple(
                 dict.fromkeys(
                     [w["detail"] for w in work if w["detail"]]
                     + [n for page in pages for n in page.notices]
+                    + ([DISCOVERY_CAPACITY_NOTICE] if capacity_stopped else [])
                 )
             )
             failed = sum(
@@ -693,10 +803,10 @@ class SQLiteCollectionJournal:
                 "collecting"
                 if row[1]
                 else "partial"
-                if remaining or failed
+                if remaining or failed or capacity_stopped
                 else "finished"
             )
-            if retries and remaining and row[1]:
+            if retries and remaining and row[1] and not progressing:
                 state = "waiting"
             progress = CollectionProgress(
                 state=state,
@@ -714,7 +824,7 @@ class SQLiteCollectionJournal:
                     w["state"] in ("failed", "refused") for w in retrievals
                 ),
                 retry_at=datetime.fromtimestamp(min(retries), UTC) if retries else None,
-                can_continue=bool(remaining),
+                can_continue=bool(remaining or capacity_stopped),
                 notices=notices,
                 provider_requests=requests,
             )

@@ -158,7 +158,20 @@ export function StandaloneEvidence({
         </p>
       )}
       {evidence.media ? (
-        <PhotographCollection key={key} gallery={evidence.media} />
+        <PhotographCollection
+          key={key}
+          gallery={evidence.media}
+          onLoadBatch={async (cursor, signal) => {
+            const next = await fetchSectionEvidence(
+              identifier,
+              'media',
+              signal,
+              cursor,
+            );
+            if (!next.media) throw new Error('No photograph collection was returned.');
+            if (!signal.aborted) setState({ key, evidence: next });
+          }}
+        />
       ) : null}
       {[...(evidence.limitations ?? []), ...(evidence.humanitarian?.gaps ?? [])].map(
         (limitation, index) => (

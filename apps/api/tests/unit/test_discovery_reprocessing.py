@@ -54,23 +54,31 @@ async def test_reprocess_preserves_original_and_reassesses_retained_articles_onl
             yield
 
     service = DiscoveryScanService((NeverAcquire(),), store, clock=lambda: NOW)
-    result = await service.reprocess(original.scan_id)
-    assert result.scan_id != original.scan_id
-    assert result.reprocessed_from == original.scan_id
-    assert result.interval == interval
-    assert result.status == "incomplete"
-    assert result.truncated and result.failed_operations == 1
-    assert result.reports[0].article == article
-    assert result.events[0].event_time == datetime(2026, 8, 26, tzinfo=UTC)
-    assert await store.read(original.scan_id) == original
-    assert await store.read(result.scan_id) == result
-    assert any("no new news acquisition" in issue for issue in result.issues)
-    again = await service.reprocess(result.scan_id)
-    assert again.reprocessed_from == original.scan_id
-    assert again.reports == result.reports
-    assert {e.event_id for e in again.events}.isdisjoint(
-        e.event_id for e in result.events
-    )
+    try:
+        pending = await service.reprocess(original.scan_id)
+        assert pending.status == "running"
+        await service.wait(pending.scan_id)
+        result = await service.get(pending.scan_id)
+        assert result.scan_id != original.scan_id
+        assert result.reprocessed_from == original.scan_id
+        assert result.interval == interval
+        assert result.status == "incomplete"
+        assert result.truncated and result.failed_operations == 1
+        assert result.reports[0].article == article
+        assert result.events[0].event_time == datetime(2026, 8, 26, tzinfo=UTC)
+        assert await store.read(original.scan_id) == original
+        assert await store.read(result.scan_id) == result
+        assert any("no new news acquisition" in issue for issue in result.issues)
+        next_pending = await service.reprocess(result.scan_id)
+        await service.wait(next_pending.scan_id)
+        again = await service.get(next_pending.scan_id)
+        assert again.reprocessed_from == original.scan_id
+        assert again.reports == result.reports
+        assert {e.event_id for e in again.events}.isdisjoint(
+            e.event_id for e in result.events
+        )
+    finally:
+        await service.aclose()
 
 
 @pytest.mark.asyncio

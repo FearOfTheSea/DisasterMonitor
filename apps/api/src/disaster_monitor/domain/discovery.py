@@ -48,6 +48,7 @@ class DiscoveryArticle:
     origin: str | None = None
     access_issue: str | None = None
     original_url: str | None = None
+    photograph_captions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for value in (

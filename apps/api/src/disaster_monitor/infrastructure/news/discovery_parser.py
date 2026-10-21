@@ -2,10 +2,11 @@
 
 import json
 import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urldefrag, urlsplit
 
 from disaster_monitor.domain.discovery import DiscoveryArticle
 from disaster_monitor.domain.events import (
@@ -14,6 +15,38 @@ from disaster_monitor.domain.events import (
     EventGeometryKind,
 )
 from disaster_monitor.domain.evidence_types import SourceReference
+from disaster_monitor.infrastructure.news.headline_narrative import (
+    headline_owned_paragraphs,
+    is_photograph_caption,
+)
+
+
+@dataclass
+class ArticleTextBlock:
+    tag: str
+    characters: int = 0
+    linked_characters: int = 0
+
+
+@dataclass(frozen=True)
+class ArticleTextPiece:
+    text: str
+    block: ArticleTextBlock | None
+
+
+def _narrative(parts: list[ArticleTextPiece]) -> list[str]:
+    return [
+        part.text
+        for part in parts
+        if part.block is None or part.block.characters > part.block.linked_characters
+    ]
+
+
+@dataclass
+class ArticleTextSection:
+    article_index: int | None
+    parts: list[ArticleTextPiece] = field(default_factory=list)
+    primary_heading: bool = False
 
 
 class ArticleParser(HTMLParser):
@@ -21,31 +54,56 @@ class ArticleParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.meta: dict[str, str] = {}
         self.objects: list[dict[str, Any]] = []
-        self.parts: list[str] = []
-        self.article_parts: list[str] = []
-        self.main_parts: list[str] = []
-        self.body_parts: list[str] = []
-        self._body_stack: list[str] = []
+        self.main_parts: list[ArticleTextPiece] = []
+        self.caption_parts: list[list[str]] = []
+        self._caption_stack: list[str] = []
+        self._body_stack: list[tuple[str, ArticleTextSection]] = []
+        self._bodies: list[ArticleTextSection] = []
+        self._articles: list[ArticleTextSection] = []
+        self._article_stack: list[int] = []
         self._main_depth = 0
-        self._article_depth = 0
+        self._parts_seen = 0
         self._json: list[str] | None = None
         self._hidden = 0
+        self._header_depth = 0
         self._paragraph = 0
         self._excluded: list[str] = []
+        self._text_blocks: list[ArticleTextBlock] = []
+        self._link_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
         void = tag in {"img", "meta", "br", "hr", "input", "link", "source", "wbr"}
-        article_body = "articleBody" in (values.get("itemprop") or "").split() or bool(
+        caption = is_photograph_caption(tag, values)
+        if not void and (self._caption_stack or caption):
+            if not self._caption_stack:
+                self.caption_parts.append([])
+            self._caption_stack.append(tag)
+        if tag == "article":
+            index = len(self._articles)
+            self._articles.append(ArticleTextSection(index))
+            self._article_stack.append(index)
+        article_body = (
+            "articleBody" in (values.get("itemprop") or "").split()
+            or values.get("data-article-body") == "true"
+        ) or bool(
             re.search(
                 r"(?:^|\s)(?:post-content|entry-content|article-content|story-body)(?:\s|$)",
                 values.get("class") or "",
             )
         )
         if not void and (self._body_stack or article_body):
-            self._body_stack.append(tag)
+            if article_body:
+                section = ArticleTextSection(
+                    self._article_stack[-1] if self._article_stack else None
+                )
+                self._bodies.append(section)
+            else:
+                section = self._body_stack[-1][1]
+            self._body_stack.append((tag, section))
         excluded = (
-            values.get("aria-hidden") == "true"
+            caption
+            or values.get("aria-hidden") == "true"
             or values.get("role") == "dialog"
             or bool(
                 re.search(
@@ -56,40 +114,49 @@ class ArticleParser(HTMLParser):
         )
         if (self._excluded or excluded) and not void:
             self._excluded.append(tag)
-        if tag == "article":
-            self._article_depth += 1
+        if (
+            tag == "h1"
+            and self._article_stack
+            and not self._excluded
+            and self._hidden == self._header_depth
+        ):
+            self._articles[self._article_stack[-1]].primary_heading = True
         if tag == "main":
             self._main_depth += 1
         if tag == "meta":
             key = values.get("property") or values.get("name")
             if key and values.get("content"):
-                self.meta[key.casefold()] = values["content"] or ""
+                self.meta.setdefault(key.casefold(), values["content"] or "")
         if tag in {"script", "style", "nav", "footer", "header", "aside", "textarea"}:
             self._hidden += 1
+        if tag == "header":
+            self._header_depth += 1
         if tag == "script" and values.get("type") == "application/ld+json":
             self._json = []
         if tag in {"p", "h1", "h2", "h3", "h4", "li"}:
             self._paragraph += 1
+            self._text_blocks.append(ArticleTextBlock(tag))
             if tag.startswith("h") and not self._hidden and not self._excluded:
-                self.parts.append("\n## ")
-                if self._article_depth:
-                    self.article_parts.append("\n## ")
-                if self._main_depth:
-                    self.main_parts.append("\n## ")
-                if self._body_stack:
-                    self.body_parts.append("\n## ")
+                self._record("\n## ")
         if tag == "br" and self._body_stack and not self._hidden and not self._excluded:
-            self.body_parts.append("\n")
+            self._record("\n")
+        if tag == "a":
+            self._link_depth += 1
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in self._body_stack:
-            index = len(self._body_stack) - 1 - self._body_stack[::-1].index(tag)
+        if tag in self._caption_stack:
+            index = len(self._caption_stack) - 1 - self._caption_stack[::-1].index(tag)
+            self._caption_stack = self._caption_stack[:index]
+        body_tags = [frame[0] for frame in self._body_stack]
+        if tag in body_tags:
+            index = len(body_tags) - 1 - body_tags[::-1].index(tag)
             self._body_stack = self._body_stack[:index]
         if tag in self._excluded:
             index = len(self._excluded) - 1 - self._excluded[::-1].index(tag)
             self._excluded = self._excluded[:index]
         if tag == "article":
-            self._article_depth = max(0, self._article_depth - 1)
+            if self._article_stack:
+                self._article_stack.pop()
         if tag == "main":
             self._main_depth = max(0, self._main_depth - 1)
         if tag == "script" and self._json is not None:
@@ -100,33 +167,80 @@ class ArticleParser(HTMLParser):
             self._json = None
         if tag in {"script", "style", "nav", "footer", "header", "aside", "textarea"}:
             self._hidden = max(0, self._hidden - 1)
+        if tag == "header":
+            self._header_depth = max(0, self._header_depth - 1)
         if tag in {"p", "h1", "h2", "h3", "h4", "li"}:
             self._paragraph = max(0, self._paragraph - 1)
-            self.parts.append("\n")
-            if self._article_depth:
-                self.article_parts.append("\n")
-            if self._main_depth:
-                self.main_parts.append("\n")
-            if self._body_stack:
-                self.body_parts.append("\n")
+            self._record("\n")
+            block_tags = [block.tag for block in self._text_blocks]
+            if tag in block_tags:
+                index = len(block_tags) - 1 - block_tags[::-1].index(tag)
+                self._text_blocks = self._text_blocks[:index]
+        if tag == "a":
+            self._link_depth = max(0, self._link_depth - 1)
 
     def handle_data(self, data: str) -> None:
         if self._json is not None:
             self._json.append(data)
+        if self._caption_stack and not self._hidden:
+            self.caption_parts[-1].append(" ".join(data.split()))
         if (
             (self._paragraph or self._body_stack)
             and not self._hidden
             and not self._excluded
-            and len(self.parts) < 2000
+            and self._parts_seen < 2000
         ):
             data = " ".join(data.split())
-            self.parts.append(data)
-            if self._article_depth:
-                self.article_parts.append(data)
-            if self._main_depth:
-                self.main_parts.append(data)
-            if self._body_stack:
-                self.body_parts.append(data)
+            if self._text_blocks:
+                block = self._text_blocks[-1]
+                block.characters += len(data)
+                if self._link_depth:
+                    block.linked_characters += len(data)
+            self._record(data)
+
+    def _record(self, text: str) -> None:
+        self._parts_seen += 1
+        piece = ArticleTextPiece(
+            text, self._text_blocks[-1] if self._text_blocks else None
+        )
+        article_index = self._article_stack[-1] if self._article_stack else None
+        if article_index is not None:
+            self._articles[article_index].parts.append(piece)
+        if self._main_depth:
+            self.main_parts.append(piece)
+        if self._body_stack:
+            section = self._body_stack[-1][1]
+            if section.article_index == article_index:
+                section.parts.append(piece)
+
+    def narrative_parts(self) -> list[str]:
+        primary = [section for section in self._articles if section.primary_heading]
+        if len(primary) > 1:
+            return []
+        bodies = [
+            section
+            for section in self._bodies
+            if any(p.strip() for p in _narrative(section.parts))
+        ]
+        if primary:
+            owned = [b for b in bodies if b.article_index == primary[0].article_index]
+            return (
+                [p for b in owned for p in _narrative(b.parts)]
+                if owned
+                else _narrative(primary[0].parts)
+            )
+        if len(bodies) == 1:
+            return _narrative(bodies[0].parts)
+        if len(bodies) > 1:
+            return []
+        if len(self._articles) == 1:
+            return _narrative(self._articles[0].parts)
+        # Multiple unidentified article cards cannot become one attributed report.
+        return [] if self._articles else _narrative(self.main_parts)
+
+    @property
+    def has_narrative_structure(self) -> bool:
+        return bool(self._articles or self._bodies or self.main_parts)
 
 
 def _objects(value: Any, depth: int = 0) -> list[dict[str, Any]]:
@@ -152,6 +266,40 @@ def _date(value: Any) -> datetime | None:
         return None
 
 
+def _primary_news(objects: list[dict[str, Any]], url: str) -> dict[str, Any]:
+    articles = []
+    for obj in objects:
+        kind = obj.get("@type")
+        kinds = kind if isinstance(kind, list) else [kind]
+        if any(k in ("NewsArticle", "Article", "ReportageNewsArticle") for k in kinds):
+            articles.append(obj)
+
+    def identities(article: dict[str, Any]) -> set[str]:
+        result = set()
+        for value in (
+            article.get("url"),
+            article.get("@id"),
+            article.get("mainEntityOfPage"),
+        ):
+            if isinstance(value, dict):
+                value = value.get("@id") or value.get("url")
+            if isinstance(value, str) and value.startswith("https://"):
+                try:
+                    result.add(urldefrag(value)[0])
+                except ValueError:
+                    pass
+        return result
+
+    matching = [
+        article for article in articles if urldefrag(url)[0] in identities(article)
+    ]
+    if len(matching) == 1:
+        return matching[0]
+    if len(articles) == 1 and not identities(articles[0]):
+        return articles[0]
+    return {}
+
+
 def parse_discovery_article(
     html: str,
     *,
@@ -163,14 +311,27 @@ def parse_discovery_article(
 ) -> DiscoveryArticle:
     parser = ArticleParser()
     parser.feed(html)
-    news = next(
-        (
-            o
-            for o in parser.objects
-            if o.get("@type") in ("NewsArticle", "Article", "ReportageNewsArticle")
-        ),
-        {},
+    news = _primary_news(parser.objects, url)
+    headline = news.get("headline")
+    source_title = (
+        parser.meta.get("og:title", "").strip()
+        or (headline.strip() if isinstance(headline, str) else "")
+        or title
     )
+    source_publisher = parser.meta.get("og:site_name", "").strip() or publisher
+    narrative = parser.narrative_parts()
+    if not narrative and not parser.has_narrative_structure:
+        narrative = [
+            "\n".join(
+                headline_owned_paragraphs(
+                    html,
+                    (
+                        headline if isinstance(headline, str) else "",
+                        parser.meta.get("og:title", ""),
+                    ),
+                )
+            )
+        ]
     # Only location attached to an explicit Event is usable as event geography.
     related_events = [
         obj
@@ -191,8 +352,8 @@ def parse_discovery_article(
                 ),
                 source=SourceReference(
                     source_id="open-news",
-                    publisher=publisher,
-                    title=title,
+                    publisher=source_publisher,
+                    title=source_title,
                     canonical_url=url,
                     published_at=None,
                     updated_at=None,
@@ -224,8 +385,8 @@ def parse_discovery_article(
             pass
     source = SourceReference(
         source_id="open-news",
-        publisher=publisher,
-        title=title,
+        publisher=source_publisher,
+        title=source_title,
         canonical_url=url,
         published_at=publication,
         publication_precision="day"
@@ -240,10 +401,7 @@ def parse_discovery_article(
     return DiscoveryArticle(
         source=source,
         text="\n".join(
-            " ".join(line.split())
-            for line in " ".join(
-                parser.body_parts or parser.article_parts or parser.main_parts
-            ).splitlines()
+            " ".join(line.split()) for line in " ".join(narrative).splitlines()
         )[:20_000]
         or str(news.get("articleBody") or parser.meta.get("og:description") or "")[
             :20_000
@@ -256,4 +414,7 @@ def parse_discovery_article(
         geometry=geometry,
         event_key=event.get("@id") if isinstance(event.get("@id"), str) else None,
         origin=origin if isinstance(origin, str) and origin else None,
+        photograph_captions=tuple(
+            " ".join(parts).strip() for parts in parser.caption_parts if any(parts)
+        ),
     )

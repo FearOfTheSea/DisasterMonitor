@@ -27,7 +27,7 @@ _NOT_ABBREVIATION = "".join(
     )
 )
 _SENTENCE = _NOT_ABBREVIATION + r"(?<=[.!?])\s+"
-_CLAUSE = _NOT_ABBREVIATION + r"[.](?=\s)|[!?;–—]"
+_CLAUSE = _NOT_ABBREVIATION + r"(?<=[.])(?=\s)|[!?;–—]"
 
 
 def source_sentences(text: str) -> list[str]:

@@ -13,6 +13,24 @@ import httpx
 Resolver = Callable[[str], tuple[str, ...] | Awaitable[tuple[str, ...]]]
 
 
+def public_document_host(url: str) -> str | None:
+    """Validate document URL syntax; the reader separately pins public DNS."""
+    try:
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.port not in (None, 443)
+            or parsed.fragment
+        ):
+            return None
+        return parsed.hostname
+    except ValueError:
+        return None
+
+
 class PublicDocumentReader:
     user_agent = "DisasterMonitorDiscovery/1.0"
 
@@ -30,16 +48,10 @@ class PublicDocumentReader:
     async def read(self, url: str) -> str:
         async with asyncio.timeout(self._timeout):
             parsed = urlsplit(url)
-            if (
-                parsed.scheme != "https"
-                or not parsed.hostname
-                or parsed.username
-                or parsed.password
-                or parsed.port not in (None, 443)
-                or parsed.fragment
-            ):
+            hostname = public_document_host(url)
+            if hostname is None:
                 raise ValueError("Article URL is outside the public HTTPS boundary.")
-            addresses = self._resolver(parsed.hostname)
+            addresses = self._resolver(hostname)
             if inspect.isawaitable(addresses):
                 addresses = await addresses
             if not addresses or any(

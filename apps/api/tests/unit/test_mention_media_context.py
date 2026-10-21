@@ -55,7 +55,9 @@ async def test_original_article_url_reaches_media_without_changing_report_identi
     event = group_reports(
         (assess_article(article, ReportingInterval.at_start(7, now)),)
     )[0]
-    incident = discovery_incident(event, now)
+    incident = discovery_incident(
+        event, now, scan_id="11111111-1111-4111-8111-111111111111"
+    )
 
     class Incidents:
         async def lookup(self, identifier):

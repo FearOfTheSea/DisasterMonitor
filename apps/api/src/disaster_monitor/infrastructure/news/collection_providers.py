@@ -13,7 +13,7 @@ from disaster_monitor.domain.collection import (
 )
 from disaster_monitor.domain.discovery import DiscoveryArticle
 from disaster_monitor.domain.news import NewsFeedItem
-from disaster_monitor.infrastructure.news.collection_http import CollectionJsonHttp
+from disaster_monitor.infrastructure.news.collection_http import CollectionHttp
 from disaster_monitor.infrastructure.news.discovery_feed import _QUERIES, ArticleReader
 from disaster_monitor.infrastructure.news.discovery_parser import (
     parse_discovery_article,
@@ -25,11 +25,13 @@ from disaster_monitor.infrastructure.news.reliefweb_discovery import (
     _FIELDS,
     _article,
 )
+from disaster_monitor.infrastructure.news.request_schedule import _retry_after
 
 
 class GdeltCollectionProvider:
     source_id = "gdelt-discovery"
     supports_alternates = True
+    supports_time_filter = True
     queries = _QUERIES
     endpoint = "https://api.gdeltproject.org/api/v2/doc/doc"
 
@@ -41,7 +43,7 @@ class GdeltCollectionProvider:
         timeout_seconds: float = 15,
         minimum_interval: float = 5.2,
     ) -> None:
-        self._http = CollectionJsonHttp(
+        self._http = CollectionHttp(
             client=client,
             timeout_seconds=timeout_seconds,
             minimum_interval=minimum_interval,
@@ -50,7 +52,7 @@ class GdeltCollectionProvider:
 
     async def fetch_page(self, partition: CollectionPartition) -> CollectionPage:
         requested_end = min(partition.end, datetime.now(UTC))
-        snapshot = await self._http.get(
+        snapshot = await self._http.get_json(
             self.endpoint,
             {
                 "query": partition.query,
@@ -112,6 +114,7 @@ class GdeltCollectionProvider:
 class ReliefWebCollectionProvider:
     source_id = "reliefweb-discovery"
     supports_alternates = False
+    supports_time_filter = True
     queries = _CATEGORIES
     endpoint = "https://api.reliefweb.int/v2/reports"
 
@@ -126,7 +129,7 @@ class ReliefWebCollectionProvider:
     ) -> None:
         self._app_name = (app_name or "").strip()
         self._limit = limit
-        self._http = CollectionJsonHttp(
+        self._http = CollectionHttp(
             client=client,
             timeout_seconds=timeout_seconds,
             minimum_interval=minimum_interval,
@@ -159,7 +162,7 @@ class ReliefWebCollectionProvider:
             "offset": str(offset),
             **{f"fields[include][{i}]": field for i, field in enumerate(_FIELDS)},
         }
-        snapshot = await self._http.get(self.endpoint, params)
+        snapshot = await self._http.get_json(self.endpoint, params)
         payload = snapshot.payload
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
             raise CollectionProviderError(
@@ -205,9 +208,12 @@ class PublicCollectionArticleReader:
                 html = await self._reader.read(lead.canonical_url)
         except httpx.HTTPStatusError as error:
             raise CollectionProviderError(
-                "article_unavailable",
+                "rate_limited"
+                if error.response.status_code == 429
+                else "article_unavailable",
                 f"Publisher HTTP {error.response.status_code}; "
                 "article access unavailable.",
+                _retry_after(error.response.headers.get("Retry-After")),
             ) from error
         except ValueError as error:
             raise CollectionProviderError(

@@ -8,6 +8,7 @@ import re
 
 from disaster_monitor.domain.disaster_types import Disaster
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
+from disaster_monitor.domain.source_sentences import source_sentences
 
 _OTHER_CAUSE = re.compile(
     r"\b(?:conflict|violence|cholera|ebola|measles|covid-?19|war|warfare|"
@@ -15,6 +16,10 @@ _OTHER_CAUSE = re.compile(
     r"chronic conditions?|diabetes|hypertension|COPD)\b",
     re.I,
 )
+
+
+def has_competing_cause(text: str) -> bool:
+    return bool(_OTHER_CAUSE.search(text))
 
 
 def scoped_disaster_text(text: str, title: str, disaster: Disaster | None) -> str:
@@ -28,8 +33,8 @@ def scoped_disaster_text(text: str, title: str, disaster: Disaster | None) -> st
         return ""
     headline_context = disasters_in_text(title) == (disaster,)
     retained = []
-    for sentence in re.split(r"(?<=[.!?])\s+", text[:20_000]):
-        if _OTHER_CAUSE.search(sentence):
+    for sentence in source_sentences(text[:20_000]):
+        if has_competing_cause(sentence):
             continue
         hazards = disasters_in_text(sentence)
         if hazards == (disaster,) or (not hazards and headline_context):

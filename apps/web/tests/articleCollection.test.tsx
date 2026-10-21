@@ -5,6 +5,96 @@ import { ArticleCollection } from '@/features/incidents/ui/ArticleCollection';
 import type { DiscoveryReportResponse } from '@/shared/api/generated/assistant';
 
 afterEach(cleanup);
+
+it('groups burn accounts under injuries while preserving subtype and overlapping counts', () => {
+  const source = {
+    source_id: 'news',
+    publisher: 'Daily',
+    title: 'Wildfire response',
+    canonical_url: 'https://daily.example/fire',
+    published_at: '2026-10-16T00:00:00Z',
+    retrieved_at: '2026-10-17T00:00:00Z',
+  };
+  render(
+    <ArticleCollection
+      reports={[
+        {
+          source,
+          claims: [
+            {
+              category: 'injuries',
+              label: 'Injuries',
+              value: '3',
+              excerpt: 'Three people were injured.',
+              qualifiers: [],
+            },
+            {
+              category: 'injuries',
+              label: 'Burn injuries',
+              value: '0',
+              excerpt: 'No responders suffered burns.',
+              qualifiers: [],
+            },
+          ],
+        },
+      ]}
+    />,
+  );
+  fireEvent.click(screen.getByText('Injuries · 2 accounts'));
+  expect(screen.getByText('Injuries: 3')).toBeVisible();
+  expect(screen.getByText('Burn injuries: 0')).toBeVisible();
+  expect(screen.getByText('No responders suffered burns.')).toBeVisible();
+  expect(screen.queryByText(/Differing accounts/)).toBeNull();
+});
+
+it('shows a shared episode account once outside the individual hazard impacts', () => {
+  const source = {
+    source_id: 'news',
+    publisher: 'Daily',
+    title: 'Joint disaster report',
+    canonical_url: 'https://daily.example/joint',
+    published_at: '2026-10-12T00:00:00Z',
+    retrieved_at: '2026-10-13T00:00:00Z',
+  };
+  const report = {
+    source,
+    claims: [],
+    episode_account: {
+      account_id: 'episode:one',
+      hazards: ['flood', 'landslide'],
+      location: 'Riverton Province',
+      event_date_wording: '30-09-2026',
+      event_time: '2026-09-30T00:00:00Z',
+      excerpt:
+        'Floods and landslides affected Riverton Province. A total of 25 deaths were reported.',
+      claims: [
+        {
+          category: 'fatalities',
+          label: 'Fatalities',
+          value: '25',
+          excerpt: 'A total of 25 deaths were reported.',
+          qualifiers: [],
+        },
+      ],
+    },
+  } as DiscoveryReportResponse;
+  render(
+    <ArticleCollection
+      reports={[report, { ...report, mention_id: 'second-hazard' }]}
+    />,
+  );
+  const individual = screen.getByRole('region', { name: 'Reported impacts' });
+  expect(within(individual).getByText('Fatalities: Unknown')).toBeVisible();
+  const joint = screen.getByRole('region', { name: 'Combined episode accounts' });
+  expect(within(joint).getAllByText('Fatalities: 25')).toHaveLength(1);
+  expect(
+    within(joint).getByText(/not allocated to individual hazards or localities/),
+  ).toBeVisible();
+  expect(within(joint).getByRole('link', { name: /Daily/ })).toHaveAttribute(
+    'href',
+    source.canonical_url,
+  );
+});
 const reports: DiscoveryReportResponse[] = Array.from({ length: 8 }, (_, i) => ({
   source: {
     source_id: 'news',

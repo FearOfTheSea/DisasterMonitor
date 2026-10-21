@@ -181,7 +181,9 @@ async def test_reported_discovery_area_is_context_not_a_damage_perimeter():
         0,
         supplemental_sources=(source,),
     )
-    incident = discovery_incident(event, now)
+    incident = discovery_incident(
+        event, now, scan_id="11111111-1111-4111-8111-111111111111"
+    )
 
     class Incidents:
         async def lookup(self, identifier):
@@ -219,7 +221,9 @@ async def test_mention_day_onset_is_expanded_without_inventing_exact_midnight():
     event = group_reports(
         (assess_article(article, ReportingInterval.at_start(7, now)),)
     )[0]
-    incident = discovery_incident(event, now)
+    incident = discovery_incident(
+        event, now, scan_id="11111111-1111-4111-8111-111111111111"
+    )
 
     class Incidents:
         async def lookup(self, identifier):
@@ -230,3 +234,39 @@ async def test_mention_day_onset_is_expanded_without_inventing_exact_midnight():
     ).get_imagery_context(event.event_id)
     assert context.onset.precision == "date_only_unknown_timezone"
     assert context.onset.earliest < event.event_time < context.onset.latest
+
+
+async def test_unknown_discovery_onset_never_targets_imagery_using_publication():
+    from disaster_monitor.domain.discovery import (
+        DiscoveryArticle,
+        ReportingInterval,
+        assess_article,
+        group_reports,
+    )
+
+    now = datetime(2026, 10, 18, 23, 9, 50, tzinfo=UTC)
+    source = SourceReference(
+        "news", "Daily", "Floods", "https://daily.example/flood", now, None, now
+    )
+    event = group_reports(
+        (
+            assess_article(
+                DiscoveryArticle(source, "Floods hit Riverton in early October."),
+                ReportingInterval.at_start(30, now),
+            ),
+        )
+    )[0]
+    assert event.event_time is None
+    assert event.reports[0].mention.time.wording == "early October"
+    incident = discovery_incident(
+        event, now, scan_id="11111111-1111-4111-8111-111111111111"
+    )
+
+    class Incidents:
+        async def lookup(self, identifier):
+            return incident
+
+    context = await ActiveIncidentImageryContextReader(
+        cast(ActiveIncidentsService, Incidents())
+    ).get_imagery_context(incident.event_id)
+    assert context is None

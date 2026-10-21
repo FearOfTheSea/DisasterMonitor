@@ -11,6 +11,8 @@ from disaster_monitor.application.incidents.discovery_projection import (
     discovery_incident,
 )
 from disaster_monitor.application.incidents.discovery_scan import DiscoveryScanService
+from disaster_monitor.application.ports.collection import ARTICLE_RETRIEVAL_PROVIDER
+from disaster_monitor.application.ports.discovery import DiscoveryCapacityError
 from disaster_monitor.domain.disaster_types import Disaster
 from disaster_monitor.domain.discovery import (
     AcquisitionAudit,
@@ -73,7 +75,10 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
         (report.article.source.retrieved_at for report in run.reports),
         default=run.interval.end,
     )
-    incidents = tuple(discovery_incident(event, retrieved_at) for event in run.events)
+    incidents = tuple(
+        discovery_incident(event, retrieved_at, scan_id=run.scan_id)
+        for event in run.events
+    )
     return DiscoveryScanResponse(
         scan_id=run.scan_id,
         reprocessed_from=run.reprocessed_from,
@@ -145,9 +150,7 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
                     if any(i.disaster == disaster for i in incidents)
                     else "no_matching_records",
                     incident_count=sum(i.disaster == disaster for i in incidents),
-                    providers=["open-news"]
-                    if run.successful_operations or run.failed_operations
-                    else [],
+                    providers=_checked_providers(run),
                     detail="Publication-window scan; reporting remains "
                     "attributed and unverified.",
                     scan_complete=run.status == "completed",
@@ -163,6 +166,18 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
     )
 
 
+def _checked_providers(run: DiscoveryRun) -> list[str]:
+    if run.collection is not None:
+        return sorted(
+            {
+                provider
+                for provider, requests in run.collection.provider_requests
+                if requests > 0 and provider != ARTICLE_RETRIEVAL_PROVIDER
+            }
+        )
+    return ["open-news"] if run.successful_operations or run.failed_operations else []
+
+
 @router.post(
     "/discovery-scans",
     response_model=DiscoveryScanResponse,
@@ -174,6 +189,8 @@ async def start_scan(
 ) -> DiscoveryScanResponse:
     try:
         return scan_response(await scans.start(body.reporting_days))
+    except DiscoveryCapacityError as error:
+        raise HTTPException(507, str(error)) from error
     except ValueError as error:
         raise HTTPException(429, str(error)) from error
 
@@ -195,6 +212,7 @@ async def get_scan(
 @router.post(
     "/discovery-scans/{scan_id}/reprocess",
     response_model=DiscoveryScanResponse,
+    status_code=202,
     tags=["discovery"],
 )
 async def reprocess_scan(
@@ -202,6 +220,8 @@ async def reprocess_scan(
 ) -> DiscoveryScanResponse:
     try:
         return scan_response(await scans.reprocess(str(scan_id)))
+    except DiscoveryCapacityError as error:
+        raise HTTPException(507, str(error)) from error
     except LookupError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:
@@ -219,6 +239,8 @@ async def continue_scan(
 ) -> DiscoveryScanResponse:
     try:
         return scan_response(await scans.continue_collection(str(scan_id)))
+    except DiscoveryCapacityError as error:
+        raise HTTPException(507, str(error)) from error
     except LookupError as error:
         raise HTTPException(404, str(error)) from error
     except ValueError as error:

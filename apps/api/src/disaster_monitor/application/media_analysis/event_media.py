@@ -1,12 +1,15 @@
 """Conservative event association, selection, and storage for source media."""
 
 import asyncio
+import base64
+import json
 import re
 import unicodedata
 from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 
 from disaster_monitor.application.media import (
     DisasterMediaCandidate,
@@ -15,6 +18,7 @@ from disaster_monitor.application.media import (
     MediaAssociationStatus,
     MediaCandidateAssessment,
     MediaContentRole,
+    MediaContinuationError,
     MediaDiscoveryBatch,
     MediaEventContext,
     MediaSourceAttribution,
@@ -272,7 +276,9 @@ class DisasterMediaService:
         self._target_count = target_count
         self._association = association_policy or EventMediaAssociationPolicy()
 
-    async def discover(self, context: MediaEventContext) -> DisasterMediaGallery | None:
+    async def discover(
+        self, context: MediaEventContext, *, cursor: str | None = None
+    ) -> DisasterMediaGallery | None:
         now = _aware(self._clock())
         accepted: list[tuple[EventMediaProvider, MediaCandidateAssessment]] = []
         rejected_count = 0
@@ -282,21 +288,42 @@ class DisasterMediaService:
         unavailable: list[MediaUnavailableSource] = []
         truncated = False
         candidate_count = 0
-        for provider in self._providers:
+        scope = sha256(
+            (
+                context.collection_version
+                + "|".join(p.provider_id for p in self._providers)
+            ).encode()
+        ).hexdigest()
+        start_provider, provider_cursor = _gallery_position(
+            cursor, scope, len(self._providers)
+        )
+        next_cursor = None
+        for index in range(start_provider, len(self._providers)):
+            provider = self._providers[index]
             provider_ids.append(provider.provider_id)
             try:
                 candidates = await asyncio.wait_for(
-                    provider.discover(context, now=now), timeout=120
+                    provider.discover(
+                        context,
+                        now=now,
+                        cursor=provider_cursor if index == start_provider else None,
+                        maximum_candidates=max(1, self._target_count - len(accepted)),
+                    ),
+                    timeout=120,
                 )
+            except MediaContinuationError:
+                raise
             except Exception:
                 warnings.append(
                     f"Media discovery from {provider.provider_id} was unavailable."
                 )
                 continue
+            continuation = None
             if isinstance(candidates, MediaDiscoveryBatch):
                 warnings.extend(candidates.warnings)
                 unavailable.extend(candidates.unavailable_sources)
                 truncated = truncated or candidates.truncated
+                continuation = candidates.next_cursor
                 candidates = candidates.candidates
             candidate_count += len(candidates)
             if len(candidates) > 180:
@@ -318,6 +345,12 @@ class DisasterMediaService:
                     )
                     continue
                 accepted.append((provider, assessment))
+            if continuation is not None:
+                next_cursor = _gallery_cursor(scope, index, continuation)
+                break
+            if len(accepted) >= self._target_count and index + 1 < len(self._providers):
+                next_cursor = _gallery_cursor(scope, index + 1, None)
+                break
 
         accepted.sort(key=_candidate_sort_key)
         truncated = truncated or len(accepted) > 180
@@ -432,7 +465,13 @@ class DisasterMediaService:
                 f"Only {len(items)} source-associated image(s) met the event and "
                 "media safety gates."
             )
-        if truncated:
+        truncated = truncated or next_cursor is not None
+        if next_cursor is not None:
+            warnings.append(
+                "More source photographs remain. Continue collection "
+                "to inspect the next bounded batch."
+            )
+        elif truncated:
             warnings.append(
                 "Photograph collection truncated by acquisition or "
                 "retained-asset limits. Source articles remain available."
@@ -451,6 +490,7 @@ class DisasterMediaService:
             truncated=truncated,
             unavailable_sources=tuple(dict.fromkeys(unavailable)),
             source_articles=context.collected_articles,
+            next_cursor=next_cursor,
         )
 
     async def aclose(self) -> None:
@@ -458,6 +498,39 @@ class DisasterMediaService:
             close = getattr(provider, "aclose", None)
             if close is not None:
                 await close()
+
+
+def _gallery_cursor(scope: str, provider: int, cursor: str | None) -> str:
+    return base64.urlsafe_b64encode(
+        json.dumps([scope, provider, cursor]).encode()
+    ).decode()
+
+
+def _gallery_position(
+    cursor: str | None, scope: str, count: int
+) -> tuple[int, str | None]:
+    if cursor is None:
+        return 0, None
+    try:
+        if len(cursor) > 8192:
+            raise ValueError("Cursor exceeds bound")
+        values = json.loads(base64.b64decode(cursor, altchars=b"-_", validate=True))
+        if not isinstance(values, list) or len(values) != 3:
+            raise ValueError("Invalid cursor")
+        supplied_scope, provider, token = values
+        if (
+            supplied_scope != scope
+            or type(provider) is not int
+            or not 0 <= provider < count
+            or (token is not None and (not isinstance(token, str) or len(token) > 4096))
+        ):
+            raise ValueError("Cursor does not match collection")
+        return provider, token
+    except (ValueError, TypeError, UnicodeDecodeError, RecursionError):
+        raise MediaContinuationError(
+            "Invalid or changed media collection. "
+            "Restart photographs from the selected event."
+        ) from None
 
 
 def _candidate_sort_key(

@@ -27,6 +27,7 @@ from disaster_monitor.domain.discovery import (
 )
 
 logger = logging.getLogger(__name__)
+_MAX_PENDING_REASSESSMENTS = 10
 
 
 class DiscoveryScanService:
@@ -54,6 +55,8 @@ class DiscoveryScanService:
         self._active: dict[int, DiscoveryRun] = {}
         self._lock = asyncio.Lock()
         self._persistence_failures: OrderedDict[str, DiscoveryRun] = OrderedDict()
+        self._reprocessing: dict[str, str] = {}
+        self._reprocessing_worker = asyncio.Semaphore(1)
 
     async def start(self, days: int = 7) -> DiscoveryRun:
         if self._collection:
@@ -79,10 +82,23 @@ class DiscoveryScanService:
             return run
 
     async def get(self, scan_id: str) -> DiscoveryRun:
-        if self._collection:
-            return await self._collection.get(scan_id)
+        run = await self._retained_run(scan_id)
+        if run.status == "running" and run.reprocessed_from:
+            # Opening a persisted pending assessment after restart resumes that ID.
+            async with self._lock:
+                if (
+                    scan_id not in self._tasks
+                    and len(self._tasks) < _MAX_PENDING_REASSESSMENTS
+                ):
+                    original = await self._retained_run(run.reprocessed_from)
+                    self._launch_reprocessing(run, original)
+        return run
+
+    async def _retained_run(self, scan_id: str) -> DiscoveryRun:
         if scan_id in self._persistence_failures:
             return self._persistence_failures[scan_id]
+        if self._collection:
+            return await self._collection.get(scan_id)
         run = await self._store.read(scan_id)
         if run is None:
             raise LookupError("Scan not found or retained scan expired.")
@@ -90,29 +106,110 @@ class DiscoveryScanService:
 
     async def reprocess(self, scan_id: str) -> DiscoveryRun:
         async with self._lock:
-            original = await self.get(scan_id)
+            original = await self._retained_run(scan_id)
             if original.reprocessed_from:
-                original = await self.get(original.reprocessed_from)
+                original = await self._retained_run(original.reprocessed_from)
             if original.status == "running":
                 raise ValueError(
                     "Wait until news acquisition has finished before reprocessing."
                 )
-            result = await asyncio.to_thread(
-                reprocess_retained_run,
+            if pending_id := self._reprocessing.get(original.scan_id):
+                return await self._retained_run(pending_id)
+            if len(self._tasks) >= _MAX_PENDING_REASSESSMENTS:
+                raise ValueError(
+                    "Reassessment capacity reached. Wait for a running assessment "
+                    "to finish."
+                )
+            pending = replace(
                 original,
                 scan_id=str(uuid4()),
-                at=self._clock(),
-                country_names=self._country_names,
+                status="running",
+                finished_at=None,
+                reprocessed_from=original.scan_id,
+                issues=(
+                    *original.issues,
+                    "Retained report reassessment is pending. Visible records are "
+                    "the previous assessment; no new news acquisition is running.",
+                ),
             )
-            await self._store.save(result)
-            return result
+            # Persist the recoverable job before acknowledging it to the browser.
+            await self._persist_reassessment(pending)
+            self._launch_reprocessing(pending, original)
+            return pending
+
+    def _launch_reprocessing(
+        self, pending: DiscoveryRun, original: DiscoveryRun
+    ) -> None:
+        self._reprocessing[original.scan_id] = pending.scan_id
+        task = asyncio.create_task(self._execute_reprocessing(pending, original))
+        self._tasks[pending.scan_id] = task
+        task.add_done_callback(
+            lambda done: None if done.cancelled() else done.exception()
+        )
+
+    async def _persist_reassessment(self, run: DiscoveryRun) -> None:
+        saving = asyncio.create_task(self._store.save(run))
+        try:
+            await asyncio.shield(saving)
+        except asyncio.CancelledError:
+            # File/SQLite writes already dispatched to a thread must finish before
+            # shutdown or another writer can replace this assessment.
+            await saving
+            raise
+
+    async def _execute_reprocessing(
+        self, pending: DiscoveryRun, original: DiscoveryRun
+    ) -> None:
+        try:
+            async with self._reprocessing_worker:
+                result = await asyncio.to_thread(
+                    reprocess_retained_run,
+                    original,
+                    scan_id=pending.scan_id,
+                    at=self._clock(),
+                    country_names=self._country_names,
+                )
+                await self._persist_reassessment(result)
+        except asyncio.CancelledError:
+            # The saved running assessment is recoverable through its existing URL.
+            raise
+        except Exception:
+            logger.exception("Retained report reassessment failed: %s", pending.scan_id)
+            failed = replace(
+                pending,
+                status="incomplete",
+                finished_at=self._clock(),
+                issues=(
+                    *original.issues,
+                    "Retained report reassessment failed. Previous assessment "
+                    "records remain available; the original scan is unchanged.",
+                ),
+            )
+            try:
+                await self._persist_reassessment(failed)
+            except Exception:
+                logger.exception("Reassessment failure could not be persisted")
+                self._persistence_failures[pending.scan_id] = replace(
+                    failed,
+                    issues=(
+                        *failed.issues,
+                        "Failure status is retained in this process only.",
+                    ),
+                )
+                while len(self._persistence_failures) > 8:
+                    self._persistence_failures.popitem(last=False)
+        finally:
+            self._tasks.pop(pending.scan_id, None)
+            if self._reprocessing.get(original.scan_id) == pending.scan_id:
+                self._reprocessing.pop(original.scan_id, None)
 
     async def wait(self, scan_id: str) -> None:
+        if task := self._tasks.get(scan_id):
+            await asyncio.shield(task)
+            return
         if self._collection:
             await self._collection.wait(scan_id)
             return
-        if task := self._tasks.get(scan_id):
-            await asyncio.shield(task)
 
     async def _execute(self, run: DiscoveryRun) -> None:
         try:

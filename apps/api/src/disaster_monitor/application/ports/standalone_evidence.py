@@ -39,7 +39,7 @@ class BaselineReader(Protocol):
 
 class EventMediaReader(Protocol):
     async def discover(
-        self, context: MediaEventContext
+        self, context: MediaEventContext, *, cursor: str | None = None
     ) -> DisasterMediaGallery | None: ...
 
 

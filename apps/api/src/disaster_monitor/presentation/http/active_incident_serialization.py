@@ -3,13 +3,18 @@
 from disaster_monitor.application.incidents.models import ActiveIncident
 from disaster_monitor.domain.discovery import fatality_accounts
 from disaster_monitor.domain.discovery_claim_scope import scoped_disaster_text
-from disaster_monitor.domain.reported_impacts import extract_reported_impacts
+from disaster_monitor.domain.event_mentions import HazardEpisodeAccount
+from disaster_monitor.domain.reported_impacts import (
+    ReportedImpact,
+    extract_reported_impacts,
+)
 from disaster_monitor.presentation.http.common_response_serialization import (
     _event_geometry_response,
     _source_response,
 )
 from disaster_monitor.presentation.http.event_schemas import (
     DiscoveryReportResponse,
+    HazardEpisodeAccountResponse,
     ReportedImpactResponse,
 )
 from disaster_monitor.presentation.http.schemas import (
@@ -18,6 +23,34 @@ from disaster_monitor.presentation.http.schemas import (
     EventMeasurementResponse,
     IncidentDetectionTimelineResponse,
 )
+
+
+def _impact_response(claim: ReportedImpact) -> ReportedImpactResponse:
+    return ReportedImpactResponse.model_validate(
+        {
+            "category": claim.fact.category,
+            "label": claim.fact.label,
+            "value": claim.fact.value,
+            "excerpt": claim.excerpt,
+            "qualifiers": list(claim.qualifiers),
+        }
+    )
+
+
+def _episode_response(
+    account: HazardEpisodeAccount | None,
+) -> HazardEpisodeAccountResponse | None:
+    if account is None:
+        return None
+    return HazardEpisodeAccountResponse(
+        account_id=account.account_id,
+        hazards=list(account.hazards),
+        location=account.place.wording,
+        event_date_wording=account.time.wording,
+        event_time=account.time.start,
+        excerpt=account.excerpt,
+        claims=[_impact_response(claim) for claim in account.claims],
+    )
 
 
 def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse:
@@ -79,6 +112,9 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                 if report.mention and report.mention.place
                 else "unresolved",
                 mention_notices=list(report.mention.notices) if report.mention else [],
+                episode_account=_episode_response(report.mention.episode_account)
+                if report.mention
+                else None,
                 origin=report.article.origin,
                 fatality_evidence=list(
                     (
@@ -90,15 +126,7 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                     else fatality_accounts(report.article, report.disaster)
                 ),
                 claims=[
-                    ReportedImpactResponse.model_validate(
-                        {
-                            "category": claim.fact.category,
-                            "label": claim.fact.label,
-                            "value": claim.fact.value,
-                            "excerpt": claim.excerpt,
-                            "qualifiers": list(claim.qualifiers),
-                        }
-                    )
+                    _impact_response(claim)
                     for claim in (
                         report.mention.claims
                         if report.mention

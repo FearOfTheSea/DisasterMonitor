@@ -60,7 +60,7 @@ async def test_page_and_cursor_survive_restart_with_shared_work_and_no_duplicate
     assert next_job.partition.cursor == "20"
     assert await restarted.commit_page(next_job, CollectionPage(), now=NOW)
     for scan in (first, second):
-        snapshot = await restarted.snapshot(scan.scan_id)
+        snapshot = await restarted.snapshot(scan.scan_id, now=NOW)
         assert len(snapshot.leads) == 1
         assert snapshot.progress.searches_completed == 1
         assert snapshot.progress.pages_acquired == 2
@@ -108,7 +108,7 @@ async def test_provider_cooldown_survives_continue_and_restart_without_blocking_
     restarted = SQLiteCollectionJournal(path)
     await restarted.continue_scan(scan.scan_id, now=NOW, budget=10)
     assert await restarted.claim("search", "c", now=NOW) is None
-    assert (await restarted.snapshot(scan.scan_id)).progress.retry_at == retry
+    assert (await restarted.snapshot(scan.scan_id, now=NOW)).progress.retry_at == retry
     assert await restarted.claim("search", "c", now=retry) is None
     await restarted.finish_pass(now=retry)
     await restarted.continue_scan(scan.scan_id, now=retry, budget=10)
@@ -123,7 +123,7 @@ async def test_budget_defers_cursor_instead_of_losing_pending_work(tmp_path):
     await store.commit_page(work, CollectionPage(next_cursor="next"), now=NOW)
     assert await store.claim("search", "b", now=NOW) is None
     await store.finish_pass(now=NOW)
-    assert (await store.snapshot(scan.scan_id)).progress.searches_pending == 1
+    assert (await store.snapshot(scan.scan_id, now=NOW)).progress.searches_pending == 1
     await store.continue_scan(scan.scan_id, now=NOW, budget=1)
     assert (await store.claim("search", "b", now=NOW)).partition.cursor == "next"
 
@@ -140,7 +140,7 @@ async def test_failed_page_is_not_acknowledged_and_refusal_is_distinct_from_empt
     await store.fail(work, outcome="access_refused", detail="HTTP 403", now=NOW)
     work = await store.claim("search", "b", now=NOW)
     await store.commit_page(work, CollectionPage(), now=NOW)
-    progress = (await store.snapshot(scan.scan_id)).progress
+    progress = (await store.snapshot(scan.scan_id, now=NOW)).progress
     assert progress.searches_completed == 1
     assert progress.searches_refused == 1
     assert progress.pages_acquired == 1
@@ -175,7 +175,7 @@ async def test_invalid_page_rolls_back_evidence_and_continuation(tmp_path):
             CollectionPage(leads=(lead(),), articles=(report,), next_cursor="next"),
             now=NOW,
         )
-    snapshot = await store.snapshot(scan.scan_id)
+    snapshot = await store.snapshot(scan.scan_id, now=NOW)
     assert not snapshot.leads and not snapshot.articles
     assert snapshot.progress.pages_acquired == 0
     later = NOW + timedelta(seconds=91)
@@ -212,7 +212,7 @@ async def test_capacity_preserves_unacknowledged_page_for_a_later_configured_lim
         next_cursor="next",
     )
     assert not await store.commit_page(work, page, now=NOW)
-    snapshot = await store.snapshot(scan.scan_id)
+    snapshot = await store.snapshot(scan.scan_id, now=NOW)
     assert snapshot.progress.can_continue
     assert snapshot.progress.pages_acquired == 0
     assert not snapshot.leads

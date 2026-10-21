@@ -1,11 +1,17 @@
 """Disaster-neutral application contracts for event-associated source media."""
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import StrEnum
+from hashlib import sha256
 
 from disaster_monitor.domain.disaster import Disaster
 from disaster_monitor.domain.evidence_types import SourceReference
+
+
+class MediaContinuationError(ValueError):
+    """The requested media page cannot continue its original evidence context."""
 
 
 class MediaAssociationStatus(StrEnum):
@@ -57,6 +63,13 @@ class MediaEventContext:
     event_time_known: bool = True
     multi_event_article_urls: tuple[str, ...] = ()
 
+    @property
+    def collection_version(self) -> str:
+        """Bind continuation to the same event, source set and admission context."""
+        return sha256(
+            json.dumps(asdict(self), sort_keys=True, default=str).encode()
+        ).hexdigest()
+
 
 @dataclass(frozen=True, slots=True)
 class DisasterMediaCandidate:
@@ -94,6 +107,7 @@ class MediaDiscoveryBatch:
     warnings: tuple[str, ...] = ()
     unavailable_sources: tuple[MediaUnavailableSource, ...] = ()
     truncated: bool = False
+    next_cursor: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,3 +191,4 @@ class DisasterMediaGallery:
     truncated: bool = False
     unavailable_sources: tuple[MediaUnavailableSource, ...] = ()
     source_articles: tuple[SourceReference, ...] = ()
+    next_cursor: str | None = None

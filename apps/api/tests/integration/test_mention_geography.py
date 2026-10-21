@@ -28,7 +28,7 @@ POLYGON = {"type": "Polygon", "coordinates": [[[1, 1], [2, 1], [2, 2], [1, 1]]]}
     [
         ([], "unresolved"),
         ([{"addresstype": "country"}], "unresolved"),
-        ([{}, {}], "ambiguous"),
+        ([{}, {}], "unresolved"),
         (
             [
                 {
@@ -122,6 +122,62 @@ async def test_place_failures_and_enrichment_budget_preserve_candidates():
     assert all(e.geometry is None for e in result)
     assert "failed" in result[0].collection_notices[0]
     assert "budget" in result[2].collection_notices[0]
+
+
+@pytest.mark.parametrize("point_first", [True, False])
+async def test_one_named_boundary_is_usable_when_a_city_centroid_is_also_returned(
+    tmp_path, point_first
+):
+    boundary = {
+        "name": "Riverton",
+        "addresstype": "province",
+        "osm_type": "relation",
+        "osm_id": 123,
+        "geojson": POLYGON,
+    }
+    point = {
+        "name": "Riverton",
+        "addresstype": "city",
+        "osm_type": "node",
+        "osm_id": 456,
+        "geojson": {"type": "Point", "coordinates": [1, 1]},
+    }
+    items = [point, boundary] if point_first else [boundary, point]
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=items))
+    ) as client:
+        resolver = NominatimMentionResolver(
+            "https://places.example/search", tmp_path / "cache.json", client=client
+        )
+        result = await resolver.resolve("Riverton", "Country")
+        assert result.status == "resolved"
+        assert result.geometry.estimated
+        assert result.geometry.source.canonical_url.endswith("/relation/123")
+        assert "not a damage footprint" in result.geometry.description
+        await resolver.aclose()
+
+
+async def test_multiple_matching_boundaries_remain_ambiguous(tmp_path):
+    items = [
+        {
+            "name": "Riverton",
+            "addresstype": "province",
+            "osm_type": "relation",
+            "osm_id": identifier,
+            "geojson": POLYGON,
+        }
+        for identifier in (123, 456)
+    ]
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=items))
+    ) as client:
+        resolver = NominatimMentionResolver(
+            "https://places.example/search", tmp_path / "cache.json", client=client
+        )
+        result = await resolver.resolve("Riverton", "Country")
+        assert result.status == "ambiguous"
+        assert result.geometry is None
+        await resolver.aclose()
 
 
 async def test_bounded_lookup_prioritizes_dated_occurrences_over_forecasts():

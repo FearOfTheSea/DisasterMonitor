@@ -15,11 +15,15 @@ from disaster_monitor.domain.collection import (
 from disaster_monitor.domain.discovery import DiscoveryArticle, DiscoveryRun
 from disaster_monitor.domain.news import NewsFeedItem
 
+ARTICLE_RETRIEVAL_PROVIDER = "publisher-articles"
+COLLECTION_RATE_LIMIT_MINIMUM_SECONDS = 900
+
 
 class CollectionProvider(Protocol):
     source_id: str
     queries: tuple[str, ...]
     supports_alternates: bool
+    supports_time_filter: bool
 
     async def fetch_page(self, partition: CollectionPartition) -> CollectionPage: ...
 
@@ -65,9 +69,13 @@ class CollectionJournal(DiscoveryStore, Protocol):
         alternates: tuple[CollectionPartition, ...] = (),
     ) -> bool: ...
 
-    async def snapshot(self, scan_id: str) -> CollectionSnapshot: ...
+    async def snapshot(self, scan_id: str, *, now: datetime) -> CollectionSnapshot: ...
 
     async def finish_pass(self, *, now: datetime) -> None: ...
+
+    async def suspend_at_capacity(
+        self, *, now: datetime, scan_ids: tuple[str, ...] = ()
+    ) -> None: ...
 
     async def active_scans(self) -> tuple[str, ...]: ...
 

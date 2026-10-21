@@ -1,6 +1,7 @@
 """No-key news discovery with registry-bounded source-page media extraction."""
 
 import asyncio
+import base64
 import json
 import re
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from defusedxml import ElementTree
 
 from disaster_monitor.application.media import (
     DisasterMediaCandidate,
+    MediaContinuationError,
     MediaCreditKind,
     MediaDiscoveryBatch,
     MediaEventContext,
@@ -88,6 +90,7 @@ class NewsEventMediaProvider:
         candidate_limit: int = 12,
         client: httpx.AsyncClient | None = None,
         noncommercial_use: bool = False,
+        rss_search_enabled: bool = False,
     ) -> None:
         self._timeout_seconds = timeout_seconds
         self._maximum_page_bytes = maximum_page_bytes
@@ -96,6 +99,7 @@ class NewsEventMediaProvider:
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._noncommercial_use = noncommercial_use
+        self._rss_search_enabled = rss_search_enabled
         self._policies = _load_policies()
         self._by_page_host = {
             host: policy for policy in self._policies for host in policy.page_hosts
@@ -103,10 +107,29 @@ class NewsEventMediaProvider:
         self._by_source_id = {item.source_id: item for item in self._policies}
 
     async def discover(
-        self, context: MediaEventContext, *, now: datetime
+        self,
+        context: MediaEventContext,
+        *,
+        now: datetime,
+        cursor: str | None = None,
+        maximum_candidates: int = 72,
     ) -> tuple[DisasterMediaCandidate, ...] | MediaDiscoveryBatch:
+        if type(maximum_candidates) is not int or not 1 <= maximum_candidates <= 180:
+            raise ValueError("Media page must request between 1 and 180 candidates.")
         if context.collected_articles:
-            return await self._collected(context)
+            return await self._collected(context, cursor, maximum_candidates)
+        if cursor is not None:
+            raise MediaContinuationError(
+                "This media search has no retained continuation."
+            )
+        if not self._rss_search_enabled:
+            return MediaDiscoveryBatch(
+                (),
+                warnings=(
+                    "Additional photograph search is disabled for this installation. "
+                    "Photographs from collected reports remain accessible.",
+                ),
+            )
         if not context.event_time_known:
             return ()
         del now
@@ -155,14 +178,23 @@ class NewsEventMediaProvider:
             candidates.extend(
                 item for item in scraped if isinstance(item, DisasterMediaCandidate)
             )
-        return tuple(candidates[: self._candidate_limit])
+        return tuple(candidates[: min(self._candidate_limit, maximum_candidates)])
 
-    async def _collected(self, context: MediaEventContext) -> MediaDiscoveryBatch:
+    async def _collected(
+        self, context: MediaEventContext, cursor: str | None, maximum_candidates: int
+    ) -> MediaDiscoveryBatch:
         candidates: list[DisasterMediaCandidate] = []
         unavailable: list[MediaUnavailableSource] = []
-        truncated = len(context.collected_articles) > self._candidate_limit
-        # The article budget and six photographs per page bound acquisition.
-        for source in context.collected_articles[: self._candidate_limit]:
+        scope = context.collection_version
+        index, offset, revision = _media_position(
+            cursor, scope, len(context.collected_articles)
+        )
+        visited = 0
+        while (
+            index < len(context.collected_articles) and visited < self._candidate_limit
+        ):
+            source = context.collected_articles[index]
+            visited += 1
             policy = self._by_page_host.get(
                 (urlsplit(source.canonical_url).hostname or "").casefold()
             )
@@ -177,6 +209,8 @@ class NewsEventMediaProvider:
                         ),
                     )
                 )
+                index += 1
+                offset, revision = 0, None
                 continue
             if policy.noncommercial_only and not self._noncommercial_use:
                 unavailable.append(
@@ -187,6 +221,8 @@ class NewsEventMediaProvider:
                         "this deployment has not enabled that use.",
                     )
                 )
+                index += 1
+                offset, revision = 0, None
                 continue
             try:
                 body, kind = await self._bounded_get(
@@ -200,9 +236,34 @@ class NewsEventMediaProvider:
                 photographs = _article_photographs(
                     body.decode("utf-8", errors="replace"), source.canonical_url
                 )
-                truncated = truncated or len(photographs) > 6
+                current_revision = sha256(
+                    json.dumps(
+                        [
+                            (
+                                p.image_url,
+                                p.caption,
+                                p.credit,
+                                str(p.published_at),
+                                str(p.captured_at),
+                            )
+                            for p in photographs
+                        ]
+                    ).encode()
+                ).hexdigest()
+                if (
+                    revision is not None and revision != current_revision
+                ) or offset > len(photographs):
+                    raise MediaContinuationError(
+                        "Source photographs changed during collection. "
+                        "Restart photographs to avoid skipping evidence."
+                    )
+                stop = min(
+                    len(photographs),
+                    offset + 6,
+                    offset + maximum_candidates - len(candidates),
+                )
                 accepted = 0
-                for metadata in photographs[:6]:
+                for metadata in photographs[offset:stop]:
                     candidate = self._candidate(
                         _NewsItem(
                             source.title,
@@ -217,15 +278,21 @@ class NewsEventMediaProvider:
                     if candidate is not None:
                         candidates.append(candidate)
                         accepted += 1
-                if not accepted:
+                offset = stop
+                if not accepted and offset == len(photographs):
                     unavailable.append(
                         MediaUnavailableSource(
                             source.canonical_url,
                             source.publisher,
-                            "No photograph met publisher metadata, credit, "
-                            "and asset-access policy.",
+                            "No photograph in this batch met publisher metadata, "
+                            "credit, and asset-access policy.",
                         )
                     )
+                if offset < len(photographs):
+                    revision = current_revision
+                    break
+            except MediaContinuationError:
+                raise
             except Exception as error:
                 unavailable.append(
                     MediaUnavailableSource(
@@ -234,29 +301,29 @@ class NewsEventMediaProvider:
                         _media_access_notice(error),
                     )
                 )
-        for source in context.collected_articles[self._candidate_limit :]:
-            unavailable.append(
-                MediaUnavailableSource(
-                    source.canonical_url,
-                    source.publisher,
-                    (
-                        "Article media acquisition budget reached; source article "
-                        "remains available."
-                    ),
-                )
-            )
+            index += 1
+            offset, revision = 0, None
+            if len(candidates) >= maximum_candidates:
+                break
+        next_cursor = (
+            _media_cursor(scope, index, offset, revision)
+            if index < len(context.collected_articles)
+            else None
+        )
         return MediaDiscoveryBatch(
             tuple(candidates),
             warnings=(
                 (
                     f"Media acquisition checks at most {self._candidate_limit} "
-                    f"collected articles and six photographs per article, under "
-                    f"maintained publisher policies. JPEG/PNG and storage limits "
-                    f"also apply."
+                    f"collected articles and six photographs per article in one batch, "
+                    "under maintained publisher policies. Continue collection "
+                    "to inspect later photographs and articles. JPEG/PNG and "
+                    "storage limits also apply."
                 ),
             ),
             unavailable_sources=tuple(unavailable),
-            truncated=truncated,
+            truncated=next_cursor is not None,
+            next_cursor=next_cursor,
         )
 
     async def retrieve(self, candidate: DisasterMediaCandidate) -> RetrievedMedia:
@@ -604,6 +671,48 @@ def _underlying_page_url(value: str) -> str | None:
     if parsed.scheme != "https" or not parsed.hostname:
         return None
     return target
+
+
+def _media_cursor(scope: str, article: int, photo: int, revision: str | None) -> str:
+    return base64.urlsafe_b64encode(
+        json.dumps([scope, article, photo, revision], separators=(",", ":")).encode()
+    ).decode()
+
+
+def _media_position(
+    cursor: str | None, scope: str, count: int
+) -> tuple[int, int, str | None]:
+    if cursor is None:
+        return 0, 0, None
+    try:
+        if len(cursor) > 4096:
+            raise ValueError("Cursor exceeds bound")
+        values = json.loads(base64.b64decode(cursor, altchars=b"-_", validate=True))
+        if not isinstance(values, list) or len(values) != 4:
+            raise ValueError("Invalid cursor")
+        supplied_scope, article, photo, revision = values
+        if (
+            supplied_scope != scope
+            or type(article) is not int
+            or not 0 <= article < count
+            or type(photo) is not int
+            or photo < 0
+            or (
+                photo > 0
+                and (
+                    not isinstance(revision, str)
+                    or not re.fullmatch("[0-9a-f]{64}", revision)
+                )
+            )
+            or (photo == 0 and revision is not None)
+        ):
+            raise ValueError("Cursor does not match source collection")
+        return article, photo, revision
+    except (ValueError, TypeError, UnicodeDecodeError, RecursionError):
+        raise MediaContinuationError(
+            "Invalid or changed photograph collection. "
+            "Restart photographs from the selected event."
+        ) from None
 
 
 def _validate_url(url: str, allowed_hosts: frozenset[str]) -> None:

@@ -11,6 +11,7 @@ from disaster_monitor.domain.event_identifiers import (
 )
 from disaster_monitor.domain.events import EventGeometryKind, geographic_distance_km
 from disaster_monitor.domain.mention_extraction import extract_mentions
+from disaster_monitor.domain.mention_occurrence import same_occurrence_detail
 
 
 def _compatible(first: AssessedReport, other: AssessedReport) -> bool:
@@ -39,12 +40,9 @@ def _compatible(first: AssessedReport, other: AssessedReport) -> bool:
     ):
         import re
 
-        first_detail = re.search(r"\d\.\d", a.distinguishing_evidence)
-        other_detail = re.search(r"\d\.\d", b.distinguishing_evidence)
-        same_magnitude = bool(
-            first_detail and other_detail and first_detail[0] == other_detail[0]
-        )
-        if not same_magnitude and not re.search(
+        if not same_occurrence_detail(
+            a.distinguishing_evidence, b.distinguishing_evidence
+        ) and not re.search(
             r"\b(?:revised|corrected|revision)\b", a.text + " " + b.text, re.I
         ):
             return False
@@ -65,6 +63,16 @@ def _reason(first: AssessedReport, other: AssessedReport) -> str | None:
     assert a and b
     if not _compatible(first, other):
         return None
+    if (
+        first.article.source.canonical_url == other.article.source.canonical_url
+        and (a.occurrence_anchor_id or b.occurrence_anchor_id)
+        and (a.occurrence_anchor_id or a.mention_id)
+        == (b.occurrence_anchor_id or b.mention_id)
+    ):
+        return (
+            "Same article explicitly links these accounts to one physical "
+            "occurrence; impact accounts retain their reported geographic scope."
+        )
     # A broad sequence or origin shared by multiple mentions is not an event key.
     single = (
         (first.mention_count or len(first.mentions))
@@ -150,7 +158,13 @@ def associate_mentions(
                 disaster=mention.disaster,
                 mention=mention,
                 mentions=(),
-                mention_count=sum(m.role in ("reported", "ongoing") for m in mentions),
+                mention_count=len(
+                    {
+                        m.occurrence_anchor_id or m.mention_id
+                        for m in mentions
+                        if m.role in ("reported", "ongoing")
+                    }
+                ),
             )
             if report.eligibility == "unknown_publication":
                 deferred.append(projected)
@@ -176,9 +190,20 @@ def associate_mentions(
         first_mention = first.mention
         assert first_mention is not None
         mention = first_mention
+        anchors = {
+            r.mention.occurrence_anchor_id
+            for r in group
+            if r.mention and r.mention.occurrence_anchor_id
+        }
+        identity_anchor = next(
+            (r.mention for r in group if r.mention and r.mention.mention_id in anchors),
+            None,
+        )
         located = next(
             (r.mention for r in group if r.mention and r.mention.geometry), mention
         )
+        if identity_anchor is not None:
+            located = identity_anchor
         timed = next(
             (
                 r.mention
@@ -230,9 +255,19 @@ def associate_mentions(
             DiscoveryEvent(
                 event_id=event_id,
                 disaster=mention.disaster,
-                location=located.place.wording
-                if located.place
-                else first.article.location or first.article.source.title,
+                location=next(
+                    (
+                        r.mention.place.wording
+                        for r in group
+                        if r.mention
+                        and r.mention.occurrence_anchor_id
+                        and r.mention.place
+                        and r.mention.place.precision == "country_context"
+                    ),
+                    located.place.wording
+                    if located.place
+                    else first.article.location or first.article.source.title,
+                ),
                 event_time=timed.time.start if timed.time else None,
                 geometry=located.geometry,
                 reports=tuple(group),

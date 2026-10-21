@@ -58,6 +58,9 @@ from disaster_monitor.infrastructure.operations.file_discovery_store import (
 from disaster_monitor.infrastructure.operations.memory_repository import (
     InMemoryOperationalRepository,
 )
+from disaster_monitor.infrastructure.operations.postgres_repository import (
+    PostgresOperationalRepository,
+)
 from disaster_monitor.main import create_app
 
 script_directory = Path(__file__).resolve().parent
@@ -68,7 +71,22 @@ def main() -> int:
     catalog_directory = tempfile.TemporaryDirectory(
         prefix="disaster-monitor-system-country-catalog-"
     )
-    repository = InMemoryOperationalRepository()
+    settings = Settings(
+        allowed_origins="http://127.0.0.1:4173",
+        country_catalog_automatic_updates=False,
+        country_catalog_root=Path(catalog_directory.name),
+        operational_auto_migrate=False,
+    )
+    repository = (
+        PostgresOperationalRepository(
+            settings.operational_database_url.get_secret_value()
+        )
+        if settings.operational_database_url is not None
+        else InMemoryOperationalRepository()
+    )
+    if isinstance(repository, PostgresOperationalRepository):
+        # Finish schema setup before either the API or scheduler thread starts.
+        asyncio.run(repository.migrate())
     discovery_store = FileDiscoveryStore(Path(catalog_directory.name) / "scans")
     active_incidents = build_system_active_incidents_service(
         discovery_store=discovery_store
@@ -89,16 +107,17 @@ def main() -> int:
 
         media_store = InMemoryMediaAssetStore(maximum_assets=180)
     app = create_app(
-        settings=Settings(
-            allowed_origins="http://127.0.0.1:4173",
-            country_catalog_automatic_updates=False,
-            country_catalog_root=Path(catalog_directory.name),
-        ),
+        settings=settings,
         overrides=AppDependencyOverrides(
             discovery_scans=inspection_discovery(discovery_store)
             if inspection
             else build_system_discovery(discovery_store),
-            event_media=inspection_media(media_store) if inspection else None,
+            event_media=inspection_media(
+                media_store,
+                target_count=int(os.environ.get("INSPECTION_MEDIA_BATCH_SIZE", "72")),
+            )
+            if inspection
+            else None,
             media_asset_store=media_store if inspection else None,
             ground_imagery_service=inspection_ground(
                 active_incidents,
@@ -140,6 +159,8 @@ def main() -> int:
             repository,
             StaticCountryCatalog(),
             clock=lambda: NOW,
+            monitoring_available=settings.scheduled_monitoring_enabled
+            and repository.durable,
         ),
     )
     if inspection:
@@ -219,7 +240,7 @@ def _prepare_standalone_runtime(web_root: Path) -> Path:
 
 
 def _run_watch_runtime(
-    repository: InMemoryOperationalRepository,
+    repository: InMemoryOperationalRepository | PostgresOperationalRepository,
     active_incidents: ActiveIncidentsService,
     stop: Event,
 ) -> None:

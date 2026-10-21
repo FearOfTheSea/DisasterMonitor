@@ -363,6 +363,12 @@ try {
       name: 'Focus Equatorial wildfire perimeter fixture on map',
     })
     .click();
+  const selectedWatchEvent = page.getByRole('complementary', {
+    name: 'Wildfire',
+    exact: true,
+  });
+  await selectedWatchEvent.getByRole('heading', { name: 'Wildfire' }).waitFor();
+  await selectedWatchEvent.getByRole('button', { name: 'Find imagery' }).click();
   await page.getByRole('heading', { name: 'Ground view' }).waitFor();
   await page.getByRole('button', { name: 'Return to event' }).click();
   await page.getByRole('button', { name: 'Back to events' }).click();

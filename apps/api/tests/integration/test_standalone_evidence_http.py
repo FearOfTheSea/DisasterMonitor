@@ -9,12 +9,72 @@ from fastapi import FastAPI
 from disaster_monitor.application.evidence.standalone_models import (
     StandaloneEvidenceResult,
 )
+from disaster_monitor.application.media import (
+    DisasterMediaGallery,
+    MediaContinuationError,
+)
 from disaster_monitor.presentation.http.standalone_evidence_routes import router
+
+
+async def test_media_continuation_query_preserves_cursor_and_public_failure_states():
+    calls = []
+    token = "opaque-page+/="
+
+    class Evidence:
+        async def execute(self, identifier, section, *, cursor=None):
+            calls.append((identifier, section, cursor))
+            if cursor is not None and section != "media":
+                raise ValueError("Continuation is supported only for photographs.")
+            if cursor == "changed":
+                raise MediaContinuationError("Source changed. Restart photographs.")
+            now = datetime.now(UTC)
+            return StandaloneEvidenceResult(
+                identifier,
+                "physical:test",
+                "media",
+                "empty",
+                now,
+                media=DisasterMediaGallery(
+                    identifier,
+                    "physical:test",
+                    now,
+                    (),
+                    0,
+                    (),
+                    next_cursor=token if cursor is None else None,
+                ),
+            )
+
+    app = FastAPI()
+    app.state.dependencies = SimpleNamespace(standalone_evidence=Evidence())
+    app.include_router(router, prefix="/api/v1")
+    path = "/api/v1/incidents/discovery%3Asnapshot/evidence/media"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        first = await client.get(path)
+        assert first.status_code == 200
+        assert first.json()["evidence"]["media"]["next_cursor"] == token
+        next_page = await client.get(path, params={"cursor": token})
+        assert next_page.status_code == 200
+        assert next_page.json()["evidence"]["media"]["next_cursor"] is None
+        assert calls[-1] == ("discovery:snapshot", "media", token)
+        changed = await client.get(path, params={"cursor": "changed"})
+        assert changed.status_code == 400 and "Restart" in changed.json()["detail"]
+        assert (
+            await client.get(path, params={"cursor": "x" * 8193})
+        ).status_code == 422
+        assert (await client.get(path, params={"cursor": ""})).status_code == 422
+        assert (
+            await client.get(
+                path.replace("/media", "/exposure"), params={"cursor": token}
+            )
+        ).status_code == 400
 
 
 async def test_section_http_states_and_bounded_inspection():
     class Evidence:
-        async def execute(self, identifier, section):
+        async def execute(self, identifier, section, *, cursor=None):
             if identifier == "missing":
                 raise LookupError("Incident unavailable")
             if identifier == "ambiguous":

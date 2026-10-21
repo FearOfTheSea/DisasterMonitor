@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Source previews retain original attribution. */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   DisasterMediaGallery,
   DisasterMediaItem,
@@ -56,20 +56,105 @@ function Photograph({ item }: { item: DisasterMediaItem }) {
   );
 }
 
-export function PhotographCollection({ gallery }: { gallery: DisasterMediaGallery }) {
+export function PhotographCollection({
+  gallery,
+  onLoadBatch,
+}: {
+  gallery: DisasterMediaGallery;
+  onLoadBatch?: (cursor: string | undefined, signal: AbortSignal) => Promise<void>;
+}) {
   const [page, setPage] = useState(0);
+  const [cursor, setCursor] = useState<string>();
+  const [history, setHistory] = useState<Array<string | undefined>>([]);
+  const [earlier, setEarlier] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>();
+  const request = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => request.current?.abort(), []);
+  async function loadBatch(
+    next: string | undefined,
+    previous: Array<string | undefined>,
+    trimmed = earlier,
+  ) {
+    if (!onLoadBatch || request.current) return;
+    const controller = new AbortController();
+    request.current = controller;
+    setLoading(true);
+    setError(undefined);
+    try {
+      await onLoadBatch(next, controller.signal);
+      if (!controller.signal.aborted) {
+        setCursor(next);
+        setHistory(previous.slice(-32));
+        setEarlier(trimmed || previous.length > 32);
+        setPage(0);
+      }
+    } catch (failure) {
+      if (!controller.signal.aborted)
+        setError(
+          failure instanceof Error ? failure.message : 'Photograph collection failed.',
+        );
+    } finally {
+      request.current = undefined;
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  }
   const pageCount = Math.max(1, Math.ceil(gallery.items.length / 5));
   const current = Math.min(page, pageCount - 1);
   return (
     <section aria-label="Article photograph collection">
       <h4>Article photographs · {gallery.items.length} retained</h4>
       <p>
-        {gallery.candidate_count ?? 'Unknown'} candidates · Retained asset limit:{' '}
-        {gallery.collection_limit ?? 'Not recorded'}.{' '}
-        {gallery.truncated
-          ? 'Collection truncated; source articles remain accessible.'
-          : 'Only eligible collected photographs are shown.'}
+        {gallery.candidate_count ?? 'Unknown'} candidates in this batch · Batch asset
+        limit: {gallery.collection_limit ?? 'Not recorded'}.{' '}
+        {gallery.next_cursor
+          ? 'More source photographs remain available through Continue photograph collection.'
+          : gallery.truncated
+            ? 'Collection truncated; source articles remain accessible.'
+            : 'Only eligible collected photographs are shown.'}
       </p>
+      {onLoadBatch ? (
+        <nav aria-label="Photograph collection batches">
+          {history.length ? (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void loadBatch(history.at(-1), history.slice(0, -1))}
+            >
+              Previous collected batch
+            </button>
+          ) : null}{' '}
+          {gallery.next_cursor ? (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() =>
+                void loadBatch(gallery.next_cursor ?? undefined, [...history, cursor])
+              }
+            >
+              Continue photograph collection
+            </button>
+          ) : null}{' '}
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void loadBatch(undefined, [], false)}
+          >
+            Restart photographs
+          </button>
+          {earlier ? (
+            <p>Earlier batches remain accessible from Restart photographs.</p>
+          ) : null}
+          {loading ? (
+            <p role="status">
+              Collecting the next photographs. Current photographs remain available.
+            </p>
+          ) : null}
+          {error ? (
+            <p role="status">{error} Current photographs remain available.</p>
+          ) : null}
+        </nav>
+      ) : null}
       {gallery.items.slice(current * 5, (current + 1) * 5).map((item) => (
         <Photograph key={item.media_id} item={item} />
       ))}
@@ -77,7 +162,7 @@ export function PhotographCollection({ gallery }: { gallery: DisasterMediaGaller
         <nav aria-label="Photograph pages">
           <button
             type="button"
-            disabled={current === 0}
+            disabled={loading || current === 0}
             onClick={() => setPage(current - 1)}
           >
             Previous photographs
@@ -87,7 +172,7 @@ export function PhotographCollection({ gallery }: { gallery: DisasterMediaGaller
           </span>{' '}
           <button
             type="button"
-            disabled={current === pageCount - 1}
+            disabled={loading || current === pageCount - 1}
             onClick={() => setPage(current + 1)}
           >
             Next photographs

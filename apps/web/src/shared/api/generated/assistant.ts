@@ -2036,6 +2036,16 @@ const apiSchemas = {
         },
         type: 'array',
       },
+      next_cursor: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
       physical_event_id: {
         type: 'string',
       },
@@ -2412,6 +2422,16 @@ const apiSchemas = {
           $ref: '#/components/schemas/ReportedImpactResponse',
         },
         type: 'array',
+      },
+      episode_account: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/HazardEpisodeAccountResponse',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       event_date_end: {
         anyOf: [
@@ -4053,6 +4073,54 @@ const apiSchemas = {
       },
     },
     required: ['role', 'sensor', 'start', 'end', 'expanded_start', 'expanded_end'],
+    type: 'object',
+  },
+  HazardEpisodeAccountResponse: {
+    properties: {
+      account_id: {
+        type: 'string',
+      },
+      claims: {
+        items: {
+          $ref: '#/components/schemas/ReportedImpactResponse',
+        },
+        type: 'array',
+      },
+      event_date_wording: {
+        type: 'string',
+      },
+      event_time: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      excerpt: {
+        type: 'string',
+      },
+      hazards: {
+        items: {
+          $ref: '#/components/schemas/Disaster',
+        },
+        type: 'array',
+      },
+      location: {
+        type: 'string',
+      },
+    },
+    required: [
+      'account_id',
+      'hazards',
+      'location',
+      'event_date_wording',
+      'excerpt',
+      'claims',
+    ],
     type: 'object',
   },
   HumanitarianContextSnapshot: {
@@ -7704,6 +7772,7 @@ export type DisasterMediaGallery = {
   event_id: string;
   generated_at: string;
   items: Array<DisasterMediaItem>;
+  next_cursor?: string | null;
   physical_event_id: string;
   provider_ids: Array<string>;
   rejected_count: number;
@@ -7779,6 +7848,7 @@ export type DisasterMediaItemResponse = {
 export type DiscoveryReportResponse = {
   access_issue?: string | null;
   claims?: Array<ReportedImpactResponse>;
+  episode_account?: HazardEpisodeAccountResponse | null;
   event_date_end?: string | null;
   event_date_precision?: 'exact' | 'day' | 'range' | 'unknown';
   event_date_wording?: string | null;
@@ -8305,6 +8375,16 @@ export type GroundImageryTimeWindowResponse = {
 export type GroundImageryWatchRequest = {
   enabled: boolean;
   interval_seconds?: number | null;
+};
+
+export type HazardEpisodeAccountResponse = {
+  account_id: string;
+  claims: Array<ReportedImpactResponse>;
+  event_date_wording: string;
+  event_time?: string | null;
+  excerpt: string;
+  hazards: Array<Disaster>;
+  location: string;
 };
 
 export type HealthResponse = {

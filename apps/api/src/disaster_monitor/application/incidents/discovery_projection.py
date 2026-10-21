@@ -8,13 +8,28 @@ from disaster_monitor.domain.discovery import DiscoveryEvent
 from disaster_monitor.domain.news import IncidentCandidateStatus
 
 
-def discovery_incident(event: DiscoveryEvent, retrieved_at: datetime) -> ActiveIncident:
+def discovery_incident(
+    event: DiscoveryEvent, retrieved_at: datetime, *, scan_id: str
+) -> ActiveIncident:
     sources = (
         *tuple(report.article.source for report in event.reports),
         *event.supplemental_sources,
     )
+    onset = next(
+        (
+            report.mention.time
+            for report in event.reports
+            if event.event_time is not None
+            and report.mention
+            and report.mention.time
+            and report.mention.time.start == event.event_time
+        ),
+        None,
+    )
     return ActiveIncident(
-        event_id=event.event_id,
+        # Extraction identifiers are local to a retained assessment. This reference
+        # selects its evidence version; it is not a global physical-event identity.
+        event_id=f"discovery:{scan_id}:{event.event_id}",
         disaster=event.disaster,
         country=None,
         location=event.location,
@@ -23,10 +38,7 @@ def discovery_incident(event: DiscoveryEvent, retrieved_at: datetime) -> ActiveI
         event_time=event.event_time or sources[0].published_at or retrieved_at,
         geometry=event.geometry,
         event_time_precision=EventTimePrecision.DAY
-        if any(
-            r.mention and r.mention.time and r.mention.time.precision != "exact"
-            for r in event.reports
-        )
+        if onset and onset.precision in ("day", "range")
         else EventTimePrecision.EXACT,
         measurements=(),
         provider_ids=(),

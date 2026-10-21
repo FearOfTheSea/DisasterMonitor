@@ -57,6 +57,7 @@ async def test_news_provider_extracts_registered_source_metadata_and_image() -> 
         maximum_page_bytes=100_000,
         maximum_image_bytes=100_000,
         client=client,
+        rss_search_enabled=True,
     )
     context = MediaEventContext(
         event_id="us6000tjl2",
@@ -116,6 +117,7 @@ async def test_news_provider_refuses_an_image_outside_registered_hosts() -> None
         maximum_page_bytes=100_000,
         maximum_image_bytes=100_000,
         client=client,
+        rss_search_enabled=True,
     )
     context = MediaEventContext(
         event_id="us6000tjl2",
@@ -186,6 +188,7 @@ async def test_news_provider_backfills_pages_that_cannot_yield_candidates() -> N
         maximum_image_bytes=100_000,
         candidate_limit=3,
         client=client,
+        rss_search_enabled=True,
     )
     context = MediaEventContext(
         event_id="us6000tjl2",
@@ -252,6 +255,7 @@ async def test_news_provider_retries_transient_discovery_failures_once() -> None
         maximum_page_bytes=100_000,
         maximum_image_bytes=100_000,
         client=client,
+        rss_search_enabled=True,
     )
     context = MediaEventContext(
         event_id="us6000tjl2",

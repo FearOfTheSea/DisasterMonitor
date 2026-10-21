@@ -223,6 +223,7 @@ def build_event_media_services(
         maximum_image_bytes=settings.event_media_max_image_bytes,
         candidate_limit=settings.event_media_candidate_limit,
         noncommercial_use=settings.event_media_noncommercial_use,
+        rss_search_enabled=settings.bing_news_rss_enabled,
     )
     return EventMediaServices(
         DisasterMediaService(

@@ -11,6 +11,13 @@ export function matchesIncidentIdentifier(
 ): boolean {
   return (
     incident.event_id === identifier ||
+    // Old bookmarks retain a local extraction ID and a separate scan URL. Only
+    // records from that loaded scan may translate it to an inspection reference.
+    (identifier.startsWith('discovery:') &&
+      incident.event_id.replace(
+        /^discovery:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}:/i,
+        '',
+      ) === identifier) ||
     incident.physical_event_id === identifier ||
     incident.provider_ids.some(
       (alias) => !alias.startsWith('glide:') && alias === identifier,
@@ -35,13 +42,14 @@ export function useIncidentSelection(
     incident?: IncidentMapRecord;
     error?: string;
   }>();
+  const lookupIdentifier = local?.event_id ?? identifier;
   useEffect(() => {
-    if (!identifier) return;
+    if (!lookupIdentifier) return;
     const controller = new AbortController();
-    fetchActiveIncident(identifier, controller.signal)
+    fetchActiveIncident(lookupIdentifier, controller.signal)
       .then((incident) => {
         if (!controller.signal.aborted) {
-          setLookup({ identifier, incident });
+          setLookup({ identifier: lookupIdentifier, incident });
           if (incident.geometry) {
             setResolvedLocations((current) => [
               ...current
@@ -55,8 +63,9 @@ export function useIncidentSelection(
       .catch((error: unknown) => {
         if (!controller.signal.aborted)
           setLookup((current) => ({
-            identifier,
-            incident: current?.identifier === identifier ? current.incident : undefined,
+            identifier: lookupIdentifier,
+            incident:
+              current?.identifier === lookupIdentifier ? current.incident : undefined,
             error:
               error instanceof Error
                 ? error.message
@@ -64,8 +73,8 @@ export function useIncidentSelection(
           }));
       });
     return () => controller.abort();
-  }, [identifier]);
-  const retained = lookup?.identifier === identifier ? lookup : undefined;
+  }, [lookupIdentifier]);
+  const retained = lookup?.identifier === lookupIdentifier ? lookup : undefined;
   const withResolvedLocation = useCallback(
     (record: IncidentMapRecord) => {
       if (record.geometry) return record;

@@ -18,7 +18,12 @@ class EventMediaProvider(Protocol):
     def provider_id(self) -> str: ...
 
     async def discover(
-        self, context: MediaEventContext, *, now: datetime
+        self,
+        context: MediaEventContext,
+        *,
+        now: datetime,
+        cursor: str | None = None,
+        maximum_candidates: int = 72,
     ) -> tuple[DisasterMediaCandidate, ...] | MediaDiscoveryBatch: ...
 
     async def retrieve(self, candidate: DisasterMediaCandidate) -> RetrievedMedia: ...
@@ -32,5 +37,5 @@ class MediaAssetStore(Protocol):
 
 class EventMediaDiscovery(Protocol):
     async def discover(
-        self, context: MediaEventContext
+        self, context: MediaEventContext, *, cursor: str | None = None
     ) -> DisasterMediaGallery | None: ...

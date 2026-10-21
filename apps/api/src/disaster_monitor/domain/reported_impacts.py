@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from disaster_monitor.domain.evidence import ReportedFact, SituationReport
 from disaster_monitor.domain.evidence_types import FactStatus, SourceReference
+from disaster_monitor.domain.source_sentences import source_sentences
 
 IMPACT_LABELS = {
     "fatalities": "Fatalities",
@@ -37,10 +38,26 @@ _NUMBER = (
     r"(?:\d[\d,]*|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
     r"dozens|hundreds|thousands)"
 )
+_PERSON = (
+    r"(?:(?-i:[A-ZÀ-Ý][\wÀ-ž'-]*)\s+){0,2}"
+    r"(?:people|persons?|men|women|children|residents|soldiers?|others?)"
+)
 _LINK = (
-    r"(?:\s+(?:people|persons?|men|women|children|residents|were|was|are|is|"
+    rf"(?:\s+(?:{_PERSON}|were|was|are|is|"
     r"have|has|been|had|reportedly|may|might|confirmed|reported|at|least|about|"
-    r"approximately))*\s+"
+    r"approximately|temporarily|internally|newly))*\s+"
+)
+_BURN_ACCOUNT = re.compile(
+    rf"\b(?:(?P<count>{_NUMBER}|no)\s+)?"
+    rf"(?:{_PERSON}|firefighters?|responders?|volunteers?|patients?|victims?)"
+    r"\s+(?:(?:had|have|has|reportedly)\s+)*"
+    r"(?:suffered|sustained)\s+(?:(?:severe|serious|minor|extensive|"
+    r"first-degree|second-degree|third-degree)\s+)*burns\b",
+    re.I,
+)
+_CALENDAR_MONTH = (
+    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
 )
 _DAMAGE = re.compile(
     r"\b(?:damag\w*|destroy\w*|disrupt\w*|collaps\w*|washed away|"
@@ -48,6 +65,7 @@ _DAMAGE = re.compile(
     re.I,
 )
 _QUALIFIERS = {
+    "temporary": r"\btemporar(?:y|ily)\b",
     "preliminary": r"\b(?:preliminary|initial|early reports)\b",
     "corrected": r"\b(?:correct\w*|revised|revision)\b",
     "historical": (
@@ -65,6 +83,22 @@ class ReportedImpact:
     fact: ReportedFact
     excerpt: str
     qualifiers: tuple[str, ...] = ()
+
+
+def _calendar_count(sentence: str, match: re.Match[str]) -> bool:
+    value = match[1].replace(",", "")
+    if not value.isdigit():
+        return False
+    before, after = sentence[: match.start(1)], sentence[match.end(1) :]
+    return bool(
+        re.search(rf"\b{_CALENDAR_MONTH}\.?\s*$", before, re.I)
+        or re.match(rf"\s+{_CALENDAR_MONTH}\b", after, re.I)
+        or (
+            len(value) == 4
+            and 1900 <= int(value) <= 2100
+            and re.search(r"\b(?:in|during|since)\s*$", before, re.I)
+        )
+    )
 
 
 def inspect_report_impacts(report: SituationReport) -> tuple[ReportedImpact, ...]:
@@ -119,6 +153,42 @@ def _account_value(value: str) -> str:
     return str(words.index(normalized)) if normalized in words else normalized
 
 
+def _burn_injury_accounts(
+    sentence: str,
+    source: SourceReference,
+    location: str | None,
+    qualifiers: tuple[str, ...],
+) -> tuple[ReportedImpact, ...]:
+    """Keep explicit personal burns separate from any broader injury count."""
+    accounts = []
+    for match in _BURN_ACCOUNT.finditer(sentence):
+        count = match["count"]
+        value = (
+            "Reported; count unknown"
+            if count is None
+            else "0"
+            if count.casefold() == "no"
+            else count.replace(",", "")
+        )
+        accounts.append(
+            ReportedImpact(
+                ReportedFact(
+                    "injuries",
+                    "Burn injuries",
+                    value,
+                    FactStatus.PRELIMINARY
+                    if "preliminary" in qualifiers
+                    else FactStatus.UNKNOWN,
+                    source,
+                    reported_location=location,
+                ),
+                sentence,
+                qualifiers,
+            )
+        )
+    return tuple(accounts)
+
+
 def extract_reported_impacts(
     text: str,
     source: SourceReference,
@@ -126,7 +196,7 @@ def extract_reported_impacts(
     location: str | None = None,
 ) -> tuple[ReportedImpact, ...]:
     claims = []
-    for sentence in re.split(r"(?<=[.!?])\s+", text[:20_000]):
+    for sentence in source_sentences(text[:20_000]):
         sentence = sentence.strip()
         # Do not cut a long source sentence and imply its qualification survived.
         if not sentence or len(sentence) > 600:
@@ -146,8 +216,15 @@ def extract_reported_impacts(
                 )
                 if alternatives:
                     qualifiers = tuple(dict.fromkeys((*qualifiers, "uncertain")))
-                before = re.search(
-                    rf"\b({_NUMBER}){_LINK}(?:{terms})\b", sentence, re.I
+                before = next(
+                    (
+                        match
+                        for match in re.finditer(
+                            rf"\b({_NUMBER}){_LINK}(?:{terms})\b", sentence, re.I
+                        )
+                        if not _calendar_count(sentence, match)
+                    ),
+                    None,
                 )
                 after = re.search(
                     rf"\b(?:{terms})\s+(?:(?:rose|risen|stands|stood|increased|reported|was|were|is|at|to|of|least)\s+)*({_NUMBER})\b",
@@ -195,4 +272,5 @@ def extract_reported_impacts(
                     qualifiers,
                 )
             )
+        claims.extend(_burn_injury_accounts(sentence, source, location, qualifiers))
     return tuple(claims)

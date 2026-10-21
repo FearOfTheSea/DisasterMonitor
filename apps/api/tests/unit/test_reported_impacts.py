@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+import pytest
+
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.reported_impacts import extract_reported_impacts
 
@@ -141,3 +143,53 @@ def test_provider_accounts_only_attach_matching_supporting_excerpts():
     assert accounts[1].excerpt == "Two people were injured."
     assert accounts[2].excerpt == ""
     assert accounts[2].fact.value == "300"
+
+
+@pytest.mark.parametrize("descriptor", ["Canadian", "South African", "CANADIAN"])
+def test_person_descriptors_and_others_keep_counts_tied_to_their_casualty(descriptor):
+    claims = extract_reported_impacts(
+        f"Four {descriptor} soldiers were killed and 39 others injured.", SOURCE
+    )
+    assert [(c.fact.category, c.fact.value) for c in claims] == [
+        ("fatalities", "Four"),
+        ("injuries", "39"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "calendar",
+    [
+        "On October 12",
+        "On 12 October",
+        "On 12 October 2026",
+        "In 2026",
+    ],
+)
+def test_calendar_numbers_before_people_are_not_casualty_counts(calendar):
+    (claim,) = extract_reported_impacts(
+        f"{calendar} Canadian soldiers were killed.", SOURCE
+    )
+    assert claim.fact.value == "Reported; count unknown"
+
+
+def test_actual_count_after_a_date_still_remains_extractable():
+    (claim,) = extract_reported_impacts(
+        "On 12 October 2026 four Canadian soldiers were killed.", SOURCE
+    )
+    assert claim.fact.value == "four"
+
+
+@pytest.mark.parametrize("abbreviation", ["Oct.", "Sept.", "Jan."])
+def test_impact_excerpt_keeps_the_reported_calendar_qualification(abbreviation):
+    sentence = f"Officials said on {abbreviation} 14 that two people died."
+    (claim,) = extract_reported_impacts(sentence, SOURCE)
+    assert claim.excerpt == sentence
+    assert claim.fact.value == "two"
+
+
+def test_hazard_scope_filter_keeps_date_prefix_with_the_hazard_sentence():
+    from disaster_monitor.domain.disaster_types import Disaster
+    from disaster_monitor.domain.discovery_claim_scope import scoped_disaster_text
+
+    sentence = "On Oct. 14, officials said floods killed two people."
+    assert scoped_disaster_text(sentence, "Regional update", Disaster.FLOOD) == sentence

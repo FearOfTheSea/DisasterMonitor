@@ -136,6 +136,7 @@ class DiscoveryReportResponse(BaseModel):
     origin: str | None = None
     fatality_evidence: list[str] = Field(default_factory=list)
     claims: list["ReportedImpactResponse"] = Field(default_factory=list)
+    episode_account: "HazardEpisodeAccountResponse | None" = None
     location: str | None = None
     geometry: EventGeometryResponse | None = None
     access_issue: str | None = None
@@ -169,6 +170,16 @@ class ReportedImpactResponse(BaseModel):
     value: str
     excerpt: str
     qualifiers: list[str] = Field(default_factory=list)
+
+
+class HazardEpisodeAccountResponse(BaseModel):
+    account_id: str
+    hazards: list[Disaster]
+    location: str
+    event_date_wording: str
+    event_time: datetime | None = None
+    excerpt: str
+    claims: list[ReportedImpactResponse]
 
 
 class ActiveIncidentResponse(BaseModel):

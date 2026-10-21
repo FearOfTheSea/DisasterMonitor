@@ -12,7 +12,7 @@ from disaster_monitor.domain.discovery import ReportingInterval
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v1"
+PLAN_VERSION = "collection-v3"
 
 
 def plan_collection(
@@ -27,11 +27,12 @@ def plan_collection(
     start = int(interval.start.timestamp()) // span * span
     generation = f"{PLAN_VERSION}:{int(observed_at.timestamp()) // 21600}"
     result = []
+    historical = tuple(p for p in providers if p.supports_time_filter)
     while start <= interval.end.timestamp():
         lower = datetime.fromtimestamp(start, UTC)
         upper = lower + timedelta(days=7)
-        for index in range(max((len(p.queries) for p in providers), default=0)):
-            for provider in providers:
+        for index in range(max((len(p.queries) for p in historical), default=0)):
+            for provider in historical:
                 if index < len(provider.queries):
                     result.append(
                         CollectionPartition(
@@ -43,6 +44,22 @@ def plan_collection(
                         )
                     )
         start += span
+    # A recent RSS snapshot has no historical query contract. Share that one
+    # observation across windows; publisher evidence still uses each exact interval.
+    observed = int(observed_at.timestamp()) // 21600 * 21600
+    lower = datetime.fromtimestamp(observed, UTC)
+    for provider in providers:
+        if not provider.supports_time_filter:
+            result.extend(
+                CollectionPartition(
+                    provider.source_id,
+                    query,
+                    lower,
+                    lower + timedelta(hours=6),
+                    generation=generation,
+                )
+                for query in provider.queries
+            )
     return tuple(result)
 
 
@@ -55,6 +72,7 @@ def plan_alternate_reports(
     if work.alternate_depth or work.lead is None:
         return ()
     lead = work.lead
+    hint = lead.discovery_hint or lead.title
     source = SourceReference(
         "acquired-lead",
         lead.publisher,
@@ -64,7 +82,7 @@ def plan_alternate_reports(
         None,
         observed_at,
     )
-    mentions = extract_mentions(lead.title, source)
+    mentions = extract_mentions(hint, source)
     anchored = next(
         (m for m in mentions if m.place and m.place.precision == "named_place"), None
     )
@@ -73,7 +91,7 @@ def plan_alternate_reports(
         query = anchored.disaster.value.replace("_", " ") + ' "' + " ".join(words) + '"'
     else:
         # An acquired headline is a search hint, never verified event evidence.
-        query = " ".join(re.findall(r"[\w'-]+", lead.title)[:12])
+        query = " ".join(re.findall(r"[\w'-]+", hint)[:12])
     if not query:
         return ()
     date_hint = lead.indexed_at or observed_at

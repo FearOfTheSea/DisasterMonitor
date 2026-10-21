@@ -109,40 +109,17 @@ class NominatimMentionResolver:
                 return PlaceResolution(
                     "unavailable", detail="Invalid place-provider response."
                 )
-            items = payload["items"]
+            # City centroids cannot establish administrative inspection areas.
+            # Judge ambiguity among matching boundary candidates, not raw hits.
+            items = [item for item in payload["items"] if _named_boundary(item, place)]
             if len(items) != 1:
                 return PlaceResolution(
                     "ambiguous" if items else "unresolved",
-                    detail="Multiple or no geographic matches; no location selected.",
+                    detail="Multiple or no matching administrative boundaries; "
+                    "no location selected.",
                 )
             item = items[0]
-            if not isinstance(item, dict) or str(item.get("addresstype")) in {
-                "country",
-                "continent",
-            }:
-                return PlaceResolution(
-                    "unresolved",
-                    detail="Broad country/continent result cannot supply "
-                    "an event point.",
-                )
-            geo = item.get("geojson")
-            matched_name = (
-                str(item.get("name") or item.get("display_name") or "")
-                .split(",", 1)[0]
-                .strip()
-            )
-            if matched_name.casefold() != place.casefold():
-                return PlaceResolution(
-                    "unresolved",
-                    detail="Geographic result does not match the reported place "
-                    "wording; no location selected.",
-                )
-            if not isinstance(geo, dict) or geo.get("type") != "Polygon":
-                return PlaceResolution(
-                    "unresolved",
-                    detail="No supported administrative polygon; "
-                    "point centroids are not event locations.",
-                )
+            geo = item["geojson"]
             try:
                 polygon = shape(geo)
                 if (
@@ -197,3 +174,18 @@ class NominatimMentionResolver:
         await self._schedule.aclose()
         if self._owns_client:
             await self._client.aclose()
+
+
+def _named_boundary(value: object, place: str) -> bool:
+    if not isinstance(value, dict) or str(value.get("addresstype")) in {
+        "country",
+        "continent",
+    }:
+        return False
+    name = str(value.get("name") or value.get("display_name") or "").split(",", 1)[0]
+    geo = value.get("geojson")
+    return (
+        name.strip().casefold() == place.casefold()
+        and isinstance(geo, dict)
+        and geo.get("type") == "Polygon"
+    )

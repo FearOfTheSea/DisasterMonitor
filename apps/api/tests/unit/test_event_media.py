@@ -9,6 +9,7 @@ from disaster_monitor.application.media import (
     DisasterMediaCandidate,
     MediaAssociationStatus,
     MediaCreditKind,
+    MediaDiscoveryBatch,
     MediaEventContext,
     MediaRightsStatus,
     RetrievedMedia,
@@ -23,6 +24,46 @@ from disaster_monitor.infrastructure.media.memory_store import InMemoryMediaAsse
 
 NOW = datetime(2026, 8, 15, 12, tzinfo=UTC)
 EVENT_TIME = datetime(2026, 8, 10, 5, 54, tzinfo=UTC)
+
+
+async def test_gallery_continuation_preserves_candidates_beyond_each_retained_batch():
+    candidates = tuple(_candidate(str(i), priority=i) for i in range(10))
+
+    class Provider:
+        provider_id = "paged-source"
+        limits = []
+
+        async def discover(self, context, *, now, cursor=None, maximum_candidates=72):
+            self.limits.append(maximum_candidates)
+            start = int(cursor or 0)
+            end = min(len(candidates), start + maximum_candidates)
+            return MediaDiscoveryBatch(
+                candidates[start:end],
+                next_cursor=str(end) if end < len(candidates) else None,
+            )
+
+        async def retrieve(self, candidate):
+            return RetrievedMedia(
+                candidate, candidate.candidate_id.encode(), "image/png", 640, 360
+            )
+
+    provider = Provider()
+    service = DisasterMediaService(
+        (provider,), InMemoryMediaAssetStore(), clock=lambda: NOW, target_count=2
+    )
+    first = await service.discover(_context())
+    assert first.next_cursor, "Retained-asset limits must not discard later candidates."
+    seen = [i.media_id for i in first.items]
+    cursor = first.next_cursor
+    for _ in range(10):
+        if cursor is None:
+            break
+        batch = await service.discover(_context(), cursor=cursor)
+        assert len(batch.items) <= 2
+        seen.extend(i.media_id for i in batch.items)
+        cursor = batch.next_cursor
+    assert cursor is None and len(seen) == len(set(seen)) == 10
+    assert provider.limits == [2] * 5
 
 
 def _context(disaster: Disaster = Disaster.EARTHQUAKE) -> MediaEventContext:
@@ -192,7 +233,7 @@ async def test_expanded_gallery_retains_duplicate_sources_and_delivery_failures(
     class Provider:
         provider_id = "fixture"
 
-        async def discover(self, context, *, now):
+        async def discover(self, context, *, now, cursor=None, maximum_candidates=72):
             return candidates
 
         async def retrieve(self, candidate):
@@ -278,7 +319,7 @@ async def test_gallery_selects_three_and_never_fetches_injected_old_photo() -> N
         def __init__(self) -> None:
             self.retrieved: list[str] = []
 
-        async def discover(self, context, *, now):
+        async def discover(self, context, *, now, cursor=None, maximum_candidates=72):
             return (*valid, old)
 
         async def retrieve(self, candidate):
@@ -318,7 +359,7 @@ async def test_gallery_backfills_when_the_initial_retrieval_batch_is_rejected() 
         def __init__(self) -> None:
             self.retrieved: list[str] = []
 
-        async def discover(self, context, *, now):
+        async def discover(self, context, *, now, cursor=None, maximum_candidates=72):
             return candidates
 
         async def retrieve(self, candidate):
@@ -361,7 +402,7 @@ async def test_zero_accepted_images_return_bounded_diagnostics() -> None:
     class Provider:
         provider_id = "fixture-media"
 
-        async def discover(self, context, *, now):
+        async def discover(self, context, *, now, cursor=None, maximum_candidates=72):
             return (rejected,)
 
         async def retrieve(self, candidate):

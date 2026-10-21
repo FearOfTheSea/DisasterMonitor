@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import monotonic
 
@@ -14,7 +15,13 @@ from disaster_monitor.infrastructure.news.request_schedule import (
 )
 
 
-class CollectionJsonHttp:
+@dataclass(frozen=True, slots=True)
+class CollectionHttpResponse:
+    body: bytes
+    retrieved_at: datetime
+
+
+class CollectionHttp:
     def __init__(
         self,
         *,
@@ -22,6 +29,7 @@ class CollectionJsonHttp:
         timeout_seconds: float = 15,
         minimum_interval: float = 1,
         maximum_bytes: int = 2_000_000,
+        user_agent: str = "DisasterMonitorDiscovery/1.0",
     ) -> None:
         self._client = client or httpx.AsyncClient(
             timeout=timeout_seconds, trust_env=False
@@ -30,10 +38,22 @@ class CollectionJsonHttp:
         self._timeout = timeout_seconds
         self._interval = minimum_interval
         self._maximum_bytes = maximum_bytes
+        self._user_agent = user_agent
         self._lock = asyncio.Lock()
         self._next_request = 0.0
 
-    async def get(self, url: str, params: dict[str, str]) -> NewsJsonSnapshot:
+    async def get_json(self, url: str, params: dict[str, str]) -> NewsJsonSnapshot:
+        response = await self.get_bytes(url, params)
+        try:
+            return NewsJsonSnapshot(json.loads(response.body), response.retrieved_at)
+        except (ValueError, TypeError) as error:
+            raise CollectionProviderError(
+                "invalid_response", "News service returned malformed JSON."
+            ) from error
+
+    async def get_bytes(
+        self, url: str, params: dict[str, str]
+    ) -> CollectionHttpResponse:
         async with self._lock:
             await asyncio.sleep(max(0, self._next_request - monotonic()))
             self._next_request = monotonic() + self._interval
@@ -44,7 +64,7 @@ class CollectionJsonHttp:
                         url,
                         params=params,
                         follow_redirects=False,
-                        headers={"User-Agent": "DisasterMonitorDiscovery/1.0"},
+                        headers={"User-Agent": self._user_agent},
                     ) as response:
                         if response.status_code != 200:
                             outcome: FailureOutcome = (
@@ -70,14 +90,10 @@ class CollectionJsonHttp:
                                     "invalid_response",
                                     "News response exceeded the byte limit.",
                                 )
-                        return NewsJsonSnapshot(json.loads(body), datetime.now(UTC))
+                        return CollectionHttpResponse(bytes(body), datetime.now(UTC))
             except (httpx.TransportError, TimeoutError) as error:
                 raise CollectionProviderError(
                     "transport_failed", "News service transport failed or timed out."
-                ) from error
-            except (ValueError, TypeError) as error:
-                raise CollectionProviderError(
-                    "invalid_response", "News service returned malformed JSON."
                 ) from error
 
     async def aclose(self) -> None:

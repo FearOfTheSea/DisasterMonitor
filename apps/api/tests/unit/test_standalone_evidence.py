@@ -3,7 +3,11 @@ from datetime import UTC, datetime
 import pytest
 
 from disaster_monitor.application.evidence.standalone import StandaloneEvidenceService
-from disaster_monitor.application.media import MediaEventContext
+from disaster_monitor.application.media import (
+    DisasterMediaGallery,
+    MediaContinuationError,
+    MediaEventContext,
+)
 from disaster_monitor.application.ports.standalone_evidence import (
     IncidentEvidenceContext,
 )
@@ -30,6 +34,57 @@ class Contexts:
             event=None,
             geometry=None,
         )
+
+
+async def test_media_page_caches_and_restart_after_source_change():
+    class Media:
+        calls = []
+
+        async def discover(self, context, *, cursor=None):
+            self.calls.append(cursor)
+            if cursor == "changed":
+                raise MediaContinuationError("Source changed. Restart photographs.")
+            return DisasterMediaGallery(
+                context.event_id,
+                context.physical_event_id,
+                NOW,
+                (),
+                0,
+                (),
+                next_cursor="second" if cursor is None else None,
+            )
+
+    media = Media()
+    service = StandaloneEvidenceService(Contexts(), media=media, clock=lambda: NOW)
+    first = await service.execute("event", "media")
+    second = await service.execute("event", "media", cursor="second")
+    assert first.media.next_cursor == "second" and second.media.next_cursor is None
+    assert await service.execute("event", "media") == first
+    assert await service.execute("event", "media", cursor="second") == second
+    assert media.calls == [None, "second"]
+    with pytest.raises(MediaContinuationError):
+        await service.execute("event", "media", cursor="changed")
+    await service.execute("event", "media")
+    assert media.calls == [None, "second", "changed", None]
+
+
+async def test_media_cache_keeps_distinct_admission_contexts_separate():
+    class Media:
+        calls = []
+
+        async def discover(self, context, *, cursor=None):
+            self.calls.append(context.event_id)
+            return DisasterMediaGallery(
+                context.event_id, context.physical_event_id, NOW, (), 0, ()
+            )
+
+    media = Media()
+    service = StandaloneEvidenceService(Contexts(), media=media, clock=lambda: NOW)
+    first = await service.execute("first", "media")
+    second = await service.execute("second", "media")
+    assert first.media.event_id == "first"
+    assert second.media.event_id == "second"
+    assert media.calls == ["first", "second"]
 
 
 @pytest.mark.asyncio

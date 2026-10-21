@@ -84,16 +84,36 @@ export function useDiscoveryScan() {
   }, [id, running]);
 
   const update = useCallback(
-    async (request: (signal: AbortSignal) => Promise<DiscoveryScanResponse>) => {
+    async (
+      request: (signal: AbortSignal) => Promise<DiscoveryScanResponse>,
+      continuingId?: string,
+    ) => {
       controller.current?.abort();
       const nextController = new AbortController();
       controller.current = nextController;
       setSubmitting(true);
       setError(undefined);
       try {
-        const next = await request(
-          AbortSignal.any([nextController.signal, AbortSignal.timeout(20_000)]),
-        );
+        let next: DiscoveryScanResponse;
+        try {
+          next = await request(
+            AbortSignal.any([nextController.signal, AbortSignal.timeout(20_000)]),
+          );
+        } catch (caught) {
+          if (
+            !continuingId ||
+            nextController.signal.aborted ||
+            !(caught instanceof Error || caught instanceof DOMException) ||
+            !['TimeoutError', 'AbortError', 'TypeError'].includes(caught.name)
+          )
+            throw caught;
+          // A lost acknowledgement does not mean the server rejected Continue.
+          // Read the existing scan with a fresh deadline; never repeat the POST.
+          next = await fetchDiscoveryScan(
+            continuingId,
+            AbortSignal.any([nextController.signal, AbortSignal.timeout(20_000)]),
+          );
+        }
         if (!nextController.signal.aborted) {
           setRun(next);
           const url = new URL(window.location.href);
@@ -120,7 +140,7 @@ export function useDiscoveryScan() {
     if (id) await update((signal) => reprocessDiscoveryScan(id, signal));
   }, [id, update]);
   const continueCollection = useCallback(async () => {
-    if (id) await update((signal) => continueDiscoveryScan(id, signal));
+    if (id) await update((signal) => continueDiscoveryScan(id, signal), id);
   }, [id, update]);
 
   const snapshot = useMemo(() => {

@@ -33,6 +33,67 @@ const INCIDENT: IncidentMapRecord = {
 afterEach(cleanup);
 
 describe('selected event reading pane', () => {
+  it('keeps supported occurrence wording when an ongoing report has contextual evidence', () => {
+    render(
+      <SelectedEventPane
+        incident={{
+          ...INCIDENT,
+          identity_status: 'associated',
+          discovery_reports: [
+            { source: INCIDENT.source, mention_role: 'ongoing' },
+            { source: INCIDENT.source, mention_role: 'uncertain' },
+          ],
+        }}
+        snapshotRetrievedAt="2026-09-23T05:00:00Z"
+        onClose={vi.fn()}
+        onAsk={vi.fn()}
+        onGroundView={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/reports an earthquake at Fixture location/)).toBeVisible();
+    expect(screen.getByText(/Associated physical event/)).toBeVisible();
+    expect(screen.queryByText(/Retained source context/)).not.toBeInTheDocument();
+  });
+
+  it.each(['uncertain', 'forecast', 'historical'] as const)(
+    'keeps %s source context from becoming a physical-event assertion',
+    (role) => {
+      render(
+        <SelectedEventPane
+          incident={{
+            ...INCIDENT,
+            event_time: null,
+            event_time_basis: 'unknown',
+            identity_status: 'candidate',
+            measurements: [],
+            verification_status: 'provisional_news_detected',
+            discovery_reports: [
+              {
+                source: INCIDENT.source,
+                mention_role: role,
+                mention_excerpt: 'Retained passage with unresolved occurrence scope.',
+                fatality_evidence: [],
+              },
+            ],
+          }}
+          snapshotRetrievedAt="2026-09-23T05:00:00Z"
+          onClose={vi.fn()}
+          onAsk={vi.fn()}
+          onGroundView={vi.fn()}
+        />,
+      );
+      expect(screen.getByText(/Retained source context/)).toBeVisible();
+      expect(
+        screen.getByText(/does not establish a current earthquake occurrence/),
+      ).toBeVisible();
+      expect(screen.queryByText(/reports an earthquake at/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Unresolved event candidate/)).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Retained passage with unresolved occurrence scope.'),
+      ).toBeVisible();
+    },
+  );
+
   it('focuses source-backed content without asking the assistant until requested', async () => {
     const onAsk = vi.fn();
     render(

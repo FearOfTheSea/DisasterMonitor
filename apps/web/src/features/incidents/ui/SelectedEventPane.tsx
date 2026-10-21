@@ -6,6 +6,7 @@ import { EventBrief } from '@/features/event-brief/public';
 import {
   displayActiveIncidentContext,
   displayActiveIncidentCountry,
+  isContextOnlyIncident,
   type IncidentMapRecord,
 } from '@/features/incidents/model/activeIncidents';
 import { ArticleCollection } from './ArticleCollection';
@@ -73,6 +74,7 @@ export function SelectedEventPane({
     heading.current?.focus();
   }, [incident.event_id]);
   const context = displayActiveIncidentContext(incident);
+  const contextOnly = isContextOnlyIncident(incident);
   const hazardLabel = disasterLabel(incident.disaster).toLowerCase();
   const hazardArticle = /^[aeiou]/.test(hazardLabel) ? 'an' : 'a';
   const sources = incident.evidence_sources?.length
@@ -185,11 +187,13 @@ export function SelectedEventPane({
             </div>
             <section>
               <h3>What is known</h3>
-              {incident.identity_status ? (
+              {contextOnly || incident.identity_status ? (
                 <p className="event-uncertainty">
-                  {incident.identity_status === 'candidate'
-                    ? 'Unresolved event candidate'
-                    : 'Associated physical event'}{' '}
+                  {contextOnly
+                    ? 'Retained source context'
+                    : incident.identity_status === 'candidate'
+                      ? 'Unresolved event candidate'
+                      : 'Associated physical event'}{' '}
                   · Source reporting remains unverified.
                 </p>
               ) : null}
@@ -203,13 +207,20 @@ export function SelectedEventPane({
                   </ul>
                 </details>
               ) : null}
-              <p>
-                {incident.source.publisher} reports {hazardArticle} {hazardLabel} at{' '}
-                {incident.location}.{' '}
-                {incident.event_time_basis === 'unknown'
-                  ? 'The event time is unresolved; the timestamp above is publication time.'
-                  : 'The source records the event time above.'}
-              </p>
+              {contextOnly ? (
+                <p>
+                  This source passage is retained as context. It does not establish a
+                  current {hazardLabel} occurrence at {incident.location}.
+                </p>
+              ) : (
+                <p>
+                  {incident.source.publisher} reports {hazardArticle} {hazardLabel} at{' '}
+                  {incident.location}.{' '}
+                  {incident.event_time_basis === 'unknown'
+                    ? 'The event time is unresolved; the timestamp above is publication time.'
+                    : 'The source records the event time above.'}
+                </p>
+              )}
               {incident.measurements.length > 0 ? (
                 <dl className="event-measurements">
                   {groupedMeasurements(incident.measurements).map(
@@ -261,7 +272,8 @@ export function SelectedEventPane({
                     ))}
                 </section>
               ) : null}
-              {incident.verification_status === 'provisional_news_detected' ? (
+              {!contextOnly &&
+              incident.verification_status === 'provisional_news_detected' ? (
                 <p className="event-uncertainty">
                   Preliminary news report. Authoritative confirmation is pending.
                 </p>

@@ -26,23 +26,26 @@ export function DiscoveryScanControls({
   onContinue?: () => void | Promise<void>;
 }) {
   const running = submitting || run?.status === 'running';
+  const reassessing = run?.status === 'running' && Boolean(run.reprocessed_from);
   const contextCount =
     run?.snapshot.incidents?.filter(isContextOnlyIncident).length ?? 0;
   const title = submitting
     ? 'Updating reporting…'
-    : !run
-      ? undefined
-      : run.collection?.state === 'waiting'
-        ? 'Waiting for a news service — available results retained'
-        : run.status === 'running'
-          ? 'Scanning the world…'
-          : run.status === 'failed'
-            ? 'Scan failed'
-            : run.status === 'incomplete'
-              ? 'Scan incomplete — available results retained'
-              : run.snapshot.incidents?.length
-                ? 'Scan completed'
-                : 'No matching events were found in this scan';
+    : reassessing
+      ? 'Reprocessing retained reports…'
+      : !run
+        ? undefined
+        : !run.reprocessed_from && run.collection?.state === 'waiting'
+          ? 'Waiting for a news service — available results retained'
+          : run.status === 'running'
+            ? 'Scanning the world…'
+            : run.status === 'failed'
+              ? 'Scan failed'
+              : run.status === 'incomplete'
+                ? 'Scan incomplete — available results retained'
+                : run.snapshot.incidents?.length
+                  ? 'Scan completed'
+                  : 'No matching events were found in this scan';
   return (
     <section className="discovery-scan-controls" aria-label="Worldwide discovery">
       <label>
@@ -63,7 +66,13 @@ export function DiscoveryScanControls({
         </select>
       </label>
       <button type="button" onClick={() => void onScan()} disabled={running}>
-        {submitting ? 'Updating…' : running ? 'Scanning…' : 'Scan the world'}
+        {submitting
+          ? 'Updating…'
+          : reassessing
+            ? 'Reprocessing…'
+            : running
+              ? 'Scanning…'
+              : 'Scan the world'}
       </button>
       <p>
         Scanning may take a while. The reporting interval is fixed at scan start and
@@ -119,10 +128,16 @@ export function DiscoveryScanControls({
                 </>
               ) : null}
               {run.reprocessed_from ? (
-                <p>
-                  These results reprocess retained reports. No new news search was
-                  performed.
-                </p>
+                <>
+                  <p>
+                    {reassessing
+                      ? 'Reassessment is running. Visible records are from the previous assessment. No new news search is being performed.'
+                      : 'These results reprocess retained reports. No new news search was performed.'}
+                  </p>
+                  <a href={`?scan=${encodeURIComponent(run.reprocessed_from)}`}>
+                    Open original scan
+                  </a>
+                </>
               ) : null}
               {run.unlocated_count > 0 ? (
                 <p>
