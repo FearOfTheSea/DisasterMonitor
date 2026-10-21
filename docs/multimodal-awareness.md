@@ -53,23 +53,24 @@ warnings or orders, government decisions, or authoritative totals.
 Discard unsafe numeric casualty output. Model confidence does not confer source
 authority.
 
-The default adapter is the local Ollama model `qwen3-vl:2b`. No inference occurs on
-text-only requests.
+Image analysis follows `MODEL_PROVIDER`. The default Compose stack sends image
+requests to the selected OpenAI-compatible multimodal API. The local-model Compose
+override uses Ollama `qwen3-vl:2b`; text-only requests do not invoke image analysis.
 
 Ordinary tests use a fake visual port and do not require Ollama. The default output
 cap is 384 tokens, temperature is zero, and seed is 7.
 
 Each observation records these values.
 
-Install the real model separately:
+The local-model Compose override pulls the real model into its persistent Ollama
+volume:
 
 ```powershell
-ollama pull qwen3-vl:2b
-ollama list
+docker compose -f compose.yaml -f compose.local-model.yaml exec ollama ollama list
 ```
 
-The local model implements the application `VisualAnalyzer` port. No hosted or paid
-vision service is configured.
+Both adapters implement the application `VisualAnalyzer` port. Hosted vision is
+used only when the configured API and model support OpenAI-compatible image input.
 
 ## Common operational picture
 

@@ -78,10 +78,12 @@ class OllamaVisionAdapter:
         timeout_seconds: float = 180.0,
         max_tokens: int = 384,
         client: httpx.AsyncClient | None = None,
+        adapter_version: str = ADAPTER_VERSION,
     ) -> None:
         self._model_name = model_name
         self._base_url = base_url.rstrip("/")
         self._max_tokens = max_tokens
+        self._adapter_version = adapter_version
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
         self._model_digest: str | None = None
@@ -175,7 +177,7 @@ class OllamaVisionAdapter:
             model_available=model_available,
             model_id=self._model_name,
             model_digest=self._model_digest,
-            adapter_version=ADAPTER_VERSION,
+            adapter_version=self._adapter_version,
             prompt_version=VISUAL_ANALYSIS_PROMPT_VERSION,
             preprocessing_version=PREPROCESSING_VERSION,
         )
@@ -208,7 +210,7 @@ class OllamaVisionAdapter:
             configuration=VisualAnalysisConfiguration(
                 model_id=self._model_name,
                 model_digest=self._model_digest,
-                adapter_version=ADAPTER_VERSION,
+                adapter_version=self._adapter_version,
                 analysis_version=ANALYSIS_VERSION,
                 prompt_version=VISUAL_ANALYSIS_PROMPT_VERSION,
                 preprocessing_version=PREPROCESSING_VERSION,

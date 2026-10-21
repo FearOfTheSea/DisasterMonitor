@@ -23,6 +23,8 @@ test-results/
 !.env.example
 *.env.*
 !.env.example
+# Machine-specific model services and local overrides are never deployed.
+compose.local-model.yaml
 *.sqlite3
 *.db
 *.log

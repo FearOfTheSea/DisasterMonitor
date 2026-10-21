@@ -1,33 +1,4 @@
 services:
-  ollama:
-    image: ollama/ollama:0.33.2
-    restart: unless-stopped
-    volumes:
-      - ollama-models:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-
-  ollama-pull:
-    image: ollama/ollama:0.33.2
-    command: ["pull", "qwen3:4b-instruct-2507-q4_K_M"]
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    volumes:
-      - ollama-models:/root/.ollama
-    depends_on:
-      ollama:
-        condition: service_healthy
-
   postgres:
     image: postgis/postgis:17-3.5
     restart: unless-stopped
@@ -70,9 +41,7 @@ services:
         required: false
     environment:
       ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: qwen3:4b-instruct-2507-q4_K_M
-      OLLAMA_TIMEOUT_SECONDS: "300"
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai-compatible}
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
       EVENT_MEDIA_BLOB_ROOT: /var/lib/disaster-monitor/event-media
@@ -87,8 +56,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      ollama-pull:
-        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -100,6 +67,7 @@ services:
       retries: 12
     restart: unless-stopped
     volumes:
+      - application-state-data:/app/data
       - operational-blobs:/var/lib/disaster-monitor/blobs
       - event-media-blobs:/var/lib/disaster-monitor/event-media
       - ground-imagery-data:/var/lib/disaster-monitor/ground-imagery
@@ -139,9 +107,7 @@ services:
       - disaster_monitor.infrastructure.operations.runtime
       - worker
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: qwen3:4b-instruct-2507-q4_K_M
-      OLLAMA_TIMEOUT_SECONDS: "300"
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai-compatible}
       OPERATIONAL_DATABASE_URL: postgresql://disastermonitor:disastermonitor-local-only@postgres:5432/disastermonitor
       OPERATIONAL_BLOB_ROOT: /var/lib/disaster-monitor/blobs
       GROUND_IMAGERY_STORAGE_ROOT: /var/lib/disaster-monitor/ground-imagery
@@ -149,10 +115,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      ollama-pull:
-        condition: service_completed_successfully
     restart: unless-stopped
     volumes:
+      - application-state-data:/app/data
       - operational-blobs:/var/lib/disaster-monitor/blobs
       - ground-imagery-data:/var/lib/disaster-monitor/ground-imagery
       - country-catalog-data:/var/lib/disaster-monitor/geography
@@ -190,7 +155,7 @@ services:
       - "127.0.0.1:3000:3000"
 
 volumes:
-  ollama-models:
+  application-state-data:
   postgres-data:
   operational-blobs:
   event-media-blobs:

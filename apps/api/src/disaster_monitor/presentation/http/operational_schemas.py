@@ -27,10 +27,10 @@ class HealthResponse(BaseModel):
 
 
 class ReadinessResponse(BaseModel):
-    """Local-model readiness response."""
+    """Configured model-provider readiness response."""
 
     status: str
-    ollama_available: bool
+    provider_available: bool
     model_available: bool
     model: str
 

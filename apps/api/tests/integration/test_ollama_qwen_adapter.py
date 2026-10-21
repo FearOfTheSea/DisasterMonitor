@@ -99,7 +99,7 @@ async def test_adapter_readiness_distinguishes_service_and_model() -> None:
     readiness = await adapter.check_readiness()
     await client.aclose()
 
-    assert readiness.ollama_available is True
+    assert readiness.provider_available is True
     assert readiness.model_available is True
 
 
@@ -114,5 +114,5 @@ async def test_adapter_reports_unavailable_service_without_raising() -> None:
     readiness = await adapter.check_readiness()
     await client.aclose()
 
-    assert readiness.ollama_available is False
+    assert readiness.provider_available is False
     assert readiness.model_available is False

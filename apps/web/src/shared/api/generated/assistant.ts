@@ -8929,7 +8929,7 @@ export type ProviderTier = 'primary' | 'secondary';
 export type ReadinessResponse = {
   model: string;
   model_available: boolean;
-  ollama_available: boolean;
+  provider_available: boolean;
   status: string;
 };
 

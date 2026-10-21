@@ -20,8 +20,9 @@ for file persistence, acquisition bounds, dataset configuration, and restart lim
 
 The topology below describes a separate operational deployment, rather than the running manual desktop.
 
-The production-like local topology is `web + api + scheduler + worker + Ollama +
-PostgreSQL/PostGIS + filesystem blob storage`.
+The production-like local topology is `web + api + scheduler + worker +
+PostgreSQL/PostGIS + filesystem blob storage`. Ollama is optional and is used only
+when the local-model Compose override is enabled.
 
 PostgreSQL stores durable jobs, metadata, state, and audit data. Raw payloads are
 content-addressed files on a separate volume.
@@ -50,22 +51,27 @@ expand decision authority.
 
 ## Start and inspect
 
-The Compose model service requires an NVIDIA GPU driver and
-[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-configured for Docker. Compose reserves one GPU for Ollama, pulls
-`qwen3:4b-instruct-2507-q4_K_M` into a persistent volume, and starts the API and
-worker only after the pull finishes. Ollama has no published host port.
+The default Compose stack uses a configured OpenAI-compatible chat API and does not
+include a local model runtime. Set `MODEL_BASE_URL`, `MODEL_NAME`, and `MODEL_API_KEY`
+in `apps/api/.env` to select your provider. The provider must implement
+`/chat/completions` and `/models`. Image analysis additionally requires that selected
+provider and model to accept OpenAI-compatible image input; set `MODEL_VISION_NAME`
+to a separate multimodal model when needed.
+
+To use local Qwen instead, start the local-model override. It reserves one NVIDIA
+GPU, pulls `qwen3:4b-instruct-2507-q4_K_M` into a persistent volume, and starts the
+API and worker only after the pull finishes. Ollama has no published host port.
 
 Check readiness and GPU use after startup:
 
 ```sh
 curl -f http://localhost:8001/api/v1/ready
-docker compose exec ollama ollama ps
-docker compose exec ollama nvidia-smi
+docker compose -f compose.yaml -f compose.local-model.yaml exec ollama ollama ps
+docker compose -f compose.yaml -f compose.local-model.yaml exec ollama nvidia-smi
 ```
 
-`/api/v1/health` reports API liveness. `/api/v1/ready` reports model readiness;
-inspect it when the assistant says the local model is unavailable.
+`/api/v1/health` reports API liveness. `/api/v1/ready` reports selected provider
+readiness.
 
 Run these commands:
 
@@ -79,8 +85,14 @@ Invoke-RestMethod http://localhost:8001/api/v1/operations/evidence-history
 Invoke-WebRequest http://localhost:8001/api/v1/metrics
 ```
 
-Wait for the migration service and model pull to finish before the API and worker
-start. The scheduler waits for migration only.
+To run the local Qwen provider and its Ollama runtime, run:
+
+```sh
+MODEL_PROVIDER=ollama docker compose -f compose.yaml -f compose.local-model.yaml up --build -d
+```
+
+Wait for migration and model pull to finish before the API and worker start. The
+scheduler waits for migration only.
 The long-running services restart after a Docker daemon restart. If PostgreSQL was
 stopped explicitly, run `docker compose up -d` to start it and restore the stack;
 the restart policy does not override an explicit stop.

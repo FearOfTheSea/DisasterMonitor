@@ -125,9 +125,9 @@ class ModelResponse:
 
 @dataclass(frozen=True, slots=True)
 class ModelReadiness:
-    """Availability of the local model service and configured model."""
+    """Availability of the selected model provider and configured model."""
 
-    ollama_available: bool
+    provider_available: bool
     model_available: bool
     model: str
 

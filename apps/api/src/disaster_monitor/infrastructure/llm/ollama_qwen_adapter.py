@@ -92,7 +92,7 @@ class OllamaQwenAdapter:
             payload = self._payload(response)
         except (httpx.HTTPError, ModelResponseError):
             return ModelReadiness(
-                ollama_available=False,
+                provider_available=False,
                 model_available=False,
                 model=self._model_name,
             )
@@ -103,7 +103,7 @@ class OllamaQwenAdapter:
             for model in models
         )
         return ModelReadiness(
-            ollama_available=True,
+            provider_available=True,
             model_available=model_available,
             model=self._model_name,
         )

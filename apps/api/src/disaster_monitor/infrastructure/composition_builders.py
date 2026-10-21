@@ -148,6 +148,9 @@ from disaster_monitor.infrastructure.ground_imagery.sentinel_hub import (
     CopernicusDataSpaceProcessRenderer,
 )
 from disaster_monitor.infrastructure.llm.ollama_qwen_adapter import OllamaQwenAdapter
+from disaster_monitor.infrastructure.llm.openai_compatible_adapter import (
+    OpenAICompatibleAdapter,
+)
 from disaster_monitor.infrastructure.llm.structured_agent_model import (
     StructuredAgentModel,
 )
@@ -197,6 +200,9 @@ from disaster_monitor.infrastructure.source_catalog_composition import (
 )
 from disaster_monitor.infrastructure.vision.ollama_vision_adapter import (
     OllamaVisionAdapter,
+)
+from disaster_monitor.infrastructure.vision.openai_compatible_vision_adapter import (
+    OpenAICompatibleVisionAdapter,
 )
 from disaster_monitor.infrastructure.weather.composite import (
     CompositeCapWarningProvider,
@@ -365,13 +371,29 @@ def build_conversation_deletion_store(
 
 
 def build_language_model(settings: Settings) -> LanguageModel:
-    """Construct the configured local model adapter."""
-    return OllamaQwenAdapter(
-        model_name=settings.ollama_model,
-        base_url=settings.ollama_base_url,
-        timeout_seconds=settings.ollama_timeout_seconds,
-        max_tokens=settings.ollama_max_tokens,
-    )
+    """Construct the configured model provider adapter."""
+    provider = settings.model_provider.strip().lower()
+    if provider == "ollama":
+        return OllamaQwenAdapter(
+            model_name=settings.ollama_model,
+            base_url=settings.ollama_base_url,
+            timeout_seconds=settings.ollama_timeout_seconds,
+            max_tokens=settings.ollama_max_tokens,
+        )
+    if provider in {"openai-compatible", "openai_compatible"}:
+        key = (
+            settings.model_api_key.get_secret_value()
+            if settings.model_api_key
+            else None
+        )
+        return OpenAICompatibleAdapter(
+            model_name=settings.model_name,
+            base_url=settings.model_base_url,
+            api_key=key,
+            timeout_seconds=settings.model_timeout_seconds,
+            max_tokens=settings.model_max_tokens,
+        )
+    raise ValueError("MODEL_PROVIDER must be 'openai-compatible' or 'ollama'.")
 
 
 def build_agent_model(
@@ -397,13 +419,31 @@ def build_specialist_model(language_model: LanguageModel) -> SpecialistModel:
 
 
 def build_visual_analyzer(settings: Settings) -> VisualAnalyzer:
-    """Construct the lazy local-only visual analysis adapter."""
-    return OllamaVisionAdapter(
-        model_name=settings.ollama_vision_model,
-        base_url=settings.ollama_base_url,
-        timeout_seconds=settings.ollama_vision_timeout_seconds,
-        max_tokens=settings.ollama_vision_max_tokens,
-    )
+    """Construct the configured image-model adapter."""
+    if settings.model_provider.strip().lower() == "ollama":
+        return OllamaVisionAdapter(
+            model_name=settings.ollama_vision_model,
+            base_url=settings.ollama_base_url,
+            timeout_seconds=settings.ollama_vision_timeout_seconds,
+            max_tokens=settings.ollama_vision_max_tokens,
+        )
+    if settings.model_provider.strip().lower() in {
+        "openai-compatible",
+        "openai_compatible",
+    }:
+        key = (
+            settings.model_api_key.get_secret_value()
+            if settings.model_api_key
+            else None
+        )
+        return OpenAICompatibleVisionAdapter(
+            model_name=settings.model_vision_name or settings.model_name,
+            base_url=settings.model_base_url,
+            api_key=key,
+            timeout_seconds=settings.ollama_vision_timeout_seconds,
+            max_tokens=settings.ollama_vision_max_tokens,
+        )
+    raise ValueError("MODEL_PROVIDER must be 'openai-compatible' or 'ollama'.")
 
 
 def build_satellite_imagery_service(settings: Settings) -> SatelliteImageryService:

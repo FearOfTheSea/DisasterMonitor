@@ -47,7 +47,8 @@ def register_error_handlers(app: FastAPI) -> None:
             status_code=503,
             content={
                 "detail": (
-                    "The local model is unavailable. Check /api/v1/ready for "
+                    "The configured model provider is unavailable. "
+                    "Check /api/v1/ready for "
                     "model readiness and deployment status, then try again."
                 )
             },
@@ -65,5 +66,7 @@ def register_error_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=502,
-            content={"detail": "The local model returned an invalid response."},
+            content={
+                "detail": "The configured model provider returned an invalid response."
+            },
         )

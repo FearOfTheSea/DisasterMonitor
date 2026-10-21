@@ -73,7 +73,7 @@ def get_country_catalog_automation(request: Request) -> CountryCatalogUpdateAuto
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
 async def health() -> HealthResponse:
-    """Return liveness without contacting Ollama."""
+    """Return API liveness without contacting the model provider."""
     return HealthResponse(status="ok", service="disaster-monitor-api", version="0.1.0")
 
 
@@ -81,13 +81,13 @@ async def health() -> HealthResponse:
 async def readiness(
     language_model: Annotated[LanguageModel, Depends(get_language_model)],
 ) -> ReadinessResponse:
-    """Check local Ollama and the configured Qwen model without inference."""
+    """Check the configured model provider without running inference."""
     result: ModelReadiness = await language_model.check_readiness()
     return ReadinessResponse(
         status="ready"
-        if result.ollama_available and result.model_available
+        if result.provider_available and result.model_available
         else "unavailable",
-        ollama_available=result.ollama_available,
+        provider_available=result.provider_available,
         model_available=result.model_available,
         model=result.model,
     )
