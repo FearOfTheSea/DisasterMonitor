@@ -74,8 +74,9 @@ class GdeltArchiveCollectionProvider:
         notices = [_NOTICE]
         if response.status_code == 404:
             notices.append(
-                f"GDELT archive HTTP404 at index minute {minute.isoformat()}; "
-                "no file was available. This does not establish absence of reporting."
+                "GDELT archive HTTP404: a requested index file was unavailable. "
+                "Requested minute bounds remain in the collection journal. "
+                "This does not establish absence of reporting."
             )
         else:
             leads, invalid = self._leads(response.body, minute, name)

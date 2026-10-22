@@ -82,6 +82,8 @@ async def test_archive_keeps_native_headline_and_index_clock_as_lead_only():
 
 async def test_complete_traversal_visits_each_minute_once_without_skipping_404_gaps():
     paths = []
+    notices = set()
+    requested_windows = set()
 
     def respond(request):
         paths.append(request.url.path)
@@ -96,10 +98,19 @@ async def test_complete_traversal_visits_each_minute_once_without_skipping_404_g
             page = await provider.fetch_page(part)
             assert not page.leads
             assert any("404" in notice for notice in page.notices)
+            notices.update(page.notices)
+            requested_windows.add((page.requested_start, page.requested_end))
             if page.next_cursor is None:
                 break
             part = replace(part, cursor=page.next_cursor)
     assert len(paths) == len(set(paths)) == 15
+    # Scans deduplicate notices by text; a cold traversal must not accumulate
+    # thousands of unique gap messages. Page bounds retain each requested minute.
+    assert len(notices) == 2
+    assert requested_windows == {
+        (START + timedelta(minutes=i), START + timedelta(minutes=i + 1))
+        for i in range(15)
+    }
     assert paths[0].endswith("20261022123100.toc.json.gz")
     assert paths[1].endswith("20261022123200.toc.json.gz")
     assert {path.rsplit("/", 1)[1][:14] for path in paths} == {
