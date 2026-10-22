@@ -19,6 +19,7 @@ from disaster_monitor.infrastructure.news.request_schedule import (
 class CollectionHttpResponse:
     body: bytes
     retrieved_at: datetime
+    status_code: int = 200
 
 
 class CollectionHttp:
@@ -52,7 +53,11 @@ class CollectionHttp:
             ) from error
 
     async def get_bytes(
-        self, url: str, params: dict[str, str]
+        self,
+        url: str,
+        params: dict[str, str],
+        *,
+        accepted_statuses: tuple[int, ...] = (200,),
     ) -> CollectionHttpResponse:
         async with self._lock:
             await asyncio.sleep(max(0, self._next_request - monotonic()))
@@ -66,7 +71,7 @@ class CollectionHttp:
                         follow_redirects=False,
                         headers={"User-Agent": self._user_agent},
                     ) as response:
-                        if response.status_code != 200:
+                        if response.status_code not in accepted_statuses:
                             outcome: FailureOutcome = (
                                 "rate_limited"
                                 if response.status_code == 429
@@ -90,7 +95,9 @@ class CollectionHttp:
                                     "invalid_response",
                                     "News response exceeded the byte limit.",
                                 )
-                        return CollectionHttpResponse(bytes(body), datetime.now(UTC))
+                        return CollectionHttpResponse(
+                            bytes(body), datetime.now(UTC), response.status_code
+                        )
             except (httpx.TransportError, TimeoutError) as error:
                 raise CollectionProviderError(
                     "transport_failed", "News service transport failed or timed out."

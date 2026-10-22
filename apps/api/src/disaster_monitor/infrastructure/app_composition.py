@@ -153,6 +153,9 @@ from disaster_monitor.infrastructure.news.collection_providers import (
     PublicCollectionArticleReader,
     ReliefWebCollectionProvider,
 )
+from disaster_monitor.infrastructure.news.gdelt_archive import (
+    GdeltArchiveCollectionProvider,
+)
 from disaster_monitor.infrastructure.news.wikipedia_collection import (
     WikipediaCitationCollectionProvider,
 )
@@ -403,6 +406,9 @@ def build_app_dependencies(
     discovery_feed = GdeltCollectionProvider(
         timeout_seconds=settings.news_feed_timeout_seconds
     )
+    archive_discovery = GdeltArchiveCollectionProvider(
+        timeout_seconds=settings.news_feed_timeout_seconds
+    )
     reliefweb_discovery = ReliefWebCollectionProvider(
         app_name=settings.reliefweb_app_name,
         timeout_seconds=settings.news_feed_timeout_seconds,
@@ -419,6 +425,11 @@ def build_app_dependencies(
             *((bing_discovery,) if settings.bing_news_rss_enabled else ()),
             *((wikipedia_discovery,) if settings.wikipedia_news_enabled else ()),
             *((discovery_feed,) if settings.gdelt_news_enabled else ()),
+            *(
+                (archive_discovery,)
+                if settings.gdelt_news_enabled and settings.gdelt_archive_enabled
+                else ()
+            ),
         )
         if settings.news_sensing_enabled
         else ()
@@ -699,6 +710,7 @@ def build_app_dependencies(
             shutdown_hooks=(
                 discovery_scans.aclose,
                 discovery_feed.aclose,
+                archive_discovery.aclose,
                 reliefweb_discovery.aclose,
                 bing_discovery.aclose,
                 wikipedia_discovery.aclose,

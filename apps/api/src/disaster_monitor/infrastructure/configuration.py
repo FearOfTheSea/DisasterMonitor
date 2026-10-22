@@ -107,6 +107,13 @@ class Settings(BaseSettings):
     self_hosted_osrm_data_version: str | None = None
     news_sensing_enabled: bool = True
     gdelt_news_enabled: bool = True
+    gdelt_archive_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable bounded public GDELT headline-archive traversal. Historical "
+            "cold scans can require thousands of requests and remain resumable."
+        ),
+    )
     bing_news_rss_enabled: bool = Field(
         default=False,
         description=(
