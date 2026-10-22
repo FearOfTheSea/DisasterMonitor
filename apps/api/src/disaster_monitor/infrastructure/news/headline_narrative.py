@@ -62,6 +62,8 @@ def is_article_decoration(tag: str, attrs: dict[str, str | None]) -> bool:
 class _Frame:
     tag: str
     hidden: bool
+    article_wrapper: bool = False
+    article_wrappers: int = 0
     parts: list[str] = field(default_factory=list)
     characters: int = 0
     linked_characters: int = 0
@@ -92,6 +94,8 @@ class _HeadlineParagraphs(HTMLParser):
                 bool(self._stack and self._stack[-1].hidden)
                 or tag in _HIDDEN
                 or is_article_decoration(tag, values),
+                article_wrapper=tag == "div"
+                and "article" in (values.get("class") or "").split(),
             )
         )
 
@@ -132,12 +136,35 @@ class _HeadlineParagraphs(HTMLParser):
                 self._stack[-1].children.append((frame.tag, text))
         if frame.tag not in {"div", "section", "td", "li", "body"}:
             return
+        if frame.article_wrapper and self._stack:
+            if any(parent.article_wrapper for parent in self._stack):
+                # A nested article card cannot supply its parent's narrative.
+                return
+            parent = self._stack[-1]
+            parent.article_wrappers += 1
+            if not any(tag == "h1" for tag, _ in frame.children):
+                parent.children.extend(frame.children)
+                parent.children.append(("article-body-end", ""))
+        if frame.article_wrappers > 1:
+            return
+        headings = [(tag, text) for tag, text in frame.children if tag == "h1"]
+        if (
+            self._stack
+            and frame.tag == "div"
+            and not frame.article_wrapper
+            and len(headings) == 1
+            and headings[0][1].casefold() in self._headlines
+            and sum(tag == "p" for tag, _ in frame.children) < 2
+        ):
+            # A title/byline wrapper can introduce a sibling article body. Only
+            # the publisher-matched heading crosses that boundary, not its text.
+            self._stack[-1].children.append(headings[0])
         for index, (tag, text) in enumerate(frame.children):
             if tag != "h1" or text.casefold() not in self._headlines:
                 continue
             paragraphs = []
             for child_tag, child_text in frame.children[index + 1 :]:
-                if child_tag in _HEADINGS:
+                if child_tag in _HEADINGS or child_tag == "article-body-end":
                     break
                 paragraphs.append(child_text)
             # One paragraph may be a card teaser, even beside a matching heading.

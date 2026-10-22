@@ -59,6 +59,17 @@ _FELT_EXTENT = re.compile(r"\b(?:was|were)\s+(?:also\s+)?felt\b", re.I)
 _DIRECT_IMPACT = re.compile(
     r"\b(?:killed|died|drowned|injured|damaged|destroyed|collapsed|displaced)\b", re.I
 )
+_HAZARD_CLOSURE = re.compile(
+    r"\b(?:landslides?|mudslides?|rockfalls?|floods?|flooding)\b"
+    r"[^.;!?]{0,180}\b(?:kept|left)\b[^.;!?]{0,180}"
+    r"\b(?:closed|blocked|impassable)\b",
+    re.I,
+)
+_PRECAUTIONARY_CLOSURE = re.compile(
+    r"\b(?:warnings?|risks?|threats?|danger|possibility|possible|potential|"
+    r"did not|not occurred)\b",
+    re.I,
+)
 _STATEMENT = re.compile(
     r"\b(?:said|says?|told|announced|confirmed|reported|explained|added|"
     r"warned|disclosed|stated)\b",
@@ -195,6 +206,16 @@ def occurrence_role(text: str, *, historical: bool = False) -> MentionRole:
         return "forecast"
     if _ONGOING.search(text):
         return "ongoing"
+    closure = _HAZARD_CLOSURE.search(text)
+    if closure:
+        prefix = source_clauses(text[: closure.start()])[-1]
+        if _PRECAUTIONARY_CLOSURE.search(prefix + closure[0]) or re.search(
+            r"\bno\s*$", prefix, re.I
+        ):
+            return "uncertain"
+        # Closure is an observed effect, not an occurrence clock. Keep it out of
+        # _occurrence_start so a reopening/closure date cannot become onset.
+        return "reported"
     if (
         is_response_context(text)
         and not _PHYSICAL_OCCURRENCE.search(text)

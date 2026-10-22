@@ -43,6 +43,12 @@ SOURCE = SourceReference(
         ("Enxurrada matou duas pessoas.", Disaster.FLOOD, "2"),
         ("Enxurrada mata duas pessoas.", Disaster.FLOOD, "2"),
         ("Duas pessoas morrem após deslizamento de terra.", Disaster.LANDSLIDE, "2"),
+        (
+            "Maria Lima perdeu a vida após um deslizamento de terra.",
+            Disaster.LANDSLIDE,
+            "Reported; count unknown",
+        ),
+        ("Duas pessoas perderam a vida na enchente.", Disaster.FLOOD, "2"),
         ("Inundações causaram quatro mortes.", Disaster.FLOOD, "4"),
         ("A inundação causou a morte de duas pessoas.", Disaster.FLOOD, "2"),
         ("A woman died in a rockfall.", Disaster.LANDSLIDE, "Reported; count unknown"),
@@ -74,6 +80,8 @@ def test_literal_hazard_and_fatal_accounts_retain_source_without_invented_onset(
         ("Nenhuma pessoa morreu no deslizamento.", "0"),
         ("Ninguém morreu no deslizamento.", "0"),
         ("Não morreu ninguém na enchente.", "0"),
+        ("Ninguém perdeu a vida na enchente.", "0"),
+        ("Não perdeu a vida na enchente.", "0"),
         ("Não há relatos de mortos nas enchentes.", "Unknown"),
         ("Duas pessoas mortas ou desaparecidas após a enxurrada.", "Unknown"),
         ("Um homem de 47 anos morreu após o deslizamento.", "Reported; count unknown"),
@@ -121,6 +129,7 @@ def test_forecast_and_drill_do_not_claim_an_observed_human_toll(text):
         "Enchente matou cinco vacas.",
         "Enchente deixou cinco animais mortos.",
         "Enchente mata duas árvores.",
+        "Duas árvores perderam a vida na enchente.",
         "Três árvores morreram durante a enchente.",
     ],
 )
@@ -233,4 +242,10 @@ def test_future_soil_burial_is_not_an_observed_occurrence():
     assert report.mentions and all(m.role == "forecast" for m in report.mentions)
     assert not any(
         c.fact.category == "fatalities" for m in report.mentions for c in m.claims
+    )
+
+
+def test_useful_life_of_equipment_is_not_a_human_death():
+    assert not extract_reported_impacts(
+        "As baterias perderam a vida útil após a enchente.", SOURCE
     )

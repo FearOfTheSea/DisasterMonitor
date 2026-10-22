@@ -28,6 +28,14 @@ _NOT_ABBREVIATION = "".join(
 )
 _SENTENCE = _NOT_ABBREVIATION + r"(?<=[.!?])\s+"
 _CLAUSE = _NOT_ABBREVIATION + r"(?<=[.])(?=\s)|[!?;–—]"
+_INLINE_CITATION = re.compile(r"\[([^\]\n]{1,600})\]\([^\n)]{1,2048}\)")
+
+
+def source_analysis_text(text: str) -> str:
+    """Keep citation labels, masking presentation and targets at original offsets."""
+    return _INLINE_CITATION.sub(
+        lambda match: " " + match[1] + " " * (len(match[0]) - len(match[1]) - 1), text
+    )
 
 
 def source_sentences(text: str) -> list[str]:

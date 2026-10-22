@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from disaster_monitor.domain.evidence import ReportedFact, SituationReport
 from disaster_monitor.domain.evidence_types import FactStatus, SourceReference
 from disaster_monitor.domain.regional_accounts import regional_fatality_account
-from disaster_monitor.domain.source_sentences import source_sentences
+from disaster_monitor.domain.source_sentences import (
+    source_analysis_text,
+    source_sentences,
+)
 
 IMPACT_LABELS = {
     "fatalities": "Fatalities",
@@ -38,6 +41,9 @@ _TERMS = {
         r"communications? (?:networks?|systems?)|telecom\w*|phone networks?"
     ),
 }
+_HUMAN_IMPACT_TERMS = "|".join(
+    _TERMS[category] for category in ("fatalities", "injuries", "displacement")
+)
 _NUMBER = (
     r"(?:\d[\d,]*|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
     r"dozens|hundreds|thousands)"
@@ -45,7 +51,7 @@ _NUMBER = (
 _PERSON = (
     r"(?:(?-i:[A-ZÀ-Ý][\wÀ-ž'-]*)\s+){0,2}"
     r"(?:people|persons?|men|women|children|residents|soldiers?|others?|"
-    r"firefighters?|workers?|miners?|volunteers?|responders?)"
+    r"firefighters?|workers?|miners?|volunteers?|responders?|passengers?)"
 )
 _LINK = (
     rf"(?:\s+(?:{_PERSON}|were|was|are|is|"
@@ -123,8 +129,10 @@ def only_nonhuman_deaths(text: str) -> bool:
 
 
 def fatality_analysis_text(text: str) -> str:
-    """Mask nonfatal/unknown drowning wording without changing source offsets."""
-    return _NONFATAL_DROWNING.sub(lambda match: " " * len(match[0]), text)
+    """Read visible labels and mask nonfatal drowning at original source offsets."""
+    return _NONFATAL_DROWNING.sub(
+        lambda match: " " * len(match[0]), source_analysis_text(text)
+    )
 
 
 def _context_count(sentence: str, match: re.Match[str]) -> bool:
@@ -244,14 +252,17 @@ def extract_reported_impacts(
         # Do not cut a long source sentence and imply its qualification survived.
         if not sentence or len(sentence) > 600:
             continue
+        visible_sentence = source_analysis_text(sentence)
         qualifiers = tuple(
             k
             for k, pattern in _QUALIFIERS.items()
-            if re.search(pattern, sentence, re.I)
+            if re.search(pattern, visible_sentence, re.I)
         )
         fatality_sentence = fatality_analysis_text(sentence)
         for category, terms in _TERMS.items():
-            analysis = fatality_sentence if category == "fatalities" else sentence
+            analysis = (
+                fatality_sentence if category == "fatalities" else visible_sentence
+            )
             if not re.search(rf"\b(?:{terms})\b", analysis, re.I):
                 continue
             nonhuman_deaths = category == "fatalities" and bool(
@@ -262,9 +273,9 @@ def extract_reported_impacts(
             value = "Unknown"
             if category in ("fatalities", "injuries", "displacement"):
                 alternatives = bool(
-                    re.search(r"\beither\b.+\bor\b|\bdead or missing\b", sentence, re.I)
+                    re.search(r"\beither\b.+\bor\b|\bdead or missing\b", analysis, re.I)
                 )
-                absent_reporting = bool(_ABSENT_REPORTING.search(sentence))
+                absent_reporting = bool(_ABSENT_REPORTING.search(analysis))
                 if alternatives or absent_reporting:
                     qualifiers = tuple(dict.fromkeys((*qualifiers, "uncertain")))
                 before = next(
@@ -285,11 +296,24 @@ def extract_reported_impacts(
                 if after is not None and _context_count(analysis, after):
                     after = None
                 zero = re.search(
-                    rf"\b(?:no|zero)(?:\s+one)?{_LINK}(?:{terms})\b", analysis, re.I
+                    rf"\b(?:no|zero)(?:\s+one)?{_LINK}"
+                    rf"(?:(?:{_HUMAN_IMPACT_TERMS})\s+(?:or|nor)\s+)*"
+                    rf"(?:{terms})\b",
+                    analysis,
+                    re.I,
                 )
                 count = before or after
                 if alternatives or absent_reporting:
                     value = "Unknown"
+                elif (
+                    zero
+                    and count
+                    and count[1].casefold() not in ("0", "zero")
+                    and not zero.start() <= count.start() < zero.end()
+                ):
+                    qualifiers = tuple(
+                        dict.fromkeys((*qualifiers, "uncertain", "scope unresolved"))
+                    )
                 elif zero:
                     value = "0"
                 elif count:
@@ -297,7 +321,7 @@ def extract_reported_impacts(
                 elif not re.search(
                     r"\b(?:unknown|unconfirmed|unclear|"
                     r"not (?:yet )?(?:known|reported|available))\b",
-                    sentence,
+                    visible_sentence,
                     re.I,
                 ):
                     # A qualitative account remains visible without a count.
@@ -332,7 +356,7 @@ def extract_reported_impacts(
                 )
             )
         if not re.search(rf"\b(?:{_TERMS['fatalities']})\b", fatality_sentence, re.I):
-            regional = regional_fatality_account(sentence)
+            regional = regional_fatality_account(visible_sentence)
             if regional is not None:
                 qualified = tuple(dict.fromkeys((*qualifiers, *regional.qualifiers)))
                 claims.append(

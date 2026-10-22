@@ -51,6 +51,7 @@ _PORTUGUESE_COUNT = (
 )
 _PORTUGUESE_DEATH = (
     r"mort[oa]s?|mortes?|morreu|morreram|morre(?:m)?|matou|mataram|"
+    r"(?:perdeu|perderam) a vida(?!\s+[uú]til\b)|"
     # "Mata" also means forest. Only its explicit human object makes a death hint.
     rf"mata(?:m)?(?=\s+(?:{_PORTUGUESE_COUNT}\s+)?(?:{_PORTUGUESE_HUMAN})\b)"
 )
@@ -86,7 +87,11 @@ _UNKNOWN = re.compile(
     r"mort[oa]s? ou desaparecid[oa]s?)\b",
     re.I,
 )
-_PORTUGUESE_ZERO = re.compile(r"\bnão (?:morreu|morreram|morre(?:m)?) ninguém\b", re.I)
+_PORTUGUESE_ZERO = re.compile(
+    r"\bnão (?:(?:morreu|morreram|morre(?:m)?) ninguém|"
+    r"(?:perdeu|perderam) a vida)\b",
+    re.I,
+)
 _QUALIFIERS = {
     "uncertain": (
         r"\b(?:al menos|au moins|estimad[oa]s?|estim[eé](?:s|e|es)?|"
@@ -169,7 +174,8 @@ _WORDINGS = (
     ),
     _wording(
         _PORTUGUESE_DEATH,
-        r"matou|mataram|mata(?:m)?|morreram|causou a morte de|causaram a morte de",
+        r"matou|mataram|mata(?:m)?|morreram|causou a morte de|causaram a morte de|"
+        r"(?:perdeu|perderam) a vida",
         _PORTUGUESE_NUMBERS,
         r"foram|foi|estão|está|são|reportad[oa]s?|encontrad[oa]s?",
         r"não houve|não foram registrad[oa]s?|sem|nenhum[ae]?s?|ninguém",

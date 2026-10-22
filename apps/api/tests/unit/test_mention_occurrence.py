@@ -287,3 +287,32 @@ def test_dated_weather_cause_establishes_the_reported_flood_occurrence():
 def test_cause_language_does_not_override_forecast_or_reporting_clocks(text):
     mentions = extract_mentions(text, SOURCE)
     assert all(mention.time is None for mention in mentions)
+
+
+def test_reported_landslide_trail_closure_retains_its_later_fatality_account():
+    report = extract_mentions(
+        "A weekend landslide on the River Passage kept a section of the trail "
+        "closed Monday as unstable ground continued to shift. "
+        "A coroner identified the victim as a 79-year-old woman who was killed "
+        "while riding on the trail with her husband.",
+        SOURCE,
+    )
+    claims = [c for m in report for c in m.claims if c.fact.category == "fatalities"]
+    assert claims and all(c.fact.value != "79" for c in claims)
+    assert any(m.role == "reported" for m in report)
+    assert all(m.time is None for m in report)  # Monday is the closure, not onset.
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "A landslide could keep the trail closed Monday, killing two people.",
+        "The risk of a landslide kept the trail closed Monday.",
+        "The threat of a landslide kept the trail closed Monday.",
+        "A possible landslide kept the trail closed Monday.",
+    ],
+)
+def test_precautionary_closures_do_not_establish_observed_landslides(text):
+    mentions = extract_mentions(text, SOURCE)
+    assert not any(m.role in ("reported", "ongoing") for m in mentions)
+    assert all(m.time is None and not m.claims for m in mentions)

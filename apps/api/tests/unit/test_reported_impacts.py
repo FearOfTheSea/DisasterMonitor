@@ -18,6 +18,64 @@ SOURCE = SourceReference(
 )
 
 
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "no Shinkansen passenger",
+        "[no Shinkansen passenger](https://official.example/safety/report.pdf)",
+    ],
+)
+def test_named_passenger_zero_account_and_its_citation_are_not_positive_tolls(subject):
+    text = f"During the earthquake, {subject} was killed or injured."
+    claims = extract_reported_impacts(text, SOURCE)
+    assert {c.fact.category: c.fact.value for c in claims} == {
+        "fatalities": "0",
+        "injuries": "0",
+    }
+    assert all(c.excerpt == text for c in claims)
+
+
+def test_coordinated_absence_remains_zero_for_each_human_impact():
+    claims = extract_reported_impacts("No deaths or injuries were reported.", SOURCE)
+    assert {c.fact.category: c.fact.value for c in claims} == {
+        "fatalities": "0",
+        "injuries": "0",
+    }
+
+
+def test_an_uninjured_population_does_not_cancel_another_populations_injuries():
+    (claim,) = extract_reported_impacts(
+        "No passengers were injured, but three workers were injured.",
+        SOURCE,
+    )
+    assert claim.fact.value == "Unknown"
+    assert "scope unresolved" in claim.qualifiers
+
+
+def test_zero_deaths_do_not_cancel_separately_reported_injuries():
+    claims = extract_reported_impacts(
+        "No one was killed, but three passengers were injured.", SOURCE
+    )
+    assert {c.fact.category: c.fact.value for c in claims} == {
+        "fatalities": "0",
+        "injuries": "three",
+    }
+
+
+def test_citation_label_retains_its_count_without_url_numbers_becoming_impacts():
+    text = "The flood killed [three people](https://official.example/2026/report/40)."
+    (claim,) = extract_reported_impacts(text, SOURCE)
+    assert claim.fact.value == "three"
+    assert claim.excerpt == text
+
+
+def test_citation_target_alone_is_not_a_death_account():
+    text = "Flood cleanup continues: [details](https://news.example/two-people-killed)."
+    assert not any(
+        c.fact.category == "fatalities" for c in extract_reported_impacts(text, SOURCE)
+    )
+
+
 def test_alternative_outcomes_are_retained_without_asserting_deaths_or_injuries():
     (deaths, injuries) = extract_reported_impacts(
         "The clinician said patients either did not have injuries "

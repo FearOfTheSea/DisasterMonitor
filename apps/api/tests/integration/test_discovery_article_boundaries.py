@@ -430,6 +430,68 @@ def test_read_content_body_keeps_narrative_beyond_the_meta_description():
     assert "Highforest" not in article.text
 
 
+@pytest.mark.parametrize("wrapped_headline", [False, True])
+def test_publisher_headline_can_own_one_article_class_paragraph_wrapper(
+    wrapped_headline,
+):
+    headline = (
+        '<div class="post-header"><h1>Floods in Lakeview</h1>'
+        "<p>A short introduction.</p></div>"
+        if wrapped_headline
+        else "<h1>Floods in Lakeview</h1>"
+    )
+    article = parse(f"""<meta property="og:title" content="Floods in Lakeview">
+      <meta property="og:description" content="Only the introduction.">
+      <section><div>{headline}
+        <div class="article"><p>Floods struck Lakeview on 14 October.</p>
+          <p class="related-news"><a href="/other">A wildfire killed nine.</a></p>
+          <p>Officials reported two deaths and three injuries.</p></div>
+        <p>Unrelated material outside the article wrapper.</p></div></section>""")
+    assert "two deaths" in article.text
+    assert "three injuries" in article.text
+    assert "wildfire" not in article.text
+    assert "Unrelated material" not in article.text
+
+
+@pytest.mark.parametrize(
+    "markup",
+    [
+        '<h1>Floods in Lakeview</h1><div class="article"><p>Only a teaser.</p></div>',
+        '<h1>Different report</h1><div class="article">'
+        "<p>Wrong report.</p><p>More text.</p></div>",
+        '<h1>Floods in Lakeview</h1><div class="article-card">'
+        "<p>Wrong report.</p><p>More text.</p></div>",
+        '<h1>Floods in Lakeview</h1><div class="article"><p>One.</p><p>Two.</p></div>'
+        '<div class="article"><p>Another.</p><p>Conflicting.</p></div>',
+    ],
+)
+def test_article_class_is_not_sufficient_without_one_full_headline_owned_body(markup):
+    article = parse(
+        '<meta property="og:title" content="Floods in Lakeview"><div>'
+        + markup
+        + "</div>"
+    )
+    assert article.text == ""
+
+
+def test_nested_article_class_card_does_not_join_the_headline_owned_body():
+    article = parse("""<meta property="og:title" content="Floods in Lakeview">
+      <div><div><h1>Floods in Lakeview</h1></div><div class="article">
+        <p>Floods struck Lakeview.</p>
+        <div class="article"><p>A wildfire killed nine people.</p>
+          <p>More unrelated reporting.</p></div>
+        <p>Two people died in Lakeview.</p></div></div>""")
+    assert "Two people died" in article.text
+    assert "wildfire" not in article.text
+
+
+def test_wrapped_index_headline_does_not_establish_publisher_body_ownership():
+    article = parse("""<div><div><h1>Floods in Lakeview</h1></div>
+      <div class="article"><p>Floods struck Lakeview.</p>
+        <p>Two people died.</p></div></div>""")
+    assert article.text == ""
+
+
 def test_baca_juga_recommendations_do_not_become_an_owned_article_account():
     article = parse("""<article><h1>Floods in Lakeview</h1>
       <div data-article-body="true"><p>Floods struck Lakeview.</p>
