@@ -11,9 +11,15 @@ _HAZARD_PATTERNS = (
     (Disaster.FLOOD, re.compile(r"\b(?:floods?|flooding|inundations?)\b", re.I)),
     (
         Disaster.WILDFIRE,
-        re.compile(r"\b(?:wildfires?|bushfires?|forest fires?|grass fires?)\b", re.I),
+        re.compile(
+            r"\b(?:wildfires?|bushfires?|forest fires?|grass fires?|veld fires?)\b",
+            re.I,
+        ),
     ),
-    (Disaster.LANDSLIDE, re.compile(r"\b(?:landslides?|mudslides?)\b", re.I)),
+    (
+        Disaster.LANDSLIDE,
+        re.compile(r"\b(?:landslides?|mudslides?|rockfalls?)\b", re.I),
+    ),
     (Disaster.DROUGHT, re.compile(r"\bdroughts?\b", re.I)),
     (
         Disaster.TROPICAL_CYCLONE,

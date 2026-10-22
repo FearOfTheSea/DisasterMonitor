@@ -8,7 +8,10 @@ import re
 
 from disaster_monitor.domain.disaster_types import Disaster
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
-from disaster_monitor.domain.regional_accounts import regional_competing_cause
+from disaster_monitor.domain.regional_accounts import (
+    has_regional_weather_toll,
+    regional_competing_cause,
+)
 from disaster_monitor.domain.source_sentences import source_sentences
 
 _OTHER_CAUSE = re.compile(
@@ -39,6 +42,10 @@ def scoped_disaster_text(text: str, title: str, disaster: Disaster | None) -> st
         if has_competing_cause(sentence):
             continue
         hazards = disasters_in_text(sentence)
+        if not hazards and has_regional_weather_toll(sentence):
+            # A local hazard headline does not allocate wider rain/storm deaths.
+            # The complete original account remains in the retained article.
+            continue
         if hazards == (disaster,) or (not hazards and headline_context):
             retained.append(sentence)
     return " ".join(retained)

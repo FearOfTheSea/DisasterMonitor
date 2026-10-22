@@ -8,7 +8,11 @@ REGIONAL_HAZARDS = {
     Disaster.EARTHQUAKE: re.compile(
         r"\b(?:terremotos?|sismos?|s[eé]ismes?|gempa(?: bumi)?)\b", re.I
     ),
-    Disaster.FLOOD: re.compile(r"\b(?:inundaci[oó]n(?:es)?|inondations?)\b", re.I),
+    Disaster.FLOOD: re.compile(
+        r"\b(?:inundaci[oó]n(?:es)?|inondations?|banjir|"
+        r"enchentes?|enxurradas?|inundaç(?:ão|ões))\b",
+        re.I,
+    ),
     Disaster.WILDFIRE: re.compile(
         r"\b(?:incendios? forestal(?:es)?|"
         r"incendies? (?:de (?:la )?for[eê]t|forestiers?))\b",
@@ -16,7 +20,9 @@ REGIONAL_HAZARDS = {
     ),
     Disaster.LANDSLIDE: re.compile(
         r"\b(?:deslizamientos? de (?:tierra|ladera)|deslaves?|"
-        r"glissements? de terrain|coul[eé]es? de boue)\b",
+        r"glissements? de terrain|coul[eé]es? de boue|"
+        r"(?:tanah )?longsor|deslizamentos?(?: de (?:terra|solo))?|"
+        r"desmoronamentos? de (?:terra|solo))\b",
         re.I,
     ),
     Disaster.DROUGHT: re.compile(r"\b(?:sequ[ií]as?|s[eé]cheresses?)\b", re.I),

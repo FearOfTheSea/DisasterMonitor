@@ -26,6 +26,12 @@ LEAD = NewsFeedItem(
         ("No deaths reported after the earthquake", None, 0),
         ("Floods leave four people missing", None, 0),
         ("Thousands evacuated before the storm", None, 0),
+        ("Mulher morre após deslizamento de terra", None, 1),
+        ("Deslizamento mata duas pessoas", None, 1),
+        ("Deslizamento mata 12 trabalhadores", None, 1),
+        ("Enchente atinge a mata atlântica", None, 0),
+        ("A mata recebe duas pessoas para pesquisa", None, 0),
+        ("Não morre ninguém após a enchente", None, 0),
     ],
 )
 def test_fatality_hints_get_priority_while_missing_only_and_zero_accounts_do_not(

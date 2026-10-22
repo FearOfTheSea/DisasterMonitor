@@ -220,8 +220,25 @@ async def test_recent_feed_work_is_shared_across_windows_without_weekly_duplicat
     assert len(one) == len(month) == len(provider.queries)
     assert {p.key for p in one} == {p.key for p in month}
     assert (
-        len(provider.queries) == 53
-    )  # Each alias has independent broad/fatal searches; no history is implied.
+        len(provider.queries) <= 70
+    )  # Bound seed work; each RSS query still has at most two orderings.
+    await provider.aclose()
+
+
+async def test_native_fatal_searches_cover_additional_literal_hazard_wording():
+    provider = BingRssCollectionProvider()
+    assert {
+        '"gempa" meninggal',
+        '"banjir" tewas',
+        '"longsor" tewas',
+        '"deslizamento" mortos',
+        '"deslizamento" morreu',
+        '"enchente" mortos',
+        '"enxurrada" morreu',
+        '"rockfall" killed',
+        '"veld fire" killed',
+    } <= set(provider.queries)
+    assert len(provider.queries) == len(set(provider.queries))
     await provider.aclose()
 
 

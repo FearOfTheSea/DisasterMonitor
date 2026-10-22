@@ -24,13 +24,13 @@ _QUERY_GROUPS = (
     (("earthquake",), "killed", ("terremoto",), ("séisme",)),
     (("flood", "mine flood"), "killed", ("inundaciones",), ("inondations",)),
     (
-        ("wildfire",),
+        ("wildfire", "veld fire"),
         "killed",
         ("incendio forestal", "incendios forestales"),
         ("incendie de forêt",),
     ),
     (
-        ("landslide", "mudslide"),
+        ("landslide", "mudslide", "rockfall"),
         "killed",
         ("deslizamiento de tierra",),
         ("glissement de terrain",),
@@ -93,6 +93,14 @@ class BingRssCollectionProvider:
             ),
             *(f'"{hazard}" morts' for hazard in french),
         )
+    ) + (
+        '"gempa" meninggal',
+        '"banjir" tewas',
+        '"longsor" tewas',
+        '"deslizamento" mortos',
+        '"deslizamento" morreu',
+        '"enchente" mortos',
+        '"enxurrada" morreu',
     )
     endpoint = "https://www.bing.com/news/search"
 
