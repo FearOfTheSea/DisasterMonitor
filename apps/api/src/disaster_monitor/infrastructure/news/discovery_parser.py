@@ -1,5 +1,7 @@
 """Article text, explicit publication metadata, and reported event metadata."""
 
+from __future__ import annotations
+
 import json
 import re
 from dataclasses import dataclass, field
@@ -17,6 +19,7 @@ from disaster_monitor.domain.events import (
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.infrastructure.news.headline_narrative import (
     headline_owned_paragraphs,
+    is_article_decoration,
     is_photograph_caption,
 )
 
@@ -26,6 +29,46 @@ class ArticleTextBlock:
     tag: str
     characters: int = 0
     linked_characters: int = 0
+    parts: list[str] = field(default_factory=list)
+    parent: ArticleTextBlock | None = None
+    container: ArticleTextBlock | None = None
+    preceding_characters: int = 0
+    preceding_text: str = ""
+
+    @property
+    def is_narrative(self) -> bool:
+        block = self
+        for _ in range(128):
+            if not block._owns_text():
+                return False
+            parent = block.parent
+            if parent is None or parent.tag not in {"strong", "b"}:
+                return True
+            block = parent
+        return False
+
+    def _owns_text(self) -> bool:
+        if self.characters > self.linked_characters:
+            return True
+        if self.tag not in {"strong", "b"} or self.container is None:
+            return False
+        owned_characters = self.container.characters - self.container.linked_characters
+        if owned_characters <= 0:
+            return False
+        # Keep linked names, figures, inline citations and attributed sentences.
+        # A trailing emphasized complete headline belongs to its linked article.
+        text = " ".join(self.parts).strip()
+        attributed = re.search(
+            r"\b(?:said|says|reported|confirmed|according to)\s*[:,—-]?\s*$",
+            self.preceding_text,
+            re.I,
+        )
+        return bool(attributed) or not (
+            self.preceding_characters > 0
+            and owned_characters == self.preceding_characters
+            and len(text.split()) >= 6
+            and text.endswith((".", "!", "?"))
+        )
 
 
 @dataclass(frozen=True)
@@ -36,9 +79,7 @@ class ArticleTextPiece:
 
 def _narrative(parts: list[ArticleTextPiece]) -> list[str]:
     return [
-        part.text
-        for part in parts
-        if part.block is None or part.block.characters > part.block.linked_characters
+        part.text for part in parts if part.block is None or part.block.is_narrative
     ]
 
 
@@ -69,11 +110,13 @@ class ArticleParser(HTMLParser):
         self._paragraph = 0
         self._excluded: list[str] = []
         self._text_blocks: list[ArticleTextBlock] = []
-        self._link_depth = 0
+        self._in_link = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
         void = tag in {"img", "meta", "br", "hr", "input", "link", "source", "wbr"}
+        if values.get("id") == "EndOfArticle":
+            self._body_stack.clear()
         caption = is_photograph_caption(tag, values)
         if not void and (self._caption_stack or caption):
             if not self._caption_stack:
@@ -88,7 +131,8 @@ class ArticleParser(HTMLParser):
             or values.get("data-article-body") == "true"
         ) or bool(
             re.search(
-                r"(?:^|\s)(?:post-content|entry-content|article-content|story-body)(?:\s|$)",
+                r"(?:^|\s)(?:post-content|entry-content|article-content|story-body|"
+                r"read__content|articlebodycontent)(?:\s|$)",
                 values.get("class") or "",
             )
         )
@@ -101,17 +145,7 @@ class ArticleParser(HTMLParser):
             else:
                 section = self._body_stack[-1][1]
             self._body_stack.append((tag, section))
-        excluded = (
-            caption
-            or values.get("aria-hidden") == "true"
-            or values.get("role") == "dialog"
-            or bool(
-                re.search(
-                    r"(?:^|\s)(?:entry-footer|post-tags|tags-links|republish\S*|related-(?:posts|news|links)|recommended-posts|sharing\S*)(?:\s|$)",
-                    values.get("class") or "",
-                )
-            )
-        )
+        excluded = is_article_decoration(tag, values)
         if (self._excluded or excluded) and not void:
             self._excluded.append(tag)
         if (
@@ -138,10 +172,37 @@ class ArticleParser(HTMLParser):
             self._text_blocks.append(ArticleTextBlock(tag))
             if tag.startswith("h") and not self._hidden and not self._excluded:
                 self._record("\n## ")
+        if tag in {"strong", "b"}:
+            parent = self._text_blocks[-1] if self._text_blocks else None
+            container = next(
+                (
+                    block
+                    for block in reversed(self._text_blocks)
+                    if block.tag not in {"strong", "b"}
+                ),
+                None,
+            )
+            self._text_blocks.append(
+                ArticleTextBlock(
+                    tag,
+                    parent=parent,
+                    container=container,
+                    preceding_characters=(
+                        container.characters - container.linked_characters
+                    )
+                    if container
+                    else 0,
+                    preceding_text=" ".join(container.parts).strip()
+                    if container
+                    else "",
+                )
+            )
         if tag == "br" and self._body_stack and not self._hidden and not self._excluded:
             self._record("\n")
         if tag == "a":
-            self._link_depth += 1
+            # HTML anchors cannot nest. Starting another anchor closes the prior
+            # one; a malformed menu must not mark all later reporting as linked.
+            self._in_link = True
 
     def handle_endtag(self, tag: str) -> None:
         if tag in self._caption_stack:
@@ -172,12 +233,13 @@ class ArticleParser(HTMLParser):
         if tag in {"p", "h1", "h2", "h3", "h4", "li"}:
             self._paragraph = max(0, self._paragraph - 1)
             self._record("\n")
+        if tag in {"p", "h1", "h2", "h3", "h4", "li", "strong", "b"}:
             block_tags = [block.tag for block in self._text_blocks]
             if tag in block_tags:
                 index = len(block_tags) - 1 - block_tags[::-1].index(tag)
                 self._text_blocks = self._text_blocks[:index]
         if tag == "a":
-            self._link_depth = max(0, self._link_depth - 1)
+            self._in_link = False
 
     def handle_data(self, data: str) -> None:
         if self._json is not None:
@@ -191,10 +253,10 @@ class ArticleParser(HTMLParser):
             and self._parts_seen < 2000
         ):
             data = " ".join(data.split())
-            if self._text_blocks:
-                block = self._text_blocks[-1]
+            for block in self._text_blocks:
                 block.characters += len(data)
-                if self._link_depth:
+                block.parts.append(data)
+                if self._in_link:
                     block.linked_characters += len(data)
             self._record(data)
 
@@ -268,11 +330,15 @@ def _date(value: Any) -> datetime | None:
 
 def _primary_news(objects: list[dict[str, Any]], url: str) -> dict[str, Any]:
     articles = []
+    seen_articles: set[str] = set()
     for obj in objects:
         kind = obj.get("@type")
         kinds = kind if isinstance(kind, list) else [kind]
         if any(k in ("NewsArticle", "Article", "ReportageNewsArticle") for k in kinds):
-            articles.append(obj)
+            identity = json.dumps(obj, sort_keys=True, ensure_ascii=False)
+            if identity not in seen_articles:
+                seen_articles.add(identity)
+                articles.append(obj)
 
     def identities(article: dict[str, Any]) -> set[str]:
         result = set()
@@ -295,6 +361,24 @@ def _primary_news(objects: list[dict[str, Any]], url: str) -> dict[str, Any]:
     ]
     if len(matching) == 1:
         return matching[0]
+    if len(matching) > 1:
+        # Some publishers emit a complete primary article and a second undated
+        # teaser template with the same page identity. Prefer the uniquely dated
+        # object only when all supplied headlines agree; conflicting clocks or
+        # distinct articles remain unresolved rather than depending on order.
+        dated = [
+            article
+            for article in matching
+            if isinstance(article.get("datePublished"), str)
+            and article["datePublished"].strip()
+        ]
+        headlines = {
+            " ".join(article["headline"].split()).casefold()
+            for article in matching
+            if isinstance(article.get("headline"), str) and article["headline"].strip()
+        }
+        if len(dated) == 1 and len(headlines) <= 1:
+            return dated[0]
     if len(articles) == 1 and not identities(articles[0]):
         return articles[0]
     return {}

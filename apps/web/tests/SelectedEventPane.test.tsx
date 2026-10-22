@@ -33,6 +33,25 @@ const INCIDENT: IncidentMapRecord = {
 afterEach(cleanup);
 
 describe('selected event reading pane', () => {
+  it('shows a reported month as a period without inventing its first day as onset', () => {
+    render(
+      <SelectedEventPane
+        incident={{
+          ...INCIDENT,
+          event_time: '2021-12-01T00:00:00Z',
+          event_time_end: '2022-01-01T00:00:00Z',
+          event_time_precision: 'range',
+        }}
+        snapshotRetrievedAt="2026-10-22T00:00:00Z"
+        onClose={vi.fn()}
+        onAsk={vi.fn()}
+        onGroundView={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('December 2021 (exact date unresolved)')).toBeVisible();
+    expect(screen.queryByText(/2021-12-01.*date only/)).not.toBeInTheDocument();
+  });
+
   it('keeps supported occurrence wording when an ongoing report has contextual evidence', () => {
     render(
       <SelectedEventPane

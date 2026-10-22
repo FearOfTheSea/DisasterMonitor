@@ -36,8 +36,9 @@ def discovery_incident(
         # Existing incident transport requires a sort/display clock. Its basis is
         # explicit; unknown onset must never be used for evidence or imagery targeting.
         event_time=event.event_time or sources[0].published_at or retrieved_at,
+        event_time_end=onset.end if onset and onset.precision == "range" else None,
         geometry=event.geometry,
-        event_time_precision=EventTimePrecision.DAY
+        event_time_precision=EventTimePrecision(onset.precision)
         if onset and onset.precision in ("day", "range")
         else EventTimePrecision.EXACT,
         measurements=(),

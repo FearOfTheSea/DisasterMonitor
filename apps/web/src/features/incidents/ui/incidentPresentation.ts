@@ -1,3 +1,4 @@
+import { formatCalendarPeriod } from '@/shared/model/calendarPeriod';
 import type {
   ActiveIncident,
   DisasterType,
@@ -31,6 +32,8 @@ export function incidentDateOnly(incident: IncidentMapRecord): string | undefine
   const precision = incident.event_time
     ? incident.event_time_precision
     : incident.source.publication_precision;
+  if (value && precision === 'range')
+    return formatCalendarPeriod(value, incident.event_time_end);
   return value && precision === 'day' ? `${value.slice(0, 10)} (date only)` : undefined;
 }
 

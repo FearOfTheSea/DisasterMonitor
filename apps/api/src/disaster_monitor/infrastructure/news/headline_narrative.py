@@ -38,6 +38,26 @@ def is_photograph_caption(tag: str, attrs: dict[str, str | None]) -> bool:
     )
 
 
+def is_article_decoration(tag: str, attrs: dict[str, str | None]) -> bool:
+    """Exclude publisher interface widgets even when they contain unlinked bylines."""
+    classes = attrs.get("class") or ""
+    return (
+        is_photograph_caption(tag, attrs)
+        or "hidden" in attrs
+        or attrs.get("aria-hidden") == "true"
+        or attrs.get("role") == "dialog"
+        or bool(
+            re.search(
+                r"(?:^|\s)(?:entry-footer|post-tags|tags-links|republish\S*|sharing\S*)(?:\s|$)"
+                r"|(?:^|[\s_-])(?:related|recommended|recommendations|baca-juga|"
+                r"also[-_]read|read[-_]also)(?:[\s_-]|$)",
+                classes,
+                re.I,
+            )
+        )
+    )
+
+
 @dataclass
 class _Frame:
     tag: str
@@ -71,10 +91,7 @@ class _HeadlineParagraphs(HTMLParser):
                 tag,
                 bool(self._stack and self._stack[-1].hidden)
                 or tag in _HIDDEN
-                or is_photograph_caption(tag, values)
-                or "hidden" in values
-                or values.get("aria-hidden") == "true"
-                or values.get("role") == "dialog",
+                or is_article_decoration(tag, values),
             )
         )
 

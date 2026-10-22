@@ -1,4 +1,4 @@
-"""Bounded English mention extraction; every normalized field retains its wording.
+"""Bounded literal mention extraction; normalized fields retain their source wording.
 
 No model, publisher catalog, network, or benchmark identity is involved. Unsupported
 language and implicit references remain unresolved rather than acquiring invented facts.
@@ -90,7 +90,35 @@ _VICTIM_ACTIVITY_NOTICE = (
 )
 
 
+def _month_period(text: str) -> MentionTime | None:
+    matches = [
+        match
+        for match in re.finditer(
+            rf"\b(?P<month>{_MONTH})\s+(?P<year>(?:19|20)\d{{2}})\b",
+            text,
+            re.I,
+        )
+        if date_is_occurrence(text, match.start(), match.end())
+    ]
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    year = int(match["year"])
+    month = next(
+        i + 1
+        for i, name in enumerate(_MONTHS)
+        if name[:3].casefold() == match["month"][:3].casefold()
+    )
+    return MentionTime(
+        match[0],
+        datetime(year, month, 1, tzinfo=UTC),
+        datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=UTC),
+        "range",
+    )
+
+
 def _historical(text: str, source: SourceReference) -> bool:
+    month = _month_period(text)
     return bool(
         re.search(
             r"\b(?:historical|anniversary|years? ago|last year|"
@@ -100,7 +128,10 @@ def _historical(text: str, source: SourceReference) -> bool:
         )
     ) or bool(
         source.published_at
-        and any(int(y) < source.published_at.year for y in occurrence_years(text))
+        and (
+            any(int(y) < source.published_at.year for y in occurrence_years(text))
+            or (month and month.start and month.start.year < source.published_at.year)
+        )
     )
 
 
@@ -108,6 +139,9 @@ def _time(text: str, source: SourceReference) -> MentionTime | None:
     matches = list(_DATE.finditer(text)) + list(_US_DATE.finditer(text))
     matches = [m for m in matches if date_is_occurrence(text, m.start(), m.end())]
     if not matches:
+        month_period = _month_period(text)
+        if month_period is not None:
+            return month_period
         weekdays = [
             m
             for m in _WEEKDAY.finditer(text)

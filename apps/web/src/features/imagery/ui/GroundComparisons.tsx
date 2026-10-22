@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 
-import { GroundCoverageMap } from '@/features/imagery/ui/GroundCoverageMap';
+import { GroundPreparedObservations } from '@/features/imagery/ui/GroundPreparedObservations';
 import {
   comparisonForSensor,
   captureRelationship,
@@ -23,82 +23,13 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
     sensor,
     pair: comparisonForSensor(request, sensor),
   })).filter((value) => value.pair !== undefined);
-  const prepared = request.artifacts
-    ?.map((artifact) => ({
-      artifact,
-      observation:
-        request.sensors
-          .flatMap((sensor) => sensor.selections)
-          .find((selection) => selection.selection_id === artifact.selection_id)
-          ?.observation ?? artifact.observation,
-    }))
-    .filter((item) => item.observation)
-    .sort(
-      (a, b) =>
-        previewQualityPriority(a.observation!.quality?.quality_state) -
-          previewQualityPriority(b.observation!.quality?.quality_state) ||
-        new Date(b.observation!.captured_end).getTime() -
-          new Date(a.observation!.captured_end).getTime() ||
-        previewPriority(a.artifact.role) - previewPriority(b.artifact.role),
-    )[0];
   if (comparisons.length === 0)
     return (
       <section
         className="ground-imagery-section ground-imagery-comparisons"
         aria-label="Ground comparisons"
       >
-        {prepared?.observation ? (
-          <>
-            <div className="ground-imagery-section-heading">
-              <div>
-                <h3>Prepared observation</h3>
-                <p>
-                  {SENSOR_LABELS[prepared.artifact.sensor]} ·{' '}
-                  {formatImageryTime(prepared.observation.captured_start)}
-                </p>
-              </div>
-              <span
-                className={`ground-imagery-status ${prepared.observation.quality?.quality_state === 'useful' ? 'is-positive' : 'is-warning'}`}
-              >
-                {prepared.observation.quality?.usable_fraction === 0
-                  ? 'Artifact delivered; no usable pixels'
-                  : prepared.observation.quality?.quality_state === 'useful'
-                    ? 'Useful observation ready'
-                    : 'Artifact delivered; inspect regional quality'}
-              </span>
-            </div>
-            <figure className="ground-single-preview">
-              <img
-                src={previewUrl(prepared.artifact.artifact_id)}
-                alt={`${SENSOR_LABELS[prepared.artifact.sensor]} ${captureRelationship(request, prepared.observation)} capture`}
-              />
-              <figcaption>
-                {captureRelationship(request, prepared.observation)} ·{' '}
-                {formatImageryTime(prepared.observation.captured_start)}
-              </figcaption>
-            </figure>
-            <GroundCoverageMap
-              artifact={prepared.artifact}
-              observation={prepared.observation}
-              region={request.region.region}
-            />
-            <p>
-              This single capture provides visual context. It does not establish damage
-              or safety. The patterned area has no pixels from this capture.
-              {prepared.observation.quality
-                ? ` Core assessment: ${Math.round(prepared.observation.quality.usable_fraction * 100)}% usable, ${Math.round(prepared.observation.quality.obscured_fraction * 100)}% obscured, ${Math.round(prepared.observation.quality.uncovered_fraction * 100)}% uncovered.`
-                : ' Regional image quality has not been assessed.'}
-            </p>
-          </>
-        ) : (
-          <>
-            <h3>Comparison stage</h3>
-            <p>
-              A validated before and after image pair is not available yet. These are
-              catalog outcomes, not evidence of damage or safety outside observed areas.
-            </p>
-          </>
-        )}
+        <GroundPreparedObservations request={request} />
         <div className="ground-comparison-status-grid">
           {DISPLAY_SENSORS.map((sensor) => {
             const status = sensorStatus(request, sensor);
@@ -135,6 +66,7 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
       className="ground-imagery-section ground-imagery-comparisons"
       aria-label="Ground comparisons"
     >
+      <GroundPreparedObservations request={request} />
       <div className="ground-imagery-section-heading">
         <div>
           <h3>Matched before / after</h3>
@@ -145,32 +77,7 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
       {comparisons.map(({ sensor, pair }) => (
         <GroundComparisonCard key={sensor} sensor={sensor} pair={pair!} />
       ))}
-      {comparisons[0]?.pair?.afterSelection.observation ? (
-        <GroundCoverageMap
-          artifact={comparisons[0].pair.after}
-          observation={comparisons[0].pair.afterSelection.observation}
-          region={request.region.region}
-        />
-      ) : null}
     </section>
-  );
-}
-
-function previewPriority(role: string): number {
-  if (role === 'latest_useful') return 0;
-  if (role === 'first_useful_after_onset') return 1;
-  return 2;
-}
-
-function previewQualityPriority(state: string | undefined): number {
-  return (
-    {
-      useful: 0,
-      partial: 1,
-      uncertain: 3,
-      obscured: 4,
-      uncovered: 5,
-    }[state ?? ''] ?? 2
   );
 }
 

@@ -136,3 +136,31 @@ def test_occurrence_date_survives_a_different_statement_date(text):
     (mention,) = extract_mentions(text, SOURCE)
     assert mention.time.start == datetime(2026, 10, 14, tzinfo=UTC)
     assert mention.time.wording == "Wednesday"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Floods killed two people in Lakeview, the worst since records began "
+        "in December 1942.",
+        "Officials said in December 2021 that floods had killed "
+        "two people in Lakeview.",
+        "Floods are forecast in Lakeview in December 2026.",
+    ],
+)
+def test_month_year_context_does_not_invent_an_occurrence_period(text):
+    mentions = extract_mentions(text, SOURCE)
+    assert mentions
+    assert all(m.time is None for m in mentions)
+    if "records began" in text:
+        assert all(m.role != "historical" for m in mentions)
+
+
+def test_month_range_does_not_become_just_its_last_month():
+    (mention,) = extract_mentions(
+        "The drought displaced 120,000 people in Lakeview "
+        "between September-December 2025.",
+        SOURCE,
+    )
+    assert mention.time is None
+    assert "September-December 2025" in mention.text

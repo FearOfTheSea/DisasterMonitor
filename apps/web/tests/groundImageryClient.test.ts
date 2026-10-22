@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createGroundImageryRequest,
   fetchGroundImageryReadiness,
+  fetchGroundImageryObservations,
+  selectGroundImageryObservation,
   replaceGroundImageryRegion,
   setGroundImageryWatch,
 } from '@/features/imagery/api/groundImageryClient';
@@ -37,6 +39,43 @@ describe('ground imagery client', () => {
     );
 
     await expect(fetchGroundImageryReadiness()).rejects.toThrow('invalid response');
+  });
+
+  it('loads a sensor catalog page with its continuation cursor', async () => {
+    const page = { observations: [], total: 21, next_cursor: '20' };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify(page), { status: 200 }));
+    await expect(
+      fetchGroundImageryObservations('request:1', 'sentinel-2', '0'),
+    ).resolves.toEqual(page);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8001/api/v1/ground-imagery/requests/request%3A1/observations?sensor=sentinel-2&cursor=0&limit=20',
+      { signal: undefined },
+    );
+  });
+
+  it('validates catalog pages and submits the selected acquisition explicitly', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(
+        async () => new Response(JSON.stringify({}), { status: 202 }),
+      );
+    await expect(
+      fetchGroundImageryObservations('request:1', 'sentinel-2'),
+    ).rejects.toThrow('invalid response');
+    const payload = {
+      sensor: 'sentinel-2' as const,
+      role: 'latest_useful',
+      observation_id: 'cloudy:1',
+    };
+    await expect(selectGroundImageryObservation('request:1', payload)).rejects.toThrow(
+      'invalid response',
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'http://localhost:8001/api/v1/ground-imagery/requests/request%3A1/selections',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }),
+    );
   });
 
   it('lets the server timestamp searches and choose the watch cadence', async () => {

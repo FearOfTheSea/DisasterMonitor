@@ -684,3 +684,64 @@
 .ground-workspace .ground-settings .ground-imagery-actions {
   padding: 16px;
 }
+.ground-observation-browser {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.ground-observation-browser ul {
+  list-style: none;
+  padding: 0;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.ground-observation-browser li {
+  display: grid;
+  gap: 7px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.ground-observation-browser li p {
+  margin: 0;
+}
+
+.ground-observation-browser button {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ground-observation-browser button:hover:enabled {
+  border-color: var(--accent);
+}
+
+.ground-observation-browser button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ground-observation-browser label,
+.ground-prepared-chooser {
+  display: grid;
+  gap: 6px;
+  margin-block: 10px;
+}
+
+.ground-observation-browser select,
+.ground-prepared-chooser select {
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: inherit;
+}

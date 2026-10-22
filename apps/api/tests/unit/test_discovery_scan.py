@@ -56,6 +56,33 @@ def article(title="Flood in Riverton", **kwargs):
     )
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Three cows died in the flood.",
+        "The floods killed 40 livestock.",
+        "More than 9000 livestock deaths were reported after the flood.",
+        "The flood left eight dogs dead.",
+        "Three trees died after the flood.",
+        "The forecast flood could cause three deaths.",
+    ],
+)
+def test_legacy_fatality_projection_excludes_nonhuman_and_forecast_accounts(text):
+    assessed = assess_article(
+        replace(article(), text=text), ReportingInterval.at_start(7, NOW)
+    )
+    assert assessed.fatality_evidence == ()
+    assert assessed.article.text == text
+
+
+def test_legacy_fatality_projection_preserves_people_rescuing_animals():
+    text = "Two people died while rescuing goats from the flood."
+    assessed = assess_article(
+        replace(article(), text=text), ReportingInterval.at_start(7, NOW)
+    )
+    assert assessed.fatality_evidence == (text,)
+
+
 @pytest.mark.parametrize("days", [1, 3, 7, 14, 30])
 def test_publication_interval_is_fixed_and_inclusive(days):
     interval = ReportingInterval.at_start(days, NOW)

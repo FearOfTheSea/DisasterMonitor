@@ -105,6 +105,47 @@ async def test_citation_filter_uses_the_supported_hazard_vocabulary(hazard):
     assert len(page.leads) == 2
 
 
+@pytest.mark.parametrize(
+    "context",
+    [
+        "An open-pit gold mine collapses, killing several workers.",
+        "Workers were killed in the collapse of a quarry.",
+        "A mine cave-in buries workers after heavy rainfall.",
+    ],
+)
+async def test_ground_collapse_citations_are_acquired_for_publisher_assessment(context):
+    html = HTML.replace("Wildfires in Highforest", context)
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json=payload(html))
+        )
+    ) as client:
+        provider = WikipediaCitationCollectionProvider(
+            client=client, minimum_interval=0
+        )
+        page = await provider.fetch_page(partition(provider))
+    assert len(page.leads) == 2
+    assert not page.articles
+    assert all(lead.published_at is None for lead in page.leads)
+
+
+@pytest.mark.parametrize(
+    "context", ["A bridge collapses.", "A coal mine explosion kills workers."]
+)
+async def test_other_accidents_are_not_ground_collapse_leads(context):
+    html = HTML.replace("Wildfires in Highforest", context)
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json=payload(html))
+        )
+    ) as client:
+        provider = WikipediaCitationCollectionProvider(
+            client=client, minimum_interval=0
+        )
+        page = await provider.fetch_page(partition(provider))
+    assert not page.leads
+
+
 async def test_three_month_cursor_handles_short_february_and_stops():
     pages = []
 

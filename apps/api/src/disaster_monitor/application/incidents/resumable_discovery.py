@@ -262,7 +262,15 @@ class ResumableDiscovery:
                 assert work.lead is not None
                 async with asyncio.timeout(self._article_timeout):
                     article = await self._reader.retrieve(work.lead)
-                await self._journal.commit_article(work, article, now=self._clock())
+                now = self._clock()
+                await self._journal.commit_article(
+                    work,
+                    article,
+                    now=now,
+                    alternates=plan_alternate_reports(
+                        work, self._providers, observed_at=now, article=article
+                    ),
+                )
             except DiscoveryCapacityError:
                 raise
             except Exception as error:

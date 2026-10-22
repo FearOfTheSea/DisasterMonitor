@@ -2772,7 +2772,7 @@ const apiSchemas = {
     type: 'object',
   },
   EventTimePrecision: {
-    enum: ['exact', 'day', 'week'],
+    enum: ['exact', 'day', 'week', 'range'],
     type: 'string',
   },
   EvidenceClaimResponse: {
@@ -3485,6 +3485,31 @@ const apiSchemas = {
       'observations',
       'selections',
     ],
+    type: 'object',
+  },
+  GroundImageryObservationPageResponse: {
+    properties: {
+      next_cursor: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      observations: {
+        items: {
+          $ref: '#/components/schemas/GroundImageryObservationResponse',
+        },
+        type: 'array',
+      },
+      total: {
+        type: 'integer',
+      },
+    },
+    required: ['observations', 'next_cursor', 'total'],
     type: 'object',
   },
   GroundImageryObservationResponse: {
@@ -7919,7 +7944,7 @@ export type EventMeasurementResponse = {
   value: number | string;
 };
 
-export type EventTimePrecision = 'exact' | 'day' | 'week';
+export type EventTimePrecision = 'exact' | 'day' | 'week' | 'range';
 
 export type EvidenceClaimResponse = {
   alternatives?: Array<EvidenceClaimVariantResponse>;

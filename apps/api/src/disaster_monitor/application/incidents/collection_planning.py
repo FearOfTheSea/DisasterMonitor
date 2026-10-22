@@ -7,12 +7,14 @@ from disaster_monitor.application.ports.collection import CollectionProvider
 from disaster_monitor.domain.collection import (
     ClaimedCollectionWork,
     CollectionPartition,
+    fatality_hint_needs_followup,
+    lead_retrieval_priority,
 )
-from disaster_monitor.domain.discovery import ReportingInterval
+from disaster_monitor.domain.discovery import DiscoveryArticle, ReportingInterval
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v3"
+PLAN_VERSION = "collection-v16"
 
 
 def plan_collection(
@@ -68,10 +70,13 @@ def plan_alternate_reports(
     providers: tuple[CollectionProvider, ...],
     *,
     observed_at: datetime,
+    article: DiscoveryArticle | None = None,
 ) -> tuple[CollectionPartition, ...]:
     if work.alternate_depth or work.lead is None:
         return ()
     lead = work.lead
+    if article is not None and not fatality_hint_needs_followup(lead, article):
+        return ()
     hint = lead.discovery_hint or lead.title
     source = SourceReference(
         "acquired-lead",
@@ -86,7 +91,11 @@ def plan_alternate_reports(
     anchored = next(
         (m for m in mentions if m.place and m.place.precision == "named_place"), None
     )
-    if anchored and anchored.place:
+    if lead.search_title:
+        # The index's native headline can find a different publisher when its
+        # citation URL fails. It never supplies article facts or publication.
+        query = " ".join(re.findall(r"[\w'-]+", lead.search_title)[:16])
+    elif anchored and anchored.place:
         words = re.findall(r"[\w'-]+", anchored.place.wording)
         query = anchored.disaster.value.replace("_", " ") + ' "' + " ".join(words) + '"'
     else:
@@ -104,6 +113,7 @@ def plan_alternate_reports(
             date_hint + timedelta(days=1),
             generation=generation,
             alternate_for=lead.canonical_url,
+            priority=int(bool(lead.search_title and lead_retrieval_priority(lead))),
         )
         for p in providers
         if p.supports_alternates

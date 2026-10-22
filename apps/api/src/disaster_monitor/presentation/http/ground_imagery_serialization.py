@@ -11,6 +11,7 @@ from disaster_monitor.application.ground_imagery.models import (
 )
 from disaster_monitor.application.ground_imagery.select_observations import (
     GroundImagerySelection,
+    SelectionReason,
 )
 from disaster_monitor.application.ports.ground_imagery.jobs import GroundImageryJob
 from disaster_monitor.domain.imagery.observations import Observation, Sensor
@@ -184,7 +185,9 @@ def _selection_response(
         ),
         sensor=sensor,
         role=outcome.role.value,
-        label=request.temporal_plan.label_for(outcome.role),
+        label="User-selected capture"
+        if outcome.reason is SelectionReason.OPERATOR_SELECTED
+        else request.temporal_plan.label_for(outcome.role),
         observation=None if observation is None else observation_response(observation),
         reason=outcome.reason.value,
         explanation=outcome.explanation,

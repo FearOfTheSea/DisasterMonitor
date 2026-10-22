@@ -55,7 +55,12 @@ class CollectionJournal(DiscoveryStore, Protocol):
     ) -> bool: ...
 
     async def commit_article(
-        self, work: ClaimedCollectionWork, article: DiscoveryArticle, *, now: datetime
+        self,
+        work: ClaimedCollectionWork,
+        article: DiscoveryArticle,
+        *,
+        now: datetime,
+        alternates: tuple[CollectionPartition, ...] = (),
     ) -> bool: ...
 
     async def fail(

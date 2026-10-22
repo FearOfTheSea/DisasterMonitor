@@ -35,6 +35,8 @@ class NewsFeedItem:
     updated_at: datetime | None
     indexed_at: datetime | None = None
     discovery_hint: str | None = None
+    # Untrusted index wording, used only to locate other publisher articles.
+    search_title: str | None = None
 
     def __post_init__(self) -> None:
         if not all(
@@ -54,6 +56,10 @@ class NewsFeedItem:
         _require_aware("indexed_at", self.indexed_at)
         if self.discovery_hint is not None and len(self.discovery_hint) > 2000:
             raise ValueError("A discovery hint must not exceed 2000 characters.")
+        if self.search_title is not None and (
+            not self.search_title.strip() or len(self.search_title) > 300
+        ):
+            raise ValueError("A search title must contain 1 to 300 characters.")
 
 
 @dataclass(frozen=True, slots=True)

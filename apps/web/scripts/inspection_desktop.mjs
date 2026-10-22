@@ -50,12 +50,14 @@ try {
   await page
     .getByRole('button', { name: 'Scan the world', exact: true })
     .press('Enter');
-  await expect(page.getByText(/8 events from 57 collected reports/)).toBeVisible({
-    timeout: 20000,
-  });
+  await expect(
+    page.getByText(
+      /7 associated physical events · 0 unresolved event candidates · 1 context\/fragment records · 57 collected reports/,
+    ),
+  ).toBeVisible({ timeout: 20000 });
   check(
     'Page identity and meaningful content',
-    'Disaster Monitor; scan returned eight controlled events across seven categories.',
+    'Disaster Monitor; scan returned seven physical events and one context record from 57 controlled reports across seven categories.',
   );
   const map = page.getByLabel('Interactive map', { exact: true });
   const box = await map.boundingBox();
@@ -66,9 +68,7 @@ try {
   ).toBeVisible();
   check('Map selection', 'Clicking the source point opens the flood event pane.');
   await page.getByRole('button', { name: 'Back to events' }).click();
-  await page
-    .getByRole('button', { name: 'Focus Region 1 on map', exact: true })
-    .click();
+  await page.locator('.incident-card-flood button').click();
   const impact = page.getByRole('region', { name: 'Reported impacts' });
   await impact.getByText('Fatalities · 8 accounts', { exact: true }).press('Enter');
   await expect(impact.getByText('Fatalities: 0', { exact: true })).toBeVisible();
@@ -130,6 +130,7 @@ try {
     'Photograph browsing',
     'Seven synthetic test assets, paged five/two; actual image endpoint decodes, broken delivery retains article link, acquisition/storage limits remain visible.',
   );
+  const originalIncidentUrl = page.url();
   const searching = page.waitForResponse(
     (response) =>
       response.url().endsWith('/ground-imagery/requests') &&
@@ -177,7 +178,9 @@ try {
   ];
   for (let index = 0; index < 7; index++) {
     await page
-      .getByRole('button', { name: `Focus Region ${index} on map`, exact: true })
+      .locator(
+        `.incident-card-${['earthquake', 'flood', 'wildfire', 'landslide', 'tropical_cyclone', 'volcanic_eruption', 'drought'][index]} button`,
+      )
       .click();
     await expect(
       page.getByRole('heading', { name: categories[index], exact: true, level: 2 }),
@@ -205,8 +208,9 @@ try {
     'Seven category imagery paths',
     'All seven inspected. Earthquake has no acquisition; wildfire has provider failure; cyclone needs region; drought uses a supported area.',
   );
+  await page.getByText('Context and unresolved evidence (1)', { exact: true }).click();
   await page
-    .getByRole('button', { name: 'Inspect Unresolved Valley', exact: true })
+    .getByRole('button', { name: 'Inspect retained Unresolved Valley', exact: true })
     .click();
   await page.getByRole('button', { name: 'Find imagery', exact: true }).press('Enter');
   await expect(page.getByText(/Publication time cannot target imagery/)).toBeVisible();
@@ -225,14 +229,10 @@ try {
   });
   const secondPage = await secondContext.newPage();
   secondPage.on('pageerror', (error) => errors.push(error.message));
-  await secondPage.goto('http://127.0.0.1:4173', { waitUntil: 'domcontentloaded' });
-  await secondPage.getByRole('button', { name: 'Scan the world', exact: true }).click();
+  await secondPage.goto(originalIncidentUrl, { waitUntil: 'domcontentloaded' });
   await expect(
-    secondPage.getByRole('button', { name: 'Focus Region 1 on map', exact: true }),
+    secondPage.getByRole('heading', { name: 'Flood', exact: true, level: 2 }),
   ).toBeVisible({ timeout: 20000 });
-  await secondPage
-    .getByRole('button', { name: 'Focus Region 1 on map', exact: true })
-    .click();
   const reusedResponse = secondPage.waitForResponse(
     (response) =>
       response.url().endsWith('/ground-imagery/requests') &&

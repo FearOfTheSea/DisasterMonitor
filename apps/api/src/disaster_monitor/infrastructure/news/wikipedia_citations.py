@@ -27,6 +27,19 @@ MONTHS = (
     "December",
 )
 _VOID = {"br", "img", "meta", "link", "hr", "input", "source", "wbr"}
+_GROUND_COLLAPSE_LEAD = re.compile(
+    r"\b(?:mines?|quarr(?:y|ies)|open[- ]pits?)\b.{0,120}"
+    r"\b(?:collaps\w*|cave[- ]ins?|bur(?:y|ied|ies))\b"
+    r"|\b(?:collaps\w*|cave[- ]ins?|bur(?:y|ied|ies))\b.{0,120}"
+    r"\b(?:mines?|quarr(?:y|ies)|open[- ]pits?)\b",
+    re.I,
+)
+
+
+def _is_disaster_lead(context: str) -> bool:
+    # An editorial mine-collapse summary may describe a slope failure without
+    # naming its hazard. Retrieve the publisher; the index cannot classify it.
+    return bool(disasters_in_text(context) or _GROUND_COLLAPSE_LEAD.search(context))
 
 
 class CitationCapacityError(ValueError):
@@ -40,7 +53,9 @@ class _CitationLeads:
         self.leads: dict[str, NewsFeedItem] = {}
         self.invalid_links = 0
 
-    def add(self, url: str, context: str, indexed_day: date) -> None:
+    def add(
+        self, url: str, context: str, indexed_day: date, search_title: str = ""
+    ) -> None:
         host = public_document_host(url)
         if (
             host is None
@@ -63,12 +78,22 @@ class _CitationLeads:
                 None,
                 None,
                 discovery_hint=context,
+                search_title=_search_title(search_title),
             ),
         )
         if len(self.leads) > self.maximum:
             raise CitationCapacityError(
                 "Citation count exceeded the page bound; page not acknowledged."
             )
+
+
+def _search_title(text: str) -> str | None:
+    text = " ".join(text.split())[:300]
+    if len(re.findall(r"[\w'-]+", text)) < 4 or re.match(
+        r"^(?:archived?\b|original\b|full text\b|retrieved\b)", text, re.I
+    ):
+        return None
+    return text
 
 
 @dataclass
@@ -155,7 +180,7 @@ def parse_citations(
     def collect(node: _Node, context: str, indexed_day: date) -> None:
         if node.tag == "li":
             context = (context + " " + _text(node, skip_lists=True)).strip()[:2000]
-            if disasters_in_text(context):
+            if _is_disaster_lead(context):
                 for link in _walk(node, skip_lists=True):
                     if (
                         link.tag != "a"
@@ -163,7 +188,7 @@ def parse_citations(
                     ):
                         continue
                     url = link.attrs.get("href", "").strip()
-                    collected.add(url, context, indexed_day)
+                    collected.add(url, context, indexed_day, _text(link))
         for child in node.children:
             if isinstance(child, _Node):
                 collect(child, context, indexed_day)
@@ -243,11 +268,7 @@ def parse_weather_citations(
     """
     tree = _IndexTree()
     tree.feed(html)
-    references: dict[str, list[_Node]] = {}
-    for node in _walk(tree.root):
-        identity = node.attrs.get("id", "")
-        if node.tag == "li" and identity.startswith("cite_note-"):
-            references.setdefault(identity, []).append(node)
+    references = _reference_nodes(tree.root)
     collected = _CitationLeads(revision, maximum_citations)
     in_timeline = False
     month = None
@@ -266,22 +287,128 @@ def parse_weather_citations(
                 continue
             dated_entries += 1
             first, last = period
-            if first > latest or last < earliest or not disasters_in_text(context):
+            if first > latest or last < earliest or not _is_disaster_lead(context):
                 continue
-            for link in _walk(node, skip_lists=True):
-                target = link.attrs.get("href", "")
-                if link.tag != "a" or not target.startswith("#cite_note-"):
-                    continue
-                candidates = references.get(target[1:], [])
-                if len(candidates) != 1:
-                    collected.invalid_links += 1
-                    continue
-                for reference in _walk(candidates[0]):
-                    if (
-                        reference.tag == "a"
-                        and "external" in reference.attrs.get("class", "").split()
-                    ):
-                        collected.add(reference.attrs.get("href", ""), context, first)
+            _collect_references(
+                _walk(node, skip_lists=True), references, collected, context, first
+            )
     if not dated_entries:
         raise ValueError("Weather citation index has no dated timeline entries.")
     return tuple(collected.leads.values()), collected.invalid_links
+
+
+def parse_earthquake_citations(
+    html: str,
+    *,
+    year: int,
+    earliest: date,
+    latest: date,
+    revision: int,
+    maximum_citations: int = 1000,
+) -> tuple[tuple[NewsFeedItem, ...], int]:
+    """Read references from recent rows in the annual earthquake calendar.
+
+    The table's dates, places, magnitudes and losses remain editorial hints.
+    Statistics and internal event links never become publisher evidence.
+    """
+    tree = _IndexTree()
+    tree.feed(html)
+    references = _reference_nodes(tree.root)
+    collected = _CitationLeads(revision, maximum_citations)
+    in_calendar = False
+    month = None
+    dated_entries = 0
+    for node in _walk(tree.root):
+        if node.tag == "h2":
+            in_calendar = _heading_identity(node) == "By_month"
+            month = None
+        elif in_calendar and node.tag == "h3":
+            identity = _heading_identity(node)
+            month = MONTHS.index(identity) + 1 if identity in MONTHS else None
+        elif in_calendar and month and node.tag == "table":
+            rows = tuple(_table_rows(node))
+            if not rows:
+                continue
+            headings = [
+                _text(cell)
+                for cell in rows[0].children
+                if isinstance(cell, _Node) and cell.tag == "th"
+            ]
+            if headings[:2] != ["Date", "Country and location"] or not {
+                "M",
+                "Notes",
+                "Casualties",
+            } <= set(headings):
+                continue
+            for row in rows[1:]:
+                cells = [
+                    cell
+                    for cell in row.children
+                    if isinstance(cell, _Node) and cell.tag == "td"
+                ]
+                if not cells:
+                    continue
+                day = re.match(r"^(\d{1,2})(?=\s*\[|\s*$)", _text(cells[0]))
+                if day is None:
+                    continue
+                try:
+                    indexed_day = date(year, month, int(day[1]))
+                except ValueError:
+                    continue
+                dated_entries += 1
+                if not earliest <= indexed_day <= latest:
+                    continue
+                context = "Earthquake editorial index: " + _text(row)[:1900]
+                _collect_references(
+                    _walk(row), references, collected, context, indexed_day
+                )
+    if not dated_entries:
+        raise ValueError("Quake citation index has no recognized dated calendar rows.")
+    return tuple(collected.leads.values()), collected.invalid_links
+
+
+def _table_rows(table: _Node) -> Iterator[_Node]:
+    """Ignore any nested table inside a calendar cell."""
+    for child in table.children:
+        if isinstance(child, _Node):
+            if child.tag == "tr":
+                yield child
+            elif child.tag in {"tbody", "thead", "tfoot"}:
+                yield from _table_rows(child)
+
+
+def _collect_references(
+    links: Iterator[_Node],
+    references: dict[str, list[_Node]],
+    collected: _CitationLeads,
+    context: str,
+    indexed_day: date,
+) -> None:
+    for link in links:
+        target = link.attrs.get("href", "")
+        if link.tag != "a" or not target.startswith("#cite_note-"):
+            continue
+        candidates = references.get(target[1:], [])
+        if len(candidates) != 1:
+            collected.invalid_links += 1
+            continue
+        for reference in _walk(candidates[0]):
+            if (
+                reference.tag == "a"
+                and "external" in reference.attrs.get("class", "").split()
+            ):
+                collected.add(
+                    reference.attrs.get("href", ""),
+                    context,
+                    indexed_day,
+                    _text(reference),
+                )
+
+
+def _reference_nodes(root: _Node) -> dict[str, list[_Node]]:
+    references: dict[str, list[_Node]] = {}
+    for node in _walk(root):
+        identity = node.attrs.get("id", "")
+        if node.tag == "li" and identity.startswith("cite_note-"):
+            references.setdefault(identity, []).append(node)
+    return references

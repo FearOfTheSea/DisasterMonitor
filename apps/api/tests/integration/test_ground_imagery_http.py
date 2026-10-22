@@ -83,6 +83,41 @@ GEOMETRY = polygon_from_geojson(
 )
 
 
+async def test_operator_can_select_obscured_capture_without_usefulness_claims():
+    cloudy = replace(
+        _observation(Sensor.SENTINEL_2, "s2-obscured"),
+        quality=ObservationQuality(
+            covered_fraction=1,
+            usable_fraction=0,
+            obscured_fraction=1,
+            uncertain_fraction=0,
+            uncovered_fraction=0,
+            component_usable_fractions=(("core", 0),),
+            quality_state=QualityState.OBSCURED,
+            mask_definition="fixture-v1",
+        ),
+    )
+    service = _service(catalog=FakeCatalog((cloudy,)))
+    original = await service.create_request(
+        GroundImageryRequestInput(
+            incident_id="incident-1",
+            reference_time=datetime(2024, 5, 20, tzinfo=UTC),
+        )
+    )
+    page = await service.observations(original.request_id, sensor=Sensor.SENTINEL_2)
+    assert cloudy in page.observations
+    selected = await service.select_observation(
+        original.request_id,
+        sensor=Sensor.SENTINEL_2,
+        role="latest_useful",
+        observation_id=cloudy.observation_id,
+    )
+    outcome = selected.selection.for_sensor(Sensor.SENTINEL_2).for_role("latest_useful")
+    assert outcome.observation == cloudy
+    assert outcome.reason.value == "operator_selected"
+    assert selected.request_version == original.request_version + 1
+
+
 @dataclass
 class FakeIncidentReader:
     context: IncidentImageryContext

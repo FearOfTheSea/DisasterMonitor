@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { formatCalendarPeriod } from '@/shared/model/calendarPeriod';
+
 import { EventBrief } from '@/features/event-brief/public';
 import {
   displayActiveIncidentContext,
@@ -19,8 +21,13 @@ import type { WeatherAlertsSnapshot } from '@/features/weather/public';
 type Tab = 'overview' | 'evidence' | 'timeline';
 const TABS: readonly Tab[] = ['overview', 'evidence', 'timeline'];
 
-function dateTime(value: string | null, precision?: string): string {
+function dateTime(
+  value: string | null,
+  precision?: string,
+  end?: string | null,
+): string {
   if (!value) return 'Unknown';
+  if (precision === 'range') return formatCalendarPeriod(value, end);
   if (precision === 'day')
     return `${value.slice(0, 10)} (date only; exact time unknown)`;
   const date = new Date(value);
@@ -80,21 +87,32 @@ export function SelectedEventPane({
   const sources = incident.evidence_sources?.length
     ? incident.evidence_sources
     : [incident.source];
-  const timeline = [
+  const timeline: Array<{
+    label: string;
+    time: string | null | undefined;
+    precision?: string;
+    end?: string | null;
+  }> = [
     {
       label: 'Source-reported event time',
       time: incident.event_time_basis === 'unknown' ? undefined : incident.event_time,
+      precision: incident.event_time_precision,
+      end: incident.event_time_end,
     },
     { label: 'News first published', time: incident.detection?.news_break_at },
     {
       label: 'First observed by monitoring',
       time: incident.detection?.first_observed_at,
     },
-    { label: 'Source publication', time: incident.source.published_at },
+    {
+      label: 'Source publication',
+      time: incident.source.published_at,
+      precision: incident.source.publication_precision,
+    },
     { label: 'Source update', time: incident.source.updated_at },
     { label: 'Visible in monitoring', time: incident.detection?.monitor_visible_at },
     { label: 'Monitor retrieval', time: incident.source.retrieved_at },
-  ].filter((entry): entry is { label: string; time: string } => Boolean(entry.time));
+  ].filter((entry) => Boolean(entry.time));
 
   return (
     <aside className="selected-event-pane" aria-labelledby="selected-event-heading">
@@ -111,7 +129,9 @@ export function SelectedEventPane({
         <p className="event-time-line">
           {incident.event_time_basis === 'unknown'
             ? 'Event time unresolved. Article published: '
-            : 'Event: '}
+            : incident.event_time_precision === 'range'
+              ? 'Reported event period: '
+              : 'Event: '}
           <time
             dateTime={incident.event_time ?? incident.source.published_at ?? undefined}
           >
@@ -120,6 +140,7 @@ export function SelectedEventPane({
               incident.event_time
                 ? incident.event_time_precision
                 : incident.source.publication_precision,
+              incident.event_time_end,
             )}
           </time>
         </p>
@@ -342,7 +363,9 @@ export function SelectedEventPane({
             <ol className="event-timeline">
               {timeline.map((entry) => (
                 <li key={entry.label}>
-                  <time dateTime={entry.time}>{dateTime(entry.time)}</time>
+                  <time dateTime={entry.time ?? undefined}>
+                    {dateTime(entry.time ?? null, entry.precision, entry.end)}
+                  </time>
                   <span>{entry.label}</span>
                 </li>
               ))}

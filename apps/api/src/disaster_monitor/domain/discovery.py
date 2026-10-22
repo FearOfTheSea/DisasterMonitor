@@ -11,6 +11,11 @@ from disaster_monitor.domain.event_mentions import EventMention
 from disaster_monitor.domain.events import EventGeometry
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import classify_disaster_text
+from disaster_monitor.domain.mention_occurrence import occurrence_role
+from disaster_monitor.domain.reported_impacts import (
+    fatality_analysis_text,
+    only_nonhuman_deaths,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,7 +166,7 @@ class DiscoveryRun:
 _FATALITY = re.compile(
     r"\b(?:[1-9]\d*|one|two|three|four|five|six|seven|eight|nine|ten|"
     r"dozens|hundreds|thousands|a person|a man|a woman|a child)\b"
-    r"[^.!?]{0,65}\b(?:died|dead|killed|deaths?|fatalities)\b|"
+    r"[^.!?]{0,65}\b(?:died|dead|killed|drowned|deaths?|fatalities)\b|"
     r"\b(?:killed|claimed the lives of)\s+(?:at least\s+)?"
     r"(?:[1-9]\d*|one|two|three|four|five|six|seven|eight|nine|ten)\b",
     re.I,
@@ -235,7 +240,10 @@ def fatality_accounts(
             r"(?<=[.!?])\s+",
             scoped_disaster_text(article.text, article.source.title, disaster),
         )
-        if _FATALITY.search(sentence) and not _NEGATED.search(sentence)
+        if _FATALITY.search(fatality_analysis_text(sentence))
+        and not _NEGATED.search(sentence)
+        and not only_nonhuman_deaths(sentence)
+        and occurrence_role(sentence) != "forecast"
     )[:10]
 
 

@@ -2,9 +2,12 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
+import { formatCalendarPeriod } from '@/shared/model/calendarPeriod';
+
 import { useGroundImageryWorkflow } from '@/features/imagery/hooks/useGroundImageryWorkflow';
 import { GroundComparisons } from '@/features/imagery/ui/GroundComparisons';
 import { GroundRegionPicker } from '@/features/imagery/ui/GroundRegionPicker';
+import { GroundObservationBrowser } from '@/features/imagery/ui/GroundObservationBrowser';
 import {
   artifactForSelection,
   formatFraction,
@@ -22,6 +25,7 @@ import {
 import type {
   GroundImageryJobResponse,
   GroundImagerySelectionResponse,
+  GroundImagerySelectionRequest,
   Sensor,
 } from '@/shared/api/generated/assistant';
 import { API_BASE_URL } from '@/shared/config/runtime';
@@ -32,7 +36,8 @@ type GroundImageryPanelProps = {
   incidentId: string;
   incidentLabel: string;
   incidentTime: string | null;
-  incidentTimePrecision?: 'exact' | 'day' | 'week';
+  incidentTimePrecision?: 'exact' | 'day' | 'week' | 'range';
+  incidentTimeEnd?: string | null;
   onClose: () => void;
   findOnOpen?: boolean;
   children?: ReactNode;
@@ -49,6 +54,7 @@ function GroundImageryView({
   incidentLabel,
   incidentTime,
   incidentTimePrecision,
+  incidentTimeEnd,
   onClose,
   findOnOpen = false,
   children,
@@ -66,6 +72,7 @@ function GroundImageryView({
     handleRegion,
     handleWatch,
     handlePrepare,
+    handleSelect,
   } = useGroundImageryWorkflow(
     incidentId,
     monitoring.available,
@@ -85,14 +92,18 @@ function GroundImageryView({
           <h2 id="ground-imagery-heading">Ground view</h2>
           <p>{incidentLabel}</p>
           <p>
-            {incidentTimePrecision === 'day'
-              ? 'Reported event date: '
-              : 'Event onset: '}
+            {incidentTimePrecision === 'range'
+              ? 'Reported event period: '
+              : incidentTimePrecision === 'day'
+                ? 'Reported event date: '
+                : 'Event onset: '}
             {incidentTime ? (
               <time dateTime={incidentTime}>
-                {incidentTimePrecision === 'day'
-                  ? `${incidentTime.slice(0, 10)} (date only; exact time unknown)`
-                  : formatImageryTime(incidentTime)}
+                {incidentTimePrecision === 'range'
+                  ? formatCalendarPeriod(incidentTime, incidentTimeEnd)
+                  : incidentTimePrecision === 'day'
+                    ? `${incidentTime.slice(0, 10)} (date only; exact time unknown)`
+                    : formatImageryTime(incidentTime)}
               </time>
             ) : (
               'Event time unresolved'
@@ -311,6 +322,7 @@ function GroundImageryView({
                     renderingReady={readiness?.state === 'ready'}
                     action={action}
                     onPrepare={handlePrepare}
+                    onSelect={handleSelect}
                   />
                 ))}
               </section>
@@ -404,12 +416,14 @@ function SensorCard({
   renderingReady,
   action,
   onPrepare,
+  onSelect,
 }: {
   sensor: Sensor;
   request: GroundImageryPanelRequest;
   renderingReady: boolean;
   action?: string;
   onPrepare: (selection: GroundImagerySelectionResponse) => void;
+  onSelect: (selection: GroundImagerySelectionRequest) => void;
 }) {
   const status = sensorStatus(request, sensor);
   const outcomes = roleOutcomes(status);
@@ -450,6 +464,14 @@ function SensorCard({
           ))
         )}
       </div>
+      <GroundObservationBrowser
+        key={`${request.request_id}:${request.request_version}:${sensor}`}
+        requestId={request.request_id}
+        sensor={sensor}
+        selections={outcomes}
+        busy={Boolean(action) || request.state === 'queued'}
+        onSelect={onSelect}
+      />
     </article>
   );
 }

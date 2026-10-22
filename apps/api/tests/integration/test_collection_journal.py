@@ -2,6 +2,7 @@
 
 import asyncio
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -40,6 +41,33 @@ def lead():
         None,
         NOW,
     )
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_fatality_hints_get_retrieval_priority_without_dropping_routine_work(
+    tmp_path,
+    legacy,
+):
+    path = tmp_path / "jobs.sqlite"
+    store = SQLiteCollectionJournal(path)
+    await store.attach(run(), (partition(),), now=NOW, budget=10)
+    search = await store.claim("search", "searcher", now=NOW)
+    routine = lead()
+    fatal = replace(
+        routine,
+        external_id="fatal",
+        canonical_url="https://another.example/fatal",
+        title="Four killed in forest fire",
+    )
+    await store.commit_page(search, CollectionPage(leads=(routine, fatal)), now=NOW)
+    if legacy:
+        with sqlite3.connect(path) as db:
+            db.execute("ALTER TABLE work DROP COLUMN priority")
+        store = SQLiteCollectionJournal(path)
+    first = await store.claim("retrieve", "reader", now=NOW)
+    second = await store.claim("retrieve", "other-reader", now=NOW)
+    assert first.lead == fatal
+    assert second.lead == routine
 
 
 async def test_page_and_cursor_survive_restart_with_shared_work_and_no_duplicates(

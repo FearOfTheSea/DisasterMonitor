@@ -145,6 +145,13 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         request = await self.get_request(request_id)
         if request.selection is None:
             raise ValueError("This imagery request has no catalog selection to change.")
+        if request.state in {
+            GroundImageryRequestState.QUEUED,
+            GroundImageryRequestState.CANCELLED,
+        }:
+            raise ValueError(
+                "Wait for preparation to finish or reopen the imagery request."
+            )
         try:
             temporal_role = TemporalRole(role)
         except ValueError as error:
@@ -169,9 +176,8 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         updated_outcome = GroundImagerySelection(
             role=temporal_role,
             observation=candidate,
-            reason=SelectionReason.SELECTED,
+            reason=SelectionReason.OPERATOR_SELECTED,
             explanation="The operator selected this catalogued acquisition.",
-            age_class=current.age_class,
             alternatives=tuple(
                 item
                 for item in alternatives
@@ -194,6 +200,7 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         )
         updated = replace(
             request,
+            request_version=request.request_version + 1,
             selection=updated_selection,
             updated_at=self._clock(),
             reason_codes=tuple(

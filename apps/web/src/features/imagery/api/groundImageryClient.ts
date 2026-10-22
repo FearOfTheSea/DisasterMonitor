@@ -4,8 +4,11 @@ import type {
   GroundImageryReadinessResponse,
   GroundImageryRequestResponse,
   GroundImageryPrepareRequest,
+  GroundImageryObservationPageResponse,
+  GroundImagerySelectionRequest,
   GroundImageryRegionRequest,
   GroundImageryWatchRequest,
+  Sensor,
 } from '@/shared/api/generated/assistant';
 import { matchesApiSchema } from '@/shared/api/generated/assistant';
 import { readJsonResponse } from '@/shared/api/http';
@@ -67,6 +70,35 @@ export async function refreshGroundImageryRequest(
     'GroundImageryRequestResponse',
     requestPath(requestId, '/refresh'),
     { method: 'POST' },
+  );
+}
+
+export async function fetchGroundImageryObservations(
+  requestId: string,
+  sensor: Sensor,
+  cursor = '0',
+  signal?: AbortSignal,
+): Promise<GroundImageryObservationPageResponse> {
+  const query = new URLSearchParams({ sensor, cursor, limit: '20' });
+  return requestJson<GroundImageryObservationPageResponse>(
+    'GroundImageryObservationPageResponse',
+    requestPath(requestId, `/observations?${query}`),
+    { signal },
+  );
+}
+
+export async function selectGroundImageryObservation(
+  requestId: string,
+  payload: GroundImagerySelectionRequest,
+): Promise<GroundImageryRequestResponse> {
+  return requestJson<GroundImageryRequestResponse>(
+    'GroundImageryRequestResponse',
+    requestPath(requestId, '/selections'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
   );
 }
 

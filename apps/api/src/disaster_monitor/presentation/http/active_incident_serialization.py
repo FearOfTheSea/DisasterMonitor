@@ -166,9 +166,11 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                 "article and query budgets; coverage is not exhaustive."
             ),
             (
-                "Impact extraction uses English source sentences up to 600 "
-                "characters from retained text (at most 20,000 characters "
-                "per article); missing claims remain unknown."
+                "Impact extraction uses English and bounded Spanish/French/Indonesian "
+                "fatality wording; Indonesian hazard recognition covers earthquakes. "
+                "Claims use source sentences up to 600 characters "
+                "(at most 20,000 characters per article); "
+                "missing claims remain unknown."
             ),
             (
                 "Structured impacts exclude explicit competing causes and other "

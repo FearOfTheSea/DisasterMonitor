@@ -1,6 +1,6 @@
 """Bound attributed disaster accounts inside potentially multi-topic reporting.
 
-This is a conservative English heuristic, not semantic causal verification. Original
+These are bounded literal language rules, not semantic causal verification. Original
 report text and links remain retained even when an account cannot be safely scoped.
 """
 
@@ -8,18 +8,20 @@ import re
 
 from disaster_monitor.domain.disaster_types import Disaster
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
+from disaster_monitor.domain.regional_accounts import regional_competing_cause
 from disaster_monitor.domain.source_sentences import source_sentences
 
 _OTHER_CAUSE = re.compile(
     r"\b(?:conflict|violence|cholera|ebola|measles|covid-?19|war|warfare|"
     r"airstrikes?|bombing|gunfire|shootings?|armed attacks?|"
-    r"chronic conditions?|diabetes|hypertension|COPD)\b",
+    r"chronic conditions?|diabetes|hypertension|COPD|"
+    r"famine\s+(?:of|in)\s+\d{4})\b",
     re.I,
 )
 
 
 def has_competing_cause(text: str) -> bool:
-    return bool(_OTHER_CAUSE.search(text))
+    return bool(_OTHER_CAUSE.search(text)) or regional_competing_cause(text)
 
 
 def scoped_disaster_text(text: str, title: str, disaster: Disaster | None) -> str:

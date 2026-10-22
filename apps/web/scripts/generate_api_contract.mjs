@@ -167,6 +167,7 @@ const runtimeSchemaNames = new Set([
   'WeatherAlertsSnapshotResponse',
   'GroundImageryReadinessResponse',
   'GroundImageryRequestResponse',
+  'GroundImageryObservationPageResponse',
   'GroundImageryManifestResponse',
   'ActiveIncidentsSnapshotResponse',
   'SectionEvidenceResponse',

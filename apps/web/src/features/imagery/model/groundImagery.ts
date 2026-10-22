@@ -37,6 +37,7 @@ const STATE_LABELS: Record<string, string> = {
   artifact_pipeline_unavailable: 'Artifact pipeline unavailable',
   disabled: 'Disabled',
   selected: 'Selected',
+  operator_selected: 'User-selected',
   no_acquisition: 'No acquisition',
   no_recent_observation: 'No recent observation',
   obscured: 'Obscured or uncertain',
@@ -61,6 +62,7 @@ export function labelImageryRole(role: string): string {
 export function labelImagerySelection(
   selection: GroundImagerySelectionResponse,
 ): string {
+  if (selection.reason === 'operator_selected') return 'User-selected capture';
   if (selection.reason !== 'selected') {
     if (selection.role === 'latest_useful') return 'Latest capture';
     if (selection.role === 'first_useful_after_onset')

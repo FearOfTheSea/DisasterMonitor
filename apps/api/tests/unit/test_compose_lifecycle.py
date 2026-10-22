@@ -69,7 +69,9 @@ def test_model_is_private_gpu_service_and_api_waits_for_model_pull() -> None:
     assert services["ollama-pull-vision"]["command"] == ["pull", "qwen3-vl:2b"]
     for service in ("api", "worker"):
         assert services[service]["environment"]["MODEL_PROVIDER"] == "ollama"
-        assert services[service]["environment"]["OLLAMA_BASE_URL"] == "http://ollama:11434"
+        assert (
+            services[service]["environment"]["OLLAMA_BASE_URL"] == "http://ollama:11434"
+        )
         assert services[service]["environment"]["OLLAMA_MODEL"] == (
             "qwen3:4b-instruct-2507-q4_K_M"
         )

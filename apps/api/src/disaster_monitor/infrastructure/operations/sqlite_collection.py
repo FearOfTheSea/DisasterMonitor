@@ -27,6 +27,7 @@ from disaster_monitor.domain.collection import (
     CollectionSnapshot,
     FailureOutcome,
     WorkKind,
+    lead_retrieval_priority,
 )
 from disaster_monitor.domain.discovery import (
     CollectionProgress,
@@ -69,7 +70,8 @@ CREATE TABLE IF NOT EXISTS work (
  payload BLOB NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
  attempts INTEGER NOT NULL DEFAULT 0, token TEXT, lease_until REAL,
  due REAL NOT NULL DEFAULT 0, outcome TEXT, detail TEXT,
- sequence INTEGER NOT NULL DEFAULT 0, alternate_depth INTEGER NOT NULL DEFAULT 0
+ sequence INTEGER NOT NULL DEFAULT 0, alternate_depth INTEGER NOT NULL DEFAULT 0,
+ priority INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS scan_work (
  scan TEXT NOT NULL, work TEXT NOT NULL, PRIMARY KEY(scan,work)
@@ -138,6 +140,32 @@ class SQLiteCollectionJournal:
                     "ALTER TABLE work ADD COLUMN alternate_depth INTEGER NOT"
                     " NULL DEFAULT 0"
                 )
+            if "priority" not in columns:
+                db.execute("BEGIN IMMEDIATE")
+                try:
+                    db.execute(
+                        "ALTER TABLE work ADD COLUMN priority INTEGER NOT NULL "
+                        "DEFAULT 0"
+                    )
+                    db.executemany(
+                        "UPDATE work SET priority=? WHERE id=?",
+                        (
+                            (
+                                lead_retrieval_priority(
+                                    LEAD.validate_json(row["payload"])
+                                ),
+                                row["id"],
+                            )
+                            for row in db.execute(
+                                "SELECT id,payload FROM work WHERE kind='retrieve' "
+                                "AND state IN ('pending','leased')"
+                            ).fetchall()
+                        ),
+                    )
+                    db.commit()
+                except BaseException:
+                    db.rollback()
+                    raise
             db.execute("PRAGMA user_version=1")
             self._retained_refusals = retained_publisher_refusals(db)
 
@@ -244,9 +272,16 @@ class SQLiteCollectionJournal:
 
     def _add_work(self, db: sqlite3.Connection, partition: CollectionPartition) -> None:
         db.execute(
-            "INSERT OR IGNORE INTO work(id,kind,provider,payload,sequence) "
-            "VALUES(?,'search',?,?,(SELECT COALESCE(MAX(sequence),0)+1 FROM work))",
-            (partition.key, partition.provider, PARTITION.dump_json(partition)),
+            "INSERT INTO work(id,kind,provider,payload,priority,sequence) "
+            "VALUES(?,'search',?,?,?,(SELECT COALESCE(MAX(sequence),0)+1 FROM work)) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "priority=MAX(work.priority,excluded.priority)",
+            (
+                partition.key,
+                partition.provider,
+                PARTITION.dump_json(partition),
+                partition.priority,
+            ),
         )
 
     def _attach_descendants(self, db: sqlite3.Connection, scan: str, key: str) -> None:
@@ -336,7 +371,7 @@ class SQLiteCollectionJournal:
                 "(w.state='leased' AND w.lease_until<=?)) "
                 "AND w.due<=? AND COALESCE(c.until_time,0)<=? "
                 "AND (? IS NULL OR w.provider=?) AND p.started>? "
-                "ORDER BY w.sequence,w.id",
+                "ORDER BY w.priority DESC,w.sequence,w.id",
                 (
                     kind,
                     timestamp,
@@ -482,10 +517,15 @@ class SQLiteCollectionJournal:
                 ).hexdigest()
                 db.execute(
                     "INSERT OR IGNORE INTO "
-                    "work(id,kind,provider,payload,sequence) "
-                    "VALUES(?,'retrieve',?,?,"
+                    "work(id,kind,provider,payload,priority,sequence) "
+                    "VALUES(?,'retrieve',?,?,?,"
                     "(SELECT COALESCE(MAX(sequence),0)+1 FROM work))",
-                    (key, ARTICLE_RETRIEVAL_PROVIDER, LEAD.dump_json(item)),
+                    (
+                        key,
+                        ARTICLE_RETRIEVAL_PROVIDER,
+                        LEAD.dump_json(item),
+                        lead_retrieval_priority(item),
+                    ),
                 )
                 self._link_child(db, work.work_id, key)
                 if work.partition.alternate_for:
@@ -522,12 +562,23 @@ class SQLiteCollectionJournal:
         return True
 
     async def commit_article(
-        self, work: ClaimedCollectionWork, article: DiscoveryArticle, *, now: datetime
+        self,
+        work: ClaimedCollectionWork,
+        article: DiscoveryArticle,
+        *,
+        now: datetime,
+        alternates: tuple[CollectionPartition, ...] = (),
     ) -> bool:
-        return await asyncio.to_thread(self._commit_article, work, article, now)
+        return await asyncio.to_thread(
+            self._commit_article, work, article, now, alternates
+        )
 
     def _commit_article(
-        self, work: ClaimedCollectionWork, article: DiscoveryArticle, now: datetime
+        self,
+        work: ClaimedCollectionWork,
+        article: DiscoveryArticle,
+        now: datetime,
+        alternates: tuple[CollectionPartition, ...],
     ) -> bool:
         with self._transaction() as db:
             if not self._owns(db, work, now):
@@ -544,6 +595,9 @@ class SQLiteCollectionJournal:
                 )
                 return False
             self._evidence(db, work.work_id, article)
+            for partition in alternates:
+                self._add_work(db, partition)
+                self._link_child(db, work.work_id, partition.key)
             db.execute(
                 "UPDATE work SET "
                 "state='done',outcome='article_retrieved',token=NULL,lease_until=NULL"

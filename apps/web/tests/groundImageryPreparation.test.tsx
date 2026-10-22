@@ -1,4 +1,11 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -54,6 +61,32 @@ describe('Ground imagery preparation and comparison', () => {
     cleanup();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps every prepared capture selectable when a comparison pair is available', async () => {
+    const user = userEvent.setup();
+    api.createGroundImageryRequest.mockResolvedValue(comparisonRequest);
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="Flood"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
+    expect(await screen.findByText('Matched before / after')).toBeVisible();
+    const chooser = screen.getByRole('combobox', { name: 'Prepared capture' });
+    expect(chooser).toHaveDisplayValue(/S1-after/);
+    await user.selectOptions(chooser, 'artifact:before');
+    expect(chooser).toHaveDisplayValue(/S1-before/);
+    expect(
+      within(screen.getByRole('region', { name: 'Prepared observation' })).getByAltText(
+        'Sentinel-1 radar before capture',
+      ),
+    ).toHaveAttribute('src', expect.stringContaining('artifact%3Abefore/preview.png'));
   });
 
   it('keeps a prepared capture visible after a refresh changes the selection', async () => {

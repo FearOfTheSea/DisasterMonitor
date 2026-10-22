@@ -30,6 +30,7 @@ class SelectionReason(StrEnum):
     """Stable reason codes for selection and availability gaps."""
 
     SELECTED = "selected"
+    OPERATOR_SELECTED = "operator_selected"
     NO_ACQUISITION = "no_acquisition"
     NO_RECENT_OBSERVATION = "no_recent_observation"
     OBSCURED = "obscured"

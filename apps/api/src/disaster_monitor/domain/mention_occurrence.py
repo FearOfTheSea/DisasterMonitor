@@ -1,10 +1,14 @@
-"""Conservative English occurrence roles and date attachment, without I/O."""
+"""Literal occurrence roles and bounded English date attachment, without I/O."""
 
 import re
 from typing import Literal
 
 from disaster_monitor.domain.disaster_types import Disaster
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
+from disaster_monitor.domain.regional_accounts import (
+    regional_forecast,
+    regional_occurrence_start,
+)
 from disaster_monitor.domain.source_sentences import source_clauses
 
 MentionRole = Literal["reported", "ongoing", "historical", "forecast", "uncertain"]
@@ -18,7 +22,7 @@ _PREPARATION = re.compile(
     re.I,
 )
 _OCCURRENCE = re.compile(
-    r"\b(?:struck|hit|occurred|erupted|killed|died|injured|damaged|destroyed|"
+    r"\b(?:struck|hit|occurred|erupted|killed|died|drowned|injured|damaged|destroyed|"
     r"affected|impacted|tore through|displaced|swept|flooded|triggered|caused|"
     r"devastated|strengthened|intensifies|"
     r"has moved|brought|bringing|began|started|onset|reported|recorded|"
@@ -47,13 +51,13 @@ _RESPONSE_CONTEXT = re.compile(
 _PHYSICAL_OCCURRENCE = re.compile(
     r"\b(?:floods?|flooding|earthquakes?|wildfires?|fires?|landslides?|"
     r"tsunamis?|drought|eruption|hurricane|typhoon|cyclone)\s+"
-    r"(?:\w+\s+){0,2}(?:struck|hit|occurred|erupted|killed|damaged|"
+    r"(?:\w+\s+){0,2}(?:struck|hit|occurred|erupted|killed|drowned|damaged|"
     r"destroyed|swept|flooded|triggered|devastated|cut off|tore through)\b",
     re.I,
 )
 _FELT_EXTENT = re.compile(r"\b(?:was|were)\s+(?:also\s+)?felt\b", re.I)
 _DIRECT_IMPACT = re.compile(
-    r"\b(?:killed|died|injured|damaged|destroyed|collapsed|displaced)\b", re.I
+    r"\b(?:killed|died|drowned|injured|damaged|destroyed|collapsed|displaced)\b", re.I
 )
 _STATEMENT = re.compile(
     r"\b(?:said|says?|told|announced|confirmed|reported|explained|added|"
@@ -105,6 +109,9 @@ def victim_activity_date_requires_reference(text: str) -> bool:
 def _occurrence_start(text: str) -> int | None:
     direct = _OCCURRENCE.search(text)
     starts = [direct.start()] if direct else []
+    regional = regional_occurrence_start(text)
+    if regional is not None:
+        starts.append(regional)
     victim_activity = _victim_firefighting_start(text)
     if victim_activity is not None:
         starts.append(victim_activity)
@@ -184,7 +191,7 @@ def has_distinct_occurrence(text: str) -> bool:
 def occurrence_role(text: str, *, historical: bool = False) -> MentionRole:
     if historical:
         return "historical"
-    if _PREPARATION.search(text):
+    if _PREPARATION.search(text) or regional_forecast(text):
         return "forecast"
     if _ONGOING.search(text):
         return "ongoing"
@@ -192,7 +199,7 @@ def occurrence_role(text: str, *, historical: bool = False) -> MentionRole:
         is_response_context(text)
         and not _PHYSICAL_OCCURRENCE.search(text)
         and not re.search(
-            r"\b(?:killed|died|injured|destroyed|collapsed)\b", text, re.I
+            r"\b(?:killed|died|drowned|injured|destroyed|collapsed)\b", text, re.I
         )
     ):
         return "uncertain"
@@ -209,6 +216,13 @@ def date_is_occurrence(text: str, start: int, end: int) -> bool:
     left = source_clauses(before)[-1]
     right = source_clauses(after)[0]
     context = left + " " + right
+    if re.search(
+        r"\b(?:records?|recordkeeping)\s+(?:began|started|date[sd]?|"
+        r"were kept|have been kept)\s+(?:in|since|from)\s*$",
+        left,
+        re.I,
+    ):
+        return False
     possessive = bool(re.match(r"[’']s\b", right))
     statements = list(_STATEMENT.finditer(left))
     if statements and not possessive:
@@ -235,7 +249,7 @@ def date_is_occurrence(text: str, start: int, end: int) -> bool:
         r"\b(?:strengthened|intensified|weakened|downgraded)\b", context, re.I
     ):
         return False  # A storm phase update does not establish impact onset.
-    if _PREPARATION.search(context):
+    if _PREPARATION.search(context) or regional_forecast(context):
         return False
     if re.search(r"\b(?:as of|by|until|through|reported on|issued on)\s*$", left, re.I):
         return False

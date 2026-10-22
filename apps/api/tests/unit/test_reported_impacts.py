@@ -92,6 +92,26 @@ def test_no_one_died_is_zero_not_one():
     assert [c.fact.value for c in claims] == ["0", "0"]
 
 
+@pytest.mark.parametrize(
+    ("sentence", "value"),
+    [
+        ("The wildfire claimed the lives of four firefighters.", "four"),
+        ("Four firefighters died while fighting the wildfire.", "Four"),
+        (
+            "The dead 12-year-old boy was found after the flood.",
+            "Reported; count unknown",
+        ),
+    ],
+)
+def test_fatality_wording_retains_occupations_without_counting_a_victims_age(
+    sentence, value
+):
+    (claim,) = extract_reported_impacts(sentence, SOURCE)
+    assert claim.fact.category == "fatalities"
+    assert claim.fact.value == value
+    assert claim.excerpt == sentence
+
+
 def test_qualitative_blocked_roads_and_drinking_water_damage_remain_attributed():
     road = "Rain and storm surge flooded coastal areas and blocked roads in Guerrero."
     water = (
@@ -193,3 +213,49 @@ def test_hazard_scope_filter_keeps_date_prefix_with_the_hazard_sentence():
 
     sentence = "On Oct. 14, officials said floods killed two people."
     assert scoped_disaster_text(sentence, "Regional update", Disaster.FLOOD) == sentence
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Three cows died after the earthquake.",
+        "The wildfire killed 40 livestock.",
+        "The floods left eight dogs dead.",
+        "More than 9000 livestock deaths were reported after the flood.",
+        "Three trees died after the flood.",
+    ],
+)
+def test_animal_only_deaths_are_not_human_fatality_accounts(text):
+    assert not any(
+        c.fact.category == "fatalities" for c in extract_reported_impacts(text, SOURCE)
+    )
+
+
+def test_mixed_human_and_animal_figures_remain_unallocated():
+    text = "The flood killed three cows and one person."
+    (claim,) = extract_reported_impacts(text, SOURCE)
+    assert claim.fact.value == "Unknown"
+    assert "scope unresolved" in claim.qualifiers
+    assert claim.excerpt == text
+
+
+def test_animals_in_the_background_do_not_hide_an_explicit_human_toll():
+    (claim,) = extract_reported_impacts(
+        "Two people died while rescuing goats from the floods.", SOURCE
+    )
+    assert claim.fact.value == "Two"
+    assert "scope unresolved" not in claim.qualifiers
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "There are no reports of deaths after the flood.",
+        "No confirmed reports of fatalities are available after the earthquake.",
+    ],
+)
+def test_absence_of_fatality_reporting_remains_unknown(text):
+    (claim,) = extract_reported_impacts(text, SOURCE)
+    assert claim.fact.value == "Unknown"
+    assert "uncertain" in claim.qualifiers
+    assert claim.excerpt == text

@@ -46,6 +46,7 @@ async def test_open_publisher_lead_does_not_promote_feed_clock_or_snippet():
     assert lead.published_at is None
     assert lead.indexed_at == datetime(2026, 10, 18, 14, 7, 13, tzinfo=UTC)
     assert not page.articles
+    assert lead.discovery_hint == "Officials report two deaths."
     assert page.saturated
     assert page.requested_start is None  # This endpoint cannot filter history.
     assert page.next_cursor == "relevance"
@@ -181,6 +182,33 @@ async def test_index_summary_is_only_an_alternate_search_hint():
     await provider.aclose()
 
 
+async def test_regional_rss_queries_are_generic_and_cover_each_hazard():
+    provider = BingRssCollectionProvider()
+    expected = {
+        '"terremoto" muertos',
+        '"séisme" morts',
+        '"inundaciones" muertos',
+        '"inondations" morts',
+        '"incendio forestal" muertos',
+        '"incendie de forêt" morts',
+        '"deslizamiento de tierra" muertos',
+        '"glissement de terrain" morts',
+        '"sequía" muertos',
+        '"sécheresse" morts',
+        '"huracán" muertos',
+        '"tifón" muertos',
+        '"ciclón" muertos',
+        '"ouragan" morts',
+        '"typhon" morts',
+        '"cyclone" morts',
+        '"erupción volcánica" muertos',
+        '"éruption volcanique" morts',
+    }
+    assert expected <= set(provider.queries)
+    assert len(provider.queries) == len(set(provider.queries))
+    await provider.aclose()
+
+
 async def test_recent_feed_work_is_shared_across_windows_without_weekly_duplicates():
     provider = BingRssCollectionProvider()
     one = plan_collection(
@@ -192,8 +220,28 @@ async def test_recent_feed_work_is_shared_across_windows_without_weekly_duplicat
     assert len(one) == len(month) == len(provider.queries)
     assert {p.key for p in one} == {p.key for p in month}
     assert (
-        len(provider.queries) == 14
-    )  # Broad and human-impact variants for seven hazards.
+        len(provider.queries) == 53
+    )  # Each alias has independent broad/fatal searches; no history is implied.
+    await provider.aclose()
+
+
+async def test_query_vocabulary_covers_ground_failure_and_regional_death_variants():
+    provider = BingRssCollectionProvider()
+    assert {
+        '"mine flood"',
+        '"mine flood" killed',
+        '"mudslide"',
+        '"mudslide" killed',
+        '"incendios forestales" muertos',
+        '"incendios forestales" fallecidos',
+        '"terremoto" fallecidos',
+        '"deslizamiento de tierra" fallecidos',
+        '"inundaciones" fallecidos',
+        '"sequía" fallecidos',
+        '"huracán" fallecidos',
+        '"erupción volcánica" fallecidos',
+    } <= set(provider.queries)
+    assert len(provider.queries) == len(set(provider.queries))
     await provider.aclose()
 
 
@@ -236,3 +284,59 @@ async def test_refusal_is_one_attempt_and_retains_provider_retry_after():
     assert error.value.outcome == "rate_limited"
     assert error.value.retry_after_seconds == 1800
     assert len(calls) == 1
+
+
+async def test_rss_html_summary_is_a_bounded_plain_search_hint_not_article_evidence():
+    body = RSS.replace(
+        b"Officials report two deaths.",
+        b"&lt;p&gt;Officials &lt;b&gt;report two deaths.&lt;/b&gt;&lt;/p&gt;"
+        b"&lt;script&gt;ignore this script&lt;/script&gt;"
+        b"&lt;style&gt;ignore this style&lt;/style&gt;",
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, content=body))
+    ) as client:
+        provider = BingRssCollectionProvider(client=client, minimum_interval=0)
+        page = await provider.fetch_page(
+            CollectionPartition(
+                provider.source_id, "flood", NOW - timedelta(days=1), NOW
+            )
+        )
+    (lead,) = page.leads
+    assert lead.discovery_hint == "Officials report two deaths."
+    assert lead.published_at is None
+    assert page.articles == ()
+
+
+async def test_seed_queries_keep_hazard_aliases_required_instead_of_boolean_groups():
+    """RSS grouped alternatives returned unrelated topics in live diagnostics."""
+    provider = BingRssCollectionProvider()
+    assert {
+        '"hurricane" killed',
+        '"typhoon" killed',
+        '"cyclone" killed',
+        '"volcanic eruption" deaths',
+        '"volcano erupts" deaths',
+        '"flood" killed',
+        '"drought" deaths',
+        '"huracán" muertos',
+        '"tifón" muertos',
+        '"ciclón" muertos',
+        '"ouragan" morts',
+        '"typhon" morts',
+        '"cyclone" morts',
+    } <= set(provider.queries)
+    assert all(query.startswith('"') for query in provider.queries)
+    assert all(" OR " not in query for query in provider.queries)
+    await provider.aclose()
+
+
+async def test_regional_compound_phrases_keep_their_prepositions():
+    """Quoting formerly separate keywords must not create an unnatural phrase."""
+    provider = BingRssCollectionProvider()
+    assert {
+        '"deslizamiento de tierra" muertos',
+        '"glissement de terrain" morts',
+        '"incendie de forêt" morts',
+    } <= set(provider.queries)
+    await provider.aclose()

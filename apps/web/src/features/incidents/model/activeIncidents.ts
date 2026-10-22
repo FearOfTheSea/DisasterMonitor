@@ -11,7 +11,7 @@ export type IncidentCoverageState =
   'events_found' | 'no_matching_records' | 'degraded' | 'unavailable';
 
 export type ObservationKind = 'physical_event' | 'preliminary_event' | 'acquisition';
-export type EventTimePrecision = 'exact' | 'day' | 'week';
+export type EventTimePrecision = 'exact' | 'day' | 'week' | 'range';
 
 export type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
 

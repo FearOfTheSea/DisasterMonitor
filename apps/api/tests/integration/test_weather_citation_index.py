@@ -321,7 +321,7 @@ async def test_monthly_refusal_cooldown_also_blocks_annual_query_without_extra_r
             run = await runtime.start(30)
             await runtime.wait(run.scan_id)
             progress = (await store.read(run.scan_id)).collection
-            assert progress.searches_pending == 2
+            assert progress.searches_pending == len(provider.queries)
             assert progress.retry_at >= NOW + timedelta(seconds=1800)
             assert len(calls) == 1
         finally:

@@ -14,6 +14,7 @@ from disaster_monitor.infrastructure.news.wikipedia_citations import (
     MONTHS,
     CitationCapacityError,
     parse_citations,
+    parse_earthquake_citations,
     parse_weather_citations,
 )
 
@@ -22,7 +23,11 @@ class WikipediaCitationCollectionProvider:
     source_id = "wikipedia-citation-discovery"
     supports_time_filter = False
     supports_alternates = False
-    queries = ("current-events-citations", "weather-timeline-citations")
+    queries = (
+        "current-events-citations",
+        "weather-timeline-citations",
+        "earthquake-timeline-citations",
+    )
 
     endpoint = "https://en.wikipedia.org/w/api.php"
 
@@ -72,7 +77,11 @@ class WikipediaCitationCollectionProvider:
         title = (
             f"Portal:Current events/{MONTHS[period.month - 1]} {period.year}"
             if monthly
-            else f"Weather of {period.year}"
+            else (
+                f"List of earthquakes in {period.year}"
+                if partition.query == "earthquake-timeline-citations"
+                else f"Weather of {period.year}"
+            )
         )
         response = await self._http.get_json(
             self.endpoint,
@@ -121,7 +130,12 @@ class WikipediaCitationCollectionProvider:
                     maximum_citations=self._maximum_citations,
                 )
             else:
-                leads, invalid_links = parse_weather_citations(
+                parser = (
+                    parse_earthquake_citations
+                    if partition.query == "earthquake-timeline-citations"
+                    else parse_weather_citations
+                )
+                leads, invalid_links = parser(
                     html,
                     year=period.year,
                     earliest=earliest,
@@ -139,7 +153,7 @@ class WikipediaCitationCollectionProvider:
             saturated=True,
             notices=(
                 f"Wikipedia editorial citation index: {title}, revision {revision}.",
-                "English disaster-category and annual weather timeline citations "
+                "English disaster-category, annual weather and earthquake citations "
                 "are editorial leads, "
                 "not exhaustive news coverage. Index summaries and calendar dates "
                 "do not establish publisher claims, publication or event onset. "

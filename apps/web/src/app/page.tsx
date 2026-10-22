@@ -406,6 +406,7 @@ export default function Home() {
             incidentLabel={`${disasterLabel(selectedIncident.disaster)} · ${selectedIncident.location}`}
             incidentTime={selectedIncident.event_time}
             incidentTimePrecision={selectedIncident.event_time_precision}
+            incidentTimeEnd={selectedIncident.event_time_end}
             onClose={() => openPane('event')}
           >
             {selectedIncident.discovery_reports?.length ? (

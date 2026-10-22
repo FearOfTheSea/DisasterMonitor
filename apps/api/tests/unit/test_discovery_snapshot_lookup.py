@@ -183,6 +183,7 @@ def test_projection_precision_belongs_to_selected_onset(runs, precision):
     incident = discovery_incident(event, original.finished_at, scan_id=original.scan_id)
 
     assert incident.event_time == onset
-    assert incident.event_time_precision is (
-        EventTimePrecision.EXACT if precision == "exact" else EventTimePrecision.DAY
+    assert incident.event_time_precision.value == precision
+    assert incident.event_time_end == (
+        selected.mention.time.end if precision == "range" else None
     )

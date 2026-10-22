@@ -317,6 +317,8 @@ def _with_prepared_quality(
                     QualityState.UNCOVERED: SelectionReason.PARTIAL_COVERAGE,
                     QualityState.UNCERTAIN: SelectionReason.QUALITY_UNASSESSED,
                 }[quality.quality_state]
+                if outcome.reason is SelectionReason.OPERATOR_SELECTED:
+                    reason = SelectionReason.OPERATOR_SELECTED
                 outcome = replace(
                     outcome,
                     observation=replace(observation, quality=quality),

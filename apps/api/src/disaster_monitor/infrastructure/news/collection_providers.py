@@ -220,7 +220,7 @@ class PublicCollectionArticleReader:
                 "article_unavailable", str(error)[:200]
             ) from error
         # Publisher metadata establishes publication; provider age stays separate.
-        return parse_discovery_article(
+        article = parse_discovery_article(
             html,
             url=lead.canonical_url,
             title=lead.title,
@@ -228,3 +228,9 @@ class PublicCollectionArticleReader:
             retrieved_at=datetime.now(UTC),
             indexed_at=lead.indexed_at,
         )
+        if not article.text.strip() and article.source.published_at is None:
+            raise CollectionProviderError(
+                "article_unavailable",
+                "Retrieved page has no publisher text or publication evidence.",
+            )
+        return article

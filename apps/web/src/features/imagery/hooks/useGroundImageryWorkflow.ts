@@ -10,6 +10,7 @@ import {
   replaceGroundImageryRegion,
   refreshGroundImageryRequest,
   setGroundImageryWatch,
+  selectGroundImageryObservation,
 } from '@/features/imagery/api/groundImageryClient';
 import {
   automaticPreparationSelections,
@@ -19,6 +20,7 @@ import {
 import type {
   GroundImageryRegionRequest,
   GroundImagerySelectionResponse,
+  GroundImagerySelectionRequest,
 } from '@/shared/api/generated/assistant';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -242,6 +244,13 @@ export function useGroundImageryWorkflow(
     );
   };
 
+  const handleSelect = (selection: GroundImagerySelectionRequest) => {
+    if (!request) return;
+    void runAction(`select:${selection.observation_id}`, () =>
+      selectGroundImageryObservation(request.request_id, selection),
+    );
+  };
+
   return {
     request,
     readiness,
@@ -254,5 +263,6 @@ export function useGroundImageryWorkflow(
     handleRegion,
     handleWatch,
     handlePrepare,
+    handleSelect,
   };
 }

@@ -2,6 +2,7 @@
 
 from datetime import UTC
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -14,8 +15,65 @@ from disaster_monitor.domain.collection import (
 )
 from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.infrastructure.news.collection_http import CollectionHttp
-from disaster_monitor.infrastructure.news.discovery_feed import _QUERIES
 from disaster_monitor.infrastructure.news.public_documents import public_document_host
+
+# Keep provider query syntax here rather than sharing GDELT's Boolean grammar.
+# Public RSS diagnostics returned unrelated headlines for grouped alternatives.
+# A mandatory phrase is still only a search hint, never event evidence.
+_QUERY_GROUPS = (
+    (("earthquake",), "killed", ("terremoto",), ("séisme",)),
+    (("flood", "mine flood"), "killed", ("inundaciones",), ("inondations",)),
+    (
+        ("wildfire",),
+        "killed",
+        ("incendio forestal", "incendios forestales"),
+        ("incendie de forêt",),
+    ),
+    (
+        ("landslide", "mudslide"),
+        "killed",
+        ("deslizamiento de tierra",),
+        ("glissement de terrain",),
+    ),
+    (("drought",), "deaths", ("sequía",), ("sécheresse",)),
+    (
+        ("hurricane", "typhoon", "cyclone"),
+        "killed",
+        ("huracán", "tifón", "ciclón"),
+        ("ouragan", "typhon", "cyclone"),
+    ),
+    (
+        ("volcanic eruption", "volcano erupts"),
+        "deaths",
+        ("erupción volcánica",),
+        ("éruption volcanique",),
+    ),
+)
+
+
+class _HintText(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in ("script", "style"):
+            self.hidden += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("script", "style"):
+            self.hidden = max(0, self.hidden - 1)
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def _summary_hint(description: str) -> str | None:
+    parser = _HintText()
+    parser.feed(description[:10_000])
+    return " ".join(" ".join(parser.parts).split())[:1500] or None
 
 
 class BingRssCollectionProvider:
@@ -24,10 +82,16 @@ class BingRssCollectionProvider:
     supports_time_filter = False
     queries = tuple(
         query
-        for hazard in _QUERIES
+        for english, fatality, spanish, french in _QUERY_GROUPS
         for query in (
-            hazard,
-            f"{hazard} (killed OR deaths OR fatalities OR missing)",
+            *(f'"{hazard}"' for hazard in english),
+            *(f'"{hazard}" {fatality}' for hazard in english),
+            *(
+                f'"{hazard}" {death_word}'
+                for hazard in spanish
+                for death_word in ("muertos", "fallecidos")
+            ),
+            *(f'"{hazard}" morts' for hazard in french),
         )
     )
     endpoint = "https://www.bing.com/news/search"
@@ -136,4 +200,5 @@ def _lead(fields: dict[str, str]) -> NewsFeedItem | None:
         published_at=None,
         updated_at=None,
         indexed_at=indexed.astimezone(UTC),
+        discovery_hint=_summary_hint(fields.get("description", "")),
     )

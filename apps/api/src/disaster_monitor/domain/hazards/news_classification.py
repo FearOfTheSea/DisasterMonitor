@@ -3,6 +3,8 @@
 import re
 
 from disaster_monitor.domain.disaster_types import Disaster
+from disaster_monitor.domain.hazards.regional_vocabulary import REGIONAL_HAZARDS
+from disaster_monitor.domain.regional_accounts import regional_fatality_account
 
 _HAZARD_PATTERNS = (
     (Disaster.EARTHQUAKE, re.compile(r"\b(?:earthquakes?|quakes?|seismic)\b", re.I)),
@@ -19,7 +21,14 @@ _HAZARD_PATTERNS = (
     ),
     (
         Disaster.VOLCANIC_ERUPTION,
-        re.compile(r"\b(?:volcanic eruptions?|volcano erupts?|eruptions?)\b", re.I),
+        re.compile(
+            r"\b(?:volcanic eruptions?|eruptions?|"
+            r"(?:volcano|(?-i:Mount|Mt\.)\s+[A-Z][\w’'-]*"
+            r"(?:\s+[A-Z][\w’'-]*){0,2})\s+"
+            r"(?:(?:last|has|had|is|was|began|started)\s+){0,2}"
+            r"erupt(?:s|ed|ing)?)\b",
+            re.I,
+        ),
     ),
 )
 _MAJOR_IMPACT = re.compile(
@@ -32,7 +41,10 @@ _MAJOR_IMPACT = re.compile(
 
 def classify_major_disaster_headline(title: str) -> Disaster | None:
     """Return one unambiguous supported hazard with major-impact language."""
-    if not _MAJOR_IMPACT.search(title):
+    regional = regional_fatality_account(title)
+    if not _MAJOR_IMPACT.search(title) and (
+        regional is None or regional.value in ("0", "Unknown")
+    ):
         return None
     return classify_disaster_text(title)
 
@@ -46,5 +58,7 @@ def classify_disaster_text(title: str) -> Disaster | None:
 def disasters_in_text(text: str) -> tuple[Disaster, ...]:
     """Expose the same hazard vocabulary for conservative source-account scoping."""
     return tuple(
-        disaster for disaster, pattern in _HAZARD_PATTERNS if pattern.search(text)
+        disaster
+        for disaster, pattern in _HAZARD_PATTERNS
+        if pattern.search(text) or REGIONAL_HAZARDS[disaster].search(text)
     )

@@ -37,6 +37,7 @@ class EventTimePrecision(StrEnum):
     EXACT = "exact"
     DAY = "day"
     WEEK = "week"
+    RANGE = "range"
 
 
 def validate_event_temporality(
@@ -45,11 +46,24 @@ def validate_event_temporality(
     event_time_precision: EventTimePrecision,
     observation_kind: ObservationKind,
 ) -> None:
-    """Protect week observations from becoming fabricated exact events."""
+    """Preserve calendar periods instead of fabricating exact occurrence dates."""
     if not isinstance(event_time_precision, EventTimePrecision):
         raise TypeError("An event requires typed temporal precision.")
     if not isinstance(observation_kind, ObservationKind):
         raise TypeError("An event requires a typed observation kind.")
+    if event_time_precision is EventTimePrecision.RANGE:
+        if event_time_end is None:
+            raise ValueError("A calendar range requires a later, exclusive end date.")
+        if any(
+            not _is_aware(value)
+            or value.utcoffset() != timedelta(0)
+            or any((value.hour, value.minute, value.second, value.microsecond))
+            for value in (event_time, event_time_end)
+        ):
+            raise ValueError("A calendar range requires UTC calendar dates.")
+        if event_time_end <= event_time:
+            raise ValueError("A calendar range requires a later, exclusive end date.")
+        return
     if event_time_precision is EventTimePrecision.WEEK:
         if event_time_end is None:
             raise ValueError("A week-precision event requires an end date.")
@@ -104,6 +118,12 @@ def event_temporality_overlaps(
     interval_end: datetime,
 ) -> bool:
     """Return whether exact instants or inclusive calendar dates overlap a window."""
+    if event_time_precision is EventTimePrecision.RANGE:
+        return bool(
+            event_time_end is not None
+            and event_time <= interval_end
+            and event_time_end > interval_start
+        )
     if event_time_precision is EventTimePrecision.WEEK:
         if event_time_end is None:
             return False

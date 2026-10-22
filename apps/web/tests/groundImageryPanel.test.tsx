@@ -25,6 +25,8 @@ const api = vi.hoisted(() => ({
   replaceGroundImageryRegion: vi.fn(),
   refreshGroundImageryRequest: vi.fn(),
   setGroundImageryWatch: vi.fn(),
+  fetchGroundImageryObservations: vi.fn(),
+  selectGroundImageryObservation: vi.fn(),
 }));
 
 vi.mock('@/features/imagery/api/groundImageryClient', () => api);
@@ -62,6 +64,79 @@ describe('GroundImageryPanel', () => {
     vi.unstubAllGlobals();
   });
 
+  it('lets the user browse later pages and select an obscured optical capture', async () => {
+    const user = userEvent.setup();
+    const cloudy = {
+      ...observation('S2-cloudy', '2024-05-19T00:00:00Z'),
+      sensor: 'sentinel-2',
+      cloud_cover_fraction: 0.99,
+    };
+    const initial = {
+      ...request,
+      sensors: [
+        request.sensors[0],
+        {
+          ...request.sensors[1],
+          scanned_count: 2,
+          selections: [{ ...request.sensors[0].selections[0], sensor: 'sentinel-2' }],
+        },
+      ],
+    };
+    api.createGroundImageryRequest.mockResolvedValue(initial);
+    api.fetchGroundImageryObservations
+      .mockResolvedValueOnce({ observations: [], total: 2, next_cursor: '1' })
+      .mockResolvedValueOnce({ observations: [cloudy], total: 2, next_cursor: null });
+    api.selectGroundImageryObservation.mockResolvedValue({
+      ...initial,
+      request_version: 2,
+      sensors: [
+        initial.sensors[0],
+        {
+          ...initial.sensors[1],
+          selections: [
+            {
+              ...initial.sensors[1].selections[0],
+              observation: cloudy,
+              reason: 'operator_selected',
+              selection_id: 'selected-cloudy',
+            },
+          ],
+        },
+      ],
+    });
+    render(
+      <GroundImageryPanel
+        incidentId="incident-1"
+        incidentLabel="Flood"
+        incidentTime="2024-05-19T12:00:00Z"
+        onClose={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Search satellite acquisitions' }),
+    );
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Browse Sentinel-2 optical acquisitions',
+      }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: 'Load more acquisitions' }),
+    );
+    expect(await screen.findByText('Cloud cover: 99%')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Select S2-cloudy' }));
+    expect(api.selectGroundImageryObservation).toHaveBeenCalledWith(
+      request.request_id,
+      {
+        sensor: 'sentinel-2',
+        role: 'latest_useful',
+        observation_id: cloudy.observation_id,
+      },
+    );
+    expect(await screen.findByText('User-selected capture')).toBeVisible();
+    expect(api.prepareGroundImagerySelection).not.toHaveBeenCalled();
+  });
+
   it('labels reused catalog cutoffs and previously retrieved imagery', async () => {
     api.createGroundImageryRequest.mockResolvedValue({
       ...request,
@@ -83,6 +158,22 @@ describe('GroundImageryPanel', () => {
     expect(
       screen.getByLabelText('Catalog snapshot cutoff').getAttribute('dateTime'),
     ).toBe(request.reference_time);
+  });
+
+  it('keeps a reported month bounded in the Ground header', () => {
+    render(
+      <GroundImageryPanel
+        incidentId="period-event"
+        incidentLabel="Reported eruption"
+        incidentTime="2021-12-01T00:00:00Z"
+        incidentTimeEnd="2022-01-01T00:00:00Z"
+        incidentTimePrecision="range"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('December 2021 (exact date unresolved)')).toBeVisible();
+    expect(screen.queryByText(/2021-12-01.*date only/)).not.toBeInTheDocument();
+    expect(api.createGroundImageryRequest).not.toHaveBeenCalled();
   });
 
   it('preserves date-only event precision in the Ground header', () => {

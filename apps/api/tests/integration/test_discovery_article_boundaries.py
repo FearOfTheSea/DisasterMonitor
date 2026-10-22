@@ -21,6 +21,30 @@ def parse(markup):
     )
 
 
+@pytest.mark.parametrize("widget_class", ["also-read", "also_read", "story-also-read"])
+@pytest.mark.parametrize("owned_body", [True, False])
+def test_also_read_widget_does_not_own_its_unlinked_teaser(widget_class, owned_body):
+    opening, closing = (
+        ('<article><div itemprop="articleBody">', "</div></article>")
+        if owned_body
+        else ("<div>", "</div>")
+    )
+    article = parse(f'''<meta property="og:title" content="Floods in Lakeview">
+        {opening}<h1>Floods in Lakeview</h1>
+        <p>Floods struck Lakeview on 14 October. Six people died.</p>
+        <div class="{widget_class}"><div class="title">
+          <a href="https://publisher.example/other">A mine landslide killed nine.</a>
+        </div><div class="description">Nine miners died in Highforest.</div>
+        <div class="byline">Agency</div></div>
+        <p>An engineer also read the river gauge. Twenty homes were damaged.</p>
+        {closing}''')
+    assert "Six people died" in article.text
+    assert "engineer also read the river gauge" in article.text
+    assert "Twenty homes were damaged" in article.text
+    assert "Nine miners" not in article.text
+    assert "Highforest" not in article.text
+
+
 def test_explicit_body_marker_excludes_other_article_cards_and_preserves_caption():
     article = parse("""<main>
       <article><h1>Floods in Lakeview</h1>
@@ -37,6 +61,81 @@ def test_explicit_body_marker_excludes_other_article_cards_and_preserves_caption
     assert "landslide" not in article.text
     assert "15 October" not in article.text
     assert "Photo: Agency" in article.photograph_captions[0]
+
+
+def test_articlebodycontent_owns_text_over_schema_with_embedded_recommendations():
+    schema = {
+        "@type": "NewsArticle",
+        "url": "https://publisher.example/main-report",
+        "headline": "Floods in Lakeview",
+        "datePublished": "2026-10-20T10:00:00Z",
+        "articleBody": "Floods killed six. A hurricane elsewhere killed nine.",
+    }
+    article = parse(
+        '<script type="application/ld+json">' + json.dumps(schema) + "</script>"
+        '<h1>Floods in Lakeview</h1><div class="articlebodycontent col-xl-9">'
+        '<div class="schemaDiv"><p>Floods struck Lakeview. Six people died.</p>'
+        '<div class="also-read print-hide"><div class="title">'
+        '<a href="/other">A hurricane elsewhere killed nine.</a></div>'
+        '<div class="description">Nine people died in Highforest.</div></div>'
+        "<p>Twenty homes were damaged, officials said.</p></div></div>"
+    )
+    assert "Six people died" in article.text
+    assert "Twenty homes were damaged" in article.text
+    assert "hurricane" not in article.text
+    assert "Highforest" not in article.text
+    assert article.source.published_at == datetime(2026, 10, 20, 10, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("tag", ["strong", "b"])
+@pytest.mark.parametrize("nested", [False, True])
+def test_trailing_emphasized_linked_headline_is_not_the_paragraphs_fatality_account(
+    tag,
+    nested,
+):
+    headline = (
+        "A landslide in Highforest <b>killed forty people.</b>"
+        if nested
+        else "A landslide in Highforest killed forty people."
+    )
+    article = parse(f"""<main><p>Floods struck Lakeview. Two people died.
+      <{tag}><a href="/other">{headline}</a></{tag}>
+      </p><p>Twenty homes were damaged.</p></main>""")
+    assert "Two people died" in article.text
+    assert "Twenty homes were damaged" in article.text
+    assert "Highforest" not in article.text
+
+
+@pytest.mark.parametrize(
+    "paragraph",
+    [
+        '<strong><a href="/official">Two</a></strong> people died in the flood.',
+        '<strong><a href="/official"><b>Two</b></a></strong> people died in the flood.',
+        'The flood killed <strong><a href="/official">two people</a></strong>.',
+        (
+            'Officials said <strong><a href="/official">'
+            "two people died in the Lakeview flood.</a></strong>"
+        ),
+        (
+            'Officials <strong>said</strong> <strong><a href="/official">'
+            "two people died in the Lakeview flood.</a></strong>"
+        ),
+        (
+            'The report says <strong><a href="/official">'
+            "two people died in the Lakeview flood.</a></strong> Rescue work continues."
+        ),
+        (
+            'The flood killed two people, according to <strong><a href="/official">'
+            "Dr. Alex Stone</a></strong>."
+        ),
+    ],
+)
+def test_linked_counts_names_and_inline_attributed_accounts_remain_narrative(paragraph):
+    article = parse(f"<main><p>{paragraph}</p></main>")
+    assert "two" in article.text.casefold()
+    assert "died" in article.text or "killed" in article.text
+    if "Alex Stone" in paragraph:
+        assert "Alex Stone" in article.text
 
 
 @pytest.mark.parametrize("recommendation_first", [False, True])
@@ -248,6 +347,27 @@ def test_an_inline_source_link_does_not_remove_the_reported_paragraph():
     assert "the authority" in article.text
 
 
+@pytest.mark.parametrize(
+    "widget_class",
+    ["author-box-related-entries", "related-stories", "recommended-content"],
+)
+def test_related_cards_with_unlinked_author_names_cannot_supply_article_claims(
+    widget_class,
+):
+    article = parse(f"""<article><h1>Floods in Lakeview</h1>
+      <div class="entry-content"><p>Floods struck Lakeview. Two people died.</p>
+        <div class="{widget_class}"><ul><li>
+          <div>Another writer</div><div><a href="/elsewhere">
+            <span>Four deaths reported in a Highforest wildfire</span>
+          </a></div></li></ul></div>
+        <p>Rescue work continues in Lakeview.</p>
+      </div></article>""")
+    assert "Two people died" in article.text
+    assert "Rescue work continues" in article.text
+    assert "Highforest" not in article.text
+    assert "Another writer" not in article.text
+
+
 def test_a_hidden_unlinked_child_does_not_turn_a_link_card_into_narrative():
     article = parse("""<article><h1>Floods in Lakeview</h1>
       <p>Floods struck Lakeview.</p>
@@ -297,3 +417,47 @@ def test_unmarked_headline_fallback_also_excludes_direct_class_marked_captions()
     assert "Two people died" in article.text
     assert "Hilltown" not in article.text
     assert "2019" in article.photograph_captions[0]
+
+
+def test_read_content_body_keeps_narrative_beyond_the_meta_description():
+    article = parse("""<meta property="og:description" content="Short damage summary.">
+      <h1>Floods in Lakeview</h1><div class="read__content">
+        <p>Floods struck Lakeview.</p><h2>Detailed local reporting</h2>
+        <p>Rescuers inspected the river bridge. Two people died.</p>
+      </div><section><p>A wildfire killed nine in Highforest.</p></section>""")
+    assert "Rescuers inspected the river bridge" in article.text
+    assert "Two people died" in article.text
+    assert "Highforest" not in article.text
+
+
+def test_baca_juga_recommendations_do_not_become_an_owned_article_account():
+    article = parse("""<article><h1>Floods in Lakeview</h1>
+      <div data-article-body="true"><p>Floods struck Lakeview.</p>
+        <p><strong>Baca juga: <a class="inner-link-baca-juga" href="/elsewhere">
+        A wildfire killed nine people in Highforest.</a></strong></p>
+        <p>Officials inspected the <a class="inner-link-tag" href="/tag/river">
+        river bridge</a>. Two people died in the floods.</p>
+      </div></article>""")
+    assert "Highforest" not in article.text
+    assert "river bridge" in article.text
+    assert "Two people died in the floods" in article.text
+
+
+def test_explicit_end_of_article_marker_excludes_later_appeals_inside_the_wrapper():
+    article = parse("""<h1>Floods in Lakeview</h1><div class="read__content">
+      <p>Floods struck Lakeview. Two people died.</p>
+      <div id="EndOfArticle"></div>
+      <p>Donate for wildfire victims in Highforest. Nine died there.</p>
+    </div>""")
+    assert "Two people died" in article.text
+    assert "Highforest" not in article.text
+
+
+def test_malformed_nested_navigation_anchors_do_not_make_the_report_all_linked():
+    article = parse("""<nav><a href="/menu">Menu
+      <a href="/next">Next</a></nav><article><h1>Floods in Lakeview</h1>
+      <p>Floods struck Lakeview. Two people died.</p>
+      <p><a href="/elsewhere">A wildfire killed nine in Highforest.</a></p>
+    </article>""")
+    assert "Two people died" in article.text
+    assert "Highforest" not in article.text

@@ -42,6 +42,7 @@ class _MetadataParser(HTMLParser):
         self._figure_image: str | None = None
         self._caption_depth = 0
         self._caption_parts: list[str] = []
+        self._figure_captions: list[str] = []
         self._article_depth = 0
         self._excluded_depth = 0
         self._figure_in_article = False
@@ -66,6 +67,7 @@ class _MetadataParser(HTMLParser):
             if self._figure_depth == 0:
                 self._figure_image = None
                 self._caption_parts = []
+                self._figure_captions = []
                 self._figure_in_article = (
                     self._article_depth > 0 and self._excluded_depth == 0
                 )
@@ -80,6 +82,8 @@ class _MetadataParser(HTMLParser):
                 None,
             )
         elif tag == "figcaption" and self._figure_depth > 0:
+            if self._caption_depth == 0:
+                self._caption_parts = []
             self._caption_depth += 1
 
     def handle_endtag(self, tag: str) -> None:
@@ -95,13 +99,17 @@ class _MetadataParser(HTMLParser):
             self._script_parts = None
         elif tag == "figcaption" and self._caption_depth > 0:
             self._caption_depth -= 1
+            if self._caption_depth == 0:
+                caption = _clean_text(" ".join(self._caption_parts))
+                if caption and caption not in self._figure_captions:
+                    self._figure_captions.append(caption)
         elif tag == "figure" and self._figure_depth > 0:
             self._figure_depth -= 1
             if self._figure_depth == 0:
                 self.figures.append(
                     _Figure(
                         self._figure_image,
-                        _clean_text(" ".join(self._caption_parts)),
+                        " ".join(self._figure_captions),
                         self._figure_in_article,
                     )
                 )
