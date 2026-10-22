@@ -20,8 +20,9 @@ from disaster_monitor.infrastructure.configuration import Settings
         (False, True, True, False),
     ],
 )
+@pytest.mark.parametrize("source_kind", ["gdelt_archive_enabled", "gdelt_gkg_enabled"])
 async def test_composed_archive_source_honours_configuration(
-    tmp_path, monkeypatch, news, gdelt, archive, expected
+    tmp_path, monkeypatch, news, gdelt, archive, expected, source_kind
 ):
     requests = []
 
@@ -41,7 +42,7 @@ async def test_composed_archive_source_honours_configuration(
         _env_file=None,
         news_sensing_enabled=news,
         gdelt_news_enabled=gdelt,
-        gdelt_archive_enabled=archive,
+        **{source_kind: archive},
         bing_news_rss_enabled=False,
         wikipedia_news_enabled=False,
         discovery_page_budget=1,

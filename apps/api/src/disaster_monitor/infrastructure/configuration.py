@@ -114,6 +114,13 @@ class Settings(BaseSettings):
             "cold scans can require thousands of requests and remain resumable."
         ),
     )
+    gdelt_gkg_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable bounded GDELT GKG body-theme archive leads. Cold historical "
+            "scans require thousands of multi-megabyte requests and remain resumable."
+        ),
+    )
     bing_news_rss_enabled: bool = Field(
         default=False,
         description=(
