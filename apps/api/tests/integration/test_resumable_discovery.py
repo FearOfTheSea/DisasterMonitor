@@ -49,6 +49,47 @@ class Reader:
         return article(lead.canonical_url)
 
 
+@pytest.mark.parametrize("newest_first", [False, True])
+async def test_repeated_captures_keep_latest_reporting_and_other_sources(
+    tmp_path, newest_first
+):
+    older = article()
+    latest = replace(
+        older,
+        source=replace(
+            older.source,
+            retrieved_at=NOW + timedelta(seconds=1),
+            updated_at=NOW,
+        ),
+        text="Floods struck Riverton on October 18, 2026. Officials said "
+        "three people died in the flood.",
+    )
+    other = article("https://another.example/flood")
+    captures = (latest, other, older) if newest_first else (older, other, latest)
+
+    class Repeated(Provider):
+        async def fetch_page(self, partition):
+            return CollectionPage(articles=captures)
+
+    service = ResumableDiscovery(
+        (Repeated(),),
+        Reader(),
+        SQLiteCollectionJournal(tmp_path / "jobs.sqlite"),
+        clock=lambda: NOW,
+    )
+    try:
+        run = await service.start(1)
+        await service.wait(run.scan_id)
+        result = await service.get(run.scan_id)
+        reports = {r.article.source.canonical_url: r for r in result.reports}
+        assert len(reports) == 2
+        assert reports[latest.source.canonical_url].article == latest
+        assert reports[other.source.canonical_url].article == other
+        assert result.collection.articles_retrieved == 3
+    finally:
+        await service.aclose()
+
+
 async def test_unexpected_worker_failure_pauses_scan_and_keeps_same_work_resumable(
     tmp_path,
 ):

@@ -313,12 +313,14 @@ class ResumableDiscovery:
             snapshot = await self._journal.snapshot(scan_id, now=self._clock())
             run = snapshot.run
             progress = snapshot.progress
-            reports_by_url = {}
-            retained = {r.article.source.canonical_url: r for r in run.reports}
+            latest_by_url = {}
             for article in sorted(
                 snapshot.articles, key=lambda a: a.source.retrieved_at
             ):
-                url = article.source.canonical_url
+                latest_by_url[article.source.canonical_url] = article
+            reports_by_url = {}
+            retained = {r.article.source.canonical_url: r for r in run.reports}
+            for url, article in latest_by_url.items():
                 old = retained.get(url)
                 reports_by_url[url] = (
                     old
