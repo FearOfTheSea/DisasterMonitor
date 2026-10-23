@@ -24,7 +24,10 @@ from disaster_monitor.infrastructure.news.feeds import (
     _gdelt_item,
     _gdelt_time,
 )
-from disaster_monitor.infrastructure.news.public_documents import PublicDocumentReader
+from disaster_monitor.infrastructure.news.public_documents import (
+    PublicDocument,
+    PublicDocumentReader,
+)
 from disaster_monitor.infrastructure.news.request_schedule import (
     NewsRequestError,
     ScheduledNewsJson,
@@ -42,7 +45,7 @@ _QUERIES = (
 
 
 class ArticleReader(Protocol):
-    async def read(self, url: str) -> str: ...
+    async def read(self, url: str) -> str | PublicDocument: ...
 
 
 class GdeltDiscoveryFeed:
@@ -282,10 +285,11 @@ class GdeltDiscoveryFeed:
 
     async def _parse_article(self, item: NewsFeedItem) -> DiscoveryArticle:
         async with asyncio.timeout(self._timeout):
-            html = await self._reader.read(item.canonical_url)
+            document = await self._reader.read(item.canonical_url)
         return parse_discovery_article(
-            html,
+            document.html if isinstance(document, PublicDocument) else document,
             url=item.canonical_url,
+            document_url=document.url if isinstance(document, PublicDocument) else None,
             title=item.title,
             publisher=item.publisher,
             retrieved_at=datetime.now(UTC),

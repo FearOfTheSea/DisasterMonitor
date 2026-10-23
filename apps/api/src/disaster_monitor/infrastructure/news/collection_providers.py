@@ -19,7 +19,10 @@ from disaster_monitor.infrastructure.news.discovery_parser import (
     parse_discovery_article,
 )
 from disaster_monitor.infrastructure.news.feeds import _gdelt_item, _gdelt_time
-from disaster_monitor.infrastructure.news.public_documents import PublicDocumentReader
+from disaster_monitor.infrastructure.news.public_documents import (
+    PublicDocument,
+    PublicDocumentReader,
+)
 from disaster_monitor.infrastructure.news.reliefweb_discovery import (
     _CATEGORIES,
     _FIELDS,
@@ -205,7 +208,7 @@ class PublicCollectionArticleReader:
     async def retrieve(self, lead: NewsFeedItem) -> DiscoveryArticle:
         try:
             async with asyncio.timeout(self._timeout):
-                html = await self._reader.read(lead.canonical_url)
+                document = await self._reader.read(lead.canonical_url)
         except httpx.HTTPStatusError as error:
             raise CollectionProviderError(
                 "rate_limited"
@@ -221,8 +224,9 @@ class PublicCollectionArticleReader:
             ) from error
         # Publisher metadata establishes publication; provider age stays separate.
         article = parse_discovery_article(
-            html,
+            document.html if isinstance(document, PublicDocument) else document,
             url=lead.canonical_url,
+            document_url=document.url if isinstance(document, PublicDocument) else None,
             title=lead.title,
             publisher=lead.publisher,
             retrieved_at=datetime.now(UTC),

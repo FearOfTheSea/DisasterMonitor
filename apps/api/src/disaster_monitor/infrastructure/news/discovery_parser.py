@@ -401,7 +401,9 @@ def _date(value: Any) -> datetime | None:
         return None
 
 
-def _primary_news(objects: list[dict[str, Any]], url: str) -> dict[str, Any]:
+def _primary_news(
+    objects: list[dict[str, Any]], url: str, document_url: str | None = None
+) -> dict[str, Any]:
     articles = []
     seen_articles: set[str] = set()
     for obj in objects:
@@ -429,8 +431,9 @@ def _primary_news(objects: list[dict[str, Any]], url: str) -> dict[str, Any]:
                     pass
         return result
 
+    page_identities = {urldefrag(value)[0] for value in (url, document_url) if value}
     matching = [
-        article for article in articles if urldefrag(url)[0] in identities(article)
+        article for article in articles if page_identities & identities(article)
     ]
     if len(matching) == 1:
         return matching[0]
@@ -465,10 +468,11 @@ def parse_discovery_article(
     publisher: str,
     retrieved_at: datetime,
     indexed_at: datetime | None,
+    document_url: str | None = None,
 ) -> DiscoveryArticle:
     parser = ArticleParser()
     parser.feed(html)
-    news = _primary_news(parser.objects, url)
+    news = _primary_news(parser.objects, url, document_url)
     headline = news.get("headline")
     source_title = (
         parser.meta.get("og:title", "").strip()
