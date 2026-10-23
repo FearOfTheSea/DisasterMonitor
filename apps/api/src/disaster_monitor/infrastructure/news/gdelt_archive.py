@@ -162,7 +162,8 @@ class GdeltArchiveCollectionProvider:
                 raise CollectionProviderError(
                     "invalid_response", "GDELT archive exceeded the decoded byte limit."
                 )
-            lines = body.decode("utf8").splitlines()
+            # Unicode separators can be literal characters inside JSON strings.
+            lines = [line.decode("utf8") for line in body.splitlines()]
             if len(lines) > 50_000 or not any(line.strip() for line in lines):
                 raise ValueError("Archive has no bounded record list")
             rows = [json.loads(line) for line in lines if line.strip()]

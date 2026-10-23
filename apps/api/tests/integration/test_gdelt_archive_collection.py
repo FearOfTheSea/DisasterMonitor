@@ -188,6 +188,26 @@ async def test_archive_failures_are_not_treated_as_empty_minutes(status, outcome
     assert error.value.retry_after_seconds == 60
 
 
+@pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
+async def test_unicode_inside_a_title_does_not_split_an_archive_record(separator):
+    title = f"Deadly flood in Riverton{separator}response reviewed"
+    rows = [
+        record(),
+        {**record(), "ID": 2, "title": title, "url": "https://another.example/flood"},
+    ]
+    body = "\r\n".join(json.dumps(row, ensure_ascii=False) for row in rows).encode()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, content=body))
+    ) as client:
+        provider = GdeltArchiveCollectionProvider(
+            client=client, minimum_interval=0, clock=lambda: NOW
+        )
+        page = await provider.fetch_page(partition(provider))
+    assert tuple(lead.title for lead in page.leads) == (record()["title"], title)
+    assert page.next_cursor
+    assert not page.articles
+
+
 @pytest.mark.parametrize("body", [b"{broken", b"[]", b"\xff", gzip.compress(b"broken")])
 async def test_malformed_archive_is_not_acknowledged(body):
     async with httpx.AsyncClient(
