@@ -54,6 +54,13 @@ LEAD = TypeAdapter(NewsFeedItem)
 PAGE = TypeAdapter(CollectionPage)
 ARTICLE = TypeAdapter(DiscoveryArticle)
 
+# Read scheduling metadata once, without revisiting saved run blobs per work row.
+_ACTIVE_SCANS = (
+    "WITH active_scans AS MATERIALIZED ("
+    "SELECT s.id,s.pass_id,p.budget FROM scans s "
+    "JOIN passes p ON p.id=s.pass_id WHERE p.active=1 AND p.started>?) "
+)
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS passes (
  id INTEGER PRIMARY KEY, active INTEGER NOT NULL, budget INTEGER NOT NULL,
@@ -363,23 +370,23 @@ class SQLiteCollectionJournal:
         timestamp = now.timestamp()
         with self._transaction() as db:
             rows = db.execute(
-                "SELECT DISTINCT w.*,s.pass_id,p.budget FROM work w "
-                "JOIN scan_work sw ON sw.work=w.id JOIN scans s ON s.id=sw.scan "
-                "JOIN passes p ON p.id=s.pass_id AND p.active=1 "
+                _ACTIVE_SCANS + "SELECT DISTINCT w.*,s.pass_id,s.budget FROM work w "
+                "JOIN scan_work sw ON sw.work=w.id "
+                "JOIN active_scans s ON s.id=sw.scan "
                 "LEFT JOIN cooldowns c ON c.provider=w.provider "
                 "WHERE w.kind=? AND (w.state='pending' OR "
                 "(w.state='leased' AND w.lease_until<=?)) "
                 "AND w.due<=? AND COALESCE(c.until_time,0)<=? "
-                "AND (? IS NULL OR w.provider=?) AND p.started>? "
+                "AND (? IS NULL OR w.provider=?) "
                 "ORDER BY w.priority DESC,w.sequence,w.id",
                 (
+                    timestamp - self._pass_seconds,
                     kind,
                     timestamp,
                     timestamp,
                     timestamp,
                     provider,
                     provider,
-                    timestamp - self._pass_seconds,
                 ),
             ).fetchall()
             schedule = CollectionRequestSchedule(db, self._retained_refusals)
@@ -742,16 +749,15 @@ class SQLiteCollectionJournal:
     def _next_retry(self, now: datetime) -> datetime | None:
         with self._connect() as db:
             rows = db.execute(
-                "SELECT w.* "
+                _ACTIVE_SCANS + "SELECT w.* "
                 "FROM work w JOIN scan_work sw ON sw.work=w.id JOIN "
-                "scans s ON s.id=sw.scan "
-                "JOIN passes p ON p.id=s.pass_id AND p.active=1 "
+                "active_scans s ON s.id=sw.scan "
                 "LEFT JOIN cooldowns c ON c.provider=w.provider "
-                "LEFT JOIN pass_budget b ON b.pass_id=p.id AND "
+                "LEFT JOIN pass_budget b ON b.pass_id=s.pass_id AND "
                 "b.provider=CASE WHEN w.kind='retrieve' "
                 "THEN 'article-retrieval' ELSE w.provider END WHERE "
                 "w.state IN ('pending','leased') "
-                "AND COALESCE(b.remaining,p.budget)>0 AND p.started>?",
+                "AND COALESCE(b.remaining,s.budget)>0",
                 (now.timestamp() - self._pass_seconds,),
             ).fetchall()
             schedule = CollectionRequestSchedule(db, self._retained_refusals)

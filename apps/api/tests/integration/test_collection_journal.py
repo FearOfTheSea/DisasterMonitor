@@ -74,6 +74,36 @@ async def test_fatality_hints_get_retrieval_priority_without_dropping_routine_wo
     assert second.lead == routine
 
 
+async def test_expired_shared_pass_needs_continue_without_losing_retrieval_budget(
+    tmp_path,
+):
+    store = SQLiteCollectionJournal(tmp_path / "jobs.sqlite", pass_seconds=10)
+    first, second = run(), run()
+    await store.attach(first, (partition(),), now=NOW, budget=1)
+    await store.attach(second, (partition(),), now=NOW, budget=1)
+    search = await store.claim("search", "searcher", now=NOW)
+    leads = tuple(
+        replace(lead(), canonical_url=f"https://publisher{i}.example/flood")
+        for i in range(5)
+    )
+    await store.commit_page(search, CollectionPage(leads=leads), now=NOW)
+    deadline = NOW + timedelta(seconds=10)
+    assert await store.claim("retrieve", "reader", now=deadline) is None
+    assert await store.next_retry(now=deadline) is None
+
+    await store.finish_pass(now=deadline)
+    await store.continue_scan(second.scan_id, now=deadline, budget=1)
+    claimed = [await store.claim("retrieve", str(i), now=deadline) for i in range(4)]
+    assert tuple(work.lead for work in claimed) == leads[:4]
+    assert await store.claim("retrieve", "over-budget", now=deadline) is None
+    assert await store.next_retry(now=deadline) is None
+
+    await store.finish_pass(now=deadline)
+    await store.continue_scan(first.scan_id, now=deadline, budget=1)
+    resumed = await store.claim("retrieve", "resumed", now=deadline)
+    assert resumed.lead == leads[4]
+
+
 async def test_page_and_cursor_survive_restart_with_shared_work_and_no_duplicates(
     tmp_path,
 ):
