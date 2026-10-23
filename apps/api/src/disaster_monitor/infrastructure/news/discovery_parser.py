@@ -34,6 +34,47 @@ class ArticleTextBlock:
     container: ArticleTextBlock | None = None
     preceding_characters: int = 0
     preceding_text: str = ""
+    emphasized_characters: int = 0
+
+    @property
+    def is_section_heading(self) -> bool:
+        if (
+            self.tag != "p"
+            or not 3 <= self.characters <= 180
+            or self.emphasized_characters != self.characters
+        ):
+            return False
+        text = " ".join(self.parts).strip()
+        if text.endswith((".", "!", "?", ";", ":")):
+            return False
+        words = re.findall(r"[^\W\d_][\w'’.-]*", text)
+        meaningful = [
+            word
+            for word in words
+            if word.casefold()
+            not in {
+                "a",
+                "an",
+                "the",
+                "and",
+                "or",
+                "of",
+                "in",
+                "on",
+                "to",
+                "for",
+                "from",
+                "as",
+                "at",
+                "by",
+                "with",
+            }
+        ]
+        return (
+            len(words) >= 3
+            and bool(meaningful)
+            and all(word[0].isupper() for word in meaningful)
+        )
 
     @property
     def is_narrative(self) -> bool:
@@ -78,9 +119,21 @@ class ArticleTextPiece:
 
 
 def _narrative(parts: list[ArticleTextPiece]) -> list[str]:
-    return [
-        part.text for part in parts if part.block is None or part.block.is_narrative
-    ]
+    result = []
+    headings: set[int] = set()
+    for part in parts:
+        if part.block is not None and not part.block.is_narrative:
+            continue
+        block = part.block
+        for _ in range(128):
+            if block is None or block.is_section_heading:
+                break
+            block = block.parent
+        if block is not None and block.is_section_heading and id(block) not in headings:
+            headings.add(id(block))
+            result.append("\n##\n## ")
+        result.append(part.text)
+    return result
 
 
 @dataclass
@@ -111,9 +164,15 @@ class ArticleParser(HTMLParser):
         self._excluded: list[str] = []
         self._text_blocks: list[ArticleTextBlock] = []
         self._in_link = False
+        self._span_emphasis: list[bool] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
+        if tag == "span":
+            self._span_emphasis.append(
+                bool(self._span_emphasis and self._span_emphasis[-1])
+                or "font-weight-bold" in (values.get("class") or "").casefold().split()
+            )
         void = tag in {"img", "meta", "br", "hr", "input", "link", "source", "wbr"}
         if values.get("id") == "EndOfArticle":
             self._body_stack.clear()
@@ -148,6 +207,16 @@ class ArticleParser(HTMLParser):
         excluded = is_article_decoration(tag, values)
         if (self._excluded or excluded) and not void:
             self._excluded.append(tag)
+        if (
+            tag in {"div", "section"}
+            and "factbox" in (values.get("class") or "").split()
+            and (self._article_stack or self._body_stack or self._main_depth)
+            and not self._hidden
+            and not self._excluded
+        ):
+            # Independent publisher sections reset inherited mention context.
+            # An empty Markdown heading adds a boundary without inventing wording.
+            self._record("\n##\n")
         if (
             tag == "h1"
             and self._article_stack
@@ -205,6 +274,8 @@ class ArticleParser(HTMLParser):
             self._in_link = True
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "span" and self._span_emphasis:
+            self._span_emphasis.pop()
         if tag in self._caption_stack:
             index = len(self._caption_stack) - 1 - self._caption_stack[::-1].index(tag)
             self._caption_stack = self._caption_stack[:index]
@@ -256,6 +327,8 @@ class ArticleParser(HTMLParser):
             for block in self._text_blocks:
                 block.characters += len(data)
                 block.parts.append(data)
+                if self._span_emphasis and self._span_emphasis[-1]:
+                    block.emphasized_characters += len(data)
                 if self._in_link:
                     block.linked_characters += len(data)
             self._record(data)

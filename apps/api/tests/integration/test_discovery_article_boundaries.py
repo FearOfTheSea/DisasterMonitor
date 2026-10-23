@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from disaster_monitor.domain.mention_extraction import extract_mentions
 from disaster_monitor.infrastructure.news.discovery_parser import (
     parse_discovery_article,
 )
@@ -19,6 +20,84 @@ def parse(markup):
         retrieved_at=datetime(2026, 10, 20, tzinfo=UTC),
         indexed_at=None,
     )
+
+
+@pytest.mark.parametrize("widget_class", ["articlesByTag", "articles-by-tag"])
+def test_inline_tag_recommendations_do_not_interrupt_the_owned_report(widget_class):
+    article = parse(f"""<article><div class="bodytext">
+      <h1>Floods in Lakeview</h1><p>Officials reviewed regional conditions.</p>
+      <div class="column {widget_class} toplist"><h3>RELATED</h3>
+        <a href="/other">A landslide killed ninety people in Hilltown.</a>
+        <p>Ninety people died, another article reports.</p></div>
+      <div class="column factbox"><div class="fact collapsableContent">
+        <p><span class="font-weight-bold">Torrential rain floods Lakeview</span></p>
+        <p>Heavy rain flooded Lakeview on 13 October and killed two people.</p>
+      </div></div></div></article>""")
+    assert "RELATED" not in article.text
+    assert "Hilltown" not in article.text
+    assert "Ninety people" not in article.text
+    assert "Heavy rain flooded Lakeview" in article.text
+
+
+def test_independent_factboxes_do_not_borrow_another_topics_place_or_forecast():
+    article = parse("""<meta property="og:title" content="Regional news roundup">
+      <article><h1>Regional news roundup</h1>
+        <div class="column factbox"><p>Floods are expected in Fieldtown.</p></div>
+        <div class="column factbox"><p>Press freedom review</p>
+          <p>A school in Wrongtown moved up the education rankings.</p></div>
+        <div class="column factbox"><h2>Heavy rain floods Lakeview</h2>
+          <p>Heavy rain flooded Lakeview on 13 October and killed two people.</p>
+          <p>One worker died from an electric shock during the floods.</p></div>
+        <div class="column factbox"><p>Historic criminal trial</p>
+          <p>A court in Othercity heard evidence of a genocide
+          in which more than 800,000 people were killed.</p></div>
+      </article>""")
+    mentions = extract_mentions(article.text, article.source)
+    physical = [m for m in mentions if "Heavy rain flooded Lakeview" in m.text]
+    assert physical and all(m.role == "reported" for m in physical)
+    assert all(
+        not m.place or m.place.wording not in {"Wrongtown", "Othercity"}
+        for m in physical
+    )
+    assert all(
+        "genocide" not in m.text and "education rankings" not in m.text
+        for m in physical
+    )
+    assert any(c.fact.value == "two" for m in physical for c in m.claims)
+
+
+def test_styled_section_headings_inside_one_box_keep_roundup_topics_separate():
+    article = parse("""<meta property="og:title" content="Regional news roundup">
+      <article><h1>Regional news roundup</h1><div class="factbox">
+        <p><span class="font-weight-bold">Flood Preparations in Fieldtown</span></p>
+        <p>Floods are expected in Fieldtown next week.</p>
+        <p><span class="font-weight-bold">Press Freedom Review</span></p>
+        <p>A school in Wrongtown moved up the education rankings.</p>
+        <p><span class="font-weight-bold">Torrential Rain Floods Lakeview</span></p>
+        <p>Heavy rain flooded Lakeview and killed two people.</p>
+        <p><span class="font-weight-bold">Historic Criminal Trial</span></p>
+        <p>A court in Othercity heard evidence of a genocide
+          in which more than 800,000 people were killed.</p>
+      </div></article>""")
+    mentions = extract_mentions(article.text, article.source)
+    physical = [m for m in mentions if "Heavy rain flooded Lakeview" in m.text]
+    assert physical and all(m.role == "reported" for m in physical)
+    assert all(
+        "education rankings" not in m.text and "genocide" not in m.text
+        for m in physical
+    )
+    assert any(c.fact.value == "two" for m in physical for c in m.claims)
+    assert len({m.mention_id for m in mentions}) == len(mentions)
+
+
+def test_emphasized_sentence_and_inline_emphasis_remain_narrative_claims():
+    article = parse("""<article><h1>Floods in Lakeview</h1>
+      <p><span class="font-weight-bold">Floods killed two people.</span></p>
+      <p>Floods damaged <span class="font-weight-bold">several</span> homes.</p>
+      </article>""")
+    assert "##\n##" not in article.text
+    mentions = extract_mentions(article.text, article.source)
+    assert any(c.fact.value == "two" for m in mentions for c in m.claims)
 
 
 @pytest.mark.parametrize("widget_class", ["also-read", "also_read", "story-also-read"])

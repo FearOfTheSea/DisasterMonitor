@@ -308,7 +308,7 @@ def _can_extend_detail(mention: EventMention, detail: str | None) -> bool:
     )
 
 
-def extract_mentions(
+def _extract_section_mentions(
     text: str,
     source: SourceReference,
     *,
@@ -717,3 +717,69 @@ def extract_mentions(
             )
         )
     return tuple(attach_hazard_episode_accounts(result, report_text, source))
+
+
+def extract_mentions(
+    text: str,
+    source: SourceReference,
+    *,
+    location: str | None = None,
+    event_time: datetime | None = None,
+    geometry: EventGeometry | None = None,
+    country_names: frozenset[str] = frozenset(),
+) -> tuple[EventMention, ...]:
+    """Keep explicitly independent publisher sections separate during association."""
+    bounded = _report_text(text[:20_000])
+    sections = re.split(r"\n##[ \t]*\n", bounded)
+    if len(sections) == 1:
+        return _extract_section_mentions(
+            text,
+            source,
+            location=location,
+            event_time=event_time,
+            geometry=geometry,
+            country_names=country_names,
+        )
+    eligible = [
+        section
+        for section in sections
+        if disasters_in_text(section)
+        and any(
+            line.strip() and not line.lstrip().startswith("#")
+            for line in section.splitlines()
+        )
+    ]
+    result: list[EventMention] = []
+    for index, section in enumerate(eligible[:80]):
+        # Article-wide geometry and occurrence clocks do not identify an
+        # independent subsection's event. Publication still anchors local weekdays.
+        mentions = _extract_section_mentions(
+            section, source, country_names=country_names
+        )
+        identities = {
+            m.mention_id: "mention:"
+            + hashlib.sha256(f"{m.mention_id}|section:{index}".encode()).hexdigest()[
+                :24
+            ]
+            for m in mentions
+        }
+        result.extend(
+            replace(
+                mention,
+                mention_id=identities[mention.mention_id],
+                occurrence_anchor_id=identities.get(
+                    mention.occurrence_anchor_id, mention.occurrence_anchor_id
+                )
+                if mention.occurrence_anchor_id
+                else None,
+            )
+            for mention in mentions
+        )
+        if len(result) >= 80:
+            break
+    if len(result) > 80 or len(eligible) > 80:
+        result = [
+            replace(m, notices=(*m.notices, "Mention limit reached; source retained."))
+            for m in result[:80]
+        ]
+    return tuple(result)

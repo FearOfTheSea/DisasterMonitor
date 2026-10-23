@@ -50,7 +50,7 @@ def is_article_decoration(tag: str, attrs: dict[str, str | None]) -> bool:
             re.search(
                 r"(?:^|\s)(?:entry-footer|post-tags|tags-links|republish\S*|sharing\S*)(?:\s|$)"
                 r"|(?:^|[\s_-])(?:related|recommended|recommendations|baca-juga|"
-                r"also[-_]read|read[-_]also)(?:[\s_-]|$)",
+                r"also[-_]read|read[-_]also|articles[-_]?by[-_]?tag)(?:[\s_-]|$)",
                 classes,
                 re.I,
             )
