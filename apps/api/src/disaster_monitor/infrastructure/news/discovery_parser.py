@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import urldefrag, urlsplit
+from urllib.parse import urlsplit
 
 from disaster_monitor.domain.discovery import DiscoveryArticle
 from disaster_monitor.domain.events import (
@@ -17,6 +17,10 @@ from disaster_monitor.domain.events import (
     EventGeometryKind,
 )
 from disaster_monitor.domain.evidence_types import SourceReference
+from disaster_monitor.infrastructure.news.article_metadata import primary_news
+from disaster_monitor.infrastructure.news.flight_article_metadata import (
+    FlightArticleMetadata,
+)
 from disaster_monitor.infrastructure.news.headline_narrative import (
     headline_owned_paragraphs,
     is_article_decoration,
@@ -148,6 +152,7 @@ class ArticleParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.meta: dict[str, str] = {}
         self.objects: list[dict[str, Any]] = []
+        self.flight_metadata = FlightArticleMetadata()
         self.main_parts: list[ArticleTextPiece] = []
         self.caption_parts: list[list[str]] = []
         self._caption_stack: list[str] = []
@@ -168,6 +173,8 @@ class ArticleParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
+        if tag == "script":
+            self.flight_metadata.start_script(values)
         if tag == "span":
             self._span_emphasis.append(
                 bool(self._span_emphasis and self._span_emphasis[-1])
@@ -274,6 +281,8 @@ class ArticleParser(HTMLParser):
             self._in_link = True
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "script":
+            self.flight_metadata.end_script()
         if tag == "span" and self._span_emphasis:
             self._span_emphasis.pop()
         if tag in self._caption_stack:
@@ -313,6 +322,7 @@ class ArticleParser(HTMLParser):
             self._in_link = False
 
     def handle_data(self, data: str) -> None:
+        self.flight_metadata.data(data)
         if self._json is not None:
             self._json.append(data)
         if self._caption_stack and not self._hidden:
@@ -401,65 +411,6 @@ def _date(value: Any) -> datetime | None:
         return None
 
 
-def _primary_news(
-    objects: list[dict[str, Any]], url: str, document_url: str | None = None
-) -> dict[str, Any]:
-    articles = []
-    seen_articles: set[str] = set()
-    for obj in objects:
-        kind = obj.get("@type")
-        kinds = kind if isinstance(kind, list) else [kind]
-        if any(k in ("NewsArticle", "Article", "ReportageNewsArticle") for k in kinds):
-            identity = json.dumps(obj, sort_keys=True, ensure_ascii=False)
-            if identity not in seen_articles:
-                seen_articles.add(identity)
-                articles.append(obj)
-
-    def identities(article: dict[str, Any]) -> set[str]:
-        result = set()
-        for value in (
-            article.get("url"),
-            article.get("@id"),
-            article.get("mainEntityOfPage"),
-        ):
-            if isinstance(value, dict):
-                value = value.get("@id") or value.get("url")
-            if isinstance(value, str) and value.startswith("https://"):
-                try:
-                    result.add(urldefrag(value)[0])
-                except ValueError:
-                    pass
-        return result
-
-    page_identities = {urldefrag(value)[0] for value in (url, document_url) if value}
-    matching = [
-        article for article in articles if page_identities & identities(article)
-    ]
-    if len(matching) == 1:
-        return matching[0]
-    if len(matching) > 1:
-        # Some publishers emit a complete primary article and a second undated
-        # teaser template with the same page identity. Prefer the uniquely dated
-        # object only when all supplied headlines agree; conflicting clocks or
-        # distinct articles remain unresolved rather than depending on order.
-        dated = [
-            article
-            for article in matching
-            if isinstance(article.get("datePublished"), str)
-            and article["datePublished"].strip()
-        ]
-        headlines = {
-            " ".join(article["headline"].split()).casefold()
-            for article in matching
-            if isinstance(article.get("headline"), str) and article["headline"].strip()
-        }
-        if len(dated) == 1 and len(headlines) <= 1:
-            return dated[0]
-    if len(articles) == 1 and not identities(articles[0]):
-        return articles[0]
-    return {}
-
-
 def parse_discovery_article(
     html: str,
     *,
@@ -472,7 +423,11 @@ def parse_discovery_article(
 ) -> DiscoveryArticle:
     parser = ArticleParser()
     parser.feed(html)
-    news = _primary_news(parser.objects, url, document_url)
+    news = primary_news(
+        [*parser.objects, *parser.flight_metadata.articles(url, document_url)],
+        url,
+        document_url,
+    )
     headline = news.get("headline")
     source_title = (
         parser.meta.get("og:title", "").strip()
