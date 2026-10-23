@@ -18,11 +18,13 @@ from disaster_monitor.domain.reported_impacts import fatality_analysis_text
 
 WorkKind = Literal["search", "retrieve"]
 _FATALITY_HINT = re.compile(
-    r"\b(?:kill(?:ed|s)?|dead|died|dies?|drowned|deaths?|fatalities|fatal)\b", re.I
+    r"\b(?:kill(?:ed|s)?|dead(?:ly)?|died|dies?|drowned|deaths?|fatalities|fatal)\b",
+    re.I,
 )
 _NO_FATALITY_HINT = re.compile(
     r"\b(?:no|zero|without)(?:\s+(?:one|people|reported|confirmed|known))*\s+"
-    r"(?:deaths?|fatalities|casualties|killed|dead|drowned)\b",
+    r"(?:deaths?|fatalities|casualties|killed|dead(?:ly)?|drowned)\b"
+    r"|\bnot\s+deadly\b",
     re.I,
 )
 

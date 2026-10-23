@@ -6,7 +6,11 @@ from datetime import UTC, datetime
 import pytest
 
 from disaster_monitor.domain.collection import fatality_hint_needs_followup
-from disaster_monitor.domain.discovery import DiscoveryArticle
+from disaster_monitor.domain.discovery import (
+    DiscoveryArticle,
+    ReportingInterval,
+    assess_article,
+)
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.news import NewsFeedItem
 
@@ -52,3 +56,14 @@ def test_missing_only_index_lead_does_not_request_a_fatality_followup():
     assert not fatality_hint_needs_followup(
         lead, DiscoveryArticle(SOURCE, "An earthquake struck Lakeview.")
     )
+
+
+def test_deadly_index_wording_requests_reporting_without_creating_a_claim():
+    lead = replace(
+        LEAD, title="Deadly earthquake response reviewed", discovery_hint=None
+    )
+    article = DiscoveryArticle(SOURCE, "An earthquake struck Lakeview.")
+    assert fatality_hint_needs_followup(lead, article)
+    assert not assess_article(
+        article, ReportingInterval.at_start(1, NOW)
+    ).fatality_evidence

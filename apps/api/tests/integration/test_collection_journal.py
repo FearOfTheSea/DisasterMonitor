@@ -44,9 +44,13 @@ def lead():
 
 
 @pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize(
+    "title", ["Four killed in forest fire", "Staffing gaps during deadly flood"]
+)
 async def test_fatality_hints_get_retrieval_priority_without_dropping_routine_work(
     tmp_path,
     legacy,
+    title,
 ):
     path = tmp_path / "jobs.sqlite"
     store = SQLiteCollectionJournal(path)
@@ -57,7 +61,7 @@ async def test_fatality_hints_get_retrieval_priority_without_dropping_routine_wo
         routine,
         external_id="fatal",
         canonical_url="https://another.example/fatal",
-        title="Four killed in forest fire",
+        title=title,
     )
     await store.commit_page(search, CollectionPage(leads=(routine, fatal)), now=NOW)
     if legacy:
