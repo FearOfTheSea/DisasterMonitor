@@ -119,6 +119,12 @@ def _month_period(text: str) -> MentionTime | None:
 
 def _historical(text: str, source: SourceReference) -> bool:
     month = _month_period(text)
+    dated_years = (
+        int(match["year"])
+        for pattern in (_DATE, _US_DATE)
+        for match in pattern.finditer(text)
+        if match["year"] and date_is_occurrence(text, match.start(), match.end())
+    )
     return bool(
         re.search(
             r"\b(?:historical|anniversary|years? ago|last year|"
@@ -130,6 +136,7 @@ def _historical(text: str, source: SourceReference) -> bool:
         source.published_at
         and (
             any(int(y) < source.published_at.year for y in occurrence_years(text))
+            or any(year < source.published_at.year for year in dated_years)
             or (month and month.start and month.start.year < source.published_at.year)
         )
     )
@@ -687,6 +694,14 @@ def extract_mentions(
                 location=mention.place.wording if mention.place else None,
             )
         )
+        if role == "historical":
+            claims = tuple(
+                replace(
+                    claim,
+                    qualifiers=tuple(dict.fromkeys((*claim.qualifiers, "historical"))),
+                )
+                for claim in claims
+            )
         result.append(
             replace(
                 mention,

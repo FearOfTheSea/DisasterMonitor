@@ -184,6 +184,14 @@ def occurrence_years(text: str) -> tuple[int, ...]:
             or is_victim_firefighting_activity(text)
         ):
             years.append(int(match[1]))
+    for match in re.finditer(
+        r"\b((?:19|20)\d{2})\s+(?:earthquakes?|floods?|wildfires?|landslides?|"
+        r"drought|eruption|hurricane|typhoon|cyclone)\b",
+        text,
+        re.I,
+    ):
+        if date_is_occurrence(text, match.start(1), match.end(1)):
+            years.append(int(match[1]))
     return tuple(years)
 
 

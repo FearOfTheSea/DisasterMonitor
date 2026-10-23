@@ -36,9 +36,13 @@ def row(**changes):
 
 
 def zipped(*rows, name="20261022123000.gkg.csv"):
+    return zipped_bytes(("\n".join(rows) + "\n").encode(), name=name)
+
+
+def zipped_bytes(data, name="20261022123000.gkg.csv"):
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(name, "\n".join(rows) + "\n")
+        archive.writestr(name, data)
     return out.getvalue()
 
 
@@ -193,6 +197,30 @@ async def test_continuation_freezes_upper_boundary_as_clock_advances():
 async def test_repeated_urls_do_not_duplicate_publisher_work():
     page = await fetch(zipped(row(), row(c0="20261022123000-2")))
     assert len(page.leads) == 1
+
+
+@pytest.mark.parametrize("bad_row", [b"\xffbad encoding", b"too\tfew\tfields"])
+async def test_one_malformed_metadata_row_does_not_discard_valid_publisher_leads(
+    bad_row,
+):
+    payload = b"\n".join(
+        [
+            row().encode(),
+            bad_row,
+            row(c0="20261022123000-2", c4="https://other.example/report").encode(),
+        ]
+    )
+    page = await fetch(zipped_bytes(payload))
+    assert {lead.canonical_url for lead in page.leads} == {
+        "https://regional.example/report",
+        "https://other.example/report",
+    }
+    assert any("excluded 1 unusable metadata rows" in notice for notice in page.notices)
+
+
+async def test_archive_without_any_valid_utf8_schema_row_stays_a_failure():
+    with pytest.raises(CollectionProviderError, match="GKG"):
+        await fetch(zipped_bytes(b"\xffinvalid\n"))
 
 
 @pytest.mark.parametrize(

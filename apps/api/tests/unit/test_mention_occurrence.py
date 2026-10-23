@@ -18,6 +18,30 @@ SOURCE = SourceReference(
 )
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The 2015 earthquake, which killed nearly 9,000 people nationwide, "
+        "destroyed villages where many families had lived for generations.",
+        "On Oct. 21, 1966, 144 people were killed when a landslide engulfed a school.",
+    ],
+)
+def test_explicit_old_occurrence_year_is_historical_in_current_reporting(text):
+    (mention,) = extract_mentions(text, SOURCE)
+    assert mention.role == "historical"
+    assert mention.claims
+    assert all("historical" in c.qualifiers for c in mention.claims)
+
+
+def test_old_statement_date_does_not_replace_current_occurrence_date():
+    (mention,) = extract_mentions(
+        "On October 21, 2015, officials said Thursday's flood killed two people.",
+        SOURCE,
+    )
+    assert mention.role == "reported"
+    assert mention.time.start.year == 2026
+
+
 def test_response_references_do_not_turn_a_clinician_base_into_an_event_location():
     mentions = extract_mentions(
         "Floods hit Riverton and Lakeview districts on 26 August. "

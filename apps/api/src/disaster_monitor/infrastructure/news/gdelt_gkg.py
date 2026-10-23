@@ -169,6 +169,7 @@ class GdeltGkgCollectionProvider:
                     raise ValueError("Unbounded or unexpected archive member")
                 decoded = 0
                 rows = 0
+                valid_rows = 0
                 with archive.open(infos[0]) as stream:
                     while line := stream.readline(1_000_001):
                         decoded += len(line)
@@ -179,9 +180,15 @@ class GdeltGkgCollectionProvider:
                             or rows > 25_000
                         ):
                             raise ValueError("Archive row or decoded bound exceeded")
-                        fields = line.decode("utf8").rstrip("\r\n").split("\t")
+                        try:
+                            fields = line.decode("utf8").rstrip("\r\n").split("\t")
+                        except UnicodeError:
+                            invalid += 1
+                            continue
                         if len(fields) != 27:
-                            raise ValueError("Unexpected GKG schema")
+                            invalid += 1
+                            continue
+                        valid_rows += 1
                         lead = _lead(fields, stamp, url)
                         if lead:
                             leads.setdefault(lead.canonical_url, lead)
@@ -190,8 +197,8 @@ class GdeltGkgCollectionProvider:
                             and set(fields[7].split(";")) & _HAZARD_THEMES.keys()
                         ):
                             invalid += 1
-                if not rows:
-                    raise ValueError("Empty archive")
+                if not valid_rows:
+                    raise ValueError("Archive has no valid UTF8 schema rows")
         except (
             ValueError,
             UnicodeError,
