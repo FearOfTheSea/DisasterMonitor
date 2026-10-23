@@ -82,6 +82,10 @@ export function SelectedEventPane({
   }, [incident.event_id]);
   const context = displayActiveIncidentContext(incident);
   const contextOnly = isContextOnlyIncident(incident);
+  const locationIsHeadline =
+    Boolean(incident.discovery_reports?.length) &&
+    incident.location === incident.source.title &&
+    !incident.discovery_reports?.some((report) => report.location?.trim());
   const hazardLabel = disasterLabel(incident.disaster).toLowerCase();
   const hazardArticle = /^[aeiou]/.test(hazardLabel) ? 'an' : 'a';
   const sources = incident.evidence_sources?.length
@@ -231,12 +235,15 @@ export function SelectedEventPane({
               {contextOnly ? (
                 <p>
                   This source passage is retained as context. It does not establish a
-                  current {hazardLabel} occurrence at {incident.location}.
+                  current {hazardLabel} occurrence
+                  {locationIsHeadline ? null : ` at ${incident.location}`}.
+                  {locationIsHeadline ? ' The reported place is unresolved.' : null}
                 </p>
               ) : (
                 <p>
-                  {incident.source.publisher} reports {hazardArticle} {hazardLabel} at{' '}
-                  {incident.location}.{' '}
+                  {incident.source.publisher} reports {hazardArticle} {hazardLabel}
+                  {locationIsHeadline ? null : ` at ${incident.location}`}.{' '}
+                  {locationIsHeadline ? 'The reported place is unresolved. ' : null}
                   {incident.event_time_basis === 'unknown'
                     ? 'The event time is unresolved; the timestamp above is publication time.'
                     : 'The source records the event time above.'}

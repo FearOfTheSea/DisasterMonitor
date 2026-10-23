@@ -33,6 +33,59 @@ const INCIDENT: IncidentMapRecord = {
 afterEach(cleanup);
 
 describe('selected event reading pane', () => {
+  it.each(['reported', 'uncertain'] as const)(
+    'does not describe an article headline as the %s event location',
+    (role) => {
+      const headline = 'Regional news roundup and recovery updates';
+      render(
+        <SelectedEventPane
+          incident={{
+            ...INCIDENT,
+            location: headline,
+            source: { ...INCIDENT.source, title: headline },
+            discovery_reports: [
+              {
+                source: { ...INCIDENT.source, title: headline },
+                mention_role: role,
+                location: null,
+              },
+            ],
+          }}
+          snapshotRetrievedAt="2026-10-23T12:00:00Z"
+          onClose={vi.fn()}
+          onAsk={vi.fn()}
+          onGroundView={vi.fn()}
+        />,
+      );
+      expect(screen.getByText(/The reported place is unresolved/)).toBeVisible();
+      expect(screen.queryByText(/at Regional news roundup/)).not.toBeInTheDocument();
+      expect(screen.getAllByText(headline).length).toBeGreaterThan(0);
+    },
+  );
+
+  it('keeps a literal reported place that is also the short article headline', () => {
+    render(
+      <SelectedEventPane
+        incident={{
+          ...INCIDENT,
+          location: 'Lakeview',
+          source: { ...INCIDENT.source, title: 'Lakeview' },
+          discovery_reports: [
+            { source: INCIDENT.source, mention_role: 'reported', location: 'Lakeview' },
+          ],
+        }}
+        snapshotRetrievedAt="2026-10-23T12:00:00Z"
+        onClose={vi.fn()}
+        onAsk={vi.fn()}
+        onGroundView={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/reports an earthquake at Lakeview/)).toBeVisible();
+    expect(
+      screen.queryByText(/The reported place is unresolved/),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows a reported month as a period without inventing its first day as onset', () => {
     render(
       <SelectedEventPane
