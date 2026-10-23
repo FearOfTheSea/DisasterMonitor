@@ -30,19 +30,27 @@ _NO_FATALITY_HINT = re.compile(
 
 
 def lead_retrieval_priority(lead: NewsFeedItem) -> int:
-    """Inspect fatality hints first; this never admits a claim or removes other work."""
-    hint = fatality_analysis_text(
-        f"{lead.title} {lead.search_title or ''} {lead.discovery_hint or ''}"
-    )
-    regional = regional_fatality_account(hint)
+    """Prefer explicit headlines over broad hints, while retaining all other work."""
+    headlines = dict.fromkeys((lead.title, lead.search_title or ""))
+    if any(_has_fatality_hint(t) for t in headlines if t):
+        return 2
+    if not lead.discovery_hint:
+        return 0
     return int(
-        bool(_FATALITY_HINT.search(hint) and not _NO_FATALITY_HINT.search(hint))
-        or (
-            regional is not None
-            and (
-                regional.value not in ("0", "Unknown")
-                or "scope unresolved" in regional.qualifiers
-            )
+        _has_fatality_hint(
+            f"{lead.title} {lead.search_title or ''} {lead.discovery_hint or ''}"
+        )
+    )
+
+
+def _has_fatality_hint(text: str) -> bool:
+    hint = fatality_analysis_text(text)
+    regional = regional_fatality_account(hint)
+    return bool(_FATALITY_HINT.search(hint) and not _NO_FATALITY_HINT.search(hint)) or (
+        regional is not None
+        and (
+            regional.value not in ("0", "Unknown")
+            or "scope unresolved" in regional.qualifiers
         )
     )
 

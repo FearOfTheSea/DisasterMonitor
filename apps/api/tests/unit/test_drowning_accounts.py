@@ -108,7 +108,7 @@ def test_completed_drowning_hint_is_prioritized_until_publisher_evidence_resolve
         None,
         None,
     )
-    assert lead_retrieval_priority(lead) == 1
+    assert lead_retrieval_priority(lead) == 2
     assert fatality_hint_needs_followup(
         lead, DiscoveryArticle(SOURCE, "Floods damaged homes.")
     )

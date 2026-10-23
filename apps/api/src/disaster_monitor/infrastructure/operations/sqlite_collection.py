@@ -14,7 +14,6 @@ from uuid import uuid4
 
 from pydantic import TypeAdapter
 
-from disaster_monitor.application.ports.collection import ARTICLE_RETRIEVAL_PROVIDER
 from disaster_monitor.application.ports.discovery import (
     DISCOVERY_CAPACITY_NOTICE,
     DiscoveryCapacityError,
@@ -27,7 +26,6 @@ from disaster_monitor.domain.collection import (
     CollectionSnapshot,
     FailureOutcome,
     WorkKind,
-    lead_retrieval_priority,
 )
 from disaster_monitor.domain.discovery import (
     CollectionProgress,
@@ -41,6 +39,10 @@ from disaster_monitor.infrastructure.operations.collection_run_payloads import (
 from disaster_monitor.infrastructure.operations.sqlite_collection_capacity import (
     CollectionStorageBudget,
     is_storage_full,
+)
+from disaster_monitor.infrastructure.operations.sqlite_collection_leads import (
+    enqueue_retrieval_lead,
+    initialize_retrieval_priorities,
 )
 from disaster_monitor.infrastructure.operations.sqlite_request_schedule import (
     CollectionRequestSchedule,
@@ -147,38 +149,12 @@ class SQLiteCollectionJournal:
                     "ALTER TABLE work ADD COLUMN alternate_depth INTEGER NOT"
                     " NULL DEFAULT 0"
                 )
-            if "priority" not in columns:
-                db.execute("BEGIN IMMEDIATE")
-                try:
-                    db.execute(
-                        "ALTER TABLE work ADD COLUMN priority INTEGER NOT NULL "
-                        "DEFAULT 0"
-                    )
-                    db.executemany(
-                        "UPDATE work SET priority=? WHERE id=?",
-                        (
-                            (
-                                lead_retrieval_priority(
-                                    LEAD.validate_json(row["payload"])
-                                ),
-                                row["id"],
-                            )
-                            for row in db.execute(
-                                "SELECT id,payload FROM work WHERE kind='retrieve' "
-                                "AND state IN ('pending','leased')"
-                            ).fetchall()
-                        ),
-                    )
-                    db.commit()
-                except BaseException:
-                    db.rollback()
-                    raise
+            initialize_retrieval_priorities(db)
             if "policy_deferrals" not in columns:
                 db.execute(
                     "ALTER TABLE work ADD COLUMN policy_deferrals "
                     "INTEGER NOT NULL DEFAULT 0"
                 )
-            db.execute("PRAGMA user_version=1")
             self._retained_refusals = retained_publisher_refusals(db)
 
     @contextmanager
@@ -520,26 +496,7 @@ class SQLiteCollectionJournal:
                     "INSERT OR IGNORE INTO work_leads VALUES(?,?)",
                     (work.work_id, item.canonical_url),
                 )
-                key = sha256(
-                    (
-                        "retrieve|"
-                        + item.canonical_url
-                        + "|"
-                        + work.partition.generation
-                    ).encode()
-                ).hexdigest()
-                db.execute(
-                    "INSERT OR IGNORE INTO "
-                    "work(id,kind,provider,payload,priority,sequence) "
-                    "VALUES(?,'retrieve',?,?,?,"
-                    "(SELECT COALESCE(MAX(sequence),0)+1 FROM work))",
-                    (
-                        key,
-                        ARTICLE_RETRIEVAL_PROVIDER,
-                        LEAD.dump_json(item),
-                        lead_retrieval_priority(item),
-                    ),
-                )
+                key = enqueue_retrieval_lead(db, item, work.partition.generation)
                 self._link_child(db, work.work_id, key)
                 if work.partition.alternate_for:
                     db.execute("UPDATE work SET alternate_depth=1 WHERE id=?", (key,))

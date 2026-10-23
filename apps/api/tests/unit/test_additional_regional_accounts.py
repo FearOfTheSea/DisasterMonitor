@@ -160,7 +160,7 @@ def test_native_fatal_headline_is_only_a_retrieval_priority_hint():
         None,
         NOW,
     )
-    assert lead_retrieval_priority(lead) == 1
+    assert lead_retrieval_priority(lead) == 2
     assert lead.published_at is None
 
 
