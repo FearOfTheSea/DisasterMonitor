@@ -157,6 +157,7 @@ from disaster_monitor.infrastructure.news.gdelt_archive import (
     GdeltArchiveCollectionProvider,
 )
 from disaster_monitor.infrastructure.news.gdelt_gkg import GdeltGkgCollectionProvider
+from disaster_monitor.infrastructure.news.public_documents import PublicDocumentReader
 from disaster_monitor.infrastructure.news.wikipedia_collection import (
     WikipediaCitationCollectionProvider,
 )
@@ -171,6 +172,9 @@ from disaster_monitor.infrastructure.operations.postgres_repository import (
 )
 from disaster_monitor.infrastructure.operations.sqlite_collection import (
     SQLiteCollectionJournal,
+)
+from disaster_monitor.infrastructure.operations.sqlite_public_document_access import (
+    SQLitePublicDocumentAccess,
 )
 from disaster_monitor.infrastructure.operator_workspace.json_store import (
     JsonOperatorWorkspaceStore,
@@ -455,7 +459,15 @@ def build_app_dependencies(
         country_names=discovery_countries,
         collection=ResumableDiscovery(
             discovery_providers,
-            PublicCollectionArticleReader(),
+            PublicCollectionArticleReader(
+                reader=PublicDocumentReader(
+                    timeout_seconds=settings.news_feed_timeout_seconds,
+                    access=SQLitePublicDocumentAccess(
+                        settings.discovery_collection_path.with_suffix(".access.sqlite")
+                    ),
+                ),
+                timeout_seconds=settings.news_feed_timeout_seconds,
+            ),
             discovery_store,
             page_budget=settings.discovery_page_budget,
             pass_seconds=settings.discovery_pass_seconds,

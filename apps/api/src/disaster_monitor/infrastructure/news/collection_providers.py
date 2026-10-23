@@ -19,6 +19,9 @@ from disaster_monitor.infrastructure.news.discovery_parser import (
     parse_discovery_article,
 )
 from disaster_monitor.infrastructure.news.feeds import _gdelt_item, _gdelt_time
+from disaster_monitor.infrastructure.news.public_document_access import (
+    PublicAccessDeferred,
+)
 from disaster_monitor.infrastructure.news.public_documents import (
     PublicDocument,
     PublicDocumentReader,
@@ -209,6 +212,10 @@ class PublicCollectionArticleReader:
         try:
             async with asyncio.timeout(self._timeout):
                 document = await self._reader.read(lead.canonical_url)
+        except PublicAccessDeferred as error:
+            raise CollectionProviderError(
+                "policy_deferred", str(error), error.retry_after_seconds
+            ) from error
         except httpx.HTTPStatusError as error:
             raise CollectionProviderError(
                 "rate_limited"

@@ -67,6 +67,7 @@ def fatality_hint_needs_followup(lead: NewsFeedItem, article: DiscoveryArticle) 
 
 
 FailureOutcome = Literal[
+    "policy_deferred",
     "rate_limited",
     "access_refused",
     "transport_failed",
@@ -143,6 +144,8 @@ class ClaimedCollectionWork:
     lead: NewsFeedItem | None
     attempts: int
     alternate_depth: int = 0
+    # Policy waits remain audited attempts but do not spend the failure allowance.
+    policy_deferrals: int = 0
 
 
 @dataclass(frozen=True, slots=True)

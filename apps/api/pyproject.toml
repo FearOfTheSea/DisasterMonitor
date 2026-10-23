@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.8,<3.0",
     "pydantic-settings>=2.4,<3.0",
     "prometheus-client>=0.22,<1.0",
+    "protego>=0.7,<1.0",
     "psycopg[binary]>=3.2,<4.0",
     "pypdf>=5.0,<7.0",
     "pyproj>=3.7,<4.0",

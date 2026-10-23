@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS work (
  attempts INTEGER NOT NULL DEFAULT 0, token TEXT, lease_until REAL,
  due REAL NOT NULL DEFAULT 0, outcome TEXT, detail TEXT,
  sequence INTEGER NOT NULL DEFAULT 0, alternate_depth INTEGER NOT NULL DEFAULT 0,
- priority INTEGER NOT NULL DEFAULT 0
+ priority INTEGER NOT NULL DEFAULT 0, policy_deferrals INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS scan_work (
  scan TEXT NOT NULL, work TEXT NOT NULL, PRIMARY KEY(scan,work)
@@ -173,6 +173,11 @@ class SQLiteCollectionJournal:
                 except BaseException:
                     db.rollback()
                     raise
+            if "policy_deferrals" not in columns:
+                db.execute(
+                    "ALTER TABLE work ADD COLUMN policy_deferrals "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
             db.execute("PRAGMA user_version=1")
             self._retained_refusals = retained_publisher_refusals(db)
 
@@ -393,7 +398,7 @@ class SQLiteCollectionJournal:
             for row in rows:
                 if schedule.ready_at(row) > timestamp:
                     continue
-                if row["attempts"] >= 4:
+                if row["attempts"] - row["policy_deferrals"] >= 4:
                     db.execute(
                         "UPDATE work SET state='failed',outcome='attempts_exhausted',"
                         "detail='Worker lease expired after maximum attempts.' "
@@ -442,6 +447,7 @@ class SQLiteCollectionJournal:
                     LEAD.validate_json(row["payload"]) if kind == "retrieve" else None,
                     row["attempts"] + 1,
                     row["alternate_depth"],
+                    row["policy_deferrals"],
                 )
         return None
 
@@ -659,7 +665,9 @@ class SQLiteCollectionJournal:
         now: datetime,
         retry_at: datetime | None,
     ) -> None:
-        retry = retry_at is not None and work.attempts < 4
+        retry = retry_at is not None and (
+            outcome == "policy_deferred" or work.attempts - work.policy_deferrals < 4
+        )
         state = (
             "capacity"
             if outcome == "capacity_exhausted"
@@ -672,12 +680,14 @@ class SQLiteCollectionJournal:
         db.execute(
             "UPDATE work SET "
             "state=?,due=?,outcome=?,detail=?,token=NULL,lease_until=NULL,"
+            "policy_deferrals=policy_deferrals+?,"
             "sequence=(SELECT MAX(sequence)+1 FROM work) WHERE id=?",
             (
                 state,
                 retry_at.timestamp() if retry_at else 0,
                 outcome,
                 detail[:300],
+                int(outcome == "policy_deferred"),
                 work.work_id,
             ),
         )

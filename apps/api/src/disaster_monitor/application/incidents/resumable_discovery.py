@@ -229,11 +229,13 @@ class ResumableDiscovery:
     ) -> None:
         now = self._clock()
         retry_at = None
-        if error.outcome in ("rate_limited", "transport_failed"):
+        if error.outcome == "policy_deferred":
+            retry_at = now + timedelta(seconds=max(0.1, error.retry_after_seconds or 0))
+        elif error.outcome in ("rate_limited", "transport_failed"):
             minimum = (
                 COLLECTION_RATE_LIMIT_MINIMUM_SECONDS
                 if error.outcome == "rate_limited"
-                else min(300, 30 * 2 ** (work.attempts - 1))
+                else min(300, 30 * 2 ** (work.attempts - work.policy_deferrals - 1))
             )
             delay = max(error.retry_after_seconds or 0, minimum + random() * 5)
             retry_at = now + timedelta(seconds=delay)
@@ -244,7 +246,9 @@ class ResumableDiscovery:
             now=now,
             retry_at=retry_at,
             alternates=plan_alternate_reports(work, self._providers, observed_at=now)
-            if work.kind == "retrieve" and work.attempts == 1
+            if work.kind == "retrieve"
+            and work.attempts - work.policy_deferrals == 1
+            and error.outcome != "policy_deferred"
             else (),
         )
 
@@ -274,9 +278,9 @@ class ResumableDiscovery:
             except DiscoveryCapacityError:
                 raise
             except Exception as error:
-                if (
-                    isinstance(error, CollectionProviderError)
-                    and error.outcome == "rate_limited"
+                if isinstance(error, CollectionProviderError) and error.outcome in (
+                    "rate_limited",
+                    "policy_deferred",
                 ):
                     await self._record_error(work, error)
                     self._dirty.set()

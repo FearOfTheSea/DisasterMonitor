@@ -315,3 +315,53 @@ async def test_rate_limited_host_allows_one_healthy_alternate(
     await service.wait(run.scan_id)
     assert len(searches) == len(reads) == 2
     await service.aclose()
+
+
+async def test_first_real_refusal_after_policy_wait_still_seeks_an_alternate(tmp_path):
+    now, searches, reads = [NOW], [], []
+
+    class Provider:
+        source_id = "controlled"
+        queries = ("flood",)
+        supports_time_filter = False
+        supports_alternates = True
+
+        async def fetch_page(self, partition):
+            searches.append(partition)
+            host = "healthy.example" if partition.alternate_for else "blocked.example"
+            return CollectionPage(leads=(lead(host, "one"),))
+
+    class Reader:
+        async def retrieve(self, item):
+            reads.append(item.canonical_url)
+            if "blocked.example" in item.canonical_url:
+                if len(reads) == 1:
+                    raise CollectionProviderError(
+                        "policy_deferred", "Robots timing.", 10
+                    )
+                raise CollectionProviderError(
+                    "rate_limited", "Publisher HTTP429.", 1800
+                )
+            return article(item)
+
+    runtime = ResumableDiscovery(
+        (Provider(),),
+        Reader(),
+        SQLiteCollectionJournal(tmp_path / "journal.sqlite"),
+        clock=lambda: now[0],
+        pass_seconds=0.5,
+    )
+    try:
+        run = await runtime.start(1)
+        await runtime.wait(run.scan_id)
+        assert len(searches) == 1
+        now[0] += timedelta(seconds=10)
+        await runtime.continue_collection(run.scan_id)
+        await runtime.wait(run.scan_id)
+        result = await runtime.get(run.scan_id)
+        assert len(searches) == 2
+        assert searches[1].alternate_for == "https://blocked.example/one"
+        assert len(result.reports) == 1
+        assert result.collection.articles_pending == 1
+    finally:
+        await runtime.aclose()
