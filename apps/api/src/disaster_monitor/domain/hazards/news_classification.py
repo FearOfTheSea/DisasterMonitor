@@ -8,7 +8,10 @@ from disaster_monitor.domain.regional_accounts import regional_fatality_account
 
 _HAZARD_PATTERNS = (
     (Disaster.EARTHQUAKE, re.compile(r"\b(?:earthquakes?|quakes?|seismic)\b", re.I)),
-    (Disaster.FLOOD, re.compile(r"\b(?:floods?|flooding|inundations?)\b", re.I)),
+    (
+        Disaster.FLOOD,
+        re.compile(r"\b(?:floods?|flooding|floodwaters?|inundations?)\b", re.I),
+    ),
     (
         Disaster.WILDFIRE,
         re.compile(
