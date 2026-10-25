@@ -1,6 +1,8 @@
-"""Source-preserving English sentence boundaries for attributed extraction."""
+"""Source-preserving sentence boundaries for bounded attributed extraction."""
 
 import re
+
+from disaster_monitor.domain.hazards.regional_vocabulary import GERMAN_CALENDAR_MONTH
 
 # Periods in month and personal-title abbreviations are not sentence boundaries.
 _NOT_ABBREVIATION = "".join(
@@ -26,8 +28,13 @@ _NOT_ABBREVIATION = "".join(
         "p.m",
     )
 )
-_SENTENCE = _NOT_ABBREVIATION + r"(?<=[.!?])\s+"
-_CLAUSE = _NOT_ABBREVIATION + r"(?<=[.])(?=\s)|[!?;–—]"
+# An ordinal day before a German month stays with its source sentence. This
+# protects the wording only; it does not infer a supported occurrence timestamp.
+_NOT_ORDINAL_DAY = "".join(
+    rf"(?!(?<=\b\d{{{digits}}}\.)\s+{GERMAN_CALENDAR_MONTH}\b)" for digits in (1, 2)
+)
+_SENTENCE = _NOT_ABBREVIATION + _NOT_ORDINAL_DAY + r"(?<=[.!?])\s+"
+_CLAUSE = _NOT_ABBREVIATION + _NOT_ORDINAL_DAY + r"(?<=[.])(?=\s)|[!?;–—]"
 _INLINE_CITATION = re.compile(r"\[([^\]\n]{1,600})\]\([^\n)]{1,2048}\)")
 
 

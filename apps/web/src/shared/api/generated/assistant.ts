@@ -2417,6 +2417,12 @@ const apiSchemas = {
           },
         ],
       },
+      bylines: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
       claims: {
         items: {
           $ref: '#/components/schemas/ReportedImpactResponse',
@@ -7872,6 +7878,7 @@ export type DisasterMediaItemResponse = {
 
 export type DiscoveryReportResponse = {
   access_issue?: string | null;
+  bylines?: Array<string>;
   claims?: Array<ReportedImpactResponse>;
   episode_account?: HazardEpisodeAccountResponse | null;
   event_date_end?: string | null;

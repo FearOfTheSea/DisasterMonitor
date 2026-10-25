@@ -9,7 +9,11 @@ import re
 from dataclasses import replace
 
 from disaster_monitor.domain.disaster_types import Disaster
-from disaster_monitor.domain.event_mentions import EventMention, MentionPlace
+from disaster_monitor.domain.event_mentions import (
+    EventMention,
+    MentionPlace,
+    MentionTime,
+)
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 from disaster_monitor.domain.mention_occurrence import (
     has_distinct_occurrence,
@@ -119,6 +123,58 @@ def explicit_wildfire_reference_target(
     ):
         return None
     return index
+
+
+def guard_inferred_occurrence_years(mentions: list[EventMention]) -> list[EventMention]:
+    """Do not guess a year against an explicit same-hazard calendar day.
+
+    A repeated day can refer to the older occurrence or a distinct newer one.
+    Calendar agreement alone does not establish identity or permit either year.
+    The caller supplies one publisher section, never independent article sections.
+    """
+    explicit = [
+        m
+        for m in mentions
+        if m.time
+        and m.time.start
+        and m.time.precision == "day"
+        and not m.time.year_inferred
+        and m.role in ("reported", "ongoing", "historical")
+    ]
+    result = []
+    for mention in mentions:
+        time = mention.time
+        conflicts = [
+            m
+            for m in explicit
+            if time
+            and time.start
+            and time.year_inferred
+            and re.search(r"\d", time.wording)
+            and m.disaster == mention.disaster
+            and m.time
+            and m.time.start
+            and (m.time.start.month, m.time.start.day)
+            == (time.start.month, time.start.day)
+            and m.time.start.year != time.start.year
+        ]
+        if time and conflicts:
+            wording = "; ".join(
+                dict.fromkeys(m.time.wording for m in conflicts if m.time)
+            )
+            mention = replace(
+                mention,
+                time=MentionTime(time.wording),
+                notices=(
+                    *mention.notices,
+                    "Reported year remains unresolved: this article explicitly "
+                    f"dates the same hazard to {wording}. Calendar agreement "
+                    "does not establish the same occurrence. "
+                    "Source wording is retained.",
+                ),
+            )
+        result.append(mention)
+    return result
 
 
 def consolidate_local_context(mentions: list[EventMention]) -> list[EventMention]:

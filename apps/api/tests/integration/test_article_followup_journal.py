@@ -76,29 +76,29 @@ async def test_successful_article_and_followup_remain_available_after_restart(tm
     assert alternate.partition == followup
 
 
-async def test_targeted_fatality_search_precedes_generic_backlog_without_removing_it(
+async def test_initial_coverage_precedes_followup_without_removing_it(
     tmp_path,
 ):
     from dataclasses import replace
 
     store = SQLiteCollectionJournal(tmp_path / "journal.sqlite")
     run = DiscoveryRun(str(uuid4()), ReportingInterval.at_start(7, NOW))
-    generic = part("drought")
+    generic = replace(part("drought"), priority=1)
     await store.attach(run, (part(), generic), now=NOW, budget=1)
     seed = await store.claim("search", "seed", now=NOW)
     await store.commit_page(seed, CollectionPage(leads=(LEAD,)), now=NOW)
     publisher = await store.claim("retrieve", "publisher", now=NOW)
-    targeted = replace(part(LEAD.search_title, LEAD.canonical_url), priority=1)
+    targeted = part(LEAD.search_title, LEAD.canonical_url)
     await store.commit_article(publisher, ARTICLE, now=NOW, alternates=(targeted,))
     await store.finish_pass(now=NOW)
     restarted = SQLiteCollectionJournal(tmp_path / "journal.sqlite")
     await restarted.continue_scan(run.scan_id, now=NOW, budget=1)
     next_search = await restarted.claim("search", "next", now=NOW)
-    assert next_search.partition == targeted
+    assert next_search.partition == generic
     await restarted.commit_page(next_search, CollectionPage(), now=NOW)
     assert (
         await restarted.snapshot(run.scan_id, now=NOW)
     ).progress.searches_pending == 1
     await restarted.finish_pass(now=NOW)
     await restarted.continue_scan(run.scan_id, now=NOW, budget=1)
-    assert (await restarted.claim("search", "generic", now=NOW)).partition == generic
+    assert (await restarted.claim("search", "targeted", now=NOW)).partition == targeted

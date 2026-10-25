@@ -88,6 +88,7 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
         discovery_reports=[
             DiscoveryReportResponse(
                 source=_source_response(report.article.source),
+                bylines=list(report.article.bylines),
                 original_url=report.article.original_url,
                 indexed_at=report.article.indexed_at,
                 event_time=report.mention.time.start
@@ -141,8 +142,10 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                         )
                     )
                 ],
-                location=report.mention.place.wording
-                if report.mention and report.mention.place
+                location=(
+                    report.mention.place.wording if report.mention.place else None
+                )
+                if report.mention
                 else report.article.location,
                 geometry=_event_geometry_response(
                     report.mention.geometry
@@ -166,8 +169,8 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                 "article and query budgets; coverage is not exhaustive."
             ),
             (
-                "Impact extraction uses English and bounded Spanish/French/Indonesian "
-                "fatality wording; Indonesian hazard recognition covers earthquakes. "
+                "Impact extraction uses bounded literal wording; "
+                "language and phrasing gaps remain. "
                 "Claims use source sentences up to 600 characters "
                 "(at most 20,000 characters per article); "
                 "missing claims remain unknown."

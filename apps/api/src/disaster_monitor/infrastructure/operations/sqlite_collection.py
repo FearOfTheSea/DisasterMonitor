@@ -3,7 +3,7 @@
 import asyncio
 import sqlite3
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -26,6 +26,7 @@ from disaster_monitor.domain.collection import (
     CollectionSnapshot,
     FailureOutcome,
     WorkKind,
+    search_acquisition_priority,
 )
 from disaster_monitor.domain.discovery import (
     CollectionProgress,
@@ -43,6 +44,10 @@ from disaster_monitor.infrastructure.operations.sqlite_collection_capacity impor
 from disaster_monitor.infrastructure.operations.sqlite_collection_leads import (
     enqueue_retrieval_lead,
     initialize_retrieval_priorities,
+)
+from disaster_monitor.infrastructure.operations.sqlite_collection_searches import (
+    enqueue_search_partition,
+    initialize_search_priorities,
 )
 from disaster_monitor.infrastructure.operations.sqlite_request_schedule import (
     CollectionRequestSchedule,
@@ -150,6 +155,11 @@ class SQLiteCollectionJournal:
                     " NULL DEFAULT 0"
                 )
             initialize_retrieval_priorities(db)
+            initialize_search_priorities(db)
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS work_acquisition_order "
+                "ON work(kind,priority DESC,sequence,id)"
+            )
             if "policy_deferrals" not in columns:
                 db.execute(
                     "ALTER TABLE work ADD COLUMN policy_deferrals "
@@ -259,18 +269,7 @@ class SQLiteCollectionJournal:
         return cursor.lastrowid
 
     def _add_work(self, db: sqlite3.Connection, partition: CollectionPartition) -> None:
-        db.execute(
-            "INSERT INTO work(id,kind,provider,payload,priority,sequence) "
-            "VALUES(?,'search',?,?,?,(SELECT COALESCE(MAX(sequence),0)+1 FROM work)) "
-            "ON CONFLICT(id) DO UPDATE SET "
-            "priority=MAX(work.priority,excluded.priority)",
-            (
-                partition.key,
-                partition.provider,
-                PARTITION.dump_json(partition),
-                partition.priority,
-            ),
-        )
+        enqueue_search_partition(db, partition)
 
     def _attach_descendants(self, db: sqlite3.Connection, scan: str, key: str) -> None:
         db.execute(
@@ -349,27 +348,32 @@ class SQLiteCollectionJournal:
         self, kind: WorkKind, worker: str, now: datetime, provider: str | None
     ) -> ClaimedCollectionWork | None:
         timestamp = now.timestamp()
-        with self._transaction() as db:
-            rows = db.execute(
-                _ACTIVE_SCANS + "SELECT DISTINCT w.*,s.pass_id,s.budget FROM work w "
-                "JOIN scan_work sw ON sw.work=w.id "
-                "JOIN active_scans s ON s.id=sw.scan "
-                "LEFT JOIN cooldowns c ON c.provider=w.provider "
-                "WHERE w.kind=? AND (w.state='pending' OR "
-                "(w.state='leased' AND w.lease_until<=?)) "
-                "AND w.due<=? AND COALESCE(c.until_time,0)<=? "
-                "AND (? IS NULL OR w.provider=?) "
-                "ORDER BY w.priority DESC,w.sequence,w.id",
-                (
-                    timestamp - self._pass_seconds,
-                    kind,
-                    timestamp,
-                    timestamp,
-                    timestamp,
-                    provider,
-                    provider,
-                ),
-            ).fetchall()
+        with (
+            self._transaction() as db,
+            closing(
+                db.execute(
+                    _ACTIVE_SCANS
+                    + "SELECT DISTINCT w.*,s.pass_id,s.budget FROM work w "
+                    "JOIN scan_work sw ON sw.work=w.id "
+                    "JOIN active_scans s ON s.id=sw.scan "
+                    "LEFT JOIN cooldowns c ON c.provider=w.provider "
+                    "WHERE w.kind=? AND (w.state='pending' OR "
+                    "(w.state='leased' AND w.lease_until<=?)) "
+                    "AND w.due<=? AND COALESCE(c.until_time,0)<=? "
+                    "AND (? IS NULL OR w.provider=?) "
+                    "ORDER BY w.priority DESC,w.sequence,w.id",
+                    (
+                        timestamp - self._pass_seconds,
+                        kind,
+                        timestamp,
+                        timestamp,
+                        timestamp,
+                        provider,
+                        provider,
+                    ),
+                )
+            ) as rows,
+        ):
             schedule = CollectionRequestSchedule(db, self._retained_refusals)
             for row in rows:
                 if schedule.ready_at(row) > timestamp:
@@ -505,7 +509,13 @@ class SQLiteCollectionJournal:
             for child in page.children:
                 self._add_work(db, child)
                 self._link_child(db, work.work_id, child.key)
-            next_partition = replace(work.partition, cursor=page.next_cursor or "")
+            next_partition = replace(
+                work.partition,
+                cursor=page.next_cursor or "",
+                priority=search_acquisition_priority(
+                    alternate_for=work.partition.alternate_for
+                ),
+            )
             state = (
                 "pending"
                 if page.next_cursor is not None

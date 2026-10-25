@@ -3,8 +3,29 @@
 import re
 
 from disaster_monitor.domain.disaster_types import Disaster
-from disaster_monitor.domain.hazards.regional_vocabulary import REGIONAL_HAZARDS
+from disaster_monitor.domain.hazards.regional_vocabulary import (
+    REGIONAL_HAZARDS,
+    TURKISH_LANDSLIDE_ENDING,
+)
 from disaster_monitor.domain.regional_accounts import regional_fatality_account
+
+_NAMED_MOUNTAIN = r"(?-i:(?:Mount|Mt\.?)\s+[A-Z][\w’'-]*(?:\s+[A-Z][\w’'-]*){0,2})"
+_VOLCANIC_CONTEXT = r"(?:volcano(?:es|s)?|volcanic|lava|pyroclastic)"
+_FIGURATIVE_SUBJECT = (
+    r"(?:tributes?|messages?|condolences|congratulations|complaints|applications|"
+    r"memories|emails?|calls?)"
+)
+_NONLITERAL_HAZARDS = re.compile(
+    r"\b(?:hurricanes?|typhoons?|cyclones?|tropical storms?)"
+    r"[\s\u2010-\u2015-]+(?:force|strength|like)\b|"
+    rf"\b{_FIGURATIVE_SUBJECT}\s+flood(?:s|ed|ing)?\s+in\b|"
+    rf"\bfloods?\s+of\s+{_FIGURATIVE_SUBJECT}\b|"
+    rf"\bflood(?:s|ed|ing)?\s+with\s+{_FIGURATIVE_SUBJECT}\b|"
+    r"\briadas?\s+de\s+(?:mensajes|homenajes|cr[ií]ticas|solicitudes|"
+    r"condolencias|quejas)\b|"
+    rf"\bsiyasi\s+heyelan(?:lar)?{TURKISH_LANDSLIDE_ENDING}\b",
+    re.I,
+)
 
 _HAZARD_PATTERNS = (
     (Disaster.EARTHQUAKE, re.compile(r"\b(?:earthquakes?|quakes?|seismic)\b", re.I)),
@@ -31,9 +52,11 @@ _HAZARD_PATTERNS = (
     (
         Disaster.VOLCANIC_ERUPTION,
         re.compile(
-            r"\b(?:volcanic eruptions?|eruptions?|"
-            r"(?:volcano|(?-i:Mount|Mt\.)\s+[A-Z][\w’'-]*"
-            r"(?:\s+[A-Z][\w’'-]*){0,2})\s+"
+            r"\b(?:volcanic eruptions?|"
+            rf"{_VOLCANIC_CONTEXT}[^.!?;\n]{{0,100}}\beruptions?|"
+            rf"eruptions?[^.!?;\n]{{0,100}}\b{_VOLCANIC_CONTEXT}|"
+            rf"eruptions?\s+of\s+(?:the\s+)?{_NAMED_MOUNTAIN}|"
+            rf"(?:volcano|{_NAMED_MOUNTAIN})\s+"
             r"(?:(?:last|has|had|is|was|began|started)\s+){0,2}"
             r"erupt(?:s|ed|ing)?)\b",
             re.I,
@@ -66,6 +89,7 @@ def classify_disaster_text(title: str) -> Disaster | None:
 
 def disasters_in_text(text: str) -> tuple[Disaster, ...]:
     """Expose the same hazard vocabulary for conservative source-account scoping."""
+    text = _NONLITERAL_HAZARDS.sub(lambda match: " " * len(match[0]), text)
     return tuple(
         disaster
         for disaster, pattern in _HAZARD_PATTERNS

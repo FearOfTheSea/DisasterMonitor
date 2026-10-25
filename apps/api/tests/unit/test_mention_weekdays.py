@@ -164,3 +164,20 @@ def test_month_range_does_not_become_just_its_last_month():
     )
     assert mention.time is None
     assert "September-December 2025" in mention.text
+
+
+@pytest.mark.parametrize("weekday", ["Saturday", "Tuesday", "Sunday"])
+@pytest.mark.parametrize("date", ["Oct. 17", "17 October"])
+def test_calendar_weekday_after_a_place_is_not_part_of_its_name(weekday, date):
+    text = f"A landslide in Lakeview {weekday}, {date}, killed one person."
+    (mention,) = extract_mentions(text, SOURCE)
+    assert mention.place.wording == "Lakeview"
+    assert mention.place.precision == "named_place"
+    assert mention.excerpt == text
+    assert mention.time and mention.time.start.day == 17
+
+
+@pytest.mark.parametrize("place", ["Friday Harbor", "Sunday River", "Lake Monday"])
+def test_weekday_words_in_place_names_survive_without_an_attached_calendar_date(place):
+    (mention,) = extract_mentions(f"A landslide in {place} killed one person.", SOURCE)
+    assert mention.place.wording == place

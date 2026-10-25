@@ -219,9 +219,9 @@ async def test_recent_feed_work_is_shared_across_windows_without_weekly_duplicat
     )
     assert len(one) == len(month) == len(provider.queries)
     assert {p.key for p in one} == {p.key for p in month}
-    assert (
-        len(provider.queries) <= 70
-    )  # Bound seed work; each RSS query still has at most two orderings.
+    # Eight language families have a fixed catalog. Request budgets stay separate
+    # and unchanged; the full traversal continues across bounded shared passes.
+    assert len(provider.queries) == 106
     await provider.aclose()
 
 

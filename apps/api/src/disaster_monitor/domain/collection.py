@@ -86,6 +86,11 @@ FailureOutcome = Literal[
 ]
 
 
+def search_acquisition_priority(*, alternate_for: str | None = None) -> int:
+    """Complete initial coverage before an acquired-headline follow-up stream."""
+    return int(not alternate_for)
+
+
 @dataclass(frozen=True, slots=True)
 class CollectionPartition:
     provider: str

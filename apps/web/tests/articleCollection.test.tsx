@@ -6,6 +6,36 @@ import type { DiscoveryReportResponse } from '@/shared/api/generated/assistant';
 
 afterEach(cleanup);
 
+it('shows a declared byline separately from publisher and reporting independence', () => {
+  render(
+    <ArticleCollection
+      reports={[{ ...reports[0], ...{ bylines: ['Wire News', 'Jane Reporter'] } }]}
+    />,
+  );
+  const articles = screen.getByRole('region', { name: 'Dated articles' });
+  expect(within(articles).getByText('Byline: Wire News; Jane Reporter')).toBeVisible();
+  expect(
+    within(articles).getByRole('link', { name: /Daily: Article 0/ }),
+  ).toHaveAttribute('href', 'https://daily.example/0');
+  expect(
+    within(articles).getByText('Shared reporting origin: wire:shared'),
+  ).toBeVisible();
+});
+
+it('does not interpret a byline as proof of a shared report or render it as HTML', () => {
+  const byline = '<img src=x onerror=alert(1)>';
+  render(
+    <ArticleCollection
+      reports={[{ ...reports[0], origin: null, ...{ bylines: [byline] } }]}
+    />,
+  );
+  const articles = screen.getByRole('region', { name: 'Dated articles' });
+  expect(within(articles).getByText(`Byline: ${byline}`)).toBeVisible();
+  expect(within(articles).getByText('Reporting independence unknown.')).toBeVisible();
+  expect(within(articles).queryByRole('img')).toBeNull();
+  expect(within(articles).queryByText(/Shared reporting origin:/)).toBeNull();
+});
+
 it('groups burn accounts under injuries while preserving subtype and overlapping counts', () => {
   const source = {
     source_id: 'news',

@@ -6,6 +6,7 @@ from typing import Literal
 from disaster_monitor.domain.disaster_types import Disaster
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 from disaster_monitor.domain.regional_accounts import (
+    regional_fatality_account,
     regional_forecast,
     regional_occurrence_start,
 )
@@ -48,11 +49,25 @@ _RESPONSE_CONTEXT = re.compile(
     r"response|responding|recovery|aid|treatment)\b",
     re.I,
 )
+_HAZARD_NOUN = (
+    r"(?:floods?|flooding|earthquakes?|wildfires?|fires?|landslides?|"
+    r"tsunamis?|drought|eruption|hurricane|typhoon|cyclone)"
+)
 _PHYSICAL_OCCURRENCE = re.compile(
-    r"\b(?:floods?|flooding|earthquakes?|wildfires?|fires?|landslides?|"
-    r"tsunamis?|drought|eruption|hurricane|typhoon|cyclone)\s+"
+    rf"\b{_HAZARD_NOUN}\s+"
     r"(?:\w+\s+){0,2}(?:struck|hit|occurred|erupted|killed|drowned|damaged|"
-    r"destroyed|swept|flooded|triggered|devastated|cut off|tore through)\b",
+    r"destroyed|swept|flooded|triggered|devastated|cut off|tore through)\b|"
+    rf"\b{_HAZARD_NOUN}\s+"
+    r"(?:(?:in|at|near)\s+(?-i:[A-ZÀ-Ý][\wÀ-ž’'-]*"
+    r"(?:[ ,]+[A-ZÀ-Ý][\wÀ-ž’'-]*){0,5})[, ]+)?"
+    r"(?:(?:had|has|have)\s+)?unleashed\s+"
+    r"(?:chaos|destruction|devastation)\b",
+    re.I,
+)
+_WAVE_OCCURRENCE = re.compile(
+    r"\bwave\s+of\s+(?:mud|water|debris)"
+    r"(?:\s+and\s+(?:mud|water|debris))?\s+"
+    r"(?:overwhelmed|swept|struck|hit)\b",
     re.I,
 )
 _FELT_EXTENT = re.compile(r"\b(?:was|were)\s+(?:also\s+)?felt\b", re.I)
@@ -120,6 +135,12 @@ def victim_activity_date_requires_reference(text: str) -> bool:
 def _occurrence_start(text: str) -> int | None:
     direct = _OCCURRENCE.search(text)
     starts = [direct.start()] if direct else []
+    physical = _PHYSICAL_OCCURRENCE.search(text)
+    if physical is not None:
+        starts.append(physical.start())
+    wave = _WAVE_OCCURRENCE.search(text)
+    if wave is not None:
+        starts.append(wave.start())
     regional = regional_occurrence_start(text)
     if regional is not None:
         starts.append(regional)
@@ -207,6 +228,18 @@ def has_distinct_occurrence(text: str) -> bool:
     )
 
 
+def has_later_physical_occurrence(text: str) -> bool:
+    """Require another occurrence or physical action, not later recovery deaths."""
+    return (
+        bool(_WAVE_OCCURRENCE.search(text))
+        or has_distinct_occurrence(text)
+        or any(
+            re.search(r"\b(?:struck|hit|occurred|erupted|unleashed)\b", match[0], re.I)
+            for match in _PHYSICAL_OCCURRENCE.finditer(text)
+        )
+    )
+
+
 def occurrence_role(text: str, *, historical: bool = False) -> MentionRole:
     if historical:
         return "historical"
@@ -234,7 +267,40 @@ def occurrence_role(text: str, *, historical: bool = False) -> MentionRole:
         return "uncertain"
     if _occurrence_start(text) is not None:
         return "reported"
+    absence = regional_fatality_account(text)
+    if absence and absence.value == "0":
+        # A source can report no fatalities without establishing hazard onset.
+        # Keep this out of _occurrence_start, which also governs date attachment.
+        return "reported"
     return "uncertain"
+
+
+def _dates_physical_hazard(left: str, right: str) -> bool:
+    """Require a direct dated hazard noun or its last physical action."""
+    following = re.match(
+        rf"\s*[,–-]?\s*(?:(?:a|an|the)\s+)?{_HAZARD_NOUN}\b", right, re.I
+    )
+    if following:
+        remainder = right[following.end() :].lstrip()
+        if not (
+            _ACTIVITY.match(remainder)
+            or _RESPONSE_CONTEXT.match(remainder)
+            or re.match(
+                r"(?:warnings?|victims?|survivors?|rescuers?|reports?|drills?)\b",
+                remainder,
+                re.I,
+            )
+        ):
+            return True
+    if re.search(rf"\b{_HAZARD_NOUN}\s+(?:of|in|on|during)\s*$", left, re.I):
+        return True
+    if not re.search(r"\b(?:on|from|since|between)\s*$", left, re.I):
+        return False
+    actions = list(_PHYSICAL_OCCURRENCE.finditer(left))
+    activities = list(_ACTIVITY.finditer(left))
+    return bool(actions) and (
+        not activities or actions[-1].start() > activities[-1].start()
+    )
 
 
 def date_is_occurrence(text: str, start: int, end: int) -> bool:
@@ -284,10 +350,13 @@ def date_is_occurrence(text: str, start: int, end: int) -> bool:
         return False
     # An explicit 'on DATE' adjacent to a hazard occurrence wins over a different
     # activity date elsewhere in the sentence. Otherwise activity clocks fail closed.
-    if _ACTIVITY.search(left[-100:]):
+    dated_hazard = _dates_physical_hazard(left, right)
+    if _ACTIVITY.search(left[-100:]) and not dated_hazard:
         return False
     if not left.strip() or re.fullmatch(r"\s*(?:On|From|Since|Between)\s*", left, re.I):
-        return _occurrence_start(right) is not None and not _ACTIVITY.search(right)
-    if re.search(r"\b(?:on|from|since|between)\s*$", left, re.I):
-        return _occurrence_start(context) is not None and not _ACTIVITY.search(context)
-    return _occurrence_start(context) is not None and not _ACTIVITY.search(context)
+        return _occurrence_start(right) is not None and (
+            dated_hazard or not _ACTIVITY.search(right)
+        )
+    return _occurrence_start(context) is not None and (
+        dated_hazard or not _ACTIVITY.search(context)
+    )

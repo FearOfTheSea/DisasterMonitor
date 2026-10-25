@@ -17,7 +17,10 @@ from disaster_monitor.domain.events import (
     EventGeometryKind,
 )
 from disaster_monitor.domain.evidence_types import SourceReference
-from disaster_monitor.infrastructure.news.article_metadata import primary_news
+from disaster_monitor.infrastructure.news.article_metadata import (
+    article_bylines,
+    primary_news,
+)
 from disaster_monitor.infrastructure.news.flight_article_metadata import (
     FlightArticleMetadata,
 )
@@ -25,6 +28,9 @@ from disaster_monitor.infrastructure.news.headline_narrative import (
     headline_owned_paragraphs,
     is_article_decoration,
     is_photograph_caption,
+)
+from disaster_monitor.infrastructure.news.visible_article_publication import (
+    visible_article_publication,
 )
 
 
@@ -151,6 +157,7 @@ class ArticleParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.meta: dict[str, str] = {}
+        self.byline_metadata: list[str] = []
         self.objects: list[dict[str, Any]] = []
         self.flight_metadata = FlightArticleMetadata()
         self.main_parts: list[ArticleTextPiece] = []
@@ -197,8 +204,8 @@ class ArticleParser(HTMLParser):
             or values.get("data-article-body") == "true"
         ) or bool(
             re.search(
-                r"(?:^|\s)(?:post-content|entry-content|article-content|story-body|"
-                r"read__content|articlebodycontent)(?:\s|$)",
+                r"(?:^|\s)(?:post-content|post_content|entry-content|article-content|story-body|"
+                r"read__content|articlebodycontent|q-content__info|content-body)(?:\s|$)",
                 values.get("class") or "",
             )
         )
@@ -237,6 +244,14 @@ class ArticleParser(HTMLParser):
             key = values.get("property") or values.get("name")
             if key and values.get("content"):
                 self.meta.setdefault(key.casefold(), values["content"] or "")
+                if (
+                    key.casefold() in {"author", "articleauthor"}
+                    and not self._article_stack
+                    and not self._body_stack
+                    and not self._main_depth
+                    and not self._hidden
+                ):
+                    self.byline_metadata.append(values["content"] or "")
         if tag in {"script", "style", "nav", "footer", "header", "aside", "textarea"}:
             self._hidden += 1
         if tag == "header":
@@ -490,6 +505,10 @@ def parse_discovery_article(
     raw_publication = parser.meta.get("article:published_time") or news.get(
         "datePublished"
     )
+    if not raw_publication:
+        raw_publication = visible_article_publication(
+            html, source_title, url=document_url or url
+        )
     day_publication = (
         isinstance(raw_publication, str) and len(raw_publication.strip()) == 10
     )
@@ -530,6 +549,7 @@ def parse_discovery_article(
         geometry=geometry,
         event_key=event.get("@id") if isinstance(event.get("@id"), str) else None,
         origin=origin if isinstance(origin, str) and origin else None,
+        bylines=article_bylines(news, parser.byline_metadata),
         photograph_captions=tuple(
             " ".join(parts).strip() for parts in parser.caption_parts if any(parts)
         ),

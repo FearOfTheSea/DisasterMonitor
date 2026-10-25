@@ -7,7 +7,7 @@ language and implicit references remain unresolved rather than acquiring invente
 import hashlib
 import re
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 
 from disaster_monitor.domain.disaster_types import Disaster
 from disaster_monitor.domain.discovery_claim_scope import scoped_disaster_text
@@ -26,11 +26,11 @@ from disaster_monitor.domain.mention_context import (
     attach_listed_place_periods,
     consolidate_local_context,
     explicit_wildfire_reference_target,
+    guard_inferred_occurrence_years,
     link_earthquake_country_accounts,
     local_context_target,
 )
 from disaster_monitor.domain.mention_occurrence import (
-    date_is_occurrence,
     has_distinct_occurrence,
     has_individual_aftershock,
     is_felt_extent,
@@ -38,42 +38,59 @@ from disaster_monitor.domain.mention_occurrence import (
     local_impact_context,
     occurrence_detail,
     occurrence_role,
-    occurrence_years,
     same_occurrence_detail,
     victim_activity_date_requires_reference,
 )
+from disaster_monitor.domain.mention_time import (
+    DAY_MONTH_DATE,
+    MONTH_DAY_DATE,
+    MONTH_WORDING,
+    WEEKDAY_WORDING,
+    WEEKDAYS,
+    historical_occurrence,
+    mention_time,
+    separate_earlier_occurrence,
+)
 from disaster_monitor.domain.reported_impacts import extract_reported_impacts
+from disaster_monitor.domain.reported_number_wording import REPORTED_NUMBER
 from disaster_monitor.domain.source_sentences import source_sentences
 
-_MONTHS = (
-    "January February March April May June July August September "
-    "October November December"
-).split()
-_MONTH = (
-    "|".join(
-        name + ("|" + name[:3] + r"\.?" if len(name) > 3 else "") for name in _MONTHS
-    )
-    + r"|Sept\.?"
-)
-_DATE = re.compile(
-    rf"\b(?P<day>\d{{1,2}})(?:(?:[-–]|\s+to\s+)(?P<last>\d{{1,2}}))?\s+(?P<month>{_MONTH})(?:\s+(?P<year>20\d{{2}}|19\d{{2}}))?(?!\w)",
-    re.I,
-)
-_US_DATE = re.compile(
-    rf"\b(?P<month>{_MONTH})\s+(?P<day>\d{{1,2}})(?:,?\s+(?P<year>20\d{{2}}|19\d{{2}}))?\b",
-    re.I,
-)
 _WORD = r"[A-ZÀ-Ý][\wÀ-ž’'-]*(?:\s+(?:[A-ZÀ-Ý][\wÀ-ž’'-]*|of|the|and|&)){0,4}"
 _PLACE = re.compile(
-    r"\b(?i:in and around|in|at|around|across(?: parts of| much of)?|near|struck|hit|"
+    r"\b(?i:in and around|in|at|around|across(?: parts of| much of)?|near|struck|"
+    r"strikes?|hits?|"
     r"centred in|centered in|affected)\s+"
     r"(?i:(?:the\s+)?(?:(?:northern|southern|eastern|western|central|"
     r"northeastern|northwestern|southeastern|southwestern|neighbouring|"
     r"neighboring|nearby)\s+)?(?:(?:state|province|region|district|county|"
     rf"island)\s+of\s+)?)(?P<place>{_WORD})"
 )
-_WEEKDAYS = "Monday Tuesday Wednesday Thursday Friday Saturday Sunday".split()
-_WEEKDAY = re.compile(r"\b(" + "|".join(_WEEKDAYS) + r")\b", re.I)
+_LOCATIVE_ADMINISTRATIVE_NAME = re.compile(
+    r"\b(?i:in|at|near|across|struck|strikes?|hits?|affected)\s+"
+    r"(?i:(?:the\s+)?(?:[\wÀ-ž'-]+\s+){0,2}"
+    r"(?:state|province|region|district|county|municipality|city|town|village|"
+    rf"island)\s+of\s+)(?P<place>{_WORD})"
+)
+_INSTITUTIONAL_ADMINISTRATION = re.compile(
+    r"(?:-run)?\s+(?:media|news|broadcasters?|courts?|judges?|"
+    r"district\s+judges?|police)\b",
+    re.I,
+)
+_NONPLACE_WORDS = frozenset(
+    "the this that these those each a an several some least most town city "
+    "village region state country area site national government".split()
+)
+_QUANTIFIED_LOCATIVE = re.compile(rf"^at\s+(?:least|most)\s+{REPORTED_NUMBER}\b", re.I)
+_EDITORIAL_INVITATION = re.compile(
+    r"^(?:interested\s+in\b|subscribe\b|sign\s+up\b|"
+    r"get\s+(?:automatic|email|news|daily)\s+alerts\b)",
+    re.I,
+)
+_CALENDAR_PLACE = re.compile(
+    rf"(?:{MONTH_WORDING}|{'|'.join(WEEKDAYS)})(?:\s+(?:and|to)\s+"
+    rf"(?:{MONTH_WORDING}|{'|'.join(WEEKDAYS)}))*",
+    re.I,
+)
 _ADMINISTRATIVE_PLACE = re.compile(
     r"\b(?P<place>[A-ZÀ-Ý][\wÀ-ž’'-]*(?:(?:,\s*|\s+and\s+|\s+)[A-ZÀ-Ý][\wÀ-ž’'-]*)*"
     r"\s+(?:districts?|provinces?|states?|municipalit(?:y|ies)))\b",
@@ -88,150 +105,55 @@ _VICTIM_ACTIVITY_NOTICE = (
     "The reported day identifies these victims' firefighting activity. "
     "It does not establish wildfire ignition or the start of the wider fire episode."
 )
+_VICTIM_SUBSET = re.compile(
+    rf",\s*(?:(?:{REPORTED_NUMBER})\s+of\s+"
+    r"(?:them|the\s+(?:victims|dead)|those\s+killed)\b|including\b)",
+    re.I,
+)
 
 
-def _month_period(text: str) -> MentionTime | None:
-    matches = [
-        match
-        for match in re.finditer(
-            rf"\b(?P<month>{_MONTH})\s+(?P<year>(?:19|20)\d{{2}})\b",
-            text,
-            re.I,
-        )
-        if date_is_occurrence(text, match.start(), match.end())
+def _toll_place_context(text: str, source: SourceReference) -> str:
+    """A victim subset cannot locate the whole source casualty account."""
+    subset = _VICTIM_SUBSET.search(text)
+    if subset is None:
+        return text
+    prefix = text[: subset.start()]
+    fatalities = [
+        c
+        for c in extract_reported_impacts(prefix, source)
+        if c.fact.category == "fatalities"
     ]
-    if len(matches) != 1:
+    if any(c.fact.value.casefold() not in {"0", "one", "1"} for c in fatalities):
+        return prefix
+    return text
+
+
+def _place_name(wording: str) -> str | None:
+    value = re.split(
+        r"\s+(?:(?:after|before|during|following|amid|while|when|because)\b|"
+        r"(?:minutes?|hours?|days?|weeks?|months?|years?)\s+(?:later|earlier)\b)",
+        wording,
+        maxsplit=1,
+        flags=re.I,
+    )[0].strip(" ,.;:&")
+    value = re.sub(r"(?:\s+(?:and|of|the|&))+$", "", value, flags=re.I)
+    if (
+        not value
+        or value.endswith(("'s", "’s"))
+        or value.casefold() in _NONPLACE_WORDS
+        or _CALENDAR_PLACE.fullmatch(value)
+    ):
         return None
-    match = matches[0]
-    year = int(match["year"])
-    month = next(
-        i + 1
-        for i, name in enumerate(_MONTHS)
-        if name[:3].casefold() == match["month"][:3].casefold()
-    )
-    return MentionTime(
-        match[0],
-        datetime(year, month, 1, tzinfo=UTC),
-        datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=UTC),
-        "range",
-    )
-
-
-def _historical(text: str, source: SourceReference) -> bool:
-    month = _month_period(text)
-    dated_years = (
-        int(match["year"])
-        for pattern in (_DATE, _US_DATE)
-        for match in pattern.finditer(text)
-        if match["year"] and date_is_occurrence(text, match.start(), match.end())
-    )
-    return bool(
-        re.search(
-            r"\b(?:historical|anniversary|years? ago|last year|"
-            r"previous event|similar to)\b",
-            text,
-            re.I,
-        )
-    ) or bool(
-        source.published_at
-        and (
-            any(int(y) < source.published_at.year for y in occurrence_years(text))
-            or any(year < source.published_at.year for year in dated_years)
-            or (month and month.start and month.start.year < source.published_at.year)
-        )
-    )
-
-
-def _time(text: str, source: SourceReference) -> MentionTime | None:
-    matches = list(_DATE.finditer(text)) + list(_US_DATE.finditer(text))
-    matches = [m for m in matches if date_is_occurrence(text, m.start(), m.end())]
-    if not matches:
-        month_period = _month_period(text)
-        if month_period is not None:
-            return month_period
-        weekdays = [
-            m
-            for m in _WEEKDAY.finditer(text)
-            if date_is_occurrence(text, m.start(), m.end())
-        ]
-        if len(weekdays) == 1:
-            weekday = weekdays[0]
-            if re.search(r"\b(?:next|every|each)\s*$", text[: weekday.start()], re.I):
-                return None
-            publication = source.published_at
-            if publication is None or _historical(text, source):
-                return MentionTime(weekday[0])
-            target = next(
-                i
-                for i, name in enumerate(_WEEKDAYS)
-                if name.casefold() == weekday[0].casefold()
-            )
-            days = (publication.weekday() - target) % 7
-            if days == 0 and re.search(r"\blast\s*$", text[: weekday.start()], re.I):
-                days = 7
-            date = publication.date() - timedelta(days=days)
-            if re.search(r"\blast week\b", text, re.I):
-                monday = publication.date() - timedelta(days=publication.weekday())
-                date = monday - timedelta(days=7) + timedelta(days=target)
-            elif re.search(r"\bthis\s*$", text[: weekday.start()], re.I):
-                monday = publication.date() - timedelta(days=publication.weekday())
-                date = monday + timedelta(days=target)
-                if date > publication.date():
-                    return MentionTime(weekday[0])
-            start = datetime(date.year, date.month, date.day, tzinfo=UTC)
-            return MentionTime(
-                weekday[0], start, start + timedelta(days=1), "day", True
-            )
-        approximate = re.search(
-            rf"\b(?:early|mid|late)\s+(?:{_MONTH})(?:\s+20\d{{2}})?\b", text, re.I
-        )
-        if approximate and date_is_occurrence(
-            text, approximate.start(), approximate.end()
-        ):
-            return MentionTime(approximate[0])
-        return None
-    if len({m.group().casefold() for m in matches}) > 1:
-        # A dateline, activity date, and occurrence date need separate scope.
-        # Preserve the passage instead of choosing the first clock as onset.
-        return None
-    match = matches[0]
-    year = match["year"]
-    publication = source.published_at
-    if year is None and publication is None:
-        return MentionTime(match.group())
-    month = next(
-        i + 1
-        for i, name in enumerate(_MONTHS)
-        if name[:3].casefold() == match["month"][:3].casefold()
-    )
-    try:
-        start = datetime(
-            int(year) if year else publication.year if publication else 0,
-            month,
-            int(match["day"]),
-            tzinfo=UTC,
-        )
-        if year is None and publication and start > publication + timedelta(days=1):
-            start = start.replace(year=start.year - 1)
-        last = match.groupdict().get("last")
-        end = (
-            start.replace(day=int(last)) + timedelta(days=1)
-            if last
-            else start + timedelta(days=1)
-        )
-        return MentionTime(
-            match.group(), start, end, "range" if last else "day", year is None
-        )
-    except ValueError:
-        return MentionTime(match.group())
+    return value
 
 
 def _place(text: str) -> MentionPlace | None:
     affected = _AFFECTED_ADMIN_GROUP.search(text)
     if affected:
         return MentionPlace(affected["place"], "named_place", "administrative_area")
-    administrative = _ADMINISTRATIVE_PLACE.search(text)
-    if administrative:
+    for administrative in _ADMINISTRATIVE_PLACE.finditer(text):
+        if _INSTITUTIONAL_ADMINISTRATION.match(text[administrative.end() :]):
+            continue
         value = re.sub(r"^In\s+", "", administrative["place"])
         words = value.split()
         if len(words) != 2 or words[0].casefold() not in {
@@ -247,24 +169,38 @@ def _place(text: str) -> MentionPlace | None:
             "some",
         }:
             return MentionPlace(value, "named_place", "administrative_area")
-    matches = [
-        match
-        for match in _PLACE.finditer(text)
-        if not re.search(
+    # Preserve the first reported scope. A later administrative place may only
+    # describe damage or another population, not locate this earlier toll.
+    locatives = sorted(
+        [*_LOCATIVE_ADMINISTRATIVE_NAME.finditer(text), *_PLACE.finditer(text)],
+        key=lambda match: match.start(),
+    )
+    for match in locatives:
+        if _QUANTIFIED_LOCATIVE.match(text[match.start() :]):
+            continue
+        if re.search(
             r"\b(?:based|headquartered|born|trained)\s*$", text[: match.start()], re.I
-        )
-    ]
-    if not matches:
-        return None
-    # An explicit named location is descriptive until a geographic source resolves it.
-    value = matches[0]["place"].strip(" ,.;:&")
-    if value.endswith(("'s", "’s")):
-        return None
-    if value.casefold() in {month.casefold() for month in _MONTHS}:
-        return None
-    if value in {"The", "National", "Government", "October", "November"}:
-        return None
-    return MentionPlace(value, "named_place")
+        ):
+            continue
+        # Keep looking after a quantifier, date or other non-location candidate.
+        value = match["place"].strip(" ,.;:&")
+        for weekday in WEEKDAY_WORDING.finditer(value):
+            if weekday.start() == 0:
+                continue
+            following = text[match.start("place") + weekday.end() :].lstrip(" ,")
+            if DAY_MONTH_DATE.match(following) or MONTH_DAY_DATE.match(following):
+                value = value[: weekday.start()].rstrip()
+                break
+        if name := _place_name(value):
+            # Descriptive until an independent geographic source resolves it.
+            return MentionPlace(
+                name,
+                "named_place",
+                "administrative_area"
+                if match.re is _LOCATIVE_ADMINISTRATIVE_NAME
+                else "reported_location",
+            )
+    return None
 
 
 def _hazard_place(text: str, hazard: Disaster) -> MentionPlace | None:
@@ -333,23 +269,43 @@ def _extract_section_mentions(
         report_text,
     )
     # Titles such as Dr. must not become standalone heading-inherited mentions.
-    sentences = [
-        s.strip(" •-\n") for s in source_sentences(normalized) if s.strip(" •-\n")
+    accounts = [
+        account
+        for s in source_sentences(normalized)
+        if s.strip(" •-\n")
+        for account in separate_earlier_occurrence(s.strip(" •-\n"))
     ]
+    sentences = [account.text for account in accounts]
     mentions: list[EventMention] = []
     active: list[int] = []
     heading_hazards: tuple[Disaster, ...] = ()
     heading_place: MentionPlace | None = None
     heading_names: tuple[str, ...] = ()
     for ordinal, sentence in enumerate(sentences):
+        account = accounts[ordinal]
+        if account.separate:
+            active = []
+            heading_hazards, heading_place, heading_names = (), None, ()
         unresolved_scope = False
         fire_reference = None
         reference_place = None
         hazards = disasters_in_text(sentence)
+        headline_context = bool(
+            account.separate
+            and not account.historical
+            and not hazards
+            and len(title_hazards) == 1
+        )
+        if headline_context:
+            hazards = title_hazards
         if not hazards and has_individual_aftershock(sentence):
             hazards = (Disaster.EARTHQUAKE,)
         if sentence.startswith("#"):
             heading_text = sentence.lstrip("# ")
+            if _EDITORIAL_INVITATION.search(heading_text):
+                heading_hazards, heading_place, heading_names = (), None, ()
+                active = []
+                continue
             heading_hazards = hazards
             heading_place = _place(heading_text)
             heading_names = tuple(dict.fromkeys(_STORM.findall(heading_text)))
@@ -372,7 +328,7 @@ def _extract_section_mentions(
             mentions, sentences[max(0, ordinal - 8) : ordinal], sentence
         )
         if target is not None:
-            reference_time = _time(sentence, source)
+            reference_time = mention_time(sentence, source)
             reference_place = _place(sentence)
             if reference_place is None and is_victim_firefighting_activity(sentence):
                 reference_place = mentions[target].place
@@ -398,7 +354,9 @@ def _extract_section_mentions(
                 and reference_place
                 and reference_place.precision == "named_place"
                 and not country_conflict
-                and occurrence_role(sentence, historical=_historical(sentence, source))
+                and occurrence_role(
+                    sentence, historical=historical_occurrence(sentence, source)
+                )
                 == "reported"
                 and (
                     prior_time is None
@@ -415,8 +373,8 @@ def _extract_section_mentions(
             target = local_context_target(mentions, active, new_place)
             if (
                 target is not None
-                and _time(sentence, source) is None
-                and not _historical(sentence, source)
+                and mention_time(sentence, source) is None
+                and not historical_occurrence(sentence, source)
                 and not has_distinct_occurrence(sentence)
                 and occurrence_role(sentence) != "forecast"
             ):
@@ -453,14 +411,18 @@ def _extract_section_mentions(
                 if active:
                     for index in active:
                         mention = mentions[index]
-                        if _historical(sentence, source) or _STORM.search(sentence):
+                        if historical_occurrence(sentence, source) or _STORM.search(
+                            sentence
+                        ):
                             active = []
                             break
                         mentions[index] = replace(
                             mention, text=f"{mention.text} {sentence}"
                         )
                 continue
-        time = _time(sentence, source)
+        time = mention_time(sentence, source)
+        if account.period_wording and (time is None or time.year_inferred):
+            time = MentionTime(account.period_wording)
         if fire_reference is None and victim_activity_date_requires_reference(sentence):
             time = None
         names = tuple(dict.fromkeys(_STORM.findall(sentence))) or (
@@ -468,8 +430,12 @@ def _extract_section_mentions(
         )
         role = (
             "uncertain"
-            if unresolved_scope
-            else occurrence_role(sentence, historical=_historical(sentence, source))
+            if unresolved_scope or headline_context
+            else occurrence_role(
+                sentence,
+                historical=account.historical
+                or historical_occurrence(sentence, source),
+            )
         )
         felt_extent = hazards == (Disaster.EARTHQUAKE,) and is_felt_extent(sentence)
         if felt_extent:
@@ -481,13 +447,16 @@ def _extract_section_mentions(
         active = []
         for hazard in hazards:
             detail = occurrence_detail(sentence)
+            place_context = _toll_place_context(sentence, source)
+            victim_subset = place_context != sentence
             place = (
                 MentionPlace(location, "country_context", "administrative_area")
                 if felt_extent and location and title_hazards == hazards
                 else None
                 if felt_extent
-                else _hazard_place(sentence, hazard)
+                else _hazard_place(place_context, hazard)
             )
+            subset_scope_unknown = victim_subset and place is None
             if fire_reference is not None:
                 place = reference_place
             if hazard is Disaster.DROUGHT and not re.search(
@@ -496,6 +465,8 @@ def _extract_section_mentions(
                 time = None
             if (
                 place is None
+                and not account.separate
+                and not victim_subset
                 and preceding_active
                 and (
                     time is None or mentions[preceding_active[-1]].time in (None, time)
@@ -508,8 +479,14 @@ def _extract_section_mentions(
                 and not re.search(r"\b(?:across|throughout)\b", sentence, re.I)
             ):
                 place = mentions[preceding_active[-1]].place
-            place = place or heading_place
-            if place is None and not mixed and title_hazards == (hazard,):
+            place = place or (heading_place if not victim_subset else None)
+            if (
+                place is None
+                and not account.separate
+                and not victim_subset
+                and not mixed
+                and title_hazards == (hazard,)
+            ):
                 place = title_place
             if place and (
                 place.wording.casefold() in country_names
@@ -524,6 +501,7 @@ def _extract_section_mentions(
                 i
                 for i, m in enumerate(mentions)
                 if m.disaster == hazard
+                and not account.separate
                 and m.role == role
                 and not mixed
                 and not felt_extent
@@ -539,6 +517,8 @@ def _extract_section_mentions(
             previous = mentions[previous_index] if mentions else None
             if (
                 previous
+                and not account.separate
+                and not (victim_subset and place is None)
                 and previous.disaster == hazard
                 and not mixed
                 and not felt_extent
@@ -562,9 +542,20 @@ def _extract_section_mentions(
                 active.append(index)
                 continue
             original_place = place
-            if place is None and len(title_hazards) == 1 and location:
+            if (
+                place is None
+                and not account.separate
+                and len(title_hazards) == 1
+                and location
+                and (not victim_subset or location.casefold() in country_names)
+            ):
                 place = MentionPlace(location, "country_context", "administrative_area")
-            if time is None and event_time is not None and len(title_hazards) == 1:
+            if (
+                time is None
+                and not account.separate
+                and event_time is not None
+                and len(title_hazards) == 1
+            ):
                 time = MentionTime(
                     event_time.isoformat(), event_time, event_time, "exact"
                 )
@@ -585,9 +576,14 @@ def _extract_section_mentions(
                 country_context=heading_place.wording
                 if heading_place and heading_place.wording.casefold() in country_names
                 else location or title_country
-                if len(title_hazards) == 1
+                if len(title_hazards) == 1 and not account.separate
                 else None,
-                geometry=geometry if len(title_hazards) == 1 and not mixed else None,
+                geometry=geometry
+                if len(title_hazards) == 1
+                and not mixed
+                and not subset_scope_unknown
+                and not account.separate
+                else None,
                 notices=(
                     "Combined hazard or named-event account: "
                     "impacts cannot be uniquely allocated.",
@@ -608,17 +604,45 @@ def _extract_section_mentions(
                 distinguishing_evidence=detail,
             )
             mentions.append(mention)
+            if account.separate:
+                mentions[-1] = replace(
+                    mentions[-1],
+                    notices=(
+                        *mentions[-1].notices,
+                        "This source describes an earlier occurrence and a later "
+                        "physical account. Dates and impacts apply only to their "
+                        "own source passage; article-wide metadata is not inherited.",
+                    ),
+                )
+            if victim_subset:
+                mentions[-1] = replace(
+                    mentions[-1],
+                    notices=(
+                        *mentions[-1].notices,
+                        "Locations in a victim subset do not establish the "
+                        "geographic scope of the whole reported toll.",
+                    ),
+                )
             activity_notices = (
                 (_VICTIM_ACTIVITY_NOTICE,)
                 if time and is_victim_firefighting_activity(sentence)
                 else ()
             )
-            if activity_notices:
+            temporal_notices = (
+                (
+                    "Reported occurrence date remains unresolved; "
+                    "source wording is retained.",
+                )
+                if time and time.start is None and time.precision == "unknown"
+                else ()
+            )
+            if activity_notices or temporal_notices:
                 mentions[-1] = replace(
                     mentions[-1],
                     notices=(
                         *mentions[-1].notices,
                         *activity_notices,
+                        *temporal_notices,
                     ),
                 )
             if fire_reference is not None:
@@ -635,7 +659,7 @@ def _extract_section_mentions(
                         *activity_notices,
                     ),
                 )
-            if time and time.start and _WEEKDAY.fullmatch(time.wording):
+            if time and time.start and WEEKDAY_WORDING.fullmatch(time.wording):
                 mentions[-1] = replace(
                     mentions[-1],
                     notices=(
@@ -678,7 +702,9 @@ def _extract_section_mentions(
         )
     result = []
     for mention in link_earthquake_country_accounts(
-        attach_listed_place_periods(consolidate_local_context(mentions))
+        attach_listed_place_periods(
+            consolidate_local_context(guard_inferred_occurrence_years(mentions))
+        )
     )[:80]:
         role = mention.role
         scoped = scoped_disaster_text(
@@ -692,6 +718,7 @@ def _extract_section_mentions(
                 scoped,
                 source,
                 location=mention.place.wording if mention.place else None,
+                source_context=normalized,
             )
         )
         if role == "historical":

@@ -66,6 +66,7 @@ async def test_fatality_hints_get_retrieval_priority_without_dropping_routine_wo
     await store.commit_page(search, CollectionPage(leads=(routine, fatal)), now=NOW)
     if legacy:
         with sqlite3.connect(path) as db:
+            db.execute("DROP INDEX work_acquisition_order")
             db.execute("ALTER TABLE work DROP COLUMN priority")
         store = SQLiteCollectionJournal(path)
     first = await store.claim("retrieve", "reader", now=NOW)

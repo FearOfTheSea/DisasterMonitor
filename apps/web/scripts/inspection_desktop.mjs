@@ -1,6 +1,6 @@
 // Controlled desktop acceptance. Start INSPECTION_ACCEPTANCE=1 stack separately.
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, expect } from '@playwright/test';
 
@@ -37,6 +37,15 @@ const capture = async (name) =>
   page.screenshot({ path: join(output, `${name}.png`), fullPage: false });
 const check = (name, evidence) => checks.push({ name, result: 'passed', evidence });
 try {
+  // The controlled imagery checks must not depend on the public basemap service.
+  const baseTile = await readFile(
+    new URL('./fixtures/ground_tile.png', import.meta.url),
+  );
+  await page
+    .context()
+    .route('https://tile.openstreetmap.org/**', (route) =>
+      route.fulfill({ contentType: 'image/png', body: baseTile }),
+    );
   await page.context().route('https://controlled.example/**', (route) =>
     route.fulfill({
       contentType: 'text/html',

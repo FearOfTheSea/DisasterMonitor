@@ -131,6 +131,7 @@ class IncidentDetectionTimelineResponse(BaseModel):
 
 class DiscoveryReportResponse(BaseModel):
     source: SourceResponse
+    bylines: list[str] = Field(default_factory=list)
     indexed_at: datetime | None = None
     event_time: datetime | None = None
     origin: str | None = None

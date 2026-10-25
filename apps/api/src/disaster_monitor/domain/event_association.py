@@ -266,7 +266,7 @@ def associate_mentions(
                     ),
                     located.place.wording
                     if located.place
-                    else first.article.location or first.article.source.title,
+                    else first.article.source.title,
                 ),
                 event_time=timed.time.start if timed.time else None,
                 geometry=located.geometry,

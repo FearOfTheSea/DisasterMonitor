@@ -9,7 +9,20 @@ from dataclasses import dataclass
 
 from disaster_monitor.domain.evidence import ReportedFact, SituationReport
 from disaster_monitor.domain.evidence_types import FactStatus, SourceReference
-from disaster_monitor.domain.regional_accounts import regional_fatality_account
+from disaster_monitor.domain.nonhuman_impact_wording import (
+    has_nonhuman_death_wording,
+    has_possible_human_referent,
+    nonhuman_death_sentences,
+)
+from disaster_monitor.domain.regional_accounts import (
+    mask_german_articles,
+    regional_fatality_account,
+)
+from disaster_monitor.domain.reported_number_wording import (
+    REPORTED_NUMBER,
+    comparable_reported_number,
+    is_approximate_reported_number,
+)
 from disaster_monitor.domain.source_sentences import (
     source_analysis_text,
     source_sentences,
@@ -26,7 +39,7 @@ IMPACT_LABELS = {
 }
 _TERMS = {
     "fatalities": (
-        r"died|dies?|dead|killed|drowned|deaths?|fatalities|death toll|"
+        r"died|dies?|dead|killed|(?<!-)killing|drowned|deaths?|fatalities|death toll|"
         r"claimed the lives of|took the lives of"
     ),
     "injuries": r"injured|injuries|wounded",
@@ -44,30 +57,30 @@ _TERMS = {
 _HUMAN_IMPACT_TERMS = "|".join(
     _TERMS[category] for category in ("fatalities", "injuries", "displacement")
 )
-_NUMBER = (
-    r"(?:\d[\d,]*|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
-    r"dozens|hundreds|thousands)"
-)
+_NUMBER = REPORTED_NUMBER
 _PERSON = (
     r"(?:(?-i:[A-ZÀ-Ý][\wÀ-ž'-]*)\s+){0,2}"
     r"(?:people|persons?|men|women|children|residents|soldiers?|others?|"
-    r"firefighters?|workers?|miners?|volunteers?|responders?|passengers?)"
+    r"firefighters?|workers?|miners?|volunteers?|responders?|passengers?|"
+    r"boys?|girls?|babies|infants?|counsel(?:l)?ors?|campers?)"
 )
+_PERSON_GROUP = rf"{_PERSON}(?:\s+(?:and|plus)\s+{_PERSON})*"
 _LINK = (
-    rf"(?:\s+(?:{_PERSON}|were|was|are|is|"
-    r"have|has|been|had|reportedly|may|might|confirmed|reported|at|least|about|"
+    rf"(?:\s+of\s+(?:the\s+)?(?:{_NUMBER}\s+)?{_PERSON_GROUP})?"
+    rf"(?:\s+(?:{_PERSON_GROUP}|were|was|are|is|"
+    r"have|has|been|being|had|reportedly|may|might|confirmed|reported|at|least|about|"
     r"approximately|temporarily|internally|newly))*\s+"
 )
-_NONHUMAN = (
-    r"cows?|cattle|livestock|animals?|sheep|goats?|horses?|dogs?|cats?|pigs?|poultry|"
-    r"buffalo(?:es)?|donkeys?|equids?|trees?|plants?|crops?"
+_COUNTED_POPULATION = (
+    rf"(?:{_NUMBER}|a|an|the)\s+"
+    r"(?:of\s+)?"
+    r"(?:(?:youth|camp|adult|young)\s+)?"
+    rf"(?:{_PERSON}|reservists?|counsel(?:l)?ors?|campers?|owners?|adults?)"
 )
-_NONHUMAN_DEATH = re.compile(
-    rf"\b(?:{_NONHUMAN})\s+"
-    r"(?:(?:were|was|are|have|had|has|been|also|reportedly|found|reported)\s+)*"
-    r"(?:died|dead|killed|drowned|deaths?)\b|"
-    rf"\b(?:killed|drowned|deaths? of)\s+(?:(?:{_NUMBER})\s+)?(?:{_NONHUMAN})\b",
-    re.I,
+_POPULATION_LIST = (
+    rf"{_COUNTED_POPULATION}"
+    rf"(?:\s*,\s*(?:(?:and|plus)\s+)?|\s+(?:and|plus)\s+)"
+    rf"{_COUNTED_POPULATION}"
 )
 _HUMAN_REFERENT = re.compile(
     rf"\b(?:{_PERSON}|farmers?|herders?|ranchers?|boys?|girls?|babies?|adults?|victims?)\b",
@@ -83,6 +96,17 @@ _NONFATAL_DROWNING = re.compile(
     r"drowned(?=\s+(?:but|and)\s+"
     r"(?:(?:was|were|have|had|been|both|all|successfully)\s+){0,5}"
     r"(?:resuscitated|revived|survived)\b))\b",
+    re.I,
+)
+_PREDICTED_DEATH = re.compile(
+    r"\b(?:going\s+to|will)\s+(?:(?:not|never)\s+)?"
+    r"(?:be\s+)?(?:die|dead|killed|drowned)\b",
+    re.I,
+)
+_POPULATION_COMPARISON = re.compile(
+    r"\bwould\s+be\s+(?:comparable|equivalent)\s+to\b"
+    r"[^.!?;\n]{0,100}\b(?:deaths?|fatalities)\b[^.!?;\n]{0,60}"
+    r"\b(?:today(?:['’]s)?|(?:current|modern)\s+population)\b",
     re.I,
 )
 _BURN_ACCOUNT = re.compile(
@@ -125,14 +149,28 @@ class ReportedImpact:
 
 def only_nonhuman_deaths(text: str) -> bool:
     """Explicit nonhuman death wording without a possible human account."""
-    return bool(_NONHUMAN_DEATH.search(text)) and not _HUMAN_REFERENT.search(text)
-
-
-def fatality_analysis_text(text: str) -> str:
-    """Read visible labels and mask nonfatal drowning at original source offsets."""
-    return _NONFATAL_DROWNING.sub(
-        lambda match: " " * len(match[0]), source_analysis_text(text)
+    return has_nonhuman_death_wording(text) and not has_possible_human_referent(
+        text, _HUMAN_REFERENT
     )
+
+
+def nonhuman_fatality_sentences(text: str) -> frozenset[str]:
+    """Identify nonhuman accounts before hazard scoping removes antecedents."""
+    return nonhuman_death_sentences(text, _HUMAN_REFERENT)
+
+
+def fatality_analysis_text(
+    text: str, *, nonhuman_sentences: frozenset[str] = frozenset()
+) -> str:
+    """Mask nonfatal and predicted deaths at original source offsets."""
+    # Mention construction can join a quoted source sentence to its next line.
+    # Mask only the original nonhuman span, preserving any later human account.
+    for sentence in nonhuman_sentences:
+        text = text.replace(sentence, " " * len(sentence))
+    analysis = mask_german_articles(source_analysis_text(text))
+    for pattern in (_NONFATAL_DROWNING, _PREDICTED_DEATH, _POPULATION_COMPARISON):
+        analysis = pattern.sub(lambda match: " " * len(match[0]), analysis)
+    return analysis
 
 
 def _context_count(sentence: str, match: re.Match[str]) -> bool:
@@ -148,6 +186,18 @@ def _context_count(sentence: str, match: re.Match[str]) -> bool:
             len(value) == 4
             and 1900 <= int(value) <= 2100
             and re.search(r"\b(?:in|during|since)\s*$", before, re.I)
+        )
+    )
+
+
+def _coordinated_impact_populations(analysis: str, terms: str) -> bool:
+    """A casualty predicate governing a list does not allocate one component total."""
+    return bool(
+        re.search(
+            rf"\b(?:{terms})\s+(?:{_POPULATION_LIST})\b|"
+            rf"\b(?:{_POPULATION_LIST}){_LINK}(?:{terms})\b",
+            analysis,
+            re.I,
         )
     )
 
@@ -199,9 +249,7 @@ def inspect_report_impacts(report: SituationReport) -> tuple[ReportedImpact, ...
 
 
 def _account_value(value: str) -> str:
-    normalized = value.strip().casefold().replace(",", "")
-    words = "zero one two three four five six seven eight nine ten".split()
-    return str(words.index(normalized)) if normalized in words else normalized
+    return comparable_reported_number(value)
 
 
 def _burn_injury_accounts(
@@ -245,30 +293,39 @@ def extract_reported_impacts(
     source: SourceReference,
     *,
     location: str | None = None,
+    source_context: str | None = None,
 ) -> tuple[ReportedImpact, ...]:
     claims = []
+    nonhuman_sentences = nonhuman_fatality_sentences(
+        text if source_context is None else source_context
+    )
     for sentence in source_sentences(text[:20_000]):
         sentence = sentence.strip()
         # Do not cut a long source sentence and imply its qualification survived.
         if not sentence or len(sentence) > 600:
             continue
         visible_sentence = source_analysis_text(sentence)
-        qualifiers = tuple(
+        sentence_qualifiers = tuple(
             k
             for k, pattern in _QUALIFIERS.items()
             if re.search(pattern, visible_sentence, re.I)
         )
-        fatality_sentence = fatality_analysis_text(sentence)
+        fatality_sentence = fatality_analysis_text(
+            sentence, nonhuman_sentences=nonhuman_sentences
+        )
         for category, terms in _TERMS.items():
+            qualifiers = sentence_qualifiers
             analysis = (
                 fatality_sentence if category == "fatalities" else visible_sentence
             )
             if not re.search(rf"\b(?:{terms})\b", analysis, re.I):
                 continue
-            nonhuman_deaths = category == "fatalities" and bool(
-                _NONHUMAN_DEATH.search(analysis)
+            nonhuman_deaths = category == "fatalities" and has_nonhuman_death_wording(
+                analysis
             )
-            if nonhuman_deaths and only_nonhuman_deaths(analysis):
+            if category == "fatalities" and (
+                sentence in nonhuman_sentences or only_nonhuman_deaths(analysis)
+            ):
                 continue
             value = "Unknown"
             if category in ("fatalities", "injuries", "displacement"):
@@ -278,33 +335,40 @@ def extract_reported_impacts(
                 absent_reporting = bool(_ABSENT_REPORTING.search(analysis))
                 if alternatives or absent_reporting:
                     qualifiers = tuple(dict.fromkeys((*qualifiers, "uncertain")))
-                before = next(
-                    (
-                        match
-                        for match in re.finditer(
-                            rf"\b({_NUMBER}){_LINK}(?:{terms})\b", analysis, re.I
-                        )
-                        if not _context_count(analysis, match)
-                    ),
-                    None,
+                before_counts = tuple(
+                    match
+                    for match in re.finditer(
+                        rf"\b({_NUMBER}){_LINK}(?:{terms})\b", analysis, re.I
+                    )
+                    if not _context_count(analysis, match)
                 )
-                after = re.search(
-                    rf"\b(?:{terms})\s+(?:(?:rose|risen|stands|stood|increased|reported|was|were|is|at|to|of|least)\s+)*({_NUMBER})\b",
-                    analysis,
-                    re.I,
+                after_counts = tuple(
+                    match
+                    for match in re.finditer(
+                        rf"\b(?:{terms})\s+(?:(?:rose|risen|stands|stood|increased|reported|was|were|is|at|to|of|least)\s+)*({_NUMBER})\b",
+                        analysis,
+                        re.I,
+                    )
+                    if not _context_count(analysis, match)
                 )
-                if after is not None and _context_count(analysis, after):
-                    after = None
                 zero = re.search(
-                    rf"\b(?:no|zero)(?:\s+one)?{_LINK}"
+                    rf"\b(?:no|zero|without)(?:\s+(?:one|any))?{_LINK}"
                     rf"(?:(?:{_HUMAN_IMPACT_TERMS})\s+(?:or|nor)\s+)*"
                     rf"(?:{terms})\b",
                     analysis,
                     re.I,
                 )
-                count = before or after
+                counts = (*before_counts, *after_counts)
+                count = next(iter(counts), None)
+                unresolved_counts = len(
+                    {_account_value(match[1]) for match in counts}
+                ) > 1 or _coordinated_impact_populations(analysis, terms)
                 if alternatives or absent_reporting:
                     value = "Unknown"
+                elif unresolved_counts:
+                    qualifiers = tuple(
+                        dict.fromkeys((*qualifiers, "uncertain", "scope unresolved"))
+                    )
                 elif (
                     zero
                     and count
@@ -336,6 +400,10 @@ def extract_reported_impacts(
                 else FactStatus.UNKNOWN
             )
             claim_qualifiers = qualifiers
+            if is_approximate_reported_number(value):
+                claim_qualifiers = tuple(
+                    dict.fromkeys((*qualifiers, "approximate", "uncertain"))
+                )
             if nonhuman_deaths:
                 value = "Unknown"
                 claim_qualifiers = tuple(
@@ -375,5 +443,7 @@ def extract_reported_impacts(
                         qualified,
                     )
                 )
-        claims.extend(_burn_injury_accounts(sentence, source, location, qualifiers))
+        claims.extend(
+            _burn_injury_accounts(sentence, source, location, sentence_qualifiers)
+        )
     return tuple(claims)

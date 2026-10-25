@@ -14,8 +14,10 @@ from disaster_monitor.domain.hazards.news_classification import classify_disaste
 from disaster_monitor.domain.mention_occurrence import occurrence_role
 from disaster_monitor.domain.reported_impacts import (
     fatality_analysis_text,
+    nonhuman_fatality_sentences,
     only_nonhuman_deaths,
 )
+from disaster_monitor.domain.reported_number_wording import REPORTED_NUMBER
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +56,8 @@ class DiscoveryArticle:
     access_issue: str | None = None
     original_url: str | None = None
     photograph_captions: tuple[str, ...] = ()
+    # Publisher-declared names; neither report identities nor independence evidence.
+    bylines: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for value in (
@@ -164,11 +168,10 @@ class DiscoveryRun:
 # Provisional extraction: retain attributed affirmative sentences, never infer deaths
 # from severity words or add figures across accounts. This is a claim, not verification.
 _FATALITY = re.compile(
-    r"\b(?:[1-9]\d*|one|two|three|four|five|six|seven|eight|nine|ten|"
-    r"dozens|hundreds|thousands|a person|a man|a woman|a child)\b"
+    rf"\b(?:(?!0+\b){REPORTED_NUMBER}|a person|a man|a woman|a child)\b"
     r"[^.!?]{0,65}\b(?:died|dead|killed|drowned|deaths?|fatalities)\b|"
     r"\b(?:killed|claimed the lives of)\s+(?:at least\s+)?"
-    r"(?:[1-9]\d*|one|two|three|four|five|six|seven|eight|nine|ten)\b",
+    rf"(?!0+\b){REPORTED_NUMBER}\b",
     re.I,
 )
 _NEGATED = re.compile(
@@ -234,15 +237,19 @@ def fatality_accounts(
     article: DiscoveryArticle, disaster: Disaster | None
 ) -> tuple[str, ...]:
     """Project current source-scoping policy, including for older retained scans."""
+    nonhuman_sentences = nonhuman_fatality_sentences(article.text)
     return tuple(
         sentence.strip()[:600]
         for sentence in re.split(
             r"(?<=[.!?])\s+",
             scoped_disaster_text(article.text, article.source.title, disaster),
         )
-        if _FATALITY.search(fatality_analysis_text(sentence))
+        if _FATALITY.search(
+            fatality_analysis_text(sentence, nonhuman_sentences=nonhuman_sentences)
+        )
         and not _NEGATED.search(sentence)
         and not only_nonhuman_deaths(sentence)
+        and sentence.strip() not in nonhuman_sentences
         and occurrence_role(sentence) != "forecast"
     )[:10]
 

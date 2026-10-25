@@ -49,6 +49,97 @@ _QUERY_GROUPS = (
         ("éruption volcanique",),
     ),
 )
+_REGIONAL_QUERY_MARKETS = {
+    '"gempa" meninggal': "id-ID",
+    '"banjir" tewas': "id-ID",
+    '"longsor" tewas': "id-ID",
+    '"deslizamento" mortos': "pt-BR",
+    '"deslizamento" morreu': "pt-BR",
+    '"enchente" mortos': "pt-BR",
+    '"enxurrada" morreu': "pt-BR",
+}
+_ADDITIONAL_QUERY_MARKETS = {
+    f'"{hazard}" {death_word}': market
+    for market, hazards, death_words in (
+        (
+            "de-DE",
+            (
+                "Erdbeben",
+                "Hochwasser",
+                "Waldbrand",
+                "Erdrutsch",
+                "Wirbelsturm",
+                "Vulkanausbruch",
+                "Dürre",
+            ),
+            ("Tote", "starben"),
+        ),
+        (
+            "tr-TR",
+            (
+                "deprem",
+                "sel",
+                "orman yangını",
+                "heyelan",
+                "kasırga",
+                "volkanik patlama",
+                "kuraklık",
+            ),
+            ("öldü", '"hayatını kaybetti"'),
+        ),
+        (
+            "ar-SA",
+            (
+                "زلزال",
+                "فيضانات",
+                "حرائق الغابات",
+                "انهيار أرضي",
+                "إعصار",
+                "ثوران بركاني",
+                "جفاف",
+            ),
+            ("قتلى", "وفيات"),
+        ),
+    )
+    for hazard in hazards
+    for death_word in death_words
+}
+_NATIVE_QUERY_MARKETS = {
+    **{
+        f'"{hazard}" {death_word}': "es-MX"
+        for _, _, spanish, _ in _QUERY_GROUPS
+        for hazard in spanish
+        for death_word in ("muertos", "fallecidos")
+    },
+    **{
+        f'"{hazard}" morts': "fr-FR"
+        for _, _, _, french in _QUERY_GROUPS
+        for hazard in french
+    },
+    **_REGIONAL_QUERY_MARKETS,
+    **_ADDITIONAL_QUERY_MARKETS,
+}
+
+
+def _request_page(partition: CollectionPartition) -> tuple[str, bool, str | None]:
+    """Retain U.S. pages before the configured seed's bounded native pages."""
+    native_market = (
+        _NATIVE_QUERY_MARKETS.get(partition.query)
+        if partition.alternate_for is None
+        else None
+    )
+    if not partition.cursor:
+        return "en-US", True, "relevance"
+    if partition.cursor == "relevance":
+        return "en-US", False, "native-recent" if native_market else None
+    if native_market:
+        if partition.cursor == "native-recent":
+            return native_market, True, "native-relevance"
+        if partition.cursor == "native-relevance":
+            return native_market, False, None
+    raise CollectionProviderError(
+        "invalid_response", "News RSS continuation is invalid."
+    )
 
 
 class _HintText(HTMLParser):
@@ -80,27 +171,23 @@ class BingRssCollectionProvider:
     source_id = "bing-rss-discovery"
     supports_alternates = True
     supports_time_filter = False
-    queries = tuple(
-        query
-        for english, fatality, spanish, french in _QUERY_GROUPS
-        for query in (
-            *(f'"{hazard}"' for hazard in english),
-            *(f'"{hazard}" {fatality}' for hazard in english),
-            *(
-                f'"{hazard}" {death_word}'
-                for hazard in spanish
-                for death_word in ("muertos", "fallecidos")
-            ),
-            *(f'"{hazard}" morts' for hazard in french),
+    queries = (
+        tuple(
+            query
+            for english, fatality, spanish, french in _QUERY_GROUPS
+            for query in (
+                *(f'"{hazard}"' for hazard in english),
+                *(f'"{hazard}" {fatality}' for hazard in english),
+                *(
+                    f'"{hazard}" {death_word}'
+                    for hazard in spanish
+                    for death_word in ("muertos", "fallecidos")
+                ),
+                *(f'"{hazard}" morts' for hazard in french),
+            )
         )
-    ) + (
-        '"gempa" meninggal',
-        '"banjir" tewas',
-        '"longsor" tewas',
-        '"deslizamento" mortos',
-        '"deslizamento" morreu',
-        '"enchente" mortos',
-        '"enxurrada" morreu',
+        + tuple(_REGIONAL_QUERY_MARKETS)
+        + tuple(_ADDITIONAL_QUERY_MARKETS)
     )
     endpoint = "https://www.bing.com/news/search"
 
@@ -118,17 +205,13 @@ class BingRssCollectionProvider:
         )
 
     async def fetch_page(self, partition: CollectionPartition) -> CollectionPage:
-        if partition.cursor not in ("", "relevance"):
-            raise CollectionProviderError(
-                "invalid_response", "News RSS continuation is invalid."
-            )
-        recent = not partition.cursor
+        market, recent, next_cursor = _request_page(partition)
         response = await self._http.get_bytes(
             self.endpoint,
             {
                 "q": partition.query,
                 "format": "rss",
-                "mkt": "en-US",
+                "mkt": market,
                 "qft": 'interval="9" sortbydate="1"' if recent else 'interval="9"',
             },
         )
@@ -153,13 +236,16 @@ class BingRssCollectionProvider:
                 leads[item.canonical_url] = item
         return CollectionPage(
             leads=tuple(leads.values()),
-            next_cursor="relevance" if recent else None,
+            next_cursor=next_cursor,
             saturated=True,
             notices=(
                 "Public RSS ordering: " + ("most recent." if recent else "best match."),
+                f"Public RSS market: {market}.",
                 "Public news RSS provides bounded recent headlines, without "
                 "historical date filtering or a complete pagination contract. "
-                "Each query checks at most these two orderings. "
+                "Each query checks at most two orderings per market. "
+                "Configured native-language seeds also check their native market; "
+                "other queries check the U.S. market only. "
                 "Publisher publication metadata determines reporting-window "
                 "eligibility.",
                 *(

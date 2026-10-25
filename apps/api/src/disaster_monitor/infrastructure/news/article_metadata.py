@@ -1,4 +1,4 @@
-"""Identify a primary article without borrowing clocks from other page content."""
+"""Own primary-article metadata without borrowing from other page content."""
 
 from __future__ import annotations
 
@@ -69,3 +69,19 @@ def primary_news(
     if len(articles) == 1 and not article_identities(articles[0]):
         return articles[0]
     return {}
+
+
+def article_bylines(news: dict[str, Any], page_authors: list[str]) -> tuple[str, ...]:
+    """Retain explicit names without treating a producer as a specific report."""
+    authors = news.get("author")
+    authors = authors if isinstance(authors, list) else [authors]
+    names = [a.get("name") if isinstance(a, dict) else a for a in authors[:32]]
+    result: dict[str, str] = {}
+    for value in [*names, *page_authors[:32]]:
+        if not isinstance(value, str):
+            continue
+        name = " ".join(value.split())
+        if not name or len(name) > 256 or name.startswith(("https://", "http://")):
+            continue
+        result.setdefault(name.casefold(), name)
+    return tuple(result.values())

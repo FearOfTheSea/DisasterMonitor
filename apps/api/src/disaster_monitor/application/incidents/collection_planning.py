@@ -8,13 +8,13 @@ from disaster_monitor.domain.collection import (
     ClaimedCollectionWork,
     CollectionPartition,
     fatality_hint_needs_followup,
-    lead_retrieval_priority,
+    search_acquisition_priority,
 )
 from disaster_monitor.domain.discovery import DiscoveryArticle, ReportingInterval
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v35"
+PLAN_VERSION = "collection-v62"
 
 
 def plan_collection(
@@ -43,6 +43,7 @@ def plan_collection(
                             lower,
                             upper,
                             generation=generation,
+                            priority=search_acquisition_priority(),
                         )
                     )
         start += span
@@ -59,6 +60,7 @@ def plan_collection(
                     lower,
                     lower + timedelta(hours=6),
                     generation=generation,
+                    priority=search_acquisition_priority(),
                 )
                 for query in provider.queries
             )
@@ -113,7 +115,7 @@ def plan_alternate_reports(
             date_hint + timedelta(days=1),
             generation=generation,
             alternate_for=lead.canonical_url,
-            priority=int(bool(lead.search_title and lead_retrieval_priority(lead))),
+            priority=search_acquisition_priority(alternate_for=lead.canonical_url),
         )
         for p in providers
         if p.supports_alternates

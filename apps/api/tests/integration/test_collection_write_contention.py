@@ -20,7 +20,9 @@ async def test_claim_waits_for_this_journals_admitted_write_without_losing_work(
 ):
     journal = SQLiteCollectionJournal(tmp_path / "journal.sqlite")
     run = DiscoveryRun("controlled", ReportingInterval.at_start(1, NOW))
-    partition = CollectionPartition("controlled", "flood", run.interval.start, NOW)
+    partition = CollectionPartition(
+        "controlled", "flood", run.interval.start, NOW, priority=1
+    )
     await journal.attach(run, (partition,), now=NOW, budget=1)
     holding = Event()
     release = Event()

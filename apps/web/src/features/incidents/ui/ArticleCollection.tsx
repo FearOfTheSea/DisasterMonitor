@@ -84,13 +84,16 @@ function ReportTimes({ report }: { report: DiscoveryReportResponse }) {
   );
 }
 
-function Lineage({ report }: { report: DiscoveryReportResponse }) {
+function ReportAttribution({ report }: { report: DiscoveryReportResponse }) {
   return (
-    <p>
-      {report.origin
-        ? `Shared reporting origin: ${report.origin}`
-        : 'Reporting independence unknown.'}
-    </p>
+    <>
+      {report.bylines?.length ? <p>Byline: {report.bylines.join('; ')}</p> : null}
+      <p>
+        {report.origin
+          ? `Shared reporting origin: ${report.origin}`
+          : 'Reporting independence unknown.'}
+      </p>
+    </>
   );
 }
 
@@ -110,7 +113,7 @@ function Article({ report }: { report: DiscoveryReportResponse }) {
           </a>
         </p>
       ) : null}
-      <Lineage report={report} />
+      <ReportAttribution report={report} />
       {report.mention_excerpt ? (
         <blockquote>{report.mention_excerpt}</blockquote>
       ) : null}
@@ -235,7 +238,7 @@ export function ArticleCollection({
                         {report.source.publisher}: {report.source.title}
                       </a>
                       <ReportTimes report={report} />
-                      <Lineage report={report} />
+                      <ReportAttribution report={report} />
                     </article>
                   )}
                 />
@@ -279,7 +282,7 @@ export function ArticleCollection({
                   {report.source.publisher}: {report.source.title}
                 </a>
                 <ReportTimes report={report} />
-                <Lineage report={report} />
+                <ReportAttribution report={report} />
                 <details>
                   <summary>Combined account source passages</summary>
                   <blockquote>{account.excerpt}</blockquote>

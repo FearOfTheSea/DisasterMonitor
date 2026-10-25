@@ -36,7 +36,7 @@ def test_native_citation_title_precedes_english_index_geography_in_alternate_sea
     )
     assert part.query == "Un residente falleció durante el terremoto"
     assert part.alternate_for == lead.canonical_url
-    assert part.priority == 1
+    assert part.priority == 0
     assert not plan_alternate_reports(
         replace(work, alternate_depth=1),
         (BingRssCollectionProvider(),),
