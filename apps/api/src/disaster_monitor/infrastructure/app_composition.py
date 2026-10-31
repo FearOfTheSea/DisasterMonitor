@@ -53,6 +53,9 @@ from disaster_monitor.application.incidents.discovery_scan import DiscoveryScanS
 from disaster_monitor.application.incidents.evidence_context import (
     IncidentEvidenceContextReader,
 )
+from disaster_monitor.application.incidents.indexed_reporting import (
+    IndexedReportingQueries,
+)
 from disaster_monitor.application.incidents.manage_incident_watches import (
     ManageIncidentWatches,
 )
@@ -175,6 +178,9 @@ from disaster_monitor.infrastructure.operations.postgres_repository import (
 )
 from disaster_monitor.infrastructure.operations.sqlite_collection import (
     SQLiteCollectionJournal,
+)
+from disaster_monitor.infrastructure.operations.sqlite_indexed_reporting import (
+    SQLiteIndexedReportingReader,
 )
 from disaster_monitor.infrastructure.operations.sqlite_public_document_access import (
     SQLitePublicDocumentAccess,
@@ -697,6 +703,9 @@ def build_app_dependencies(
     )
     return AppDependencies(
         discovery_scans=discovery_scans,
+        indexed_reporting=IndexedReportingQueries(
+            SQLiteIndexedReportingReader(settings.discovery_collection_path)
+        ),
         standalone_evidence=standalone_evidence,
         conversation_queries=ConversationQueries(conversations),
         evidence_history=EvidenceHistoryQuery(operational.repository),

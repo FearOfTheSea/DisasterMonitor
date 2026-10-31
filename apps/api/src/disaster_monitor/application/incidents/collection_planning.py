@@ -20,7 +20,7 @@ from disaster_monitor.domain.discovery import DiscoveryArticle, ReportingInterva
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v90"
+PLAN_VERSION = "collection-v93"
 
 
 def plan_collection(

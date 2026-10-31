@@ -27,6 +27,9 @@ from disaster_monitor.presentation.http.ground_imagery_routes import (
 from disaster_monitor.presentation.http.incident_routes import (
     router as incident_router,
 )
+from disaster_monitor.presentation.http.indexed_reporting_routes import (
+    router as indexed_reporting_router,
+)
 from disaster_monitor.presentation.http.interoperability_routes import (
     router as interoperability_router,
 )
@@ -49,6 +52,7 @@ from disaster_monitor.presentation.http.system_routes import (
 router = APIRouter()
 router.include_router(discovery_router)
 router.include_router(scan_reporting_router)
+router.include_router(indexed_reporting_router)
 router.include_router(access_context_router)
 router.include_router(system_router)
 router.include_router(catalog_router)

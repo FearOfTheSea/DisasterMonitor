@@ -4527,6 +4527,124 @@ const apiSchemas = {
     },
     type: 'object',
   },
+  IndexedReportingItemResponse: {
+    properties: {
+      canonical_url: {
+        type: 'string',
+      },
+      index_excerpt: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      indexed_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      observation_id: {
+        type: 'string',
+      },
+      observed_at: {
+        format: 'date-time',
+        type: 'string',
+      },
+      provider: {
+        type: 'string',
+      },
+      published_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      publisher: {
+        type: 'string',
+      },
+      search_wording: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      title: {
+        type: 'string',
+      },
+      updated_at: {
+        anyOf: [
+          {
+            format: 'date-time',
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: [
+      'observation_id',
+      'provider',
+      'observed_at',
+      'publisher',
+      'title',
+      'canonical_url',
+      'published_at',
+      'updated_at',
+      'indexed_at',
+      'index_excerpt',
+      'search_wording',
+    ],
+    type: 'object',
+  },
+  IndexedReportingResponse: {
+    properties: {
+      items: {
+        items: {
+          $ref: '#/components/schemas/IndexedReportingItemResponse',
+        },
+        type: 'array',
+      },
+      next_cursor: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      query: {
+        type: 'string',
+      },
+      snapshot: {
+        type: 'string',
+      },
+    },
+    required: ['items', 'query', 'snapshot', 'next_cursor'],
+    type: 'object',
+  },
   InfrastructureAsset: {
     properties: {
       asset_id: {
@@ -8791,6 +8909,27 @@ export type IncidentWatchScopeResponse = {
   country_code: string | null;
   country_name: string | null;
   kind: 'country' | 'worldwide';
+};
+
+export type IndexedReportingItemResponse = {
+  canonical_url: string;
+  index_excerpt: string | null;
+  indexed_at: string | null;
+  observation_id: string;
+  observed_at: string;
+  provider: string;
+  published_at: string | null;
+  publisher: string;
+  search_wording: string | null;
+  title: string;
+  updated_at: string | null;
+};
+
+export type IndexedReportingResponse = {
+  items: Array<IndexedReportingItemResponse>;
+  next_cursor: string | null;
+  query: string;
+  snapshot: string;
 };
 
 export type InfrastructureAsset = {

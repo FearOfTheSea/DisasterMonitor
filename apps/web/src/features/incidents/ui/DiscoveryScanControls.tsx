@@ -3,6 +3,7 @@
 import type { ReportingDays } from '@/features/incidents/api/discoveryClient';
 import type { DiscoveryScanResponse } from '@/shared/api/generated/assistant';
 import { CollectedReporting } from './CollectedReporting';
+import { IndexedReporting } from './IndexedReporting';
 import { isContextOnlyIncident } from '@/features/incidents/model/activeIncidents';
 
 export function DiscoveryScanControls({
@@ -164,6 +165,14 @@ export function DiscoveryScanControls({
         </div>
       ) : null}
       {run ? <CollectedReporting key={run.scan_id} scanId={run.scan_id} /> : null}
+      {run?.collection ? (
+        <IndexedReporting
+          key={`indexed:${run.scan_id}`}
+          scanId={run.scan_id}
+          intervalStart={run.interval_start}
+          intervalEnd={run.interval_end}
+        />
+      ) : null}
       {error ? <p role="alert">{error}</p> : null}
       {run?.collection?.can_continue && !run.reprocessed_from && onContinue ? (
         <>

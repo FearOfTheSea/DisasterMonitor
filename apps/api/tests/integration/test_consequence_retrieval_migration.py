@@ -162,7 +162,7 @@ async def test_full_version4_journal_remains_inspectable_during_ranking_upgrade(
         )
     expanded = SQLiteCollectionJournal(path, maximum_bytes=2 * limit)
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
     claim = await expanded.claim("retrieve", "publisher", now=NOW)
     assert claim is not None
     assert claim.lead.title == CONSEQUENCE.title

@@ -13,7 +13,8 @@ from disaster_monitor.infrastructure.operations.sqlite_collection_capacity impor
 )
 
 _LEAD = TypeAdapter(NewsFeedItem)
-_PRIORITY_VERSION = 5
+# Bump when ranking rules change so retained work adopts the current policy.
+_PRIORITY_VERSION = 6
 
 
 def initialize_retrieval_priorities(

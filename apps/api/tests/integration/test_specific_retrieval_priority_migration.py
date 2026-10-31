@@ -38,7 +38,7 @@ HEADLINE = replace(
 )
 
 
-@pytest.mark.parametrize("version", [0, 1, 2, 3, 4])
+@pytest.mark.parametrize("version", [0, 1, 2, 3, 4, 5])
 @pytest.mark.parametrize("missing_column", [False, True])
 async def test_old_journal_upgrades_both_policies_without_resetting_any_work(
     tmp_path, version, missing_column
@@ -136,7 +136,7 @@ async def test_old_journal_upgrades_both_policies_without_resetting_any_work(
                 )
         for table, rows in retained.items():
             assert [tuple(r) for r in db.execute(f"SELECT * FROM {table}")] == rows
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
     # Reopening must be idempotent, including leased and capacity-stopped work.
     SQLiteCollectionJournal(path)
     with sqlite3.connect(path) as db:

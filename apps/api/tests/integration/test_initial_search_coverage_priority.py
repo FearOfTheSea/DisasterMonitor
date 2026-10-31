@@ -152,7 +152,7 @@ async def test_legacy_open_search_priorities_migrate_without_resetting_progress(
             assert migrated["priority"] == after[key]["priority"]
         assert db.execute("SELECT * FROM pass_budget").fetchall() == budgets
         assert db.execute("SELECT * FROM scans").fetchall() == scans
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
         once = after
     SQLiteCollectionJournal(path)
     with sqlite3.connect(path) as db:

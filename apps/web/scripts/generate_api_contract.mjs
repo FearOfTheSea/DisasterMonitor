@@ -162,6 +162,7 @@ const runtimeSchemaNames = new Set([
   'DiscoveryScanResponse',
   'RetainedReportingPageResponse',
   'CollectedReportingResponse',
+  'IndexedReportingResponse',
   'AssistantResponse',
   'ConversationResponse',
   'ConversationSummaryResponse',
