@@ -231,7 +231,7 @@ def test_calendars_ages_and_german_subject_order_preserve_count_scope(text, expe
 @pytest.mark.parametrize(
     ("headline", "expected"),
     [
-        ("116 Kinder starben: Gedenken nach der Katastrophe", 2),
+        ("116 Kinder starben: Gedenken nach der Katastrophe", 3),
         ("Keine Menschen starben bei einem Erdrutsch", 0),
     ],
 )

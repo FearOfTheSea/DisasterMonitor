@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from disaster_monitor.domain.hazards.regional_vocabulary import (
+    FRENCH_MASS_OBJECT,
     GERMAN_CALENDAR_MONTH,
     GERMAN_SOIL_SLIDE,
     TURKISH_EARTHQUAKE_ENDING,
@@ -37,7 +38,8 @@ _COMPETING = re.compile(
     r"\b(?:guerra|guerre|ataques? armados?|conflits? arm[eé]s?|"
     r"tiroteos?|fusillades?|c[oó]lera|chol[eé]ra|"
     r"mon[oó]xido de carbono|monoxyde de carbone|"
-    r"serangan bersenjata|perang|penembakan|kolera|karbon monoksida|"
+    r"serangan bersenjata|perang|penembakan|ditembak|tertembak|dibunuh|"
+    r"kolera|karbon monoksida|"
     r"tiroteios?|ataques? armados?|silahlı saldırı(?:da|sı)?|savaş(?:ta)?|"
     r"Krieg|Schießerei|bewaffnete Angriffe)\b",
     re.I,
@@ -50,6 +52,17 @@ _SPANISH_DEATH = (
 _FRENCH_DEATH = (
     r"morts?|mortes?|d[eé]c[eè]s|tué(?:s|es|e)?|"
     r"pertes en vies humaines|(?:a|ont) perdu la vie"
+)
+# A fatal adjective qualifies the mass failure, not a counted human population.
+_FRENCH_FATAL_SLIDE = re.compile(
+    rf"\b[eé]boulement(?P<plural>s)?\s+(?:meurtriers?|mortels?)\s+"
+    rf"{FRENCH_MASS_OBJECT}\b",
+    re.I,
+)
+_FRENCH_NONOCCURRENCE = re.compile(
+    r"\b[eé]vit[eé](?:e|s|es)?\b|\bn['’]a\s+pas\s+eu\s+lieu\b|"
+    r"\b(?:ficti(?:f|ve)s?|imaginaire|simul[eé](?:e|s|es)?)\b",
+    re.I,
 )
 _INDONESIAN_DEATH = r"tewas|meninggal(?: dunia)?|korban jiwa|menewaskan"
 _TURKISH_DEATH = (
@@ -84,7 +97,7 @@ _OCCURRENCE = re.compile(
     rf"{_TURKISH_DEATH}|{_GERMAN_DEATH}|"
     r"dej[oó]|dejaron|caus[oó]|causaron|provoc[oó]|provocaron|"
     r"frapp[eé](?:s|e|es)?|provoqu[eé](?:s|e|es)?|causé(?:s|e|es)?|"
-    r"mengguncang|melanda|terjadi|menimbun|tertimbun|"
+    r"mengguncang|melanda|terjadi|menimbun|tertimbun|menyebabkan|mengakibatkan|"
     r"deixou|deixaram|causou|causaram)\b",
     re.I,
 )
@@ -110,6 +123,14 @@ _UNKNOWN = re.compile(
     r"(?:belum|tidak) (?:ada|terdapat) laporan|(?:tewas|meninggal) atau hilang|"
     r"não (?:há|existem) (?:relatos?|registros?) de|desconhecid[oa]|"
     r"mort[oa]s? ou desaparecid[oa]s?|bilinmiyor|belirsiz|unbekannt|unklar)\b",
+    re.I,
+)
+# Bound the absence clause before a contrast or sentence boundary. It describes
+# missing reporting, not a death or a confirmed zero, and cannot hide a later toll.
+_SPANISH_ABSENT_REPORT = re.compile(
+    r"\bno se (?:(?:han|ha) )?(?:reportado|reportan|reporta|reportaron)\b"
+    r"(?:(?!\b(?:pero|aunque|sin embargo)\b)[^.;!?]){0,120}?"
+    r"\b(?:muert[oa]s?|muertes?|fallecid[oa]s?|fallecimientos?)\b",
     re.I,
 )
 _PORTUGUESE_ZERO = re.compile(
@@ -271,6 +292,11 @@ _WORDINGS = (
 )
 
 
+def has_french_fatal_mass_wording(text: str) -> bool:
+    """A qualified mass-failure adjective, not a counted human population."""
+    return bool(_FRENCH_FATAL_SLIDE.search(text))
+
+
 def regional_forecast(text: str) -> bool:
     return bool(_FORECAST.search(text))
 
@@ -298,12 +324,11 @@ def has_regional_weather_toll(text: str) -> bool:
 
 def regional_occurrence_start(text: str) -> int | None:
     masked = _mask_non_fatal_names(text)
+    patterns: tuple[re.Pattern[str], ...] = (_OCCURRENCE, _TURKISH_SLIDE_OCCURRENCE)
+    if not _FRENCH_NONOCCURRENCE.search(text):
+        patterns += (_FRENCH_FATAL_SLIDE,)
     return min(
-        (
-            match.start()
-            for pattern in (_OCCURRENCE, _TURKISH_SLIDE_OCCURRENCE)
-            if (match := pattern.search(masked))
-        ),
+        (match.start() for pattern in patterns if (match := pattern.search(masked))),
         default=None,
     )
 
@@ -344,18 +369,27 @@ def _count_matches(wording: _Wording, sentence: str) -> Iterator[re.Match[str]]:
 def regional_fatality_account(sentence: str) -> RegionalFatalityAccount | None:
     """One source account; combined or absent reporting is never a positive toll."""
     sentence = _mask_non_fatal_names(sentence)
+    absent_reporting = bool(_SPANISH_ABSENT_REPORT.search(sentence))
+    sentence = _SPANISH_ABSENT_REPORT.sub(lambda match: " " * len(match[0]), sentence)
     wordings = tuple(w for w in _WORDINGS if w.term.search(sentence))
+    fatal_slide = _FRENCH_FATAL_SLIDE.search(sentence)
     zero = any(w.zero.search(sentence) for w in wordings) or bool(
         _PORTUGUESE_ZERO.search(sentence) or _TURKISH_ZERO.search(sentence)
     )
-    if (not wordings and not zero) or (
+    if absent_reporting and not wordings and not zero:
+        return RegionalFatalityAccount("Unknown", ("uncertain",))
+    if (not wordings and not zero and fatal_slide is None) or (
         _ANIMAL.search(sentence) and not has_possible_human_referent(sentence, _HUMAN)
     ):
         return None
     qualifiers = tuple(
         k for k, p in _QUALIFIERS.items() if re.search(p, sentence, re.I)
     )
-    if _UNKNOWN.search(sentence) or regional_forecast(sentence):
+    if (
+        _UNKNOWN.search(sentence)
+        or regional_forecast(sentence)
+        or (fatal_slide is not None and _FRENCH_NONOCCURRENCE.search(sentence))
+    ):
         return RegionalFatalityAccount(
             "Unknown", tuple(dict.fromkeys((*qualifiers, "uncertain")))
         )
@@ -370,7 +404,8 @@ def regional_fatality_account(sentence: str) -> RegionalFatalityAccount | None:
     if zero and not any(value != "0" for value in counts):
         return RegionalFatalityAccount("0", qualifiers)
     combined = bool(
-        (
+        (fatal_slide is not None and fatal_slide.group("plural"))
+        or (
             _TURKISH_MULTIPLE_OCCURRENCES.search(sentence)
             and _TURKISH_WORDING.term.search(sentence)
         )
@@ -381,6 +416,7 @@ def regional_fatality_account(sentence: str) -> RegionalFatalityAccount | None:
     )
     if (
         len(counts) > 1
+        or absent_reporting
         or zero
         or combined
         or any(w.coordinated.search(sentence) for w in wordings)

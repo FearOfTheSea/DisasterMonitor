@@ -20,6 +20,7 @@ class CollectionHttpResponse:
     body: bytes
     retrieved_at: datetime
     status_code: int = 200
+    redirect_location: str | None = None
 
 
 class CollectionHttp:
@@ -59,17 +60,39 @@ class CollectionHttp:
         *,
         accepted_statuses: tuple[int, ...] = (200,),
     ) -> CollectionHttpResponse:
+        return await self._request_bytes(
+            "GET", url, params, accepted_statuses=accepted_statuses
+        )
+
+    async def post_bytes(self, url: str, data: bytes) -> CollectionHttpResponse:
+        return await self._request_bytes("POST", url, {}, data=data)
+
+    async def _request_bytes(
+        self,
+        method: str,
+        url: str,
+        params: dict[str, str],
+        *,
+        data: bytes | None = None,
+        accepted_statuses: tuple[int, ...] = (200,),
+    ) -> CollectionHttpResponse:
         async with self._lock:
             await asyncio.sleep(max(0, self._next_request - monotonic()))
             self._next_request = monotonic() + self._interval
             try:
                 async with asyncio.timeout(self._timeout):
+                    headers = {"User-Agent": self._user_agent}
+                    if data is not None:
+                        headers["Content-Type"] = (
+                            "application/x-www-form-urlencoded;charset=UTF-8"
+                        )
                     async with self._client.stream(
-                        "GET",
+                        method,
                         url,
-                        params=params,
+                        params=params or None,
+                        content=data,
                         follow_redirects=False,
-                        headers={"User-Agent": self._user_agent},
+                        headers=headers,
                     ) as response:
                         if response.status_code not in accepted_statuses:
                             outcome: FailureOutcome = (
@@ -96,7 +119,10 @@ class CollectionHttp:
                                     "News response exceeded the byte limit.",
                                 )
                         return CollectionHttpResponse(
-                            bytes(body), datetime.now(UTC), response.status_code
+                            bytes(body),
+                            datetime.now(UTC),
+                            response.status_code,
+                            response.headers.get("Location"),
                         )
             except (httpx.TransportError, TimeoutError) as error:
                 raise CollectionProviderError(

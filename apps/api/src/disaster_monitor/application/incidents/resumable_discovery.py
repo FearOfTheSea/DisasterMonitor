@@ -14,6 +14,9 @@ from disaster_monitor.application.incidents.collection_planning import (
     plan_alternate_reports,
     plan_collection,
 )
+from disaster_monitor.application.incidents.discovery_report_versions import (
+    assess_article_versions,
+)
 from disaster_monitor.application.ports.collection import (
     COLLECTION_RATE_LIMIT_MINIMUM_SECONDS,
     CollectionArticleReader,
@@ -29,7 +32,6 @@ from disaster_monitor.domain.discovery import (
     CollectionProgress,
     DiscoveryRun,
     ReportingInterval,
-    assess_article,
     group_reports,
     supplement_events,
 )
@@ -87,8 +89,15 @@ class ResumableDiscovery:
 
     async def continue_collection(self, scan_id: str) -> DiscoveryRun:
         async with self._lifecycle_lock:
+            run = await self.get(scan_id)
+            now = self._clock()
             await self._journal.continue_scan(
-                scan_id, now=self._clock(), budget=self._budget
+                scan_id,
+                now=now,
+                budget=self._budget,
+                partitions=plan_collection(
+                    run.interval, self._providers, observed_at=now
+                ),
             )
             self._kick()
         return await self.get(scan_id)
@@ -317,26 +326,12 @@ class ResumableDiscovery:
             snapshot = await self._journal.snapshot(scan_id, now=self._clock())
             run = snapshot.run
             progress = snapshot.progress
-            latest_by_url = {}
-            for article in sorted(
-                snapshot.articles, key=lambda a: a.source.retrieved_at
-            ):
-                latest_by_url[article.source.canonical_url] = article
-            reports_by_url = {}
-            retained = {r.article.source.canonical_url: r for r in run.reports}
-            for url, article in latest_by_url.items():
-                old = retained.get(url)
-                reports_by_url[url] = (
-                    old
-                    if old and old.article == article
-                    else await asyncio.to_thread(
-                        assess_article,
-                        article,
-                        run.interval,
-                        country_names=self._country_names,
-                    )
-                )
-            reports = tuple(reports_by_url.values())
+            reports = await assess_article_versions(
+                snapshot.articles,
+                run.reports,
+                run.interval,
+                country_names=self._country_names,
+            )
             grouped = await asyncio.to_thread(group_reports, reports, run.events)
             events = await asyncio.to_thread(
                 supplement_events, grouped, snapshot.supplemental

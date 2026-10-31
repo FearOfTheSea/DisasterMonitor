@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { IncidentGeometry } from '@/features/incidents/model/activeIncidents';
+import { RetainedSourceText } from './RetainedSourceText';
 import { disasterLabel } from './incidentPresentation';
 import type {
   DiscoveryReportResponse,
@@ -97,7 +98,28 @@ function ReportAttribution({ report }: { report: DiscoveryReportResponse }) {
   );
 }
 
-function Article({ report }: { report: DiscoveryReportResponse }) {
+type CollectedArticle = {
+  key: string;
+  report: DiscoveryReportResponse;
+  reports: DiscoveryReportResponse[];
+};
+
+function Article({
+  article,
+  incidentId,
+}: {
+  article: CollectedArticle;
+  incidentId?: string;
+}) {
+  const { report, reports } = article;
+  const passages = [
+    ...new Set(
+      reports.flatMap((item) => [
+        ...(item.mention_excerpt ? [item.mention_excerpt] : []),
+        ...(!item.claims?.length ? (item.fatality_evidence ?? []) : []),
+      ]),
+    ),
+  ];
   return (
     <article className="event-collected-article">
       <h4>
@@ -114,49 +136,73 @@ function Article({ report }: { report: DiscoveryReportResponse }) {
         </p>
       ) : null}
       <ReportAttribution report={report} />
-      {report.mention_excerpt ? (
-        <blockquote>{report.mention_excerpt}</blockquote>
-      ) : null}
-      {report.mention_notices?.map((notice) => (
-        <p key={notice}>{notice}</p>
+      {incidentId && report.capture_id ? (
+        <RetainedSourceText
+          key={`${incidentId}:${report.capture_id}`}
+          incidentId={incidentId}
+          captureId={report.capture_id}
+        />
+      ) : (
+        <p>Retained text inspection is unavailable for this saved article record.</p>
+      )}
+      {passages.map((passage) => (
+        <blockquote key={passage}>{passage}</blockquote>
       ))}
-      {report.access_issue ? <p>{report.access_issue}</p> : null}
-      {!report.claims?.length
-        ? report.fatality_evidence?.map((excerpt) => (
-            <blockquote key={excerpt}>
-              {excerpt}
-              <br />
-              Reported by {report.source.publisher}; unverified claim.
-            </blockquote>
-          ))
-        : null}
+      {[...new Set(reports.flatMap((item) => item.mention_notices ?? []))].map(
+        (notice) => (
+          <p key={notice}>{notice}</p>
+        ),
+      )}
+      {[
+        ...new Set(
+          reports.flatMap((item) => (item.access_issue ? [item.access_issue] : [])),
+        ),
+      ].map((issue) => (
+        <p key={issue}>{issue}</p>
+      ))}
     </article>
   );
 }
 
 export function ArticleCollection({
   reports,
+  incidentId,
   notices = [],
   mappedGeometry,
 }: {
   reports: DiscoveryReportResponse[];
+  incidentId?: string;
   notices?: string[];
   mappedGeometry?: IncidentGeometry | null;
 }) {
   const mapped =
     mappedGeometry?.kind !== 'descriptive' &&
     Boolean(mappedGeometry?.coordinates.length);
-  const articles = [
-    ...new Map(reports.map((report) => [report.source.canonical_url, report])).values(),
-  ];
+  const captures = new Map<string, CollectedArticle>();
+  for (const report of reports) {
+    const key = JSON.stringify([
+      report.capture_id ?? null,
+      report.source,
+      report.bylines ?? [],
+      report.origin ?? null,
+      report.original_url ?? null,
+    ]);
+    const existing = captures.get(key);
+    if (existing) existing.reports.push(report);
+    else captures.set(key, { key, report, reports: [report] });
+  }
+  const articles = [...captures.values()];
   const dated = articles
-    .filter((r) => r.source.published_at)
+    .filter((a) => a.report.source.published_at)
     .toSorted(
       (a, b) =>
-        Date.parse(b.source.published_at!) - Date.parse(a.source.published_at!) ||
-        a.source.canonical_url.localeCompare(b.source.canonical_url),
+        Date.parse(b.report.source.published_at!) -
+          Date.parse(a.report.source.published_at!) ||
+        Date.parse(b.report.source.updated_at ?? b.report.source.retrieved_at) -
+          Date.parse(a.report.source.updated_at ?? a.report.source.retrieved_at) ||
+        a.report.source.canonical_url.localeCompare(b.report.source.canonical_url),
     );
-  const undated = articles.filter((r) => !r.source.published_at);
+  const undated = articles.filter((a) => !a.report.source.published_at);
   const claims = reports.flatMap((report) =>
     (report.claims ?? []).map((claim) => ({ report, claim })),
   );
@@ -293,17 +339,17 @@ export function ArticleCollection({
         </section>
       ) : null}
       <section aria-label="Discovery reporting">
-        <h3>Collected articles · {articles.length}</h3>
+        <h3>Collected articles · {articles.length} records</h3>
         <p>
-          The five latest dated collected articles appear first. Every retained report
-          is accessible below.
+          The five latest dated article records appear first. Earlier versions and every
+          retained passage remain accessible below.
         </p>
         <section aria-label="Dated articles">
           <Pages
             items={dated}
             label="articles"
-            render={(report) => (
-              <Article key={report.source.canonical_url} report={report} />
+            render={(article) => (
+              <Article key={article.key} article={article} incidentId={incidentId} />
             )}
           />
           {!dated.length ? <p>No dated articles collected.</p> : null}
@@ -317,8 +363,8 @@ export function ArticleCollection({
           <Pages
             items={undated}
             label="undated articles"
-            render={(report) => (
-              <Article key={report.source.canonical_url} report={report} />
+            render={(article) => (
+              <Article key={article.key} article={article} incidentId={incidentId} />
             )}
           />
         </details>

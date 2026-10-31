@@ -6,6 +6,50 @@ import type { DiscoveryReportResponse } from '@/shared/api/generated/assistant';
 
 afterEach(cleanup);
 
+it('preserves separately captured revisions and all passages at the same article URL', () => {
+  const original = {
+    ...reports[0],
+    bylines: ['First Reporter'],
+    mention_id: 'mention:original',
+    mention_excerpt: 'Officials reported two deaths in the flood.',
+  };
+  const revised = {
+    ...original,
+    source: {
+      ...original.source,
+      updated_at: '2026-10-18T13:00:00Z',
+      retrieved_at: '2026-10-18T14:00:00Z',
+    },
+    bylines: ['Later Reporter'],
+    mention_id: 'mention:revision',
+    mention_excerpt: 'The publisher revised the reported deaths to three.',
+  };
+  render(
+    <ArticleCollection
+      reports={[
+        revised,
+        {
+          ...revised,
+          mention_id: 'mention:scope',
+          mention_excerpt: 'The account covers Riverton district.',
+        },
+        original,
+      ]}
+    />,
+  );
+  const articles = screen.getByRole('region', { name: 'Dated articles' });
+  expect(
+    within(articles).getAllByRole('link', { name: /Daily: Article 0/ }),
+  ).toHaveLength(2);
+  expect(within(articles).getByText('Byline: First Reporter')).toBeVisible();
+  expect(within(articles).getByText('Byline: Later Reporter')).toBeVisible();
+  expect(within(articles).getByText(original.mention_excerpt)).toBeVisible();
+  expect(within(articles).getByText(revised.mention_excerpt)).toBeVisible();
+  expect(
+    within(articles).getByText('The account covers Riverton district.'),
+  ).toBeVisible();
+});
+
 it('shows a declared byline separately from publisher and reporting independence', () => {
   render(
     <ArticleCollection
@@ -221,4 +265,31 @@ it('keeps an unresolved mapping notice when neither articles nor the selected ev
     <ArticleCollection reports={[{ ...reports[0], location: 'Uncertain district' }]} />,
   );
   expect(screen.getByText(/Location unresolved for mapping/)).toBeVisible();
+});
+
+it('keeps different retained text captures separate when publisher clocks and attribution agree', () => {
+  render(
+    <ArticleCollection
+      incidentId="event"
+      reports={[
+        {
+          ...reports[0],
+          capture_id: 'earlier-text',
+          mention_excerpt: 'Earlier source passage.',
+        },
+        {
+          ...reports[0],
+          capture_id: 'later-text',
+          mention_excerpt: 'Later source passage.',
+        },
+      ]}
+    />,
+  );
+  const articles = screen.getByRole('region', { name: 'Dated articles' });
+  expect(
+    within(articles).getAllByRole('link', { name: /Daily: Article 0/ }),
+  ).toHaveLength(2);
+  expect(
+    within(articles).getAllByRole('button', { name: 'Read retained source text' }),
+  ).toHaveLength(2);
 });

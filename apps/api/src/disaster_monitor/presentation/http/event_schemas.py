@@ -131,6 +131,7 @@ class IncidentDetectionTimelineResponse(BaseModel):
 
 class DiscoveryReportResponse(BaseModel):
     source: SourceResponse
+    capture_id: str | None = None
     bylines: list[str] = Field(default_factory=list)
     indexed_at: datetime | None = None
     event_time: datetime | None = None
@@ -155,6 +156,19 @@ class DiscoveryReportResponse(BaseModel):
         "unresolved"
     )
     mention_notices: list[str] = Field(default_factory=list)
+
+
+class RetainedReportingPageResponse(BaseModel):
+    capture_id: str
+    source: SourceResponse
+    bylines: list[str]
+    origin: str | None = None
+    original_url: str | None = None
+    text: str
+    offset: int = Field(ge=0)
+    total_characters: int = Field(ge=0)
+    next_offset: int | None = Field(default=None, ge=0)
+    unavailable_reason: str | None = None
 
 
 class ReportedImpactResponse(BaseModel):

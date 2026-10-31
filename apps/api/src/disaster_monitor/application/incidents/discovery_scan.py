@@ -15,9 +15,14 @@ from disaster_monitor.application.incidents.discovery_reprocessing import (
 from disaster_monitor.application.incidents.mention_geography import (
     resolve_event_places,
 )
+from disaster_monitor.application.incidents.retained_reporting import (
+    RetainedReportingPage,
+    read_retained_reporting,
+)
 from disaster_monitor.application.ports.collection import CollectionRuntime
 from disaster_monitor.application.ports.discovery import DiscoveryFeed, DiscoveryStore
 from disaster_monitor.application.ports.mention_geography import MentionPlaceResolver
+from disaster_monitor.application.ports.reporting_captures import ReportingCaptureReader
 from disaster_monitor.domain.discovery import (
     DiscoveryRun,
     ReportingInterval,
@@ -42,10 +47,12 @@ class DiscoveryScanService:
         place_resolver: MentionPlaceResolver | None = None,
         country_names: frozenset[str] = frozenset(),
         collection: CollectionRuntime | None = None,
+        capture_reader: ReportingCaptureReader | None = None,
     ) -> None:
         self._feeds = feeds
         self._collection = collection
         self._store = store
+        self._capture_reader = capture_reader
         self._clock = clock
         self._timeout = provider_timeout_seconds
         self._maximum_reports = maximum_reports
@@ -103,6 +110,17 @@ class DiscoveryScanService:
         if run is None:
             raise LookupError("Scan not found or retained scan expired.")
         return run
+
+    async def reporting_text(
+        self, scan_id: str, capture_id: str, *, offset: int = 0
+    ) -> RetainedReportingPage:
+        run = await self.get(scan_id)
+        return await read_retained_reporting(
+            tuple(report.article for report in run.reports),
+            capture_id,
+            reader=self._capture_reader,
+            offset=offset,
+        )
 
     async def reprocess(self, scan_id: str) -> DiscoveryRun:
         async with self._lock:

@@ -8,6 +8,68 @@ from disaster_monitor.application.ports.discovery import DiscoveryCapacityError
 
 
 @dataclass(frozen=True)
+class CollectionLeadBudget:
+    """Keep archive-only admissions from occupying every retained lead slot."""
+
+    maximum_leads: int
+    bulk_index_providers: frozenset[str] = frozenset()
+    reserved_targeted_leads: int = 0
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.reserved_targeted_leads, bool)
+            or not 0 <= self.reserved_targeted_leads <= self.maximum_leads
+        ):
+            raise ValueError("Lead reservation must fit within total capacity.")
+
+    def page_refusal(
+        self,
+        db: sqlite3.Connection,
+        provider: str,
+        urls: set[str],
+        articles: int,
+    ) -> str | None:
+        existing = {row[0] for row in db.execute("SELECT url FROM leads")}
+        evidence = db.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
+        if (
+            len(existing | urls) > self.maximum_leads
+            or evidence + articles > self.maximum_leads
+        ):
+            return "Evidence storage capacity reached; page not acknowledged."
+        if (
+            not self.reserved_targeted_leads
+            or provider not in self.bulk_index_providers
+        ):
+            return None
+        providers = tuple(sorted(self.bulk_index_providers))
+        placeholders = ",".join("?" for _ in providers)
+        bulk = {
+            row[0]
+            for row in db.execute(
+                "SELECT DISTINCT l.url FROM work_leads l JOIN work w ON w.id=l.work "
+                f"WHERE w.provider IN ({placeholders})",
+                providers,
+            )
+        }
+        targeted = {
+            row[0]
+            for row in db.execute(
+                "SELECT DISTINCT l.url FROM work_leads l JOIN work w ON w.id=l.work "
+                f"WHERE w.provider NOT IN ({placeholders})",
+                providers,
+            )
+        }
+        before = len(bulk - targeted)
+        after = len((bulk | urls) - targeted)
+        if after > self.maximum_leads - self.reserved_targeted_leads and after > before:
+            return (
+                "Bulk archive lead capacity reached; other discovery routes retain "
+                "reserved space. Page not acknowledged."
+            )
+        return None
+
+
+@dataclass(frozen=True)
 class CollectionStorageBudget:
     path: Path
     maximum_bytes: int

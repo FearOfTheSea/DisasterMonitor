@@ -81,10 +81,18 @@ async def test_repeated_captures_keep_latest_reporting_and_other_sources(
         run = await service.start(1)
         await service.wait(run.scan_id)
         result = await service.get(run.scan_id)
-        reports = {r.article.source.canonical_url: r for r in result.reports}
-        assert len(reports) == 2
-        assert reports[latest.source.canonical_url].article == latest
-        assert reports[other.source.canonical_url].article == other
+        reports = [r.article for r in result.reports]
+        assert len(reports) == 3
+        assert older in reports and latest in reports and other in reports
+        assert reports.index(latest) < reports.index(older)
+        values = {
+            claim.fact.value.casefold()
+            for event in result.events
+            for report in event.reports
+            for claim in report.mention.claims
+            if claim.fact.category == "fatalities"
+        }
+        assert {"two", "three"} <= values
         assert result.collection.articles_retrieved == 3
     finally:
         await service.aclose()

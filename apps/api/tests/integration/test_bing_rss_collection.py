@@ -221,7 +221,7 @@ async def test_recent_feed_work_is_shared_across_windows_without_weekly_duplicat
     assert {p.key for p in one} == {p.key for p in month}
     # Eight language families have a fixed catalog. Request budgets stay separate
     # and unchanged; the full traversal continues across bounded shared passes.
-    assert len(provider.queries) == 106
+    assert len(provider.queries) == 113
     await provider.aclose()
 
 

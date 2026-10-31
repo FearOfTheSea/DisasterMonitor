@@ -53,6 +53,13 @@ _REGIONAL_QUERY_MARKETS = {
     '"gempa" meninggal': "id-ID",
     '"banjir" tewas': "id-ID",
     '"longsor" tewas': "id-ID",
+    '"kebakaran hutan" tewas': "id-ID",
+    '"karhutla" meninggal': "id-ID",
+    '"kekeringan" meninggal': "id-ID",
+    '"siklon tropis" tewas': "id-ID",
+    '"topan" tewas': "id-ID",
+    '"erupsi gunung" tewas': "id-ID",
+    '"letusan gunung" meninggal': "id-ID",
     '"deslizamento" mortos': "pt-BR",
     '"deslizamento" morreu': "pt-BR",
     '"enchente" mortos': "pt-BR",
@@ -122,14 +129,24 @@ _NATIVE_QUERY_MARKETS = {
 
 
 def _request_page(partition: CollectionPartition) -> tuple[str, bool, str | None]:
-    """Retain U.S. pages before the configured seed's bounded native pages."""
+    """Reach configured markets first; preserve already issued cursor meanings."""
     native_market = (
         _NATIVE_QUERY_MARKETS.get(partition.query)
         if partition.alternate_for is None
         else None
     )
     if not partition.cursor:
+        if native_market:
+            return native_market, True, "native-first-relevance"
         return "en-US", True, "relevance"
+    if native_market:
+        if partition.cursor == "native-first-relevance":
+            return native_market, False, "us-recent"
+        if partition.cursor == "us-recent":
+            return "en-US", True, "us-relevance"
+        if partition.cursor == "us-relevance":
+            return "en-US", False, None
+    # Stored U.S.-first chains must finish without replaying earlier requests.
     if partition.cursor == "relevance":
         return "en-US", False, "native-recent" if native_market else None
     if native_market:
@@ -244,7 +261,8 @@ class BingRssCollectionProvider:
                 "Public news RSS provides bounded recent headlines, without "
                 "historical date filtering or a complete pagination contract. "
                 "Each query checks at most two orderings per market. "
-                "Configured native-language seeds also check their native market; "
+                "Configured native-language seeds start in their native market "
+                "and retain U.S. fallback orderings; "
                 "other queries check the U.S. market only. "
                 "Publisher publication metadata determines reporting-window "
                 "eligibility.",

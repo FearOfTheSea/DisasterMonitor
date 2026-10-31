@@ -3,7 +3,13 @@
 import re
 from datetime import UTC, datetime, timedelta
 
-from disaster_monitor.application.ports.collection import CollectionProvider
+from disaster_monitor.application.incidents.collection_index_planning import (
+    plan_index_collection,
+)
+from disaster_monitor.application.ports.collection import (
+    CollectionProvider,
+    ImmutableIndexProvider,
+)
 from disaster_monitor.domain.collection import (
     ClaimedCollectionWork,
     CollectionPartition,
@@ -14,7 +20,7 @@ from disaster_monitor.domain.discovery import DiscoveryArticle, ReportingInterva
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v62"
+PLAN_VERSION = "collection-v90"
 
 
 def plan_collection(
@@ -29,7 +35,11 @@ def plan_collection(
     start = int(interval.start.timestamp()) // span * span
     generation = f"{PLAN_VERSION}:{int(observed_at.timestamp()) // 21600}"
     result = []
-    historical = tuple(p for p in providers if p.supports_time_filter)
+    historical = tuple(
+        p
+        for p in providers
+        if p.supports_time_filter and not isinstance(p, ImmutableIndexProvider)
+    )
     while start <= interval.end.timestamp():
         lower = datetime.fromtimestamp(start, UTC)
         upper = lower + timedelta(days=7)
@@ -47,6 +57,12 @@ def plan_collection(
                         )
                     )
         start += span
+    for provider in providers:
+        result.extend(
+            plan_index_collection(
+                interval, provider, observed_at=observed_at, version=PLAN_VERSION
+            )
+        )
     # A recent RSS snapshot has no historical query contract. Share that one
     # observation across windows; publisher evidence still uses each exact interval.
     observed = int(observed_at.timestamp()) // 21600 * 21600

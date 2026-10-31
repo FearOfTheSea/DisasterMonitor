@@ -68,6 +68,116 @@ async def test_exhausted_page_keeps_cursor_and_prior_evidence_through_restart(tm
     assert await expanded.commit_page(resumed, CollectionPage(), now=NOW)
 
 
+async def test_lead_limit_pauses_only_that_provider_for_the_shared_pass(tmp_path):
+    from disaster_monitor.domain.news import NewsFeedItem
+
+    path = tmp_path / "journal.sqlite"
+    store = SQLiteCollectionJournal(path, maximum_leads=1)
+    first, second = new_run(), new_run()
+    partitions = tuple(
+        CollectionPartition("news", query, NOW - timedelta(days=1), NOW, priority=1)
+        for query in ("flood", "landslide", "earthquake")
+    )
+    other = replace(partitions[0], provider="other")
+    for run in (first, second):
+        await store.attach(run, (*partitions, other), now=NOW, budget=10)
+    lead = NewsFeedItem(
+        "one", "Daily", "Flood kills two", "https://daily.example/one", None, None
+    )
+    acquired = await store.claim("search", "index", now=NOW, provider="news")
+    assert await store.commit_page(acquired, CollectionPage(leads=(lead,)), now=NOW)
+    blocked = await store.claim("search", "index", now=NOW, provider="news")
+    overflow = replace(lead, canonical_url="https://daily.example/two")
+    assert not await store.commit_page(
+        blocked,
+        CollectionPage(leads=(overflow,), next_cursor="unacknowledged"),
+        now=NOW,
+    )
+    # Neither another scan nor a worker restart may spend this provider's
+    # remaining allowance on pages the same finite store cannot admit.
+    restarted = SQLiteCollectionJournal(path, maximum_leads=1)
+    assert await restarted.claim("search", "retry", now=NOW, provider="news") is None
+    independent = await restarted.claim("search", "other", now=NOW, provider="other")
+    assert independent.partition == other
+    assert await restarted.commit_page(independent, CollectionPage(), now=NOW)
+    retrieval = await restarted.claim("retrieve", "reader", now=NOW)
+    assert retrieval.lead == lead
+    # No false retry wakeup from the capacity-blocked search provider. Finish
+    # the article attempt so its lease is not itself a valid retry.
+    await restarted.fail(
+        retrieval, outcome="article_unavailable", detail="Controlled refusal", now=NOW
+    )
+    assert await restarted.next_retry(now=NOW) is None
+    snapshot = await restarted.snapshot(first.scan_id, now=NOW)
+    assert snapshot.leads == (lead,)
+    assert snapshot.progress.searches_pending == 2
+    assert snapshot.progress.can_continue
+    await restarted.finish_pass(now=NOW)
+    expanded = SQLiteCollectionJournal(path, maximum_leads=3)
+    await expanded.continue_scan(first.scan_id, now=NOW, budget=10)
+    # Explicit continuation restores the allowance; the rejected page's cursor
+    # and retained work survive unchanged, including after capacity expansion.
+    remaining = []
+    for i in range(2):
+        work = await expanded.claim("search", str(i), now=NOW, provider="news")
+        remaining.append(work.partition)
+        assert await expanded.commit_page(work, CollectionPage(), now=NOW)
+    assert blocked.partition in remaining
+    assert all(p.cursor != "unacknowledged" for p in remaining)
+
+
+async def test_runtime_does_not_fetch_each_query_after_provider_lead_capacity(tmp_path):
+    from disaster_monitor.application.incidents.resumable_discovery import (
+        ResumableDiscovery,
+    )
+    from disaster_monitor.domain.news import NewsFeedItem
+
+    class Provider:
+        source_id = "controlled"
+        queries = tuple(f"hazard {i}" for i in range(10))
+        supports_time_filter = False
+        supports_alternates = False
+        calls = 0
+
+        async def fetch_page(self, partition):
+            self.calls += 1
+            return CollectionPage(
+                leads=tuple(
+                    NewsFeedItem(
+                        str(i),
+                        "Daily",
+                        "Flood kills two",
+                        f"https://daily.example/{i}",
+                        None,
+                        None,
+                    )
+                    for i in range(2)
+                )
+            )
+
+    class Reader:
+        async def retrieve(self, lead):
+            raise AssertionError("The page did not fit; no lead was acknowledged.")
+
+    store = SQLiteCollectionJournal(tmp_path / "journal.sqlite", maximum_leads=1)
+    provider = Provider()
+    runtime = ResumableDiscovery(
+        (provider,), Reader(), store, clock=lambda: NOW, page_budget=5
+    )
+    try:
+        run = await runtime.start(1)
+        await runtime.wait(run.scan_id)
+        result = await runtime.get(run.scan_id)
+        assert result.status == "incomplete"
+        assert result.collection.can_continue
+        assert result.collection.searches_pending == 10
+        assert result.collection.pages_acquired == 0
+        assert provider.calls == 1
+        assert not await store.active_scans()
+    finally:
+        await runtime.aclose()
+
+
 async def test_snapshot_growth_and_new_scan_admission_are_bounded_without_eviction(
     tmp_path,
 ):

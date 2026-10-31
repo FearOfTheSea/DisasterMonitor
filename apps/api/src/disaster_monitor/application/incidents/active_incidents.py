@@ -41,6 +41,10 @@ from disaster_monitor.application.incidents.projection_codec import (
     projection_to_snapshot,
     snapshot_to_projection,
 )
+from disaster_monitor.application.incidents.retained_reporting import (
+    RetainedReportingPage,
+    read_retained_reporting,
+)
 from disaster_monitor.application.incidents.retrieval import IncidentRetrieval
 from disaster_monitor.application.incidents.snapshot_cache import (
     IncidentCursorExpiredError,
@@ -64,6 +68,7 @@ from disaster_monitor.application.ports.incident_projection import (
 from disaster_monitor.application.ports.mention_geography import MentionPlaceResolver
 from disaster_monitor.application.ports.news import NewsCandidateStore
 from disaster_monitor.application.ports.provider_status import ProviderAttemptWriter
+from disaster_monitor.application.ports.reporting_captures import ReportingCaptureReader
 from disaster_monitor.application.sources.provider_registry import (
     ProviderRegistry,
 )
@@ -105,8 +110,10 @@ class ActiveIncidentsService:
         identity_store: IncidentIdentityStore | None = None,
         discovery_store: DiscoveryStore | None = None,
         discovery_place_resolver: MentionPlaceResolver | None = None,
+        capture_reader: ReportingCaptureReader | None = None,
     ) -> None:
         self._clock = clock
+        self._capture_reader = capture_reader
         self._discovery_lookup = (
             DiscoveryIncidentLookup(discovery_store, discovery_place_resolver)
             if discovery_store
@@ -252,6 +259,17 @@ class ActiveIncidentsService:
                 "Incident is unavailable in the retained source snapshots."
             )
         return matches[0]
+
+    async def reporting_text(
+        self, incident: ActiveIncident, capture_id: str, *, offset: int = 0
+    ) -> RetainedReportingPage:
+        reports = incident.discovery_event.reports if incident.discovery_event else ()
+        return await read_retained_reporting(
+            tuple(report.article for report in reports),
+            capture_id,
+            reader=self._capture_reader,
+            offset=offset,
+        )
 
     async def _acquire(self, query: ActiveIncidentsQuery) -> ActiveIncidentsSnapshot:
         """Acquire providers once, persist the complete result, and return a page."""

@@ -37,6 +37,7 @@ class GdeltArchiveCollectionProvider:
     source_id = "gdelt-archive-discovery"
     supports_alternates = False
     supports_time_filter = True
+    index_availability_delay = timedelta(minutes=5)
     queries = ("supported-hazard-headlines",)
     endpoint = "https://data.gdeltproject.org/gdeltv5/weblegacy/ngrams/"
 

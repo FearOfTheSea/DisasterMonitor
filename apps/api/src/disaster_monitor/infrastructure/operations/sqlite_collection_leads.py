@@ -8,22 +8,22 @@ from pydantic import TypeAdapter
 from disaster_monitor.application.ports.collection import ARTICLE_RETRIEVAL_PROVIDER
 from disaster_monitor.domain.collection import lead_retrieval_priority
 from disaster_monitor.domain.news import NewsFeedItem
+from disaster_monitor.infrastructure.operations.sqlite_collection_capacity import (
+    is_storage_full,
+)
 
 _LEAD = TypeAdapter(NewsFeedItem)
-_PRIORITY_VERSION = 2
+_PRIORITY_VERSION = 5
 
 
-def initialize_retrieval_priorities(db: sqlite3.Connection) -> None:
-    columns = {row[1] for row in db.execute("PRAGMA table_info(work)")}
+def initialize_retrieval_priorities(
+    db: sqlite3.Connection, *, priority_column_created: bool = False
+) -> None:
     version = int(db.execute("PRAGMA user_version").fetchone()[0])
-    if "priority" in columns and version >= _PRIORITY_VERSION:
+    if version >= _PRIORITY_VERSION and not priority_column_created:
         return
     db.execute("BEGIN IMMEDIATE")
     try:
-        if "priority" not in columns:
-            db.execute(
-                "ALTER TABLE work ADD COLUMN priority INTEGER NOT NULL DEFAULT 0"
-            )
         db.executemany(
             "UPDATE work SET priority=? WHERE id=?",
             (
@@ -39,8 +39,12 @@ def initialize_retrieval_priorities(db: sqlite3.Connection) -> None:
         )
         db.execute(f"PRAGMA user_version={max(version, _PRIORITY_VERSION)}")
         db.commit()
-    except BaseException:
+    except BaseException as error:
         db.rollback()
+        # Ordering upgrades must not hide retained evidence at full capacity.
+        # Keep the old revision so the next open retries once space is available.
+        if isinstance(error, sqlite3.Error) and is_storage_full(error):
+            return
         raise
 
 

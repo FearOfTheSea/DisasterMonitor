@@ -42,6 +42,33 @@ class ReportingInterval:
     def at_start(cls, days: int, now: datetime) -> "ReportingInterval":
         return cls(days, now - timedelta(days=days), now)
 
+    def may_include_retained(self, article: "DiscoveryArticle") -> bool:
+        """Admit possible reporting; an observation never supplies publication time."""
+        bounds = publication_bounds(article.source)
+        if bounds is None:
+            observed = max(
+                article.source.retrieved_at,
+                article.indexed_at or article.source.retrieved_at,
+            )
+            return self.start <= observed <= self.end
+        lower, upper = bounds
+        return lower <= self.end and (
+            upper > self.start
+            if article.source.publication_precision == "day"
+            else upper >= self.start
+        )
+
+
+def publication_bounds(source: SourceReference) -> tuple[datetime, datetime] | None:
+    if source.published_at is None or source.publication_precision == "unknown":
+        return None
+    if source.publication_precision == "day":
+        start = source.published_at.astimezone(UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        return start, start + timedelta(days=1)
+    return source.published_at, source.published_at
+
 
 @dataclass(frozen=True, slots=True)
 class DiscoveryArticle:
@@ -198,7 +225,7 @@ def assess_article(
     disaster = classify_disaster_text(article.source.title) or classify_disaster_text(
         article.text
     )
-    publication = article.source.published_at
+    bounds = publication_bounds(article.source)
     eligibility: Literal[
         "eligible",
         "unknown_publication",
@@ -206,20 +233,17 @@ def assess_article(
         "unclassified",
         "uncertain_publication",
     ] = "eligible"
-    if publication is None or article.source.publication_precision == "unknown":
+    if bounds is None:
         eligibility = "unknown_publication"
     elif article.source.publication_precision == "day":
-        day = publication.astimezone(UTC).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        end = day + timedelta(days=1)
+        day, end = bounds
         if day > interval.end or end <= interval.start:
             eligibility = "outside_interval"
         elif not (interval.start <= day and end <= interval.end):
             eligibility = "uncertain_publication"
         elif not mentions:
             eligibility = "unclassified"
-    elif not interval.start <= publication <= interval.end:
+    elif not interval.start <= bounds[0] <= interval.end:
         eligibility = "outside_interval"
     elif not mentions:
         eligibility = "unclassified"

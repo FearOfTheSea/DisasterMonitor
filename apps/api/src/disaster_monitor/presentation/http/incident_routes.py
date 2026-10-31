@@ -33,6 +33,12 @@ from disaster_monitor.domain.disaster import (
 from disaster_monitor.presentation.http.active_incident_serialization import (
     active_incident_response,
 )
+from disaster_monitor.presentation.http.common_response_serialization import (
+    _source_response,
+)
+from disaster_monitor.presentation.http.event_schemas import (
+    RetainedReportingPageResponse,
+)
 from disaster_monitor.presentation.http.operator_identity import (
     get_trusted_operator_identity_policy,
     trusted_operator_id,
@@ -187,6 +193,43 @@ async def lookup_incident(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.get(
+    "/incidents/{identifier}/reporting/{capture_id}",
+    response_model=RetainedReportingPageResponse,
+    tags=["incidents"],
+)
+async def retained_reporting(
+    identifier: str,
+    capture_id: str,
+    service: Annotated[ActiveIncidentsService, Depends(get_active_incidents_service)],
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> RetainedReportingPageResponse:
+    try:
+        incident = await service.lookup(identifier)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+    try:
+        page = await service.reporting_text(incident, capture_id, offset=offset)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    return RetainedReportingPageResponse(
+        capture_id=page.capture_id,
+        source=_source_response(page.article.source),
+        bylines=list(page.article.bylines),
+        origin=page.article.origin,
+        original_url=page.article.original_url,
+        text=page.text,
+        offset=page.offset,
+        total_characters=page.total_characters,
+        next_offset=page.next_offset,
+        unavailable_reason=page.unavailable_reason,
+    )
 
 
 @router.post(

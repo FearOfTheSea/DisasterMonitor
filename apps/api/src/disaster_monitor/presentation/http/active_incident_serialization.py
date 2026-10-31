@@ -1,6 +1,9 @@
 """Shared serialization for list, lookup, and standalone incident evidence."""
 
 from disaster_monitor.application.incidents.models import ActiveIncident
+from disaster_monitor.application.incidents.retained_reporting import (
+    reporting_capture_id,
+)
 from disaster_monitor.domain.discovery import fatality_accounts
 from disaster_monitor.domain.discovery_claim_scope import scoped_disaster_text
 from disaster_monitor.domain.event_mentions import HazardEpisodeAccount
@@ -87,6 +90,7 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
         else [],
         discovery_reports=[
             DiscoveryReportResponse(
+                capture_id=reporting_capture_id(report.article),
                 source=_source_response(report.article.source),
                 bylines=list(report.article.bylines),
                 original_url=report.article.original_url,

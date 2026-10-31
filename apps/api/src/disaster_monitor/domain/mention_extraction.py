@@ -10,7 +10,10 @@ from dataclasses import replace
 from datetime import datetime
 
 from disaster_monitor.domain.disaster_types import Disaster
-from disaster_monitor.domain.discovery_claim_scope import scoped_disaster_text
+from disaster_monitor.domain.discovery_claim_scope import (
+    scoped_disaster_text,
+    separate_regional_hazard_accounts,
+)
 from disaster_monitor.domain.event_mentions import (
     EventMention,
     MentionPlace,
@@ -263,6 +266,11 @@ def _extract_section_mentions(
     )
     # Markdown headings from report bodies are event context, never discarded markup.
     report_text = _report_text(text[:20_000])
+    # Mention positions are local to one publisher revision. Reusing an ordinal
+    # after an update must not overwrite the previous account during association.
+    revision = hashlib.sha256(
+        f"{source.published_at}|{source.updated_at}|{report_text}".encode()
+    ).hexdigest()
     normalized = re.sub(
         r"\*\*([^*]+)\*\*",
         lambda m: f"\n{m[1]}\n" if m[1].isupper() and len(m[1]) < 100 else m[1],
@@ -273,7 +281,8 @@ def _extract_section_mentions(
         account
         for s in source_sentences(normalized)
         if s.strip(" •-\n")
-        for account in separate_earlier_occurrence(s.strip(" •-\n"))
+        for clause in separate_regional_hazard_accounts(s.strip(" •-\n"))
+        for account in separate_earlier_occurrence(clause)
     ]
     sentences = [account.text for account in accounts]
     mentions: list[EventMention] = []
@@ -559,7 +568,7 @@ def _extract_section_mentions(
                 time = MentionTime(
                     event_time.isoformat(), event_time, event_time, "exact"
                 )
-            material = f"{source.canonical_url}|{hazard}|{len(mentions)}"
+            material = f"{source.canonical_url}|{revision}|{hazard}|{len(mentions)}"
             mention = EventMention(
                 mention_id="mention:"
                 + hashlib.sha256(material.encode()).hexdigest()[:24],
@@ -678,7 +687,7 @@ def _extract_section_mentions(
             EventMention(
                 "mention:"
                 + hashlib.sha256(
-                    f"{source.canonical_url}|{hazard}|0".encode()
+                    f"{source.canonical_url}|{revision}|{hazard}|0".encode()
                 ).hexdigest()[:24],
                 source,
                 hazard,
@@ -708,7 +717,10 @@ def _extract_section_mentions(
     )[:80]:
         role = mention.role
         scoped = scoped_disaster_text(
-            mention.text, mention.disaster.value.replace("_", " "), mention.disaster
+            mention.text,
+            mention.disaster.value.replace("_", " "),
+            mention.disaster,
+            source_context=normalized,
         )
         claims = (
             ()

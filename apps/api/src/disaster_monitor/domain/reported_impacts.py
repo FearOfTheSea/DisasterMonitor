@@ -7,6 +7,10 @@ retains dates, scopes, overlap, and qualifications that cannot safely be normali
 import re
 from dataclasses import dataclass
 
+from disaster_monitor.domain.discovery_claim_scope import (
+    explicit_hazard_fatality_subset,
+)
+from disaster_monitor.domain.displacement_wording import displacement_analysis_text
 from disaster_monitor.domain.evidence import ReportedFact, SituationReport
 from disaster_monitor.domain.evidence_types import FactStatus, SourceReference
 from disaster_monitor.domain.nonhuman_impact_wording import (
@@ -318,6 +322,8 @@ def extract_reported_impacts(
             analysis = (
                 fatality_sentence if category == "fatalities" else visible_sentence
             )
+            if category == "displacement":
+                analysis = displacement_analysis_text(analysis)
             if not re.search(rf"\b(?:{terms})\b", analysis, re.I):
                 continue
             nonhuman_deaths = category == "fatalities" and has_nonhuman_death_wording(
@@ -363,6 +369,11 @@ def extract_reported_impacts(
                 unresolved_counts = len(
                     {_account_value(match[1]) for match in counts}
                 ) > 1 or _coordinated_impact_populations(analysis, terms)
+                subset = (
+                    explicit_hazard_fatality_subset(visible_sentence)
+                    if category == "fatalities"
+                    else None
+                )
                 if alternatives or absent_reporting:
                     value = "Unknown"
                 elif unresolved_counts:
@@ -380,6 +391,9 @@ def extract_reported_impacts(
                     )
                 elif zero:
                     value = "0"
+                elif subset is not None:
+                    value = subset.value
+                    qualifiers = tuple(dict.fromkeys((*qualifiers, "subset")))
                 elif count:
                     value = count[1].replace(",", "")
                 elif not re.search(

@@ -123,6 +123,7 @@ export function automaticPreparationSelections(
   )
     return [];
   const captures = new Set<string>();
+  const sensors = new Set<Sensor>();
   return request.sensors
     .flatMap((sensor) => sensor.selections)
     .toSorted((a, b) => {
@@ -138,14 +139,15 @@ export function automaticPreparationSelections(
     .filter((selection) => {
       if (
         !selection.observation ||
-        artifactForSelection(request.artifacts, selection.selection_id) ||
+        sensors.has(selection.sensor) ||
         captures.has(selection.observation.observation_id)
       )
         return false;
+      // A cached preferred view must not cause extra automatic baseline work.
+      sensors.add(selection.sensor);
       captures.add(selection.observation.observation_id);
-      return true;
-    })
-    .slice(0, 4);
+      return !artifactForSelection(request.artifacts, selection.selection_id);
+    });
 }
 
 export type GroundComparisonPair = {

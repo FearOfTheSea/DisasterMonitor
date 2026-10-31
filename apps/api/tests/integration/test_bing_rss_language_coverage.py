@@ -72,7 +72,7 @@ async def test_configured_language_seed_retains_us_and_native_pages(query, marke
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
         provider = BingRssCollectionProvider(client=client, minimum_interval=0)
         cursor = ""
-        for expected in ("relevance", "native-recent", "native-relevance", None):
+        for expected in ("native-first-relevance", "us-recent", "us-relevance", None):
             page = await provider.fetch_page(
                 CollectionPartition(
                     provider.source_id,
@@ -85,13 +85,13 @@ async def test_configured_language_seed_retains_us_and_native_pages(query, marke
             assert page.next_cursor == expected
             assert not page.articles
             cursor = page.next_cursor
-    assert [r.url.params["mkt"] for r in calls] == ["en-US", "en-US", market, market]
+    assert [r.url.params["mkt"] for r in calls] == [market, market, "en-US", "en-US"]
     assert all(r.url.params["q"] == query for r in calls)
 
 
 def test_language_families_add_bounded_generic_queries_without_duplicates():
     assert len(CASES) == 42
-    assert len(set(BingRssCollectionProvider.queries)) == 106
+    assert len(set(BingRssCollectionProvider.queries)) == 113
     # Existing English, Spanish, French, Indonesian and Portuguese routes remain.
     for query in (
         '"earthquake"',

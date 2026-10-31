@@ -28,6 +28,39 @@ def events(*articles):
     )
 
 
+def test_mention_identity_tracks_publisher_revision_but_not_retrieval_clock():
+    original = report("Floods struck Riverton. Two people died.")
+    repeated = replace(
+        original,
+        source=replace(original.source, retrieved_at=NOW + timedelta(hours=1)),
+    )
+    revised = replace(original, text="Floods struck Riverton. Three people died.")
+    interval = ReportingInterval.at_start(7, NOW)
+    first = assess_article(original, interval).mentions
+    again = assess_article(repeated, interval).mentions
+    changed = assess_article(revised, interval).mentions
+    assert {m.mention_id for m in first} == {m.mention_id for m in again}
+    assert {m.mention_id for m in first}.isdisjoint(m.mention_id for m in changed)
+
+
+def test_changed_accounts_at_one_url_retain_both_claims_without_summing():
+    original = report("Floods struck Riverton on 17 October 2026. Two people died.")
+    revised = replace(
+        original,
+        source=replace(original.source, updated_at=NOW),
+        text="Floods struck Riverton on 17 October 2026. Three people died.",
+    )
+    groups = events(original, revised)
+    values = {
+        claim.fact.value.casefold()
+        for group in groups
+        for report in group.reports
+        for claim in report.mention.claims
+        if claim.fact.category == "fatalities"
+    }
+    assert values == {"two", "three"}
+
+
 def test_one_article_has_separate_hazards_places_and_scoped_accounts():
     groups = events(
         report(

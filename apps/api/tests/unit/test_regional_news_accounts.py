@@ -151,7 +151,8 @@ def test_animal_deaths_and_competing_armed_causes_do_not_become_disaster_fatalit
 )
 def test_retained_spanish_present_tense_denials_are_not_positive_fatalities(text):
     (claim,) = extract_reported_impacts(text, SOURCE)
-    assert claim.fact.value == "0"
+    assert claim.fact.value == "Unknown"
+    assert "uncertain" in claim.qualifiers
 
 
 @pytest.mark.parametrize(

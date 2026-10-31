@@ -14,7 +14,9 @@ RUN uv sync --frozen --no-dev --no-editable
 
 FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
 
-ENV PATH=/app/.venv/bin:$PATH \
+# Bound retained allocator arenas shared by native API workers.
+ENV MALLOC_ARENA_MAX=2 \
+    PATH=/app/.venv/bin:$PATH \
     COUNTRY_CATALOG_ROOT=/var/lib/disaster-monitor/geography \
     EVENT_MEDIA_BLOB_ROOT=/var/lib/disaster-monitor/event-media \
     FIELD_MEDIA_ROOT=/var/lib/disaster-monitor/field-reports/media \

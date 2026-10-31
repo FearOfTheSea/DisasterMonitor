@@ -1,4 +1,4 @@
-"""Native seed markets supplement bounded U.S. pages without guessing language."""
+"""Native seed markets precede bounded U.S. fallback pages without guessing language."""
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -42,11 +42,18 @@ def partition(query, cursor=""):
         ('"cyclone" morts', "fr-FR"),
         ('"longsor" tewas', "id-ID"),
         ('"gempa" meninggal', "id-ID"),
+        ('"kebakaran hutan" tewas', "id-ID"),
+        ('"karhutla" meninggal', "id-ID"),
+        ('"kekeringan" meninggal', "id-ID"),
+        ('"siklon tropis" tewas', "id-ID"),
+        ('"topan" tewas', "id-ID"),
+        ('"erupsi gunung" tewas', "id-ID"),
+        ('"letusan gunung" meninggal', "id-ID"),
         ('"deslizamento" mortos', "pt-BR"),
         ('"enxurrada" morreu', "pt-BR"),
     ],
 )
-async def test_native_seed_retains_both_us_orderings_before_native_orderings(
+async def test_native_seed_reaches_native_orderings_before_both_us_fallbacks(
     query, native_market
 ):
     calls = []
@@ -59,7 +66,12 @@ async def test_native_seed_retains_both_us_orderings_before_native_orderings(
         provider = BingRssCollectionProvider(client=client, minimum_interval=0)
         cursor = ""
         pages = []
-        for expected_cursor in ("relevance", "native-recent", "native-relevance", None):
+        for expected_cursor in (
+            "native-first-relevance",
+            "us-recent",
+            "us-relevance",
+            None,
+        ):
             page = await provider.fetch_page(partition(query, cursor))
             assert page.next_cursor == expected_cursor
             assert len(page.leads) == 1
@@ -72,10 +84,10 @@ async def test_native_seed_retains_both_us_orderings_before_native_orderings(
         any("market" in notice.casefold() for notice in page.notices) for page in pages
     )
     assert [r.url.params["mkt"] for r in calls] == [
-        "en-US",
-        "en-US",
         native_market,
         native_market,
+        "en-US",
+        "en-US",
     ]
     assert [r.url.params["qft"] for r in calls] == [
         'interval="9" sortbydate="1"',
@@ -111,7 +123,16 @@ async def test_english_and_unrecognized_headline_queries_keep_two_us_pages(query
     assert all(r.url.params["mkt"] == "en-US" for r in calls)
 
 
-@pytest.mark.parametrize("cursor", ["native-recent", "native-relevance"])
+@pytest.mark.parametrize(
+    "cursor",
+    [
+        "native-recent",
+        "native-relevance",
+        "native-first-relevance",
+        "us-recent",
+        "us-relevance",
+    ],
+)
 async def test_native_cursor_for_unconfigured_query_is_rejected_before_request(cursor):
     calls = []
     async with httpx.AsyncClient(
@@ -140,7 +161,7 @@ async def test_native_pages_resume_across_restarts_with_one_request_budget(tmp_p
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
         provider = BingRssCollectionProvider(client=client, minimum_interval=0)
-        for cursor in ("", "relevance", "native-recent", "native-relevance"):
+        for cursor in ("", "native-first-relevance", "us-recent", "us-relevance"):
             work = await store.claim("search", "reader", now=NOW)
             assert work is not None and work.partition.cursor == cursor
             page = await provider.fetch_page(work.partition)
@@ -202,7 +223,7 @@ async def test_expanded_seed_traversal_resumes_with_the_original_shared_pass_bud
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
         provider = BingRssCollectionProvider(client=client, minimum_interval=0)
         partitions = plan_collection(run.interval, (provider,), observed_at=NOW)
-        assert len(partitions) == 106
+        assert len(partitions) == 113
         await store.attach(run, partitions, now=NOW, budget=200)
         viewers = []
         for days in (1, 3, 7, 14):
@@ -219,6 +240,16 @@ async def test_expanded_seed_traversal_resumes_with_the_original_shared_pass_bud
         assert progress.searches_pending > 0
         assert progress.provider_requests == (("bing-rss-discovery", 200),)
         assert set(r.url.params["q"] for r in calls) == set(provider.queries)
+        assert {r.url.params["mkt"] for r in calls} == {
+            "en-US",
+            "es-MX",
+            "fr-FR",
+            "id-ID",
+            "pt-BR",
+            "de-DE",
+            "tr-TR",
+            "ar-SA",
+        }
         await store.finish_pass(now=NOW)
         store = SQLiteCollectionJournal(tmp_path / "collection.sqlite")
         await store.continue_scan(run.scan_id, now=NOW, budget=200)
@@ -226,17 +257,17 @@ async def test_expanded_seed_traversal_resumes_with_the_original_shared_pass_bud
         while work := await store.claim("search", "collector", now=NOW):
             page = await provider.fetch_page(work.partition)
             assert await store.commit_page(work, page, now=NOW)
-        assert len(calls) - before == 168
+        assert len(calls) - before == 196
     progress = (await store.snapshot(run.scan_id, now=NOW)).progress
-    assert len(calls) == progress.pages_acquired == 368
+    assert len(calls) == progress.pages_acquired == 396
     assert progress.searches_pending == 0
-    assert progress.searches_saturated == 106
+    assert progress.searches_saturated == 113
     assert (
         progress.searches_completed == 0
     )  # Bounded RSS pages do not exhaust an index.
-    assert progress.provider_requests == (("bing-rss-discovery", 368),)
+    assert progress.provider_requests == (("bing-rss-discovery", 396),)
     assert set(r.url.params["q"] for r in calls) == set(provider.queries)
     for viewer in viewers:
         shared = (await store.snapshot(viewer.scan_id, now=NOW)).progress
-        assert shared.pages_acquired == 368
+        assert shared.pages_acquired == 396
         assert shared.provider_requests == progress.provider_requests

@@ -55,6 +55,7 @@ class GdeltGkgCollectionProvider:
     source_id = "gdelt-gkg-discovery"
     supports_alternates = False
     supports_time_filter = True
+    index_availability_delay = timedelta(minutes=15)
     queries = ("english-body-themes", "translated-body-themes")
     endpoint = "https://data.gdeltproject.org/gdeltv2/"
 

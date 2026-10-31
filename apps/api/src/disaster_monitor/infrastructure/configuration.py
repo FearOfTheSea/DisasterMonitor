@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     discovery_scan_store_path: Path = Path("data/discovery-scans")
     discovery_collection_path: Path = Path("data/discovery-collection.sqlite")
     discovery_page_budget: int = Field(default=28, ge=1, le=200)
+    discovery_metadata_request_limit: int | None = Field(default=None, ge=1, le=1200)
     discovery_pass_seconds: float = Field(default=180, ge=10, le=600)
     discovery_capacity_records: int = Field(default=20_000, ge=100, le=100_000)
     discovery_storage_max_bytes: int = Field(
@@ -128,6 +129,7 @@ class Settings(BaseSettings):
             "covered by the RSS provider's permissions."
         ),
     )
+    google_news_rss_enabled: bool = False
     wikipedia_news_enabled: bool = True
     news_feed_timeout_seconds: float = Field(default=15.0, gt=0, le=60)
     approved_web_source_registry_path: Path | None = _DEFAULT_APPROVED_WEB_SOURCES

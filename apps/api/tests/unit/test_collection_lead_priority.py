@@ -15,14 +15,14 @@ LEAD = NewsFeedItem(
 @pytest.mark.parametrize(
     ("title", "hint", "priority"),
     [
-        ("El frente frío dejó diez muertos y graves inundaciones", None, 2),
-        ("Las inundaciones dejaron cuatro personas muertas", None, 2),
-        ("Les inondations ont fait deux morts", None, 2),
+        ("El frente frío dejó diez muertos y graves inundaciones", None, 3),
+        ("Las inundaciones dejaron cuatro personas muertas", None, 3),
+        ("Les inondations ont fait deux morts", None, 3),
         ("No hubo muertos en las inundaciones", None, 0),
         ("Le bilan des morts reste inconnu", None, 0),
-        ("Four firefighters die battling a wildfire", None, 2),
-        ("A flood killed two people", None, 2),
-        ("Responders cite staffing gaps in deadly 2025 flood", None, 2),
+        ("Four firefighters die battling a wildfire", None, 3),
+        ("A flood killed two people", None, 3),
+        ("Responders cite staffing gaps in deadly 2025 flood", None, 3),
         ("Article title unavailable", "Deadly landslide response reviewed", 1),
         ("Flood was not deadly", None, 0),
         ("No deadly floods reported", None, 0),
@@ -31,9 +31,9 @@ LEAD = NewsFeedItem(
         ("No deaths reported after the earthquake", None, 0),
         ("Floods leave four people missing", None, 0),
         ("Thousands evacuated before the storm", None, 0),
-        ("Mulher morre após deslizamento de terra", None, 2),
-        ("Deslizamento mata duas pessoas", None, 2),
-        ("Deslizamento mata 12 trabalhadores", None, 2),
+        ("Mulher morre após deslizamento de terra", None, 3),
+        ("Deslizamento mata duas pessoas", None, 3),
+        ("Deslizamento mata 12 trabalhadores", None, 3),
         ("Enchente atinge a mata atlântica", None, 0),
         ("A mata recebe duas pessoas para pesquisa", None, 0),
         ("Não morre ninguém após a enchente", None, 0),
@@ -51,7 +51,7 @@ def test_a_search_headline_outranks_an_unverified_death_theme():
     explicit = replace(
         weak, title="Article title unavailable", search_title="Two died in a flood"
     )
-    assert lead_retrieval_priority(explicit) == 2
+    assert lead_retrieval_priority(explicit) == 3
     assert lead_retrieval_priority(weak) == 1
     assert lead_retrieval_priority(LEAD) == 0
 

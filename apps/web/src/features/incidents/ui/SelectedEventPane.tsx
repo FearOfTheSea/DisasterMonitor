@@ -332,6 +332,7 @@ export function SelectedEventPane({
               <>
                 <ArticleCollection
                   key={incident.event_id}
+                  incidentId={incident.event_id}
                   reports={incident.discovery_reports}
                   notices={incident.collection_notices}
                   mappedGeometry={incident.geometry}

@@ -187,7 +187,7 @@ def test_a_local_denial_does_not_override_another_positive_account(text):
 @pytest.mark.parametrize(
     ("title", "priority"),
     [
-        ("Depremlerde 800 kişi hayatını kaybetti", 2),
+        ("Depremlerde 800 kişi hayatını kaybetti", 3),
         ("Depremde can kaybı olmadı", 0),
     ],
 )

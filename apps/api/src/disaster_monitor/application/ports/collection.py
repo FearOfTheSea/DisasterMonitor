@@ -1,7 +1,7 @@
 """Consumer-owned seams for resumable discovery, acquisition and article retrieval."""
 
-from datetime import datetime
-from typing import Protocol
+from datetime import datetime, timedelta
+from typing import Protocol, runtime_checkable
 
 from disaster_monitor.application.ports.discovery import DiscoveryStore
 from disaster_monitor.domain.collection import (
@@ -28,6 +28,13 @@ class CollectionProvider(Protocol):
     async def fetch_page(self, partition: CollectionPartition) -> CollectionPage: ...
 
 
+@runtime_checkable
+class ImmutableIndexProvider(Protocol):
+    """An archive whose closed index-time windows can be reused unchanged."""
+
+    index_availability_delay: timedelta
+
+
 class CollectionArticleReader(Protocol):
     async def retrieve(self, lead: NewsFeedItem) -> DiscoveryArticle: ...
 
@@ -43,7 +50,12 @@ class CollectionJournal(DiscoveryStore, Protocol):
     ) -> None: ...
 
     async def continue_scan(
-        self, scan_id: str, *, now: datetime, budget: int
+        self,
+        scan_id: str,
+        *,
+        now: datetime,
+        budget: int,
+        partitions: tuple[CollectionPartition, ...] = (),
     ) -> None: ...
 
     async def claim(
@@ -82,7 +94,9 @@ class CollectionJournal(DiscoveryStore, Protocol):
         self, *, now: datetime, scan_ids: tuple[str, ...] = ()
     ) -> None: ...
 
-    async def active_scans(self) -> tuple[str, ...]: ...
+    async def active_scans(self) -> tuple[str, ...]:
+        """Scans with active acquisition or an unfinished terminal projection."""
+        ...
 
     async def next_retry(self, *, now: datetime) -> datetime | None: ...
 

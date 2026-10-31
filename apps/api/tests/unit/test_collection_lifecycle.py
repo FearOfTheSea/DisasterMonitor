@@ -30,7 +30,7 @@ class CheckpointJournal:
         self.runs[run.scan_id] = run
         self.active.add(run.scan_id)
 
-    async def continue_scan(self, scan_id, *, now, budget):
+    async def continue_scan(self, scan_id, *, now, budget, partitions=()):
         self.active.add(scan_id)
         self.runs[scan_id] = replace(self.runs[scan_id], status="running")
 

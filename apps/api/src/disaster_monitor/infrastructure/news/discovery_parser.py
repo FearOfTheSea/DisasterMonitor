@@ -151,6 +151,14 @@ class ArticleTextSection:
     article_index: int | None
     parts: list[ArticleTextPiece] = field(default_factory=list)
     primary_heading: bool = False
+    main_index: int | None = None
+
+
+@dataclass
+class ArticleHeadlineAnchor:
+    main_index: int
+    article_index: int | None = None
+    parts: list[str] = field(default_factory=list)
 
 
 class ArticleParser(HTMLParser):
@@ -168,6 +176,10 @@ class ArticleParser(HTMLParser):
         self._articles: list[ArticleTextSection] = []
         self._article_stack: list[int] = []
         self._main_depth = 0
+        self._main_sequence = 0
+        self._main_stack: list[int] = []
+        self._external_headings: list[ArticleHeadlineAnchor] = []
+        self._external_heading: ArticleHeadlineAnchor | None = None
         self._parts_seen = 0
         self._json: list[str] | None = None
         self._hidden = 0
@@ -197,7 +209,17 @@ class ArticleParser(HTMLParser):
             self._caption_stack.append(tag)
         if tag == "article":
             index = len(self._articles)
-            self._articles.append(ArticleTextSection(index))
+            main_index = self._main_stack[-1] if self._main_stack else None
+            self._articles.append(ArticleTextSection(index, main_index=main_index))
+            if (
+                main_index is not None
+                and self._hidden == self._header_depth
+                and not self._excluded
+                and not is_article_decoration(tag, values)
+            ):
+                for anchor in self._external_headings:
+                    if anchor.main_index == main_index and anchor.article_index is None:
+                        anchor.article_index = index
             self._article_stack.append(index)
         article_body = (
             "articleBody" in (values.get("itemprop") or "").split()
@@ -238,8 +260,25 @@ class ArticleParser(HTMLParser):
             and self._hidden == self._header_depth
         ):
             self._articles[self._article_stack[-1]].primary_heading = True
+        if (
+            tag in {"h1", "h2", "h3", "h4", "h5", "h6"}
+            and not self._article_stack
+            and self._main_stack
+            and not self._excluded
+            and self._hidden == self._header_depth
+        ):
+            for anchor in self._external_headings:
+                if (
+                    anchor.main_index == self._main_stack[-1]
+                    and anchor.article_index is None
+                ):
+                    anchor.article_index = -1
+            if tag == "h1":
+                self._external_heading = ArticleHeadlineAnchor(self._main_stack[-1])
         if tag == "main":
             self._main_depth += 1
+            self._main_sequence += 1
+            self._main_stack.append(self._main_sequence)
         if tag == "meta":
             key = values.get("property") or values.get("name")
             if key and values.get("content"):
@@ -296,6 +335,9 @@ class ArticleParser(HTMLParser):
             self._in_link = True
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "h1" and self._external_heading is not None:
+            self._external_headings.append(self._external_heading)
+            self._external_heading = None
         if tag == "script":
             self.flight_metadata.end_script()
         if tag == "span" and self._span_emphasis:
@@ -315,6 +357,9 @@ class ArticleParser(HTMLParser):
                 self._article_stack.pop()
         if tag == "main":
             self._main_depth = max(0, self._main_depth - 1)
+            if self._main_stack:
+                self._main_stack.pop()
+            self._external_heading = None
         if tag == "script" and self._json is not None:
             try:
                 self.objects.extend(_objects(json.loads("".join(self._json))))
@@ -337,6 +382,12 @@ class ArticleParser(HTMLParser):
             self._in_link = False
 
     def handle_data(self, data: str) -> None:
+        if (
+            self._external_heading is not None
+            and self._hidden == self._header_depth
+            and not self._excluded
+        ):
+            self._external_heading.parts.append(data)
         self.flight_metadata.data(data)
         if self._json is not None:
             self._json.append(data)
@@ -373,15 +424,37 @@ class ArticleParser(HTMLParser):
             if section.article_index == article_index:
                 section.parts.append(piece)
 
-    def narrative_parts(self) -> list[str]:
+    def narrative_parts(self, headlines: tuple[str, ...] = ()) -> list[str]:
         primary = [section for section in self._articles if section.primary_heading]
-        if len(primary) > 1:
-            return []
         bodies = [
             section
             for section in self._bodies
             if any(p.strip() for p in _narrative(section.parts))
         ]
+        normalized = {
+            " ".join(value.split()).casefold() for value in headlines if value
+        }
+        anchors = [
+            anchor
+            for anchor in self._external_headings
+            if " ".join("".join(anchor.parts).split()).casefold() in normalized
+            and anchor.article_index is not None
+            and 0 <= anchor.article_index < len(self._articles)
+            and self._articles[anchor.article_index].main_index == anchor.main_index
+        ]
+        if len(anchors) > 1:
+            return []
+        if anchors:
+            selected = anchors[0].article_index
+            owned = [body for body in bodies if body.article_index == selected]
+            assert selected is not None
+            return (
+                [part for body in owned for part in _narrative(body.parts)]
+                if owned
+                else _narrative(self._articles[selected].parts)
+            )
+        if len(primary) > 1:
+            return []
         if primary:
             owned = [b for b in bodies if b.article_index == primary[0].article_index]
             return (
@@ -450,7 +523,12 @@ def parse_discovery_article(
         or title
     )
     source_publisher = parser.meta.get("og:site_name", "").strip() or publisher
-    narrative = parser.narrative_parts()
+    external_headlines = (
+        (headline if isinstance(headline, str) else "", parser.meta.get("og:title", ""))
+        if news or parser.meta.get("og:type", "").casefold() == "article"
+        else ()
+    )
+    narrative = parser.narrative_parts(external_headlines)
     if not narrative and not parser.has_narrative_structure:
         narrative = [
             "\n".join(

@@ -1242,6 +1242,124 @@ const apiSchemas = {
     enum: ['actual', 'exercise', 'system', 'test', 'draft'],
     type: 'string',
   },
+  CollectedReportingResponse: {
+    properties: {
+      items: {
+        items: {
+          $ref: '#/components/schemas/CollectedReportResponse',
+        },
+        type: 'array',
+      },
+      next_offset: {
+        anyOf: [
+          {
+            minimum: 0,
+            type: 'integer',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      offset: {
+        minimum: 0,
+        type: 'integer',
+      },
+      total: {
+        minimum: 0,
+        type: 'integer',
+      },
+      unlinked_only: {
+        type: 'boolean',
+      },
+      version: {
+        type: 'string',
+      },
+    },
+    required: ['items', 'version', 'offset', 'total', 'unlinked_only'],
+    type: 'object',
+  },
+  CollectedReportResponse: {
+    properties: {
+      access_issue: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      bylines: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      capture_id: {
+        type: 'string',
+      },
+      disaster: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/Disaster',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      eligibility: {
+        enum: [
+          'eligible',
+          'unknown_publication',
+          'outside_interval',
+          'unclassified',
+          'uncertain_publication',
+        ],
+        type: 'string',
+      },
+      event_linked: {
+        type: 'boolean',
+      },
+      origin: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      original_url: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source: {
+        $ref: '#/components/schemas/SourceResponse',
+      },
+      text_preview: {
+        type: 'string',
+      },
+    },
+    required: [
+      'capture_id',
+      'source',
+      'bylines',
+      'eligibility',
+      'event_linked',
+      'text_preview',
+    ],
+    type: 'object',
+  },
   CollectionProgress: {
     properties: {
       articles_pending: {
@@ -2422,6 +2540,16 @@ const apiSchemas = {
           type: 'string',
         },
         type: 'array',
+      },
+      capture_id: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
       },
       claims: {
         items: {
@@ -5954,6 +6082,76 @@ const apiSchemas = {
     required: ['title', 'content'],
     type: 'object',
   },
+  RetainedReportingPageResponse: {
+    properties: {
+      bylines: {
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      },
+      capture_id: {
+        type: 'string',
+      },
+      next_offset: {
+        anyOf: [
+          {
+            minimum: 0,
+            type: 'integer',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      offset: {
+        minimum: 0,
+        type: 'integer',
+      },
+      origin: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      original_url: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      source: {
+        $ref: '#/components/schemas/SourceResponse',
+      },
+      text: {
+        type: 'string',
+      },
+      total_characters: {
+        minimum: 0,
+        type: 'integer',
+      },
+      unavailable_reason: {
+        anyOf: [
+          {
+            type: 'string',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+    },
+    required: ['capture_id', 'source', 'bylines', 'text', 'offset', 'total_characters'],
+    type: 'object',
+  },
   SatelliteAvailabilityResponse: {
     properties: {
       products: {
@@ -7579,6 +7777,33 @@ export type CaseNotebookRequest = {
   title: string;
 };
 
+export type CollectedReportingResponse = {
+  items: Array<CollectedReportResponse>;
+  next_offset?: number | null;
+  offset: number;
+  total: number;
+  unlinked_only: boolean;
+  version: string;
+};
+
+export type CollectedReportResponse = {
+  access_issue?: string | null;
+  bylines: Array<string>;
+  capture_id: string;
+  disaster?: Disaster | null;
+  eligibility:
+    | 'eligible'
+    | 'unknown_publication'
+    | 'outside_interval'
+    | 'unclassified'
+    | 'uncertain_publication';
+  event_linked: boolean;
+  origin?: string | null;
+  original_url?: string | null;
+  source: SourceResponse;
+  text_preview: string;
+};
+
 export type CollectionProgress = {
   articles_pending?: number;
   articles_retrieved?: number;
@@ -7879,6 +8104,7 @@ export type DisasterMediaItemResponse = {
 export type DiscoveryReportResponse = {
   access_issue?: string | null;
   bylines?: Array<string>;
+  capture_id?: string | null;
   claims?: Array<ReportedImpactResponse>;
   episode_account?: HazardEpisodeAccountResponse | null;
   event_date_end?: string | null;
@@ -9001,6 +9227,19 @@ export type ReportedImpactResponse = {
 export type ReportSectionResponse = {
   content: string;
   title: string;
+};
+
+export type RetainedReportingPageResponse = {
+  bylines: Array<string>;
+  capture_id: string;
+  next_offset?: number | null;
+  offset: number;
+  origin?: string | null;
+  original_url?: string | null;
+  source: SourceResponse;
+  text: string;
+  total_characters: number;
+  unavailable_reason?: string | null;
 };
 
 export type RouteAccessRequest = {

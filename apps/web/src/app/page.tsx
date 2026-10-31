@@ -412,6 +412,7 @@ export default function Home() {
             {selectedIncident.discovery_reports?.length ? (
               <ArticleCollection
                 key={selectedIncident.event_id}
+                incidentId={selectedIncident.event_id}
                 reports={selectedIncident.discovery_reports}
                 notices={selectedIncident.collection_notices}
                 mappedGeometry={selectedIncident.geometry}

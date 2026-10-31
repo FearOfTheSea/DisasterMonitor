@@ -3,14 +3,13 @@
 import asyncio
 import sqlite3
 from collections.abc import Iterator
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from threading import Lock
 from typing import Any, TypeVar
-from uuid import uuid4
 
 from pydantic import TypeAdapter
 
@@ -38,8 +37,20 @@ from disaster_monitor.infrastructure.operations.collection_run_payloads import (
     DiscoveryRunPayloads,
 )
 from disaster_monitor.infrastructure.operations.sqlite_collection_capacity import (
+    CollectionLeadBudget,
     CollectionStorageBudget,
     is_storage_full,
+)
+from disaster_monitor.infrastructure.operations.sqlite_collection_citations import (
+    initialize_citation_schedule,
+    register_citation_page,
+)
+from disaster_monitor.infrastructure.operations.sqlite_collection_claims import (
+    ACTIVE_COLLECTION_SCANS as _ACTIVE_SCANS,
+)
+from disaster_monitor.infrastructure.operations.sqlite_collection_claims import (
+    claim_collection_work,
+    initialize_metadata_attempts,
 )
 from disaster_monitor.infrastructure.operations.sqlite_collection_leads import (
     enqueue_retrieval_lead,
@@ -48,6 +59,9 @@ from disaster_monitor.infrastructure.operations.sqlite_collection_leads import (
 from disaster_monitor.infrastructure.operations.sqlite_collection_searches import (
     enqueue_search_partition,
     initialize_search_priorities,
+)
+from disaster_monitor.infrastructure.operations.sqlite_reporting_captures import (
+    initialize_reporting_lookup,
 )
 from disaster_monitor.infrastructure.operations.sqlite_request_schedule import (
     CollectionRequestSchedule,
@@ -60,13 +74,6 @@ PARTITION = TypeAdapter(CollectionPartition)
 LEAD = TypeAdapter(NewsFeedItem)
 PAGE = TypeAdapter(CollectionPage)
 ARTICLE = TypeAdapter(DiscoveryArticle)
-
-# Read scheduling metadata once, without revisiting saved run blobs per work row.
-_ACTIVE_SCANS = (
-    "WITH active_scans AS MATERIALIZED ("
-    "SELECT s.id,s.pass_id,p.budget FROM scans s "
-    "JOIN passes p ON p.id=s.pass_id WHERE p.active=1 AND p.started>?) "
-)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS passes (
@@ -93,6 +100,10 @@ CREATE TABLE IF NOT EXISTS scan_work (
 CREATE TABLE IF NOT EXISTS work_links (
  parent TEXT NOT NULL, child TEXT NOT NULL, PRIMARY KEY(parent,child)
 );
+CREATE TABLE IF NOT EXISTS retrieval_rotation (
+ id INTEGER PRIMARY KEY CHECK(id=1), claimed INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO retrieval_rotation VALUES(1,0);
 CREATE TABLE IF NOT EXISTS pass_budget (
  pass_id INTEGER NOT NULL, provider TEXT NOT NULL, remaining INTEGER NOT NULL,
  PRIMARY KEY(pass_id,provider)
@@ -135,11 +146,24 @@ class SQLiteCollectionJournal:
         maximum_leads: int = 20_000,
         maximum_bytes: int = 512 * 1024 * 1024,
         pass_seconds: float = 180,
+        bulk_index_providers: frozenset[str] = frozenset(),
+        reserved_targeted_leads: int = 0,
+        maximum_metadata_requests: int | None = None,
     ) -> None:
+        if maximum_metadata_requests is not None and (
+            isinstance(maximum_metadata_requests, bool)
+            or not isinstance(maximum_metadata_requests, int)
+            or maximum_metadata_requests < 1
+        ):
+            raise ValueError("Metadata request limit must be positive.")
+        self._maximum_metadata_requests = maximum_metadata_requests
         self._path = path
         self._legacy = legacy
         self._lease_seconds = lease_seconds
         self._maximum_leads = maximum_leads
+        self._lead_budget = CollectionLeadBudget(
+            maximum_leads, bulk_index_providers, reserved_targeted_leads
+        )
         self._storage = CollectionStorageBudget(path, maximum_bytes)
         self._pass_seconds = pass_seconds
         self._run_payloads = DiscoveryRunPayloads()
@@ -148,24 +172,64 @@ class SQLiteCollectionJournal:
         with self._connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(_SCHEMA)
+            initialize_reporting_lookup(db)
+            initialize_metadata_attempts(db)
             columns = {row[1] for row in db.execute("PRAGMA table_info(work)")}
             if "alternate_depth" not in columns:
                 db.execute(
                     "ALTER TABLE work ADD COLUMN alternate_depth INTEGER NOT"
                     " NULL DEFAULT 0"
                 )
-            initialize_retrieval_priorities(db)
             initialize_search_priorities(db)
+            initialize_citation_schedule(db)
+            initialize_retrieval_priorities(
+                db, priority_column_created="priority" not in columns
+            )
+            self._initialize_projection_recovery(db)
             db.execute(
                 "CREATE INDEX IF NOT EXISTS work_acquisition_order "
                 "ON work(kind,priority DESC,sequence,id)"
             )
+            # Enqueue also allocates a global ordinal for existing partitions.
+            # Its MAX lookup must not traverse the ledger inside the writer lock.
+            try:
+                db.execute("CREATE INDEX IF NOT EXISTS work_sequence ON work(sequence)")
+            except sqlite3.Error as error:
+                # An optimization must not hide retained views in a full journal.
+                # A later open retries it when storage capacity is available.
+                if not is_storage_full(error):
+                    raise
             if "policy_deferrals" not in columns:
                 db.execute(
                     "ALTER TABLE work ADD COLUMN policy_deferrals "
                     "INTEGER NOT NULL DEFAULT 0"
                 )
             self._retained_refusals = retained_publisher_refusals(db)
+
+    def _initialize_projection_recovery(self, db: sqlite3.Connection) -> None:
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            scan_columns = {row[1] for row in db.execute("PRAGMA table_info(scans)")}
+            if "projection_pending" not in scan_columns:
+                db.execute(
+                    "ALTER TABLE scans ADD COLUMN projection_pending INTEGER "
+                    "NOT NULL DEFAULT 0"
+                )
+                # Older journals can have a closed pass whose terminal view was
+                # never saved. Restore that work without reopening acquisition.
+                for row in db.execute(
+                    "SELECT id,run FROM scans WHERE id NOT IN "
+                    "(SELECT scan FROM scan_capacity)"
+                ).fetchall():
+                    if self._run_payloads.decode(row["run"]).status == "running":
+                        db.execute(
+                            "UPDATE scans SET projection_pending=1 WHERE id=?",
+                            (row["id"],),
+                        )
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -209,8 +273,9 @@ class SQLiteCollectionJournal:
         with self._transaction() as db:
             db.execute(
                 "INSERT INTO scans(id,run) VALUES (?,?) ON CONFLICT(id) "
-                "DO UPDATE SET run=excluded.run",
-                (run.scan_id, payload),
+                "DO UPDATE SET run=excluded.run,projection_pending="
+                "CASE WHEN ? THEN 0 ELSE scans.projection_pending END",
+                (run.scan_id, payload, run.status != "running"),
             )
 
     async def read(self, scan_id: str) -> DiscoveryRun | None:
@@ -299,17 +364,30 @@ class SQLiteCollectionJournal:
         with self._transaction() as db:
             pass_id = self._pass(db, now, budget)
             db.execute(
-                "INSERT INTO scans VALUES(?,?,?)",
+                "INSERT INTO scans(id,run,pass_id) VALUES(?,?,?)",
                 (run.scan_id, self._run_payloads.encode(run), pass_id),
             )
             for partition in partitions:
                 self._add_work(db, partition)
                 self._attach_descendants(db, run.scan_id, partition.key)
 
-    async def continue_scan(self, scan_id: str, *, now: datetime, budget: int) -> None:
-        await asyncio.to_thread(self._continue, scan_id, now, budget)
+    async def continue_scan(
+        self,
+        scan_id: str,
+        *,
+        now: datetime,
+        budget: int,
+        partitions: tuple[CollectionPartition, ...] = (),
+    ) -> None:
+        await asyncio.to_thread(self._continue, scan_id, now, budget, partitions)
 
-    def _continue(self, scan_id: str, now: datetime, budget: int) -> None:
+    def _continue(
+        self,
+        scan_id: str,
+        now: datetime,
+        budget: int,
+        partitions: tuple[CollectionPartition, ...],
+    ) -> None:
         with self._transaction() as db:
             row = db.execute("SELECT run FROM scans WHERE id=?", (scan_id,)).fetchone()
             if not row:
@@ -338,6 +416,9 @@ class SQLiteCollectionJournal:
                     scan_id,
                 ),
             )
+            for partition in partitions:
+                self._add_work(db, partition)
+                self._attach_descendants(db, scan_id, partition.key)
 
     async def claim(
         self, kind: WorkKind, worker: str, *, now: datetime, provider: str | None = None
@@ -347,89 +428,18 @@ class SQLiteCollectionJournal:
     def _claim(
         self, kind: WorkKind, worker: str, now: datetime, provider: str | None
     ) -> ClaimedCollectionWork | None:
-        timestamp = now.timestamp()
-        with (
-            self._transaction() as db,
-            closing(
-                db.execute(
-                    _ACTIVE_SCANS
-                    + "SELECT DISTINCT w.*,s.pass_id,s.budget FROM work w "
-                    "JOIN scan_work sw ON sw.work=w.id "
-                    "JOIN active_scans s ON s.id=sw.scan "
-                    "LEFT JOIN cooldowns c ON c.provider=w.provider "
-                    "WHERE w.kind=? AND (w.state='pending' OR "
-                    "(w.state='leased' AND w.lease_until<=?)) "
-                    "AND w.due<=? AND COALESCE(c.until_time,0)<=? "
-                    "AND (? IS NULL OR w.provider=?) "
-                    "ORDER BY w.priority DESC,w.sequence,w.id",
-                    (
-                        timestamp - self._pass_seconds,
-                        kind,
-                        timestamp,
-                        timestamp,
-                        timestamp,
-                        provider,
-                        provider,
-                    ),
-                )
-            ) as rows,
-        ):
-            schedule = CollectionRequestSchedule(db, self._retained_refusals)
-            for row in rows:
-                if schedule.ready_at(row) > timestamp:
-                    continue
-                if row["attempts"] - row["policy_deferrals"] >= 4:
-                    db.execute(
-                        "UPDATE work SET state='failed',outcome='attempts_exhausted',"
-                        "detail='Worker lease expired after maximum attempts.' "
-                        "WHERE id=?",
-                        (row["id"],),
-                    )
-                    continue
-                budget_key = (
-                    row["provider"] if kind == "search" else "article-retrieval"
-                )
-                limit = row["budget"] if kind == "search" else row["budget"] * 4
-                db.execute(
-                    "INSERT OR IGNORE INTO pass_budget VALUES(?,?,?)",
-                    (row["pass_id"], budget_key, limit),
-                )
-                remaining = db.execute(
-                    "SELECT remaining FROM pass_budget WHERE pass_id=? AND provider=?",
-                    (row["pass_id"], budget_key),
-                ).fetchone()[0]
-                if remaining <= 0:
-                    continue
-                token = worker + ":" + str(uuid4())
-                db.execute(
-                    "UPDATE pass_budget SET remaining=remaining-1 WHERE "
-                    "pass_id=? AND provider=?",
-                    (row["pass_id"], budget_key),
-                )
-                db.execute(
-                    "UPDATE work SET "
-                    "state='leased',token=?,lease_until=?,attempts=attempts+1"
-                    " WHERE id=?",
-                    (token, timestamp + self._lease_seconds, row["id"]),
-                )
-                db.execute(
-                    "INSERT INTO attempts(token,work,provider,started) VALUES(?,?,?,?)",
-                    (token, row["id"], row["provider"], timestamp),
-                )
-                return ClaimedCollectionWork(
-                    row["id"],
-                    token,
-                    kind,
-                    row["provider"],
-                    PARTITION.validate_json(row["payload"])
-                    if kind == "search"
-                    else None,
-                    LEAD.validate_json(row["payload"]) if kind == "retrieve" else None,
-                    row["attempts"] + 1,
-                    row["alternate_depth"],
-                    row["policy_deferrals"],
-                )
-        return None
+        with self._transaction() as db:
+            return claim_collection_work(
+                db,
+                kind,
+                worker,
+                now=now,
+                provider=provider,
+                pass_seconds=self._pass_seconds,
+                lease_seconds=self._lease_seconds,
+                retained_refusals=self._retained_refusals,
+                maximum_metadata_requests=self._maximum_metadata_requests,
+            )
 
     def _owns(
         self, db: sqlite3.Connection, work: ClaimedCollectionWork, now: datetime
@@ -446,7 +456,10 @@ class SQLiteCollectionJournal:
     def _link_child(self, db: sqlite3.Connection, parent: str, child: str) -> None:
         db.execute("INSERT OR IGNORE INTO work_links VALUES(?,?)", (parent, child))
         db.execute(
-            "INSERT OR IGNORE INTO scan_work SELECT scan,? FROM scan_work WHERE work=?",
+            "WITH RECURSIVE descendants(id) AS (SELECT ? UNION "
+            "SELECT child FROM work_links JOIN descendants ON parent=descendants.id) "
+            "INSERT OR IGNORE INTO scan_work SELECT s.scan,d.id FROM scan_work s "
+            "CROSS JOIN descendants d WHERE s.work=?",
             (child, parent),
         )
 
@@ -471,18 +484,23 @@ class SQLiteCollectionJournal:
         with self._transaction() as db:
             if not self._owns(db, work, now):
                 return False
+            # A new subscriber may advance article observation while this page
+            # is in flight. Preserve its generation without changing ownership.
+            partition = PARTITION.validate_json(
+                db.execute(
+                    "SELECT payload FROM work WHERE id=?", (work.work_id,)
+                ).fetchone()[0]
+            )
             new_urls = {item.canonical_url for item in page.leads}
-            existing = {row[0] for row in db.execute("SELECT url FROM leads")}
-            evidence_count = db.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
-            if (
-                len(existing | new_urls) > self._maximum_leads
-                or evidence_count + len(page.articles) > self._maximum_leads
-            ):
+            refusal = self._lead_budget.page_refusal(
+                db, work.provider, new_urls, len(page.articles)
+            )
+            if refusal:
                 self._record_failure(
                     db,
                     work,
                     "capacity_exhausted",
-                    "Evidence storage capacity reached; page not acknowledged.",
+                    refusal,
                     now,
                     None,
                 )
@@ -500,20 +518,26 @@ class SQLiteCollectionJournal:
                     "INSERT OR IGNORE INTO work_leads VALUES(?,?)",
                     (work.work_id, item.canonical_url),
                 )
-                key = enqueue_retrieval_lead(db, item, work.partition.generation)
+                key = enqueue_retrieval_lead(
+                    db,
+                    item,
+                    partition.retrieval_generation or partition.generation,
+                )
                 self._link_child(db, work.work_id, key)
-                if work.partition.alternate_for:
+                if partition.alternate_for:
                     db.execute("UPDATE work SET alternate_depth=1 WHERE id=?", (key,))
             for article in page.articles:
                 self._evidence(db, work.work_id, article)
             for child in page.children:
                 self._add_work(db, child)
                 self._link_child(db, work.work_id, child.key)
+            register_citation_page(db, work.work_id, partition, page.children)
             next_partition = replace(
-                work.partition,
+                partition,
                 cursor=page.next_cursor or "",
+                defer_initial_request=False,
                 priority=search_acquisition_priority(
-                    alternate_for=work.partition.alternate_for
+                    alternate_for=partition.alternate_for
                 ),
             )
             state = (
@@ -525,12 +549,13 @@ class SQLiteCollectionJournal:
             )
             db.execute(
                 "UPDATE work SET "
-                "payload=?,state=?,token=NULL,lease_until=NULL,attempts=0,"
+                "payload=?,state=?,priority=?,token=NULL,lease_until=NULL,attempts=0,"
                 "outcome=?,detail=NULL,sequence=(SELECT MAX(sequence)+1 "
                 "FROM work) WHERE id=?",
                 (
                     PARTITION.dump_json(next_partition),
                     state,
+                    next_partition.priority,
                     "saturated" if page.saturated else "page_acquired",
                     work.work_id,
                 ),
@@ -662,6 +687,17 @@ class SQLiteCollectionJournal:
             "UPDATE attempts SET finished=?,outcome=?,detail=? WHERE token=?",
             (now.timestamp(), outcome, detail[:300], work.token),
         )
+        if outcome == "capacity_exhausted" and work.kind == "search":
+            # Another page from this source can hit the same admission limit.
+            # Pause its shared pass, preserving retrieval and other providers.
+            # Explicit continuation grants a fresh allowance without advancing
+            # the rejected cursor or removing any retained lead.
+            db.execute(
+                "UPDATE pass_budget SET remaining=0 WHERE provider=? AND pass_id IN "
+                "(SELECT s.pass_id FROM scans s JOIN scan_work sw ON sw.scan=s.id "
+                "JOIN passes p ON p.id=s.pass_id WHERE sw.work=? AND p.active=1)",
+                (work.provider, work.work_id),
+            )
         if retry_at:
             row = db.execute(
                 "SELECT * FROM work WHERE id=?", (work.work_id,)
@@ -681,7 +717,7 @@ class SQLiteCollectionJournal:
                 row[0]
                 for row in db.execute(
                     "SELECT s.id FROM scans s JOIN passes p ON "
-                    "p.id=s.pass_id WHERE p.active=1"
+                    "p.id=s.pass_id WHERE p.active=1 OR s.projection_pending=1"
                 )
             )
 
@@ -690,6 +726,10 @@ class SQLiteCollectionJournal:
 
     def _finish_pass(self) -> None:
         with self._transaction(control=True) as db:
+            db.execute(
+                "UPDATE scans SET projection_pending=1 WHERE pass_id IN "
+                "(SELECT id FROM passes WHERE active=1)"
+            )
             db.execute("UPDATE passes SET active=0 WHERE active=1")
 
     async def suspend_at_capacity(
@@ -719,6 +759,10 @@ class SQLiteCollectionJournal:
                 "token=NULL,lease_until=NULL WHERE state='leased'"
             )
             db.execute("UPDATE passes SET active=0 WHERE active=1")
+            db.execute(
+                "UPDATE scans SET projection_pending=0 WHERE id IN "
+                "(SELECT scan FROM scan_capacity)"
+            )
 
     async def next_retry(self, *, now: datetime) -> datetime | None:
         return await asyncio.to_thread(self._next_retry, now)
@@ -732,9 +776,12 @@ class SQLiteCollectionJournal:
                 "LEFT JOIN cooldowns c ON c.provider=w.provider "
                 "LEFT JOIN pass_budget b ON b.pass_id=s.pass_id AND "
                 "b.provider=CASE WHEN w.kind='retrieve' "
-                "THEN 'article-retrieval' ELSE w.provider END WHERE "
+                "THEN 'article-retrieval' ELSE w.provider END "
+                "LEFT JOIN pass_budget m ON m.pass_id=s.pass_id "
+                "AND m.provider='all-metadata' WHERE "
                 "w.state IN ('pending','leased') "
-                "AND COALESCE(b.remaining,s.budget)>0",
+                "AND COALESCE(b.remaining,s.budget)>0 "
+                "AND (w.kind!='search' OR COALESCE(m.remaining,1)>0)",
                 (now.timestamp() - self._pass_seconds,),
             ).fetchall()
             schedule = CollectionRequestSchedule(db, self._retained_refusals)
@@ -768,14 +815,20 @@ class SQLiteCollectionJournal:
                 "LEFT JOIN cooldowns c ON c.provider=w.provider WHERE sw.scan=?",
                 (scan_id,),
             ).fetchall()
-            pages = tuple(
-                PAGE.validate_json(r[0])
-                for r in db.execute(
-                    "SELECT page FROM pages p JOIN scan_work sw ON "
-                    "sw.work=p.work WHERE sw.scan=?",
-                    (scan_id,),
-                )
-            )
+            # Index pages repeat lead metadata already read from the unique-lead
+            # table below. Retain only their projection context, one page at a time.
+            pages_acquired = 0
+            page_notices: list[str] = []
+            supplemental: list[DiscoveryArticle] = []
+            for saved_page in db.execute(
+                "SELECT page FROM pages p JOIN scan_work sw ON "
+                "sw.work=p.work WHERE sw.scan=?",
+                (scan_id,),
+            ):
+                page = PAGE.validate_json(saved_page[0])
+                pages_acquired += 1
+                page_notices.extend(page.notices)
+                supplemental.extend(page.supplemental)
             leads = tuple(
                 LEAD.validate_json(r[0])
                 for r in db.execute(
@@ -785,15 +838,24 @@ class SQLiteCollectionJournal:
                     (scan_id,),
                 )
             )
-            evidence = tuple(
-                ARTICLE.validate_json(r[0])
+            linked_evidence = {
+                r[0]
                 for r in db.execute(
-                    "SELECT DISTINCT e.article FROM evidence e JOIN "
-                    "work_evidence we ON we.evidence=e.id JOIN scan_work sw "
+                    "SELECT we.evidence FROM work_evidence we JOIN scan_work sw "
                     "ON sw.work=we.work WHERE sw.scan=?",
                     (scan_id,),
                 )
-            )
+            }
+            evidence = []
+            # A feed can stop listing an article that still qualifies for this
+            # interval. The retained corpus is independent of acquisition routes.
+            # Stream captures so out-of-window bodies do not accumulate in memory.
+            for saved in db.execute("SELECT id,article FROM evidence"):
+                article = ARTICLE.validate_json(saved[1])
+                if saved[0] in linked_evidence or run.interval.may_include_retained(
+                    article
+                ):
+                    evidence.append(article)
             requests = tuple(
                 (r[0], r[1])
                 for r in db.execute(
@@ -829,7 +891,7 @@ class SQLiteCollectionJournal:
             notices = tuple(
                 dict.fromkeys(
                     [w["detail"] for w in work if w["detail"]]
-                    + [n for page in pages for n in page.notices]
+                    + page_notices
                     + ([DISCOVERY_CAPACITY_NOTICE] if capacity_stopped else [])
                 )
             )
@@ -853,7 +915,7 @@ class SQLiteCollectionJournal:
                     w["state"] in ("refused", "failed") for w in searches
                 ),
                 searches_saturated=sum(w["state"] == "saturated" for w in searches),
-                pages_acquired=len(pages),
+                pages_acquired=pages_acquired,
                 leads_acquired=len(leads),
                 articles_pending=sum(pending(w) for w in retrievals),
                 articles_retrieved=len([a for a in evidence if a.text]),
@@ -867,8 +929,8 @@ class SQLiteCollectionJournal:
             )
             return CollectionSnapshot(
                 run,
-                evidence,
+                tuple(evidence),
                 leads,
-                tuple(a for p in pages for a in p.supplemental),
+                tuple(supplemental),
                 progress,
             )

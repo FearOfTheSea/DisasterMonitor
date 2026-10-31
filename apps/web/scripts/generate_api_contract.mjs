@@ -160,6 +160,8 @@ function referencedSchemas(schema) {
 
 const runtimeSchemaNames = new Set([
   'DiscoveryScanResponse',
+  'RetainedReportingPageResponse',
+  'CollectedReportingResponse',
   'AssistantResponse',
   'ConversationResponse',
   'ConversationSummaryResponse',

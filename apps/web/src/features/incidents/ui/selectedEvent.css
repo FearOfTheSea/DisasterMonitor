@@ -259,3 +259,8 @@
 .event-brief-disclosures li {
   overflow-wrap: anywhere;
 }
+
+.event-retained-source-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

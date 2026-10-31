@@ -1,11 +1,13 @@
 """Durable acquisition identities and evidence, independent of providers and storage."""
 
-import re
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
 from typing import Literal
 
+from disaster_monitor.domain.collection_retrieval_priority import (
+    lead_retrieval_priority as lead_retrieval_priority,
+)
 from disaster_monitor.domain.discovery import (
     CollectionProgress,
     DiscoveryArticle,
@@ -13,46 +15,8 @@ from disaster_monitor.domain.discovery import (
 )
 from disaster_monitor.domain.mention_extraction import extract_mentions
 from disaster_monitor.domain.news import NewsFeedItem
-from disaster_monitor.domain.regional_accounts import regional_fatality_account
-from disaster_monitor.domain.reported_impacts import fatality_analysis_text
 
 WorkKind = Literal["search", "retrieve"]
-_FATALITY_HINT = re.compile(
-    r"\b(?:kill(?:ed|s)?|dead(?:ly)?|died|dies?|drowned|deaths?|fatalities|fatal)\b",
-    re.I,
-)
-_NO_FATALITY_HINT = re.compile(
-    r"\b(?:no|zero|without)(?:\s+(?:one|people|reported|confirmed|known))*\s+"
-    r"(?:deaths?|fatalities|casualties|killed|dead(?:ly)?|drowned)\b"
-    r"|\bnot\s+deadly\b",
-    re.I,
-)
-
-
-def lead_retrieval_priority(lead: NewsFeedItem) -> int:
-    """Prefer explicit headlines over broad hints, while retaining all other work."""
-    headlines = dict.fromkeys((lead.title, lead.search_title or ""))
-    if any(_has_fatality_hint(t) for t in headlines if t):
-        return 2
-    if not lead.discovery_hint:
-        return 0
-    return int(
-        _has_fatality_hint(
-            f"{lead.title} {lead.search_title or ''} {lead.discovery_hint or ''}"
-        )
-    )
-
-
-def _has_fatality_hint(text: str) -> bool:
-    hint = fatality_analysis_text(text)
-    regional = regional_fatality_account(hint)
-    return bool(_FATALITY_HINT.search(hint) and not _NO_FATALITY_HINT.search(hint)) or (
-        regional is not None
-        and (
-            regional.value not in ("0", "Unknown")
-            or "scope unresolved" in regional.qualifiers
-        )
-    )
 
 
 def fatality_hint_needs_followup(lead: NewsFeedItem, article: DiscoveryArticle) -> bool:
@@ -86,9 +50,11 @@ FailureOutcome = Literal[
 ]
 
 
-def search_acquisition_priority(*, alternate_for: str | None = None) -> int:
+def search_acquisition_priority(
+    *, alternate_for: str | None = None, defer_initial_request: bool = False
+) -> int:
     """Complete initial coverage before an acquired-headline follow-up stream."""
-    return int(not alternate_for)
+    return int(not alternate_for and not defer_initial_request)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +68,13 @@ class CollectionPartition:
     generation: str = "v1"
     alternate_for: str | None = None
     priority: int = 0
+    # Archive search identity can outlive a viewer's article refresh generation.
+    retrieval_generation: str | None = None
+    # Citation expansion starts after initial index coverage. Once a request has
+    # supplied continuation state, finish that state at normal search priority.
+    defer_initial_request: bool = False
+    # Public metadata resolution can be shared by identity across query windows.
+    shared_resource: bool = False
 
     def __post_init__(self) -> None:
         if not self.provider.strip() or not self.query.strip():
@@ -114,6 +87,12 @@ class CollectionPartition:
             raise ValueError("Collection partitions require ordered aware timestamps.")
         if not 0 <= self.depth <= 12:
             raise ValueError("Collection partition depth must be bounded.")
+        if not isinstance(self.shared_resource, bool) or (
+            self.shared_resource and (self.depth < 1 or self.alternate_for is not None)
+        ):
+            raise ValueError("Shared resources require a bounded metadata child.")
+        if not isinstance(self.defer_initial_request, bool):
+            raise ValueError("Initial request deferral must be boolean.")
         if (
             isinstance(self.priority, bool)
             or not isinstance(self.priority, int)
@@ -123,6 +102,12 @@ class CollectionPartition:
 
     @property
     def key(self) -> str:
+        if self.shared_resource:
+            return sha256(
+                "|".join(
+                    (self.provider, "shared-resource", self.query, self.generation)
+                ).encode()
+            ).hexdigest()
         fields = (
             self.provider,
             self.query,

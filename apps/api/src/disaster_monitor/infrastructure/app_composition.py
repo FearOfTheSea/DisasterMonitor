@@ -157,6 +157,9 @@ from disaster_monitor.infrastructure.news.gdelt_archive import (
     GdeltArchiveCollectionProvider,
 )
 from disaster_monitor.infrastructure.news.gdelt_gkg import GdeltGkgCollectionProvider
+from disaster_monitor.infrastructure.news.google_news_collection import (
+    GoogleNewsCollectionProvider,
+)
 from disaster_monitor.infrastructure.news.public_documents import PublicDocumentReader
 from disaster_monitor.infrastructure.news.wikipedia_collection import (
     WikipediaCitationCollectionProvider,
@@ -175,6 +178,9 @@ from disaster_monitor.infrastructure.operations.sqlite_collection import (
 )
 from disaster_monitor.infrastructure.operations.sqlite_public_document_access import (
     SQLitePublicDocumentAccess,
+)
+from disaster_monitor.infrastructure.operations.sqlite_reporting_captures import (
+    SQLiteReportingCaptureReader,
 )
 from disaster_monitor.infrastructure.operator_workspace.json_store import (
     JsonOperatorWorkspaceStore,
@@ -363,7 +369,22 @@ def build_app_dependencies(
         pass_seconds=settings.discovery_pass_seconds,
         maximum_leads=settings.discovery_capacity_records,
         maximum_bytes=settings.discovery_storage_max_bytes,
+        maximum_metadata_requests=(
+            settings.discovery_metadata_request_limit
+            if settings.discovery_metadata_request_limit is not None
+            else settings.discovery_page_budget * 6
+        ),
+        # Reserve one fifth of the same total lead limit for non-archive routes.
+        # Registered identities also classify retained legacy work on restart.
+        bulk_index_providers=frozenset(
+            (
+                GdeltArchiveCollectionProvider.source_id,
+                GdeltGkgCollectionProvider.source_id,
+            )
+        ),
+        reserved_targeted_leads=settings.discovery_capacity_records // 5,
     )
+    capture_reader = SQLiteReportingCaptureReader(settings.discovery_collection_path)
     mention_resolver = (
         NominatimMentionResolver(
             settings.discovery_place_endpoint, settings.discovery_place_cache_path
@@ -391,6 +412,7 @@ def build_app_dependencies(
             candidate_store=operational.repository,
             discovery_store=discovery_store,
             discovery_place_resolver=mention_resolver,
+            capture_reader=capture_reader,
             identity_store=FileIncidentIdentityStore(
                 settings.incident_identity_store_path
             ),
@@ -424,12 +446,18 @@ def build_app_dependencies(
     bing_discovery = BingRssCollectionProvider(
         timeout_seconds=settings.news_feed_timeout_seconds
     )
+    google_discovery = (
+        GoogleNewsCollectionProvider(timeout_seconds=settings.news_feed_timeout_seconds)
+        if settings.google_news_rss_enabled and settings.news_sensing_enabled
+        else None
+    )
     wikipedia_discovery = WikipediaCitationCollectionProvider(
         timeout_seconds=settings.news_feed_timeout_seconds
     )
     discovery_providers = (
         (
             reliefweb_discovery,
+            *((google_discovery,) if google_discovery is not None else ()),
             *((bing_discovery,) if settings.bing_news_rss_enabled else ()),
             *((wikipedia_discovery,) if settings.wikipedia_news_enabled else ()),
             *((discovery_feed,) if settings.gdelt_news_enabled else ()),
@@ -455,6 +483,7 @@ def build_app_dependencies(
     discovery_scans = configured.discovery_scans or DiscoveryScanService(
         (),
         discovery_store,
+        capture_reader=capture_reader,
         place_resolver=mention_resolver,
         country_names=discovery_countries,
         collection=ResumableDiscovery(
@@ -735,6 +764,7 @@ def build_app_dependencies(
                 gkg_discovery.aclose,
                 reliefweb_discovery.aclose,
                 bing_discovery.aclose,
+                *((google_discovery.aclose,) if google_discovery is not None else ()),
                 wikipedia_discovery.aclose,
                 *((mention_resolver.aclose,) if mention_resolver else ()),
                 *(
