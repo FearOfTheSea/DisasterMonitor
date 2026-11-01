@@ -39,17 +39,25 @@ export function useIncidentSelection(
   );
   const [lookup, setLookup] = useState<{
     identifier: string;
+    revision?: string;
     incident?: IncidentMapRecord;
     error?: string;
   }>();
   const lookupIdentifier = local?.event_id ?? identifier;
+  // A refreshed summary must not reuse details from an older source capture.
+  const detailRevision =
+    local?.reporting_detail === 'on_selection' ? JSON.stringify(local) : undefined;
   useEffect(() => {
     if (!lookupIdentifier) return;
     const controller = new AbortController();
     fetchActiveIncident(lookupIdentifier, controller.signal)
       .then((incident) => {
         if (!controller.signal.aborted) {
-          setLookup({ identifier: lookupIdentifier, incident });
+          setLookup({
+            identifier: lookupIdentifier,
+            revision: detailRevision,
+            incident,
+          });
           if (incident.geometry) {
             setResolvedLocations((current) => [
               ...current
@@ -64,8 +72,12 @@ export function useIncidentSelection(
         if (!controller.signal.aborted)
           setLookup((current) => ({
             identifier: lookupIdentifier,
+            revision: detailRevision,
             incident:
-              current?.identifier === lookupIdentifier ? current.incident : undefined,
+              current?.identifier === lookupIdentifier &&
+              current.revision === detailRevision
+                ? current.incident
+                : undefined,
             error:
               error instanceof Error
                 ? error.message
@@ -73,8 +85,11 @@ export function useIncidentSelection(
           }));
       });
     return () => controller.abort();
-  }, [lookupIdentifier]);
-  const retained = lookup?.identifier === lookupIdentifier ? lookup : undefined;
+  }, [lookupIdentifier, detailRevision]);
+  const retained =
+    lookup?.identifier === lookupIdentifier && lookup?.revision === detailRevision
+      ? lookup
+      : undefined;
   const withResolvedLocation = useCallback(
     (record: IncidentMapRecord) => {
       if (record.geometry) return record;
@@ -82,28 +97,52 @@ export function useIncidentSelection(
         (item) =>
           item.event_id === record.event_id &&
           item.event_time === record.event_time &&
-          item.source.canonical_url === record.source.canonical_url,
+          item.source.canonical_url === record.source.canonical_url &&
+          (record.reporting_detail !== 'on_selection' ||
+            JSON.stringify(
+              item.discovery_reports?.map((report) => [
+                report.capture_id,
+                report.mention_id,
+              ]),
+            ) ===
+              JSON.stringify(
+                record.discovery_reports?.map((report) => [
+                  report.capture_id,
+                  report.mention_id,
+                ]),
+              )),
       );
       return resolved
         ? {
             ...record,
             geometry: resolved.geometry,
-            evidence_sources: resolved.evidence_sources,
-            discovery_reports: resolved.discovery_reports,
-            collection_notices: resolved.collection_notices,
+            ...(record.reporting_detail === 'on_selection'
+              ? {}
+              : {
+                  evidence_sources: resolved.evidence_sources,
+                  discovery_reports: resolved.discovery_reports,
+                  collection_notices: resolved.collection_notices,
+                }),
           }
         : record;
     },
     [resolvedLocations],
   );
   const incident = useMemo(
-    () => (local ? withResolvedLocation(local) : retained?.incident),
+    () =>
+      local?.reporting_detail === 'on_selection'
+        ? retained?.incident
+        : local
+          ? withResolvedLocation(local)
+          : retained?.incident,
     [local, retained?.incident, withResolvedLocation],
   );
   return {
     incident,
     withResolvedLocation,
     error: retained?.error,
-    loading: Boolean(identifier && !local && !retained),
+    loading: Boolean(
+      identifier && (!local || local.reporting_detail === 'on_selection') && !retained,
+    ),
   };
 }

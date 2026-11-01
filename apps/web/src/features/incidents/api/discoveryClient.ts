@@ -10,7 +10,7 @@ export async function requestDiscoveryScan(
   signal?: AbortSignal,
 ): Promise<DiscoveryScanResponse> {
   return readScan(
-    await fetch(`${API_BASE_URL}/discovery-scans`, {
+    await fetch(`${API_BASE_URL}/discovery-scans?reporting_detail=on_selection`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reporting_days: days }),
@@ -24,9 +24,12 @@ export async function fetchDiscoveryScan(
   signal?: AbortSignal,
 ): Promise<DiscoveryScanResponse> {
   return readScan(
-    await fetch(`${API_BASE_URL}/discovery-scans/${encodeURIComponent(id)}`, {
-      signal,
-    }),
+    await fetch(
+      `${API_BASE_URL}/discovery-scans/${encodeURIComponent(id)}?reporting_detail=on_selection`,
+      {
+        signal,
+      },
+    ),
   );
 }
 
@@ -35,10 +38,13 @@ export async function reprocessDiscoveryScan(
   signal?: AbortSignal,
 ): Promise<DiscoveryScanResponse> {
   return readScan(
-    await fetch(`${API_BASE_URL}/discovery-scans/${encodeURIComponent(id)}/reprocess`, {
-      method: 'POST',
-      signal,
-    }),
+    await fetch(
+      `${API_BASE_URL}/discovery-scans/${encodeURIComponent(id)}/reprocess?reporting_detail=on_selection`,
+      {
+        method: 'POST',
+        signal,
+      },
+    ),
   );
 }
 
@@ -47,10 +53,13 @@ export async function continueDiscoveryScan(
   signal?: AbortSignal,
 ): Promise<DiscoveryScanResponse> {
   return readScan(
-    await fetch(`${API_BASE_URL}/discovery-scans/${encodeURIComponent(id)}/continue`, {
-      method: 'POST',
-      signal,
-    }),
+    await fetch(
+      `${API_BASE_URL}/discovery-scans/${encodeURIComponent(id)}/continue?reporting_detail=on_selection`,
+      {
+        method: 'POST',
+        signal,
+      },
+    ),
   );
 }
 

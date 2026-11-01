@@ -198,6 +198,7 @@ async def test_active_incidents_response_preserves_typed_source_evidence() -> No
     }
     assert body["incidents"][0] == {
         "event_id": "fire-1",
+        "reporting_detail": "full",
         "disaster": "wildfire",
         "country": {
             "code": "JPN",

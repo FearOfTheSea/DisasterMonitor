@@ -22,6 +22,7 @@ from disaster_monitor.domain.discovery import (
 from disaster_monitor.presentation.http.active_incident_serialization import (
     active_incident_response,
 )
+from disaster_monitor.presentation.http.event_schemas import ReportingDetail
 from disaster_monitor.presentation.http.schemas import (
     ActiveIncidentsSnapshotResponse,
     DisasterIncidentCoverageResponse,
@@ -70,7 +71,9 @@ def service(request: Request) -> DiscoveryScanService:
     return cast(DiscoveryScanService, value)
 
 
-def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
+def scan_response(
+    run: DiscoveryRun, *, reporting_detail: ReportingDetail = "full"
+) -> DiscoveryScanResponse:
     retrieved_at = run.finished_at or max(
         (report.article.source.retrieved_at for report in run.reports),
         default=run.interval.end,
@@ -138,7 +141,10 @@ def scan_response(run: DiscoveryRun) -> DiscoveryScanResponse:
         },
         snapshot=ActiveIncidentsSnapshotResponse(
             retrieved_at=retrieved_at,
-            incidents=[active_incident_response(item) for item in incidents],
+            incidents=[
+                active_incident_response(item, reporting_detail=reporting_detail)
+                for item in incidents
+            ],
             coverage=[
                 DisasterIncidentCoverageResponse(
                     disaster=disaster,
@@ -185,10 +191,14 @@ def _checked_providers(run: DiscoveryRun) -> list[str]:
     tags=["discovery"],
 )
 async def start_scan(
-    body: DiscoveryScanRequest, scans: Annotated[DiscoveryScanService, Depends(service)]
+    body: DiscoveryScanRequest,
+    scans: Annotated[DiscoveryScanService, Depends(service)],
+    reporting_detail: ReportingDetail = "full",
 ) -> DiscoveryScanResponse:
     try:
-        return scan_response(await scans.start(body.reporting_days))
+        return scan_response(
+            await scans.start(body.reporting_days), reporting_detail=reporting_detail
+        )
     except DiscoveryCapacityError as error:
         raise HTTPException(507, str(error)) from error
     except ValueError as error:
@@ -201,10 +211,14 @@ async def start_scan(
     tags=["discovery"],
 )
 async def get_scan(
-    scan_id: UUID, scans: Annotated[DiscoveryScanService, Depends(service)]
+    scan_id: UUID,
+    scans: Annotated[DiscoveryScanService, Depends(service)],
+    reporting_detail: ReportingDetail = "full",
 ) -> DiscoveryScanResponse:
     try:
-        return scan_response(await scans.get(str(scan_id)))
+        return scan_response(
+            await scans.get(str(scan_id)), reporting_detail=reporting_detail
+        )
     except LookupError as error:
         raise HTTPException(404, str(error)) from error
 
@@ -216,10 +230,14 @@ async def get_scan(
     tags=["discovery"],
 )
 async def reprocess_scan(
-    scan_id: UUID, scans: Annotated[DiscoveryScanService, Depends(service)]
+    scan_id: UUID,
+    scans: Annotated[DiscoveryScanService, Depends(service)],
+    reporting_detail: ReportingDetail = "full",
 ) -> DiscoveryScanResponse:
     try:
-        return scan_response(await scans.reprocess(str(scan_id)))
+        return scan_response(
+            await scans.reprocess(str(scan_id)), reporting_detail=reporting_detail
+        )
     except DiscoveryCapacityError as error:
         raise HTTPException(507, str(error)) from error
     except LookupError as error:
@@ -235,10 +253,15 @@ async def reprocess_scan(
     tags=["discovery"],
 )
 async def continue_scan(
-    scan_id: UUID, scans: Annotated[DiscoveryScanService, Depends(service)]
+    scan_id: UUID,
+    scans: Annotated[DiscoveryScanService, Depends(service)],
+    reporting_detail: ReportingDetail = "full",
 ) -> DiscoveryScanResponse:
     try:
-        return scan_response(await scans.continue_collection(str(scan_id)))
+        return scan_response(
+            await scans.continue_collection(str(scan_id)),
+            reporting_detail=reporting_detail,
+        )
     except DiscoveryCapacityError as error:
         raise HTTPException(507, str(error)) from error
     except LookupError as error:

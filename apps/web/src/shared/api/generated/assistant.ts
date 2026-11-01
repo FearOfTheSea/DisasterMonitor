@@ -226,6 +226,10 @@ const apiSchemas = {
       provider_tier: {
         $ref: '#/components/schemas/ProviderTier',
       },
+      reporting_detail: {
+        enum: ['full', 'on_selection'],
+        type: 'string',
+      },
       source: {
         $ref: '#/components/schemas/SourceResponse',
       },
@@ -7676,6 +7680,7 @@ export type ActiveIncidentResponse = {
   physical_event_id?: string | null;
   provider_ids?: Array<string>;
   provider_tier: ProviderTier;
+  reporting_detail?: 'full' | 'on_selection';
   source: SourceResponse;
   source_authority: SourceAuthority;
   verification_status?: 'provisional_news_detected' | 'source_backed' | 'rejected';

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchActiveIncidents } from '@/features/incidents/api/incidentsClient';
+import {
+  fetchActiveIncident,
+  fetchActiveIncidents,
+} from '@/features/incidents/api/incidentsClient';
 import type {
   ActiveIncident,
   ActiveIncidentsSnapshot,
@@ -230,4 +233,24 @@ describe('incidentsClient', () => {
       'Incident providers are unavailable.',
     );
   });
+});
+
+it('does not present deferred source details as complete incident evidence', async () => {
+  const preview = {
+    ...incident('earthquake', {
+      kind: 'point',
+      coordinates: [],
+      description: null,
+      source_id: 'source',
+      estimated: true,
+    }),
+    reporting_detail: 'on_selection',
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response(JSON.stringify(preview))),
+  );
+  await expect(fetchActiveIncident(preview.event_id)).rejects.toThrow(
+    'source details are not available yet',
+  );
 });

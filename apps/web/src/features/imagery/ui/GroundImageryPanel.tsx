@@ -96,7 +96,7 @@ function GroundImageryView({
               ? 'Reported event period: '
               : incidentTimePrecision === 'day'
                 ? 'Reported event date: '
-                : 'Event onset: '}
+                : 'Reported event time: '}
             {incidentTime ? (
               <time dateTime={incidentTime}>
                 {incidentTimePrecision === 'range'

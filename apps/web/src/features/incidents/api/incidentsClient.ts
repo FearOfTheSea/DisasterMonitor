@@ -78,5 +78,8 @@ export async function fetchActiveIncident(
   const body = await readJsonResponse<unknown>(response);
   if (!matchesApiSchema('ActiveIncidentResponse', body))
     throw new Error('Incident lookup returned an invalid response.');
-  return body as ActiveIncident;
+  const incident = body as ActiveIncident;
+  if (incident.reporting_detail === 'on_selection')
+    throw new Error('The selected incident’s source details are not available yet.');
+  return incident;
 }

@@ -19,6 +19,7 @@ from disaster_monitor.presentation.http.event_schemas import (
     DiscoveryReportResponse,
     HazardEpisodeAccountResponse,
     ReportedImpactResponse,
+    ReportingDetail,
 )
 from disaster_monitor.presentation.http.schemas import (
     ActiveIncidentCountryResponse,
@@ -56,10 +57,13 @@ def _episode_response(
     )
 
 
-def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse:
+def active_incident_response(
+    incident: ActiveIncident, *, reporting_detail: ReportingDetail = "full"
+) -> ActiveIncidentResponse:
     country = incident.country
     return ActiveIncidentResponse(
         event_id=incident.event_id,
+        reporting_detail=reporting_detail if incident.discovery_event else "full",
         physical_event_id=incident.physical_event_id,
         disaster=incident.disaster,
         country=(
@@ -121,7 +125,9 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                 if report.mention
                 else None,
                 origin=report.article.origin,
-                fatality_evidence=list(
+                fatality_evidence=[]
+                if reporting_detail == "on_selection"
+                else list(
                     (
                         claim.excerpt
                         for claim in report.mention.claims
@@ -130,7 +136,9 @@ def active_incident_response(incident: ActiveIncident) -> ActiveIncidentResponse
                     if report.mention
                     else fatality_accounts(report.article, report.disaster)
                 ),
-                claims=[
+                claims=[]
+                if reporting_detail == "on_selection"
+                else [
                     _impact_response(claim)
                     for claim in (
                         report.mention.claims

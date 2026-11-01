@@ -88,6 +88,7 @@ export type IncidentCountry = {
 
 export type ActiveIncident = {
   event_id: string;
+  reporting_detail?: 'full' | 'on_selection';
   physical_event_id?: string | null;
   disaster: DisasterType;
   country: IncidentCountry | null;

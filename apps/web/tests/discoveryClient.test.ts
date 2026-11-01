@@ -69,3 +69,12 @@ it('rejects a shifted or inconsistent reporting interval', async () => {
     'invalid reporting interval',
   );
 });
+
+it('requests source details on selection when restoring a retained result index', async () => {
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(run)));
+  vi.stubGlobal('fetch', fetcher);
+  await fetchDiscoveryScan(run.scan_id);
+  const url = new URL(fetcher.mock.calls[0][0]);
+  expect(url.pathname).toBe(`/api/v1/discovery-scans/${run.scan_id}`);
+  expect(url.searchParams.get('reporting_detail')).toBe('on_selection');
+});

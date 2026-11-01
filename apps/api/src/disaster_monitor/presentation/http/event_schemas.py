@@ -197,10 +197,14 @@ class HazardEpisodeAccountResponse(BaseModel):
     claims: list[ReportedImpactResponse]
 
 
+ReportingDetail = Literal["full", "on_selection"]
+
+
 class ActiveIncidentResponse(BaseModel):
     """One worldwide event or observation with source-backed evidence."""
 
     event_id: str
+    reporting_detail: ReportingDetail = "full"
     physical_event_id: str | None = None
     disaster: Disaster
     country: ActiveIncidentCountryResponse | None = None
