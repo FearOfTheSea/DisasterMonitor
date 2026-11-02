@@ -170,6 +170,10 @@ describe('Ground imagery preparation and comparison', () => {
       findOnOpen: true,
       onClose: vi.fn(),
     };
+    api.createGroundImageryRequest.mockResolvedValue({
+      ...request,
+      incident_id: 'new',
+    });
     const view = render(<GroundImageryPanel {...props} incidentId="old" />);
     await act(async () => undefined);
     view.rerender(<GroundImageryPanel {...props} incidentId="new" />);

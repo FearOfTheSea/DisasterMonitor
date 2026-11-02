@@ -437,3 +437,94 @@ def _source_geotiff() -> bytes:
         ) as dataset:
             dataset.write(np.ones((1, 10, 10), dtype=np.float32))
         return memory.read()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("primary_code", "primary_retryable", "fallback_code", "fallback_retryable"),
+    [
+        ("processing_timeout", True, "public_cog_unavailable", False),
+        ("credentials_required", False, "public_cog_unavailable", False),
+        ("permission_denied", False, "public_cog_download_failed", True),
+        ("quota_deferred", True, "public_cog_invalid", False),
+    ],
+)
+async def test_failed_imagery_paths_preserve_remote_cause_and_local_diagnostic(
+    primary_code: str,
+    primary_retryable: bool,
+    fallback_code: str,
+    fallback_retryable: bool,
+) -> None:
+    primary_error = GroundImageryRenderError(
+        "Remote processing did not deliver the selected observation.",
+        reason_code=primary_code,
+        retryable=primary_retryable,
+    )
+    fallback_error = GroundImageryRenderError(
+        "The public asset could not deliver a local alternative.",
+        reason_code=fallback_code,
+        retryable=fallback_retryable,
+    )
+
+    class FailedRenderer:
+        def __init__(self, error: GroundImageryRenderError):
+            self.error = error
+
+        async def render(self, request: RenderRequest):
+            raise self.error
+
+        async def aclose(self) -> None:
+            return None
+
+    renderer = FallbackGroundImageryRenderer(
+        FailedRenderer(primary_error), FailedRenderer(fallback_error)
+    )
+    with pytest.raises(GroundImageryRenderError) as caught:
+        await renderer.render(_render_request())
+
+    assert caught.value.reason_code == primary_code
+    assert caught.value.retryable is (primary_retryable or fallback_retryable)
+    assert primary_code in str(caught.value)
+    assert fallback_code in str(caught.value)
+    assert str(primary_error) in str(caught.value)
+    assert str(fallback_error) in str(caught.value)
+    assert caught.value.__cause__ is fallback_error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "reason_code",
+    [
+        "processing_request_invalid",
+        "unverified_product_identity",
+        "unexpected_content_type",
+    ],
+)
+async def test_imagery_identity_and_request_failures_do_not_try_local_fallback(
+    reason_code: str,
+) -> None:
+    original = GroundImageryRenderError(
+        "The selected acquisition cannot be verified.",
+        reason_code=reason_code,
+        retryable=False,
+    )
+
+    class InvalidRemote:
+        async def render(self, request: RenderRequest):
+            raise original
+
+        async def aclose(self) -> None:
+            return None
+
+    class UnexpectedFallback:
+        async def render(self, request: RenderRequest):
+            raise AssertionError("A rejected identity must not use a fallback.")
+
+        async def aclose(self) -> None:
+            return None
+
+    with pytest.raises(GroundImageryRenderError) as caught:
+        await FallbackGroundImageryRenderer(
+            InvalidRemote(), UnexpectedFallback()
+        ).render(_render_request())
+    assert caught.value is original

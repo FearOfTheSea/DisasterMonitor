@@ -123,7 +123,7 @@ async def test_unknown_rss_continuation_is_rejected_without_a_provider_request()
     assert not requests
 
 
-async def test_inaccessible_article_can_use_one_bing_alternate_without_recursion():
+async def test_inaccessible_article_keeps_bounded_bing_routes_without_recursion():
     from dataclasses import replace
 
     from disaster_monitor.application.incidents.collection_planning import (
@@ -145,10 +145,12 @@ async def test_inaccessible_article_can_use_one_bing_alternate_without_recursion
     work = ClaimedCollectionWork(
         "work", "token", "retrieve", "publisher-articles", None, lead, 1
     )
-    (alternate,) = plan_alternate_reports(work, (provider,), observed_at=NOW)
-    assert alternate.provider == provider.source_id
-    assert alternate.alternate_for == lead.canonical_url
-    assert "flood" in alternate.query.casefold()
+    alternates = plan_alternate_reports(work, (provider,), observed_at=NOW)
+    assert len(alternates) == 2
+    assert len({part.query for part in alternates}) == 2
+    assert all(part.provider == provider.source_id for part in alternates)
+    assert all(part.alternate_for == lead.canonical_url for part in alternates)
+    assert all("flood" in part.query.casefold() for part in alternates)
     assert not plan_alternate_reports(
         replace(work, alternate_depth=1), (provider,), observed_at=NOW
     )

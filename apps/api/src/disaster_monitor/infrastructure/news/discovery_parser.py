@@ -29,6 +29,9 @@ from disaster_monitor.infrastructure.news.headline_narrative import (
     is_article_decoration,
     is_photograph_caption,
 )
+from disaster_monitor.infrastructure.news.scoped_article_publication import (
+    scoped_article_publication,
+)
 from disaster_monitor.infrastructure.news.visible_article_publication import (
     visible_article_publication,
 )
@@ -152,6 +155,15 @@ class ArticleTextSection:
     parts: list[ArticleTextPiece] = field(default_factory=list)
     primary_heading: bool = False
     main_index: int | None = None
+    continuation_parent: int | None = None
+    continuation_position: int = 0
+
+
+@dataclass
+class ArticleElement:
+    tag: str
+    identifier: int
+    children: int = 0
 
 
 @dataclass
@@ -189,6 +201,8 @@ class ArticleParser(HTMLParser):
         self._text_blocks: list[ArticleTextBlock] = []
         self._in_link = False
         self._span_emphasis: list[bool] = []
+        self._elements: list[ArticleElement] = []
+        self._element_sequence = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
@@ -200,6 +214,12 @@ class ArticleParser(HTMLParser):
                 or "font-weight-bold" in (values.get("class") or "").casefold().split()
             )
         void = tag in {"img", "meta", "br", "hr", "input", "link", "source", "wbr"}
+        element_parent = self._elements[-1] if self._elements else None
+        if element_parent is not None:
+            element_parent.children += 1
+        if not void:
+            self._element_sequence += 1
+            self._elements.append(ArticleElement(tag, self._element_sequence))
         if values.get("id") == "EndOfArticle":
             self._body_stack.clear()
         caption = is_photograph_caption(tag, values)
@@ -221,20 +241,35 @@ class ArticleParser(HTMLParser):
                     if anchor.main_index == main_index and anchor.article_index is None:
                         anchor.article_index = index
             self._article_stack.append(index)
+        story_section = (
+            tag in {"section", "div"}
+            and "story-section" in (values.get("class") or "").split()
+        )
         article_body = (
-            "articleBody" in (values.get("itemprop") or "").split()
-            or values.get("data-article-body") == "true"
-        ) or bool(
-            re.search(
-                r"(?:^|\s)(?:post-content|post_content|entry-content|article-content|story-body|"
-                r"read__content|articlebodycontent|q-content__info|content-body)(?:\s|$)",
-                values.get("class") or "",
+            story_section
+            or (
+                "articleBody" in (values.get("itemprop") or "").split()
+                or values.get("data-article-body") == "true"
+            )
+            or bool(
+                re.search(
+                    r"(?:^|\s)(?:post-content|post_content|entry-content|article-content|story-body|"
+                    r"read__content|articlebodycontent|q-content__info|content-body)(?:\s|$)",
+                    values.get("class") or "",
+                )
             )
         )
         if not void and (self._body_stack or article_body):
             if article_body:
                 section = ArticleTextSection(
-                    self._article_stack[-1] if self._article_stack else None
+                    self._article_stack[-1] if self._article_stack else None,
+                    main_index=self._main_stack[-1] if self._main_stack else None,
+                    continuation_parent=element_parent.identifier
+                    if story_section and element_parent is not None
+                    else None,
+                    continuation_position=element_parent.children
+                    if element_parent
+                    else 0,
                 )
                 self._bodies.append(section)
             else:
@@ -335,6 +370,10 @@ class ArticleParser(HTMLParser):
             self._in_link = True
 
     def handle_endtag(self, tag: str) -> None:
+        for index in range(len(self._elements) - 1, -1, -1):
+            if self._elements[index].tag == tag:
+                self._elements = self._elements[:index]
+                break
         if tag == "h1" and self._external_heading is not None:
             self._external_headings.append(self._external_heading)
             self._external_heading = None
@@ -434,6 +473,29 @@ class ArticleParser(HTMLParser):
         normalized = {
             " ".join(value.split()).casefold() for value in headlines if value
         }
+        external = [
+            anchor
+            for anchor in self._external_headings
+            if " ".join("".join(anchor.parts).split()).casefold() in normalized
+        ]
+        # Explicit sibling story sections may precede unrelated article cards.
+        # Join only one adjacent group owned by the matching primary main heading.
+        # A different parent or any intervening element keeps groups separate.
+        if (
+            not primary
+            and len(external) == 1
+            and len(bodies) > 1
+            and bodies[0].continuation_parent is not None
+            and all(
+                body.article_index is None
+                and body.main_index == external[0].main_index
+                and body.continuation_parent == bodies[0].continuation_parent
+                and body.continuation_position
+                == bodies[0].continuation_position + index
+                for index, body in enumerate(bodies)
+            )
+        ):
+            return [part for body in bodies for part in _narrative(body.parts)]
         anchors = [
             anchor
             for anchor in self._external_headings
@@ -497,6 +559,18 @@ def _date(value: Any) -> datetime | None:
         return result if result.tzinfo is not None else None
     except ValueError:
         return None
+
+
+def _publication_date(value: Any) -> tuple[datetime | None, bool]:
+    if not isinstance(value, str):
+        return None, False
+    value = value.strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        try:
+            return datetime.fromisoformat(value).replace(tzinfo=UTC), True
+        except ValueError:
+            return None, False
+    return _date(value), False
 
 
 def parse_discovery_article(
@@ -580,22 +654,23 @@ def parse_discovery_article(
         or urlsplit(origin).path in ("", "/")
     ):
         origin = None
-    raw_publication = parser.meta.get("article:published_time") or news.get(
-        "datePublished"
-    )
-    if not raw_publication:
-        raw_publication = visible_article_publication(
-            html, source_title, url=document_url or url
+    publication, day_publication = None, False
+    for candidate in (
+        parser.meta.get("article:published_time"),
+        news.get("datePublished"),
+        parser.meta.get("datepublished"),
+    ):
+        publication, day_publication = _publication_date(candidate)
+        if publication is not None:
+            break
+    if publication is None:
+        publication, day_publication = _publication_date(
+            scoped_article_publication(html, source_title)
         )
-    day_publication = (
-        isinstance(raw_publication, str) and len(raw_publication.strip()) == 10
-    )
-    publication = _date(raw_publication)
-    if day_publication and isinstance(raw_publication, str):
-        try:
-            publication = datetime.fromisoformat(raw_publication).replace(tzinfo=UTC)
-        except ValueError:
-            pass
+    if publication is None:
+        publication, day_publication = _publication_date(
+            visible_article_publication(html, source_title, url=document_url or url)
+        )
     source = SourceReference(
         source_id="open-news",
         publisher=source_publisher,

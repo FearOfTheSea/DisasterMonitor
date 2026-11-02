@@ -32,6 +32,8 @@ import { API_BASE_URL } from '@/shared/config/runtime';
 import { DataAgeBadge } from '@/shared/ui/DataAgeBadge';
 import { useMonitoringReadiness } from '@/shared/hooks/useMonitoringReadiness';
 
+import type { GroundImageryRetention } from '@/features/imagery/model/groundImageryRetention';
+
 type GroundImageryPanelProps = {
   incidentId: string;
   incidentLabel: string;
@@ -40,6 +42,7 @@ type GroundImageryPanelProps = {
   incidentTimeEnd?: string | null;
   onClose: () => void;
   findOnOpen?: boolean;
+  retention?: GroundImageryRetention;
   children?: ReactNode;
 };
 
@@ -57,11 +60,15 @@ function GroundImageryView({
   incidentTimeEnd,
   onClose,
   findOnOpen = false,
+  retention,
   children,
 }: GroundImageryPanelProps) {
   const monitoring = useMonitoringReadiness();
   const {
     request,
+    preferredArtifactId,
+    restoring,
+    startNewSearch,
     readiness,
     loadState,
     searchIsSlow,
@@ -78,6 +85,7 @@ function GroundImageryView({
     monitoring.available,
     findOnOpen,
     incidentTime !== null,
+    retention,
   );
 
   return (
@@ -154,6 +162,11 @@ function GroundImageryView({
               <button type="button" onClick={() => void load()}>
                 Try again
               </button>
+              {restoring && !request ? (
+                <button type="button" onClick={startNewSearch}>
+                  Start a new imagery search
+                </button>
+              ) : null}
             </div>
           ) : null}
 
@@ -391,7 +404,13 @@ function GroundImageryView({
             </details>
           ) : null}
           {request ? (
-            <GroundComparisons request={request} />
+            <GroundComparisons
+              request={request}
+              preferredArtifactId={preferredArtifactId}
+              onArtifactChange={(artifactId) =>
+                retention?.saveArtifact(incidentId, request.request_id, artifactId)
+              }
+            />
           ) : (
             <section
               className="ground-imagery-section ground-imagery-comparisons"

@@ -89,6 +89,46 @@ async def test_initial_query_continuation_is_not_overtaken_by_new_followups(tmp_
     assert next_page.partition.cursor == "relevance"
 
 
+async def test_started_alternative_metadata_precedes_unstarted_citations(
+    tmp_path,
+):
+    first = replace(FOLLOWUP, query="metadata-a", depth=1, defer_initial_request=True)
+    second = replace(first, query="metadata-b")
+    path = tmp_path / "metadata.sqlite"
+    store = SQLiteCollectionJournal(path, maximum_metadata_requests=4)
+    run = DiscoveryRun(str(uuid4()), ReportingInterval.at_start(1, NOW))
+    await store.attach(run, (first, second), now=NOW, budget=4)
+    work = await store.claim("search", "page", now=NOW)
+    assert work.partition.query == "metadata-a" and work.partition.priority == 0
+    assert await store.commit_page(
+        work, CollectionPage(next_cursor="opaque-step-1"), now=NOW
+    )
+    store = SQLiteCollectionJournal(path, maximum_metadata_requests=4)
+    continued = await store.claim("search", "continuation", now=NOW)
+    assert continued.work_id == work.work_id and continued.partition.priority == 1
+    assert await store.commit_page(
+        continued, CollectionPage(next_cursor="opaque-step-2"), now=NOW
+    )
+    continued = await store.claim("search", "next-continuation", now=NOW)
+    assert continued.work_id == work.work_id and continued.partition.priority == 1
+    assert await store.commit_page(continued, CollectionPage(), now=NOW)
+    remaining = await store.claim("search", "unstarted", now=NOW)
+    assert (
+        remaining.partition.query == "metadata-b" and remaining.partition.priority == 0
+    )
+    assert await store.claim("search", "over-cap", now=NOW) is None
+
+
+async def test_ordinary_alternative_pagination_keeps_followup_priority(tmp_path):
+    first = replace(FOLLOWUP, query="route-a")
+    second = replace(FOLLOWUP, query="route-b")
+    store, _ = await prepare(tmp_path / "alternates.sqlite", (first, second))
+    work = await store.claim("search", "page", now=NOW)
+    assert await store.commit_page(work, CollectionPage(next_cursor="more"), now=NOW)
+    other = await store.claim("search", "ordinary-peer", now=NOW)
+    assert other.partition.query == "route-b" and other.partition.priority == 0
+
+
 @pytest.mark.parametrize("state", ["pending", "leased", "capacity"])
 async def test_legacy_open_search_priorities_migrate_without_resetting_progress(
     tmp_path, state

@@ -63,6 +63,7 @@ class _Frame:
     hidden: bool
     heading: bool = False
     clock: bool = False
+    label_required: bool = False
     linked: bool = False
     attribute: str | None = None
     parts: list[str] = field(default_factory=list)
@@ -100,7 +101,7 @@ def _publication_value(attribute: str | None, text: str) -> str | None:
     text = " ".join(text.split())
     spanish = re.fullmatch(r"Publicad[oa] el (\d{2})-(\d{2})-(\d{4})", text, re.I)
     english = re.fullmatch(
-        r"(?:Posted|Published)(?: on)?\s*:\s*([a-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})"
+        r"(?:Posted|Published)(?: (?:on|at))?\s*:\s*([a-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})"
         r"(?:\s+(?:at\s+)?\d{1,2}:\d{2}(?:\s*[AP]M)?(?:\s+[A-Z]{2,5})?)?",
         text,
         re.I,
@@ -146,10 +147,12 @@ class _VisiblePublication(HTMLParser):
             or is_article_decoration(tag, decoration_attrs)
         )
         owners = self.stack[-1].owners if self.stack else ()
-        if not hidden and (tag in {"article", "header"} or "content-header" in classes):
+        if not hidden and (
+            tag in {"article", "main", "header"} or "content-header" in classes
+        ):
             owner = _Owner()
             self.owners.append(owner)
-            owners = (owner,) if tag == "article" else (*owners, owner)
+            owners = (owner,) if tag in {"article", "main"} else (*owners, owner)
         if tag == "a":
             for frame in self.stack:
                 if frame.heading:
@@ -164,6 +167,7 @@ class _VisiblePublication(HTMLParser):
                 )
             )
             or "content-date-posted" in classes
+            or "updated-time" in classes
         )
         self.stack.append(
             _Frame(
@@ -172,6 +176,7 @@ class _VisiblePublication(HTMLParser):
                 hidden,
                 heading=heading,
                 clock=clock,
+                label_required="updated-time" in classes,
                 linked=heading and any(f.tag == "a" for f in self.stack),
                 attribute=values.get("datetime") if tag == "time" else None,
             )
@@ -190,6 +195,10 @@ class _VisiblePublication(HTMLParser):
                     for owner in frame.owners:
                         owner.headings.append(_normalized(text))
                 if frame.clock:
+                    if frame.label_required and not re.match(
+                        r"^(?:Published|Posted)(?:\s+(?:on|at))?\s*:", text, re.I
+                    ):
+                        continue
                     for owner in frame.owners:
                         owner.clocks.append(
                             (frame.attribute, text if frame.characters <= 256 else "")

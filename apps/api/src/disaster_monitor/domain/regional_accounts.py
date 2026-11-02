@@ -44,10 +44,12 @@ _COMPETING = re.compile(
     r"Krieg|Schießerei|bewaffnete Angriffe)\b",
     re.I,
 )
+_SPANISH_LIFE_ENDING = r"(?:acab[oó]|acabaron) con la vida de"
 _SPANISH_DEATH = (
     r"muert[oa]s?|muertes?|muri[oó]|murieron|falleci[oó]|fallecieron|"
     r"fallecid[oa]s?|fallecimientos?|v[ií]ctimas? mortales?|mat[oó]|mataron|"
-    r"cobr[oó] la vida de|(?:perdi[oó]|perdieron|perdiendo) la vida(?!\s+[uú]til\b)"
+    r"cobr[oó] la vida de|(?:perdi[oó]|perdieron|perdiendo) la vida(?!\s+[uú]til\b)|"
+    rf"{_SPANISH_LIFE_ENDING}"
 )
 _FRENCH_DEATH = (
     r"morts?|mortes?|d[eé]c[eè]s|tué(?:s|es|e)?|"
@@ -103,6 +105,7 @@ _OCCURRENCE = re.compile(
 )
 _PERSON = (
     r"personas?|hombres?|mujeres?|ni[ñn][oa]s?|trabajadores?|bomberos?|mineros?|"
+    r"espos[oa]s?|hij[oa]s?|herman[oa]s?|familiares?|"
     r"personnes?|hommes?|femmes?|enfants?|habitants?|pompiers?|ouvriers?|"
     r"orang|korban|warga|lansia|pria|perempuan|penduduk|anak(?:-anak)?|"
     r"pekerja|petugas|relawan|penambang|"
@@ -250,7 +253,7 @@ _WORDINGS = (
     _wording(
         _SPANISH_DEATH,
         r"mat[oó]|mataron|murieron|fallecieron|caus(?:o|aron) la muerte de|"
-        r"caus[oó] la muerte de|cobr[oó] la vida de",
+        rf"caus[oó] la muerte de|cobr[oó] la vida de|{_SPANISH_LIFE_ENDING}",
         "un:1 uno:1 una:1 dos:2 tres:3 cuatro:4 cinco:5 seis:6 siete:7 "
         "ocho:8 nueve:9 diez:10 once:11 doce:12",
         r"han|ha|hab[ií]an?|fueron|resultaron|sido|se|reportad[oa]s?",

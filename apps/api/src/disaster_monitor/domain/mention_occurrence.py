@@ -64,6 +64,14 @@ _PHYSICAL_OCCURRENCE = re.compile(
     r"(?:chaos|destruction|devastation)\b",
     re.I,
 )
+_PRESENT_PHYSICAL_OCCURRENCE = re.compile(
+    rf"\b{_HAZARD_NOUN}\s+(?:strikes|hits)\b", re.I
+)
+_PRESENT_HYPOTHETICAL = re.compile(
+    r"\b(?:if|whenever|when|every|each|usually|often|annually|"
+    r"hypothetical|simulat(?:ed|ion)|suppose|imagine|would|could|may|might|will)\b",
+    re.I,
+)
 _WAVE_OCCURRENCE = re.compile(
     r"\bwave\s+of\s+(?:mud|water|debris)"
     r"(?:\s+and\s+(?:mud|water|debris))?\s+"
@@ -132,12 +140,33 @@ def victim_activity_date_requires_reference(text: str) -> bool:
     )
 
 
+def _present_physical_start(text: str) -> int | None:
+    # News and historical chronologies can narrate an actual occurrence in the
+    # present tense. Require a hazard as subject, not a bare English/German "die".
+    if _PREPARATION.search(text) or _PRESENT_HYPOTHETICAL.search(text):
+        return None
+    for match in _PRESENT_PHYSICAL_OCCURRENCE.finditer(text):
+        prefix = text[: match.start()]
+        if re.search(
+            r"\b(?:no|not|never)\b[^.!?;]{0,50}$|"
+            r"\b(?:political|electoral|financial|economic)\s+$",
+            prefix,
+            re.I,
+        ):
+            continue
+        return match.start()
+    return None
+
+
 def _occurrence_start(text: str) -> int | None:
     direct = _OCCURRENCE.search(text)
     starts = [direct.start()] if direct else []
     physical = _PHYSICAL_OCCURRENCE.search(text)
     if physical is not None:
         starts.append(physical.start())
+    present = _present_physical_start(text)
+    if present is not None:
+        starts.append(present)
     wave = _WAVE_OCCURRENCE.search(text)
     if wave is not None:
         starts.append(wave.start())
@@ -219,7 +248,7 @@ def occurrence_years(text: str) -> tuple[int, ...]:
 def has_distinct_occurrence(text: str) -> bool:
     return bool(
         re.search(
-            r"\b(?:another|separate|different|new)\s+(?:[\w.-]+\s+){0,2}"
+            r"\b(?:another|separate|different|new|last|previous)\s+(?:[\w.-]+\s+){0,2}"
             r"(?:flood|earthquake|wildfire|fire|landslide|tsunami|drought|"
             r"eruption|hurricane|typhoon|cyclone)\b",
             text,
@@ -232,6 +261,7 @@ def has_later_physical_occurrence(text: str) -> bool:
     """Require another occurrence or physical action, not later recovery deaths."""
     return (
         bool(_WAVE_OCCURRENCE.search(text))
+        or _present_physical_start(text) is not None
         or has_distinct_occurrence(text)
         or any(
             re.search(r"\b(?:struck|hit|occurred|erupted|unleashed)\b", match[0], re.I)

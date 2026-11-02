@@ -15,8 +15,12 @@ import { API_BASE_URL } from '@/shared/config/runtime';
 
 export function GroundPreparedObservations({
   request,
+  preferredArtifactId,
+  onArtifactChange,
 }: {
   request: GroundImageryPanelRequest;
+  preferredArtifactId?: string;
+  onArtifactChange?: (artifactId: string) => void;
 }) {
   const [choice, setChoice] = useState<{ version: number; artifactId: string }>();
   const selections = request.sensors.flatMap((sensor) => sensor.selections);
@@ -45,7 +49,8 @@ export function GroundPreparedObservations({
   const selected =
     (choice?.version === request.request_version
       ? prepared.find((item) => item.artifact.artifact_id === choice.artifactId)
-      : undefined) ?? prepared[0];
+      : prepared.find((item) => item.artifact.artifact_id === preferredArtifactId)) ??
+    prepared[0];
   const observation = selected?.observation;
   if (!selected || !observation)
     return (
@@ -82,12 +87,13 @@ export function GroundPreparedObservations({
         Prepared capture
         <select
           value={artifact.artifact_id}
-          onChange={(event) =>
+          onChange={(event) => {
+            onArtifactChange?.(event.target.value);
             setChoice({
               version: request.request_version,
               artifactId: event.target.value,
-            })
-          }
+            });
+          }}
         >
           {prepared.map((item) => (
             <option key={item.artifact.artifact_id} value={item.artifact.artifact_id}>

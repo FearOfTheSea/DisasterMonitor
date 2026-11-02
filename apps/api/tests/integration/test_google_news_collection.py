@@ -283,3 +283,84 @@ async def test_missing_conflicting_or_unbounded_public_metadata_fails_closed(mar
         with pytest.raises(CollectionProviderError, match="metadata"):
             await provider.fetch_page(child)
     assert len(replies.calls) == 2
+
+
+async def test_dated_alternative_keeps_lineage_and_meters_each_resolution_step(
+    tmp_path,
+):
+    replies = GoogleReplies()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(replies.respond)
+    ) as client:
+        provider = GoogleNewsCollectionProvider(
+            client=client, minimum_interval=0, clock=lambda: NOW
+        )
+        assert provider.supports_alternates
+        root = replace(
+            partition(provider),
+            query='earthquake "Lakeview"',
+            alternate_for="https://daily.example/inaccessible",
+            priority=0,
+        )
+        store = SQLiteCollectionJournal(
+            tmp_path / "alternate.sqlite", maximum_metadata_requests=4
+        )
+        run = DiscoveryRun("alternate", ReportingInterval.at_start(30, NOW))
+        await store.attach(run, (root,), now=NOW, budget=4)
+        feed = await store.claim("search", "feed", now=NOW)
+        page = await provider.fetch_page(feed.partition)
+        assert len(replies.calls) == 1
+        assert (
+            replies.calls[0].url.params["q"]
+            == 'earthquake "Lakeview" after:2026-09-07 before:2026-09-16'
+        )
+        assert all(
+            c.alternate_for == root.alternate_for and not c.shared_resource
+            for c in page.children
+        )
+        assert await store.commit_page(feed, page, now=NOW)
+        first = await store.claim("search", "page", now=NOW)
+        assert first.partition.defer_initial_request and first.partition.priority == 0
+        page = await provider.fetch_page(first.partition)
+        assert len(replies.calls) == 2 and page.next_cursor
+        assert await store.commit_page(first, page, now=NOW)
+        store = SQLiteCollectionJournal(
+            tmp_path / "alternate.sqlite", maximum_metadata_requests=4
+        )
+        rpc = await store.claim("search", "rpc", now=NOW)
+        assert rpc.work_id == first.work_id
+        assert (
+            rpc.partition.priority == 1
+            and rpc.partition.alternate_for == root.alternate_for
+        )
+        page = await provider.fetch_page(rpc.partition)
+        assert len(replies.calls) == 3 and replies.calls[-1].method == "POST"
+        assert await store.commit_page(rpc, page, now=NOW)
+        retrieval = await store.claim("retrieve", "body", now=NOW)
+        assert retrieval.alternate_depth == 1
+        assert (
+            retrieval.lead.published_at is None
+            and retrieval.lead.indexed_at is not None
+        )
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["earthquake after:2020-01-01", "https://daily.example", "word " * 33, "x" * 301],
+)
+async def test_alternative_query_bounds_cannot_override_dates_or_add_urls(query):
+    replies = GoogleReplies()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(replies.respond)
+    ) as client:
+        provider = GoogleNewsCollectionProvider(
+            client=client, minimum_interval=0, clock=lambda: NOW
+        )
+        root = replace(
+            partition(provider),
+            query=query,
+            alternate_for="https://daily.example/inaccessible",
+        )
+        with pytest.raises(CollectionProviderError):
+            await provider.fetch_page(root)
+    assert not replies.calls

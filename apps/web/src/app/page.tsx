@@ -24,6 +24,7 @@ import { useMapWorkspace } from '@/app/workspace/useMapWorkspace';
 import { SecondaryWorkspaces } from '@/app/workspace/SecondaryWorkspaces';
 import { ToolsMenu } from '@/app/workspace/ToolsMenu';
 import { useWorkspaceActions } from '@/app/workspace/useWorkspaceActions';
+import { useGroundInspectionLocation } from '@/app/workspace/useGroundInspectionLocation';
 import { useWorkspaceNavigation } from '@/app/workspace/useWorkspaceNavigation';
 import { useWorkspacePresentation } from '@/app/workspace/useWorkspacePresentation';
 import { useWorkspaceScrollRestoration } from '@/app/workspace/useWorkspaceScrollRestoration';
@@ -89,6 +90,7 @@ export default function Home() {
     : providerIncidents;
   const weatherAlerts = useWeatherAlerts();
   const navigation = useWorkspaceNavigation();
+  const groundInspection = useGroundInspectionLocation();
   const { navigate, openPane } = navigation;
   useWorkspaceScrollRestoration(navigation.destination, navigation.section);
   const commandPaletteRef = useRef<CommandPaletteHandle>(null);
@@ -401,6 +403,8 @@ export default function Home() {
       {groundOpen && selectedIncident && (
         <div className="ground-workspace">
           <GroundImageryPanel
+            key={groundInspection.navigationKey}
+            retention={groundInspection.retention}
             findOnOpen
             incidentId={selectedIncident.event_id}
             incidentLabel={`${disasterLabel(selectedIncident.disaster)} · ${selectedIncident.location}`}

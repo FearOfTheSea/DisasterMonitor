@@ -119,6 +119,15 @@ class CollectionPartition:
         return sha256("|".join(fields).encode()).hexdigest()
 
 
+def search_continuation_priority(partition: CollectionPartition) -> int:
+    """Finish started deferred metadata without promoting ordinary follow-up pages."""
+    return max(
+        partition.priority,
+        int(partition.defer_initial_request),
+        search_acquisition_priority(alternate_for=partition.alternate_for),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class CollectionPage:
     leads: tuple[NewsFeedItem, ...] = ()

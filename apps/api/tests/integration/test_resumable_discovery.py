@@ -336,7 +336,7 @@ async def test_startup_resumes_interrupted_article_without_repeating_saved_searc
     await restarted.aclose()
 
 
-async def test_blocked_article_gets_one_alternate_search_with_actual_report_attribution(
+async def test_blocked_article_keeps_bounded_searches_and_actual_report_attribution(
     tmp_path,
 ):
     class Alternatives(Provider):
@@ -382,8 +382,12 @@ async def test_blocked_article_gets_one_alternate_search_with_actual_report_attr
     run = await service.start(1)
     await service.wait(run.scan_id)
     result = await service.get(run.scan_id)
-    assert len(provider.calls) == 2
-    assert provider.calls[1].alternate_for == "https://blocked.example/flood"
+    assert len(provider.calls) == 3
+    alternatives = provider.calls[1:]
+    assert len({part.query for part in alternatives}) == 2
+    assert all(
+        part.alternate_for == "https://blocked.example/flood" for part in alternatives
+    )
     assert result.reports[0].article.source.publisher == "Alternative"
     assert result.collection.articles_unavailable == 1
     assert result.collection.leads_acquired == 2

@@ -25,7 +25,7 @@ from disaster_monitor.domain.collection import (
     CollectionSnapshot,
     FailureOutcome,
     WorkKind,
-    search_acquisition_priority,
+    search_continuation_priority,
 )
 from disaster_monitor.domain.discovery import (
     CollectionProgress,
@@ -56,6 +56,10 @@ from disaster_monitor.infrastructure.operations.sqlite_collection_leads import (
     enqueue_retrieval_lead,
     initialize_retrieval_priorities,
 )
+from disaster_monitor.infrastructure.operations.sqlite_collection_links import (
+    attach_collection_descendants,
+    link_collection_work,
+)
 from disaster_monitor.infrastructure.operations.sqlite_collection_searches import (
     enqueue_search_partition,
     initialize_search_priorities,
@@ -67,6 +71,9 @@ from disaster_monitor.infrastructure.operations.sqlite_request_schedule import (
     CollectionRequestSchedule,
     request_scope,
     retained_publisher_refusals,
+)
+from disaster_monitor.infrastructure.operations.sqlite_retained_observations import (
+    initialize_retained_observation_lookup,
 )
 
 T = TypeVar("T")
@@ -173,6 +180,7 @@ class SQLiteCollectionJournal:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(_SCHEMA)
             initialize_reporting_lookup(db)
+            self._reuse_retained = initialize_retained_observation_lookup(db)
             initialize_metadata_attempts(db)
             columns = {row[1] for row in db.execute("PRAGMA table_info(work)")}
             if "alternate_depth" not in columns:
@@ -337,12 +345,7 @@ class SQLiteCollectionJournal:
         enqueue_search_partition(db, partition)
 
     def _attach_descendants(self, db: sqlite3.Connection, scan: str, key: str) -> None:
-        db.execute(
-            "WITH RECURSIVE children(id) AS (SELECT ? UNION SELECT child FROM "
-            "work_links JOIN children ON parent=children.id) INSERT OR IGNORE "
-            "INTO scan_work SELECT ?,id FROM children",
-            (key, scan),
-        )
+        attach_collection_descendants(db, scan, key)
 
     async def attach(
         self,
@@ -439,6 +442,7 @@ class SQLiteCollectionJournal:
                 lease_seconds=self._lease_seconds,
                 retained_refusals=self._retained_refusals,
                 maximum_metadata_requests=self._maximum_metadata_requests,
+                reuse_retained=self._reuse_retained,
             )
 
     def _owns(
@@ -454,14 +458,7 @@ class SQLiteCollectionJournal:
         )
 
     def _link_child(self, db: sqlite3.Connection, parent: str, child: str) -> None:
-        db.execute("INSERT OR IGNORE INTO work_links VALUES(?,?)", (parent, child))
-        db.execute(
-            "WITH RECURSIVE descendants(id) AS (SELECT ? UNION "
-            "SELECT child FROM work_links JOIN descendants ON parent=descendants.id) "
-            "INSERT OR IGNORE INTO scan_work SELECT s.scan,d.id FROM scan_work s "
-            "CROSS JOIN descendants d WHERE s.work=?",
-            (child, parent),
-        )
+        link_collection_work(db, parent, child)
 
     def _evidence(
         self, db: sqlite3.Connection, work_id: str, article: DiscoveryArticle
@@ -536,9 +533,7 @@ class SQLiteCollectionJournal:
                 partition,
                 cursor=page.next_cursor or "",
                 defer_initial_request=False,
-                priority=search_acquisition_priority(
-                    alternate_for=partition.alternate_for
-                ),
+                priority=search_continuation_priority(partition),
             )
             state = (
                 "pending"

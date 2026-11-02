@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { clearGroundInspection } from './useGroundInspectionLocation';
 import {
   DEFAULT_WORKSPACE_LOCATION,
   parseWorkspaceLocation,
@@ -35,6 +36,8 @@ export function useWorkspaceNavigation() {
       const parameters = new URLSearchParams(
         serializeWorkspaceLocation(window.location.search, next),
       );
+      if (incidentId !== undefined && incidentId !== parameters.get('i'))
+        clearGroundInspection(parameters);
       if (incidentId === null) parameters.delete('i');
       else if (incidentId !== undefined) parameters.set('i', incidentId);
       const query = parameters.toString();

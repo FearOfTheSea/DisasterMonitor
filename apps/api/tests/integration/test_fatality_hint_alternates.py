@@ -38,7 +38,7 @@ def article(url, text):
 
 
 @pytest.mark.parametrize("alternate_reports_fatality", [True, False])
-async def test_retains_successful_damage_report_and_seeks_at_most_one_alternate(
+async def test_retains_damage_report_and_bounds_distinct_alternate_queries(
     tmp_path, alternate_reports_fatality
 ):
     queries = []
@@ -95,11 +95,10 @@ async def test_retains_successful_damage_report_and_seeks_at_most_one_alternate(
                 for m in reports[secondary.source.canonical_url].mentions
                 for c in m.claims
             )
-        assert len([x for x in queries if x.alternate_for]) == 1
-        assert (
-            next(x for x in queries if x.alternate_for).alternate_for
-            == LEAD.canonical_url
-        )
+        alternatives = [x for x in queries if x.alternate_for]
+        assert len(alternatives) == 2
+        assert len({x.query for x in alternatives}) == 2
+        assert all(x.alternate_for == LEAD.canonical_url for x in alternatives)
         assert len(retrieved) == 2
         assert retained.collection.articles_retrieved == 2
         assert retained.collection.articles_unavailable == 0

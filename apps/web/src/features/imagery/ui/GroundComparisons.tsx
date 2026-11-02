@@ -18,7 +18,15 @@ import { API_BASE_URL } from '@/shared/config/runtime';
 
 const DISPLAY_SENSORS: Sensor[] = ['sentinel-1', 'sentinel-2'];
 
-export function GroundComparisons({ request }: { request: GroundImageryPanelRequest }) {
+export function GroundComparisons({
+  request,
+  preferredArtifactId,
+  onArtifactChange,
+}: {
+  request: GroundImageryPanelRequest;
+  preferredArtifactId?: string;
+  onArtifactChange?: (artifactId: string) => void;
+}) {
   const comparisons = DISPLAY_SENSORS.map((sensor) => ({
     sensor,
     pair: comparisonForSensor(request, sensor),
@@ -29,7 +37,11 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
         className="ground-imagery-section ground-imagery-comparisons"
         aria-label="Ground comparisons"
       >
-        <GroundPreparedObservations request={request} />
+        <GroundPreparedObservations
+          request={request}
+          preferredArtifactId={preferredArtifactId}
+          onArtifactChange={onArtifactChange}
+        />
         <div className="ground-comparison-status-grid">
           {DISPLAY_SENSORS.map((sensor) => {
             const status = sensorStatus(request, sensor);
@@ -66,7 +78,11 @@ export function GroundComparisons({ request }: { request: GroundImageryPanelRequ
       className="ground-imagery-section ground-imagery-comparisons"
       aria-label="Ground comparisons"
     >
-      <GroundPreparedObservations request={request} />
+      <GroundPreparedObservations
+        request={request}
+        preferredArtifactId={preferredArtifactId}
+        onArtifactChange={onArtifactChange}
+      />
       <div className="ground-imagery-section-heading">
         <div>
           <h3>Matched before / after</h3>

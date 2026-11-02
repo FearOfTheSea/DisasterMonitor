@@ -23,6 +23,9 @@ from disaster_monitor.infrastructure.operations.sqlite_collection_citations impo
 from disaster_monitor.infrastructure.operations.sqlite_request_schedule import (
     CollectionRequestSchedule,
 )
+from disaster_monitor.infrastructure.operations.sqlite_retained_observations import (
+    reuse_retained_observation,
+)
 
 PARTITION = TypeAdapter(CollectionPartition)
 LEAD = TypeAdapter(NewsFeedItem)
@@ -161,6 +164,7 @@ def claim_collection_work(
     lease_seconds: float,
     retained_refusals: dict[str, float],
     maximum_metadata_requests: int | None = None,
+    reuse_retained: bool = False,
 ) -> ClaimedCollectionWork | None:
     """Claim work and advance fairness within the caller's transaction."""
     timestamp = now.timestamp()
@@ -171,6 +175,12 @@ def claim_collection_work(
         )
     ) as rows:
         for row in rows:
+            if (
+                kind == "retrieve"
+                and reuse_retained
+                and reuse_retained_observation(db, row, now=now)
+            ):
+                continue
             if schedule.ready_at(row) > timestamp:
                 continue
             if row["attempts"] - row["policy_deferrals"] >= 4:

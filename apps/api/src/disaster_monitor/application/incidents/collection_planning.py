@@ -18,9 +18,10 @@ from disaster_monitor.domain.collection import (
 )
 from disaster_monitor.domain.discovery import DiscoveryArticle, ReportingInterval
 from disaster_monitor.domain.evidence_types import SourceReference
+from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v93"
+PLAN_VERSION = "collection-v109"
 
 
 def plan_collection(
@@ -121,18 +122,46 @@ def plan_alternate_reports(
         query = " ".join(re.findall(r"[\w'-]+", hint)[:12])
     if not query:
         return ()
+    queries: tuple[str, ...] = (query,)
+    if not lead.search_title and lead.title.casefold() != "article title unavailable":
+        # A dateline or a broad place extracted from the summary can lose the
+        # actual reporting headline. Keep that context route as well: headline
+        # search can itself miss a useful alternative. Neither route is evidence.
+        headline = " ".join(re.findall(r"[\w'-]+", lead.title)[:32])
+        queries = tuple(dict.fromkeys(q for q in (headline, query) if q))
+    if lead.search_title:
+        subject = re.match(
+            r"^([\wÀ-ž’'-]+(?:\s+[\wÀ-ž’'-]+){0,4})\s+"
+            r"(?:marks?|recalls?|remembers?)\b",
+            lead.search_title,
+            re.I,
+        )
+        hazards = disasters_in_text(lead.search_title)
+        if subject and len(hazards) == 1:
+            # The grammatical subject is a raw search hint, not event geography.
+            context = hazards[0].value.replace("_", " ") + ' "' + subject[1] + '"'
+            queries = tuple(dict.fromkeys((*queries, context)))
+    alternatives = tuple(p for p in providers if p.supports_alternates)
+    historical = bool(
+        lead.indexed_at and observed_at - lead.indexed_at >= timedelta(days=1)
+    )
+    provider = next(
+        (p for p in alternatives if p.supports_time_filter == historical),
+        next(iter(alternatives), None),
+    )
+    if provider is None:
+        return ()
     date_hint = lead.indexed_at or observed_at
     generation = f"{PLAN_VERSION}:{int(observed_at.timestamp()) // 21600}"
     return tuple(
         CollectionPartition(
-            p.source_id,
-            query,
+            provider.source_id,
+            alternate_query,
             date_hint - timedelta(days=3),
             date_hint + timedelta(days=1),
             generation=generation,
             alternate_for=lead.canonical_url,
             priority=search_acquisition_priority(alternate_for=lead.canonical_url),
         )
-        for p in providers
-        if p.supports_alternates
-    )[:1]
+        for alternate_query in queries
+    )

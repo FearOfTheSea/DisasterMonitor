@@ -93,6 +93,22 @@ _HUMAN_REFERENT = re.compile(
 _ABSENT_REPORTING = re.compile(
     r"\bno\s+(?:(?:confirmed|known|official)\s+)?reports?\s+of\b", re.I
 )
+_ATTRIBUTION = r"(?:attribut(?:e|ed)|link(?:ed)?|tie(?:d)?)"
+_DEATH_SUBJECT = (
+    rf"(?:(?:any|the|a|these|those|no|zero)\s+)?(?:{_NUMBER}\s+)?"
+    r"(?:deaths?|fatalities)"
+)
+_ABSENT_FATALITY_ATTRIBUTION = re.compile(
+    rf"\b(?:(?:did|do|does|has|have|had|could|can|would)\s+not\s+"
+    rf"(?:yet\s+)?{_ATTRIBUTION}\s+{_DEATH_SUBJECT}|"
+    rf"{_ATTRIBUTION}\s+(?:no|zero)\s+(?:deaths?|fatalities)|"
+    r"(?:no|zero)\s+(?:deaths?|fatalities)\s+"
+    r"(?:(?:(?:have|has|had)\s+been|were|was|are|is)\s+)?"
+    rf"(?:yet\s+)?{_ATTRIBUTION}|"
+    rf"{_DEATH_SUBJECT}\s+(?:(?:have|has|had)\s+not\s+been|"
+    rf"(?:were|was|are|is)\s+not)\s+(?:yet\s+)?{_ATTRIBUTION})\s+to\b",
+    re.I,
+)
 _NONFATAL_DROWNING = re.compile(
     r"\b(?:(?:nearly|almost|feared|presumed)\s+"
     r"(?:(?:to|be|have|been|had)\s+){0,3}drowned|"
@@ -206,6 +222,15 @@ def _coordinated_impact_populations(analysis: str, terms: str) -> bool:
     )
 
 
+def _attribution_clauses(sentence: str) -> list[str]:
+    """Retain contrasting attribution accounts as unchanged source spans."""
+    if not _ABSENT_FATALITY_ATTRIBUTION.search(sentence):
+        return [sentence]
+    return re.split(
+        r"(?<=;)\s*|\s+(?=(?:but|however|yet|whereas)\b)", sentence, flags=re.I
+    )
+
+
 def inspect_report_impacts(report: SituationReport) -> tuple[ReportedImpact, ...]:
     """Project all in-scope provider facts, retaining their own source accounts."""
     accounts = []
@@ -303,7 +328,12 @@ def extract_reported_impacts(
     nonhuman_sentences = nonhuman_fatality_sentences(
         text if source_context is None else source_context
     )
-    for sentence in source_sentences(text[:20_000]):
+    for sentence in (
+        clause
+        for source_sentence in source_sentences(text[:20_000])
+        if len(source_sentence.strip()) <= 600
+        for clause in _attribution_clauses(source_sentence)
+    ):
         sentence = sentence.strip()
         # Do not cut a long source sentence and imply its qualification survived.
         if not sentence or len(sentence) > 600:
@@ -339,8 +369,17 @@ def extract_reported_impacts(
                     re.search(r"\beither\b.+\bor\b|\bdead or missing\b", analysis, re.I)
                 )
                 absent_reporting = bool(_ABSENT_REPORTING.search(analysis))
+                absent_attribution = category == "fatalities" and bool(
+                    _ABSENT_FATALITY_ATTRIBUTION.search(analysis)
+                )
                 if alternatives or absent_reporting:
                     qualifiers = tuple(dict.fromkeys((*qualifiers, "uncertain")))
+                if absent_attribution:
+                    qualifiers = tuple(
+                        dict.fromkeys(
+                            (*qualifiers, "uncertain", "no fatality attribution")
+                        )
+                    )
                 before_counts = tuple(
                     match
                     for match in re.finditer(
@@ -374,7 +413,7 @@ def extract_reported_impacts(
                     if category == "fatalities"
                     else None
                 )
-                if alternatives or absent_reporting:
+                if alternatives or absent_reporting or absent_attribution:
                     value = "Unknown"
                 elif unresolved_counts:
                     qualifiers = tuple(

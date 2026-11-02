@@ -1,6 +1,7 @@
 """One metered Google metadata operation per durable page."""
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -74,7 +75,7 @@ _QUERIES = {
 class GoogleNewsCollectionProvider:
     source_id = "google-rss-discovery"
     supports_time_filter = True
-    supports_alternates = False
+    supports_alternates = True
     queries = tuple(_QUERIES)
 
     def __init__(
@@ -95,15 +96,28 @@ class GoogleNewsCollectionProvider:
     async def fetch_page(self, partition: CollectionPartition) -> CollectionPage:
         if partition.query.startswith(ARTICLE_PREFIX):
             return await self._resolve(partition)
-        if (
-            partition.cursor
-            or partition.query not in _QUERIES
-            or partition.alternate_for
-        ):
+        if partition.cursor:
             raise CollectionProviderError(
                 "invalid_response", "Google RSS continuation or query is invalid."
             )
-        query, locale = _QUERIES[partition.query]
+        if partition.alternate_for:
+            query = partition.query
+            if (
+                not public_document_host(partition.alternate_for)
+                or not re.fullmatch(r"[\w’'\" -]{1,300}", query)
+                or len(query.split()) > 32
+                or not any(char.isalnum() for char in query)
+            ):
+                raise CollectionProviderError(
+                    "invalid_response", "Google alternate query is invalid."
+                )
+            locale = _MARKETS["en-US"]
+        elif partition.query in _QUERIES:
+            query, locale = _QUERIES[partition.query]
+        else:
+            raise CollectionProviderError(
+                "invalid_response", "Google RSS continuation or query is invalid."
+            )
         end = min(partition.end, self._clock())
         # Date hints deliberately overlap day boundaries. Publisher-original time
         # and each viewer's exact frozen interval remain authoritative later.
@@ -132,7 +146,7 @@ class GoogleNewsCollectionProvider:
                 depth=partition.depth + 1,
                 priority=0,
                 defer_initial_request=True,
-                shared_resource=True,
+                shared_resource=partition.alternate_for is None,
             )
             for article in feed_articles(response.body, locale)
         )

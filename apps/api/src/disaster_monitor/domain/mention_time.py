@@ -9,10 +9,12 @@ from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 from disaster_monitor.domain.mention_occurrence import (
     date_is_occurrence,
+    has_distinct_occurrence,
     has_later_physical_occurrence,
     occurrence_role,
     occurrence_years,
 )
+from disaster_monitor.domain.reported_number_wording import REPORTED_NUMBER
 
 _MONTHS = (
     "January February March April May June July August September "
@@ -56,6 +58,39 @@ _LATER_CLOCK = re.compile(
     rf"(?:{MONTH_WORDING})\s+\d{{1,2}})\b)",
     re.I,
 )
+_SPANISH_PERIOD_QUANTITY = (
+    r"(?:\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|"
+    r"diez|once|doce|varios|varias|algunos|algunas|pocos|pocas)"
+)
+_RELATIVE_EARLIER = re.compile(
+    rf"^[\"'“‘«]?\s*(?P<period>"
+    rf"(?:only\s+|just\s+)?(?:{REPORTED_NUMBER})\s+"
+    r"(?:days?|weeks?|months?|years?)\s+(?:ago|earlier|before)"
+    rf"|hace\s+(?:(?:apenas|solo|sólo|tan\s+solo)\s+)?{_SPANISH_PERIOD_QUANTITY}\s+"
+    r"(?:días?|semanas?|mes(?:es)?|años?))\b",
+    re.I,
+)
+_OTHER_ACCIDENT = re.compile(
+    r"\b(?:another|separate|different)\s+(?:[\w.-]+\s+){0,2}"
+    r"(?:accident|incident|disaster)\b|"
+    r"\b(?:otr[oa]s?|distint[oa]s?|diferentes?)\s+(?:[\w.-]+\s+){0,2}"
+    r"(?:accidentes?|sucesos?|desastres?|eventos?|derrumbes?|deslizamientos?|"
+    r"inundaci(?:ón|ones)|terremotos?|incendios?|sequías?|erupci(?:ón|ones)|"
+    r"hurac(?:án|anes)|tif(?:ón|ones)|cicl(?:ón|ones))\b",
+    re.I,
+)
+
+
+def _distinct_earlier_period(text: str) -> str | None:
+    """A past clock alone cannot detach recovery or another victim of this event."""
+    period = _RELATIVE_EARLIER.match(text)
+    if (
+        period is not None
+        and (has_distinct_occurrence(text) or _OTHER_ACCIDENT.search(text))
+        and occurrence_role(text) != "forecast"
+    ):
+        return period["period"]
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +108,11 @@ def separate_earlier_occurrence(text: str) -> tuple[OccurrenceAccount, ...]:
     clocks alone do not establish another physical event. Relative earlier periods
     remain wording rather than acquiring an assumed year or exact onset.
     """
+    earlier_period = _distinct_earlier_period(text)
+    if earlier_period is not None:
+        # An untyped different accident cannot inherit the previous hazard.
+        # Typed older hazards keep their own account and literal relative clock.
+        return (OccurrenceAccount(text, True, True, earlier_period),)
     if re.match(r"^[\"'“‘]?\s*(?:After|Following)\b", text, re.I):
         for period in _EARLIER_PERIOD.finditer(text):
             earlier, later = text[: period.end()], text[period.end() :].strip()
@@ -144,6 +184,8 @@ def _month_period(text: str) -> MentionTime | None:
 
 
 def historical_occurrence(text: str, source: SourceReference) -> bool:
+    if _distinct_earlier_period(text) is not None:
+        return True
     month = _month_period(text)
     dated_years = (
         int(match["year"])

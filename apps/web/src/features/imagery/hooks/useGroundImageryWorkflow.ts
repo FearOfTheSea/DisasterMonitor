@@ -23,6 +23,8 @@ import type {
   GroundImagerySelectionRequest,
 } from '@/shared/api/generated/assistant';
 
+import type { GroundImageryRetention } from '@/features/imagery/model/groundImageryRetention';
+
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 const SLOW_SEARCH_DELAY_MS = 8_000;
 const PREPARATION_POLL_MS = 3_000;
@@ -33,6 +35,7 @@ export function useGroundImageryWorkflow(
   monitoringAvailable = false,
   findOnOpen = false,
   eventTimeKnown = true,
+  retention?: GroundImageryRetention,
 ) {
   const [request, setRequest] = useState<GroundImageryPanelRequest>();
   const [readiness, setReadiness] = useState<GroundImageryPanelReadiness>();
@@ -41,6 +44,8 @@ export function useGroundImageryWorkflow(
   const [error, setError] = useState<string>();
   const [action, setAction] = useState<string>();
   const requestVersion = useRef(0);
+  const [restoring, setRestoring] = useState(false);
+  const [preferredArtifactId, setPreferredArtifactId] = useState<string>();
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -51,7 +56,10 @@ export function useGroundImageryWorkflow(
       setSearchIsSlow(false);
       setError(undefined);
       setAction(undefined);
-      if (!eventTimeKnown) {
+      const retained = retention?.read(incidentId);
+      setRestoring(Boolean(retained));
+      setPreferredArtifactId(retained?.artifactId);
+      if (!eventTimeKnown && !retained) {
         setError(
           'Event time is unresolved. Publication time cannot target imagery. Article reporting remains available.',
         );
@@ -73,12 +81,18 @@ export function useGroundImageryWorkflow(
                 );
               return undefined;
             }),
-          createGroundImageryRequest(incidentId, signal),
+          retained
+            ? fetchGroundImageryRequest(retained.requestId, signal)
+            : createGroundImageryRequest(incidentId, signal),
         ]);
         if (signal?.aborted || version !== requestVersion.current) return;
+        if (nextRequest.incident_id !== incidentId)
+          throw new Error('This saved imagery request belongs to a different event.');
+        retention?.saveRequest(incidentId, nextRequest.request_id);
         setRequest(nextRequest);
         setLoadState('ready');
         if (
+          !retained &&
           findOnOpen &&
           nextReadiness?.state === 'ready' &&
           nextRequest.region.region
@@ -121,7 +135,7 @@ export function useGroundImageryWorkflow(
         setLoadState('error');
       }
     },
-    [incidentId, findOnOpen, eventTimeKnown],
+    [incidentId, findOnOpen, eventTimeKnown, retention],
   );
 
   useEffect(() => {
@@ -253,6 +267,12 @@ export function useGroundImageryWorkflow(
 
   return {
     request,
+    preferredArtifactId,
+    restoring,
+    startNewSearch: () => {
+      retention?.clear(incidentId);
+      void load();
+    },
     readiness,
     loadState,
     searchIsSlow,

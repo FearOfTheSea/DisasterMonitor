@@ -144,9 +144,19 @@ def lead_retrieval_priority(lead: NewsFeedItem) -> int:
 
 
 def preferred_retrieval_priority(requests_used: int) -> int | None:
-    """Give consequence reporting one in five opportunities within the same cap.
+    """Keep every metadata class inspectable within the shared request cap.
 
-    Other opportunities retain normal priority order. When no preferred work is
-    ready, the journal can use the opportunity for other reporting.
+    Consequence reporting retains one in five opportunities. Weak hints and
+    unclassified headlines each receive one in ten, so unfamiliar wording cannot
+    be starved by an ongoing supply of stronger headlines. Other opportunities
+    retain normal priority order. An unavailable preferred class never wastes a
+    request: the journal falls back to ready work under the same access limits.
     """
-    return 2 if requests_used % 5 == 4 else None
+    position = requests_used % 10
+    if position in (4, 9):
+        return 2
+    if position == 7:
+        return 1
+    if position == 8:
+        return 0
+    return None

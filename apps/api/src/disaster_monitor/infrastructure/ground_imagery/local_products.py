@@ -119,7 +119,16 @@ class FallbackGroundImageryRenderer(GroundImageryRenderer):
         except GroundImageryRenderError as error:
             if error.reason_code not in _FALLBACK_REASONS:
                 raise
-            return await self._local_fallback.render(request)
+            try:
+                return await self._local_fallback.render(request)
+            except GroundImageryRenderError as fallback_error:
+                raise GroundImageryRenderError(
+                    f"Remote rendering failed ({error.reason_code}): {error} "
+                    "Local COG fallback failed "
+                    f"({fallback_error.reason_code}): {fallback_error}",
+                    reason_code=error.reason_code,
+                    retryable=error.retryable or fallback_error.retryable,
+                ) from fallback_error
 
     async def aclose(self) -> None:
         await self._primary.aclose()
