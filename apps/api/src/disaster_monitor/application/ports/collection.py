@@ -21,7 +21,12 @@ COLLECTION_RATE_LIMIT_MINIMUM_SECONDS = 900
 
 class CollectionProvider(Protocol):
     source_id: str
-    queries: tuple[str, ...]
+
+    @property
+    def queries(self) -> tuple[str, ...]:
+        """Return a stable query snapshot for one collection planning call."""
+        ...
+
     supports_alternates: bool
     supports_time_filter: bool
 

@@ -453,7 +453,10 @@ def build_app_dependencies(
         timeout_seconds=settings.news_feed_timeout_seconds
     )
     google_discovery = (
-        GoogleNewsCollectionProvider(timeout_seconds=settings.news_feed_timeout_seconds)
+        GoogleNewsCollectionProvider(
+            countries=country_catalog.countries,
+            timeout_seconds=settings.news_feed_timeout_seconds,
+        )
         if settings.google_news_rss_enabled and settings.news_sensing_enabled
         else None
     )

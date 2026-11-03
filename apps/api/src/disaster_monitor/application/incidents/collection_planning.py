@@ -21,7 +21,7 @@ from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v109"
+PLAN_VERSION = "collection-v114"
 
 
 def plan_collection(
@@ -36,21 +36,23 @@ def plan_collection(
     start = int(interval.start.timestamp()) // span * span
     generation = f"{PLAN_VERSION}:{int(observed_at.timestamp()) // 21600}"
     result = []
+    # A maintained directory can refresh between calls, but one plan must retain
+    # one immutable query ordering while its aligned windows are assembled.
     historical = tuple(
-        p
+        (p, p.queries)
         for p in providers
         if p.supports_time_filter and not isinstance(p, ImmutableIndexProvider)
     )
     while start <= interval.end.timestamp():
         lower = datetime.fromtimestamp(start, UTC)
         upper = lower + timedelta(days=7)
-        for index in range(max((len(p.queries) for p in historical), default=0)):
-            for provider in historical:
-                if index < len(provider.queries):
+        for index in range(max((len(queries) for _, queries in historical), default=0)):
+            for provider, queries in historical:
+                if index < len(queries):
                     result.append(
                         CollectionPartition(
                             provider.source_id,
-                            provider.queries[index],
+                            queries[index],
                             lower,
                             upper,
                             generation=generation,

@@ -16,6 +16,7 @@ from disaster_monitor.domain.collection import (
     CollectionPartition,
     CollectionProviderError,
 )
+from disaster_monitor.domain.disaster_types import Country
 from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.infrastructure.news.collection_http import CollectionHttp
 from disaster_monitor.infrastructure.news.google_news_metadata import (
@@ -70,28 +71,69 @@ _QUERIES = {
     for market, queries in _SEEDS.items()
     for query in queries
 }
+_COUNTRY_HAZARDS = (
+    "earthquake OR flood OR wildfire OR landslide OR cyclone OR "
+    '"volcanic eruption" OR drought'
+)
+
+
+def _geographic_queries(
+    countries: tuple[Country, ...],
+) -> dict[str, tuple[str, tuple[str, str, str]]]:
+    queries = {}
+    for country in sorted(countries, key=lambda item: item.alpha3_code):
+        name = country.canonical_name
+        if (
+            not re.fullmatch(r"[A-Z]{3}", country.alpha3_code)
+            or not name
+            or len(name) > 200
+            or any(char in name for char in ('"', "\\", "\n", "\r"))
+        ):
+            raise ValueError("Country metadata cannot form a Google news query.")
+        # Include the catalog wording in the durable key: a later catalog rename
+        # must not silently change an already issued query's meaning.
+        key = f"en-US|country:{country.alpha3_code}:{name}"
+        queries[key] = (f'"{name}" ({_COUNTRY_HAZARDS})', _MARKETS["en-US"])
+    return queries
 
 
 class GoogleNewsCollectionProvider:
     source_id = "google-rss-discovery"
     supports_time_filter = True
     supports_alternates = True
-    queries = tuple(_QUERIES)
 
     def __init__(
         self,
         *,
+        countries: Callable[[], tuple[Country, ...]] = lambda: (),
         client: httpx.AsyncClient | None = None,
         timeout_seconds: float = 15,
         minimum_interval: float = 2,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
+        self._countries = countries
+        self._queries = dict(_QUERIES)
         self._http = CollectionHttp(
             client=client,
             timeout_seconds=timeout_seconds,
             minimum_interval=minimum_interval,
         )
         self._clock = clock
+
+    @property
+    def queries(self) -> tuple[str, ...]:
+        geographic = _geographic_queries(self._countries())
+        # Catalog refreshes extend future plans. Keep literal previously issued
+        # keys resolvable without changing their original country wording.
+        self._queries.update(geographic)
+        return (*_QUERIES, *geographic)
+
+    def _query(self, key: str) -> tuple[str, tuple[str, str, str]] | None:
+        if key not in self._queries:
+            # A reopened journal can claim an issued root before a new scan has
+            # requested a plan from this provider instance.
+            self._queries.update(_geographic_queries(self._countries()))
+        return self._queries.get(key)
 
     async def fetch_page(self, partition: CollectionPartition) -> CollectionPage:
         if partition.query.startswith(ARTICLE_PREFIX):
@@ -112,8 +154,8 @@ class GoogleNewsCollectionProvider:
                     "invalid_response", "Google alternate query is invalid."
                 )
             locale = _MARKETS["en-US"]
-        elif partition.query in _QUERIES:
-            query, locale = _QUERIES[partition.query]
+        elif (route := self._query(partition.query)) is not None:
+            query, locale = route
         else:
             raise CollectionProviderError(
                 "invalid_response", "Google RSS continuation or query is invalid."
