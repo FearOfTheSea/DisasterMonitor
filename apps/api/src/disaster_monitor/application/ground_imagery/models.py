@@ -124,6 +124,29 @@ class ImageryArtifactReference:
 
 
 @dataclass(frozen=True, slots=True)
+class ImageryPreparationFailure:
+    """Latest failure and recovery for one immutable preparation, with attempt count."""
+
+    request_version: int
+    selection_id: str
+    artifact_id: str
+    failed_at: datetime
+    recovered_at: datetime | None = None
+    failure_count: int = 1
+
+    def __post_init__(self) -> None:
+        if self.request_version < 1 or self.failure_count < 1:
+            raise ValueError("Preparation failure version and count must be positive.")
+        if not self.selection_id.strip() or not self.artifact_id.strip():
+            raise ValueError("Preparation failures require immutable target identity.")
+        for value in (self.failed_at, self.recovered_at):
+            if value is not None and value.utcoffset() is None:
+                raise ValueError("Preparation failure clocks must be timezone-aware.")
+        if self.recovered_at is not None and self.recovered_at < self.failed_at:
+            raise ValueError("Preparation recovery cannot precede its failure.")
+
+
+@dataclass(frozen=True, slots=True)
 class GroundImageryRequest:
     request_id: str
     request_version: int
@@ -145,6 +168,8 @@ class GroundImageryRequest:
     watch_interval_seconds: int | None = None
     next_check_at: datetime | None = None
     artifacts: tuple[ImageryArtifactReference, ...] = ()
+    preparation_failures: tuple[ImageryPreparationFailure, ...] = ()
+    preparation_failure_scope_unknown: bool = False
 
     def __post_init__(self) -> None:
         if not self.request_id.strip() or self.request_version < 1:

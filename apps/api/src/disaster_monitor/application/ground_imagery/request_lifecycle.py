@@ -189,6 +189,9 @@ class GroundImageryRequestLifecycle:
                 if previous_request
                 else None,
                 artifacts=historical_artifacts,
+                preparation_failures=previous_request.preparation_failures
+                if previous_request
+                else (),
             )
             await self._store.save_request(request)
             self._indexes.remember(request_input, request_id)
@@ -269,6 +272,9 @@ class GroundImageryRequestLifecycle:
             ),
             next_check_at=previous_request.next_check_at if previous_request else None,
             artifacts=historical_artifacts,
+            preparation_failures=previous_request.preparation_failures
+            if previous_request
+            else (),
         )
         await self._store.save_request(request)
         self._indexes.remember(request_input, request_id)

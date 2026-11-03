@@ -9,6 +9,7 @@ from typing import Any, cast
 from disaster_monitor.application.ground_imagery.models import (
     GroundImageryRequest,
     GroundImageryRequestState,
+    ImageryPreparationFailure,
     SensorSearchStatus,
 )
 from disaster_monitor.application.ground_imagery.resolve_region import (
@@ -137,6 +138,20 @@ def request_to_document(request: GroundImageryRequest) -> dict[str, Any]:
             None if request.next_check_at is None else request.next_check_at.isoformat()
         ),
         "artifacts": [_artifact_document(item) for item in request.artifacts],
+        "preparation_failures": [
+            {
+                "request_version": item.request_version,
+                "selection_id": item.selection_id,
+                "artifact_id": item.artifact_id,
+                "failed_at": item.failed_at.isoformat(),
+                "recovered_at": None
+                if item.recovered_at is None
+                else item.recovered_at.isoformat(),
+                "failure_count": item.failure_count,
+            }
+            for item in request.preparation_failures
+        ],
+        "preparation_failure_scope_unknown": request.preparation_failure_scope_unknown,
     }
 
 
@@ -200,6 +215,32 @@ def request_from_document(document: Mapping[str, Any]) -> GroundImageryRequest:
                 _list(document, "artifacts") if "artifacts" in document else []
             )
         ),
+        preparation_failures=tuple(
+            _preparation_failure_from_document(_mapping_value(item))
+            for item in (
+                _list(document, "preparation_failures")
+                if "preparation_failures" in document
+                else []
+            )
+        ),
+        preparation_failure_scope_unknown=(
+            _boolean(document, "preparation_failure_scope_unknown")
+            if "preparation_failure_scope_unknown" in document
+            else "artifact_preparation_failed" in document.get("reason_codes", [])
+        ),
+    )
+
+
+def _preparation_failure_from_document(
+    value: dict[str, Any],
+) -> ImageryPreparationFailure:
+    return ImageryPreparationFailure(
+        request_version=_integer(value, "request_version"),
+        selection_id=_string(value, "selection_id"),
+        artifact_id=_string(value, "artifact_id"),
+        failed_at=_datetime(value, "failed_at"),
+        recovered_at=_optional_datetime(value, "recovered_at"),
+        failure_count=_integer(value, "failure_count"),
     )
 
 

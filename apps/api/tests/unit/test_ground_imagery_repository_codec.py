@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -6,6 +7,7 @@ from disaster_monitor.application.ground_imagery.models import (
     GroundImageryRequest,
     GroundImageryRequestState,
     ImageryArtifactReference,
+    ImageryPreparationFailure,
 )
 from disaster_monitor.application.ground_imagery.resolve_region import (
     RegionResolution,
@@ -155,7 +157,9 @@ def test_request_codec_round_trips_versioned_regions_selections_and_artifacts() 
     assert restored == request
 
 
-@pytest.mark.parametrize("field", ["watch_enabled", "scan_complete"])
+@pytest.mark.parametrize(
+    "field", ["watch_enabled", "scan_complete", "preparation_failure_scope_unknown"]
+)
 @pytest.mark.parametrize("invalid", ["false", 1, None])
 def test_request_codec_rejects_nonboolean_fields(field: str, invalid: object) -> None:
     document = request_to_document(_request_fixture())
@@ -168,6 +172,46 @@ def test_request_codec_rejects_nonboolean_fields(field: str, invalid: object) ->
 
     with pytest.raises(ValueError, match=field):
         request_from_document(document)
+
+
+@pytest.mark.asyncio
+async def test_preparation_failure_and_recovery_survive_file_store_reopen(tmp_path):
+    from disaster_monitor.infrastructure.ground_imagery.file_repository import (
+        FileGroundImageryRequestStore,
+    )
+
+    request = _request_fixture()
+    failure = ImageryPreparationFailure(
+        request_version=request.request_version,
+        selection_id="selection:failed",
+        artifact_id="artifact:failed",
+        failed_at=request.created_at,
+        recovered_at=request.created_at + timedelta(minutes=1),
+        failure_count=2,
+    )
+    unresolved = replace(failure, artifact_id="artifact:other-grid", recovered_at=None)
+    request = replace(
+        request,
+        preparation_failures=(failure, unresolved),
+        reason_codes=("artifact_preparation_failed",),
+    )
+    path = tmp_path / "requests.json"
+    await FileGroundImageryRequestStore(path).save_request(request)
+    restored = await FileGroundImageryRequestStore(path).get_request(request.request_id)
+    assert restored == request
+    assert restored.preparation_failures[0].recovered_at == failure.recovered_at
+    assert restored.preparation_failures[1].recovered_at is None
+
+
+def test_legacy_failure_without_a_target_is_not_assumed_recovered():
+    document = request_to_document(_request_fixture())
+    document["reason_codes"] = ["artifact_preparation_failed"]
+    del document["preparation_failures"]
+    del document["preparation_failure_scope_unknown"]
+    restored = request_from_document(document)
+    assert restored.preparation_failure_scope_unknown is True
+    assert restored.reason_codes == ("artifact_preparation_failed",)
+    assert request_from_document(request_to_document(restored)) == restored
 
 
 def test_request_codec_preserves_absent_legacy_boolean_defaults() -> None:

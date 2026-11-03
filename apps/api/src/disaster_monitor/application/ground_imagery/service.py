@@ -20,6 +20,11 @@ from disaster_monitor.application.ground_imagery.models import (
     GroundImageryRequest,
     GroundImageryRequestState,
 )
+from disaster_monitor.application.ground_imagery.preparation_status import (
+    local_preparation_state,
+    record_preparation_failure,
+    recover_preparation_failure,
+)
 from disaster_monitor.application.ground_imagery.request_indexes import (
     GroundImageryRequestIndexes,
 )
@@ -309,9 +314,7 @@ class GroundImageryService(GroundImageryRequestLifecycle):
             return updated
         completed = replace(
             updated,
-            state=GroundImageryRequestState.PARTIAL
-            if request.state is GroundImageryRequestState.FAILED
-            else request.state,
+            state=local_preparation_state(updated),
             reason_codes=tuple(
                 code
                 for code in updated.reason_codes
@@ -388,19 +391,52 @@ class GroundImageryService(GroundImageryRequestLifecycle):
         overview: bool,
         output_kind: str | None,
     ) -> GroundImageryRequest:
-        updated = await self._artifact_workflow.prepare(
+        selection_id, artifact_id = self._artifact_workflow.preparation_identity(
             request,
             sensor=sensor,
-            role=role.value,
+            role=role,
             overview=overview,
             output_kind=output_kind,
         )
+        try:
+            updated = await self._artifact_workflow.prepare(
+                request,
+                sensor=sensor,
+                role=role.value,
+                overview=overview,
+                output_kind=output_kind,
+            )
+        except Exception:
+            current = await self.get_request(request.request_id)
+            if (
+                current.state is not GroundImageryRequestState.CANCELLED
+                and current.request_version == request.request_version
+            ):
+                await self._store.save_request(
+                    record_preparation_failure(
+                        current,
+                        selection_id,
+                        artifact_id,
+                        self._clock(),
+                    )
+                )
+            raise
         current = await self.get_request(request.request_id)
         if (
             current.state is GroundImageryRequestState.CANCELLED
             or current.request_version != request.request_version
         ):
             return current
+        updated = recover_preparation_failure(
+            replace(
+                updated,
+                preparation_failures=current.preparation_failures,
+                preparation_failure_scope_unknown=current.preparation_failure_scope_unknown,
+            ),
+            selection_id,
+            artifact_id,
+            self._clock(),
+        )
         await self._store.save_request(updated)
         return updated
 

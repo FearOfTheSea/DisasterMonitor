@@ -26,6 +26,7 @@ from disaster_monitor.application.ground_imagery.select_observations import (
 )
 from disaster_monitor.application.ground_imagery.shared_rasters import (
     SharedRasterPreparation,
+    raster_identity,
 )
 from disaster_monitor.application.ports.ground_imagery.artifacts import (
     ImageryArtifactStore,
@@ -79,6 +80,60 @@ class GroundImageryArtifactWorkflow:
             else None
         )
 
+    def _render_request(
+        self,
+        request: GroundImageryRequest,
+        *,
+        sensor: Sensor,
+        role: str,
+        overview: bool,
+        output_kind: str | None,
+    ) -> RenderRequest:
+        region = request.region_resolution.region
+        if region is None:
+            raise ValueError("An imagery region must be resolved before rendering.")
+        if request.selection is None:
+            raise ValueError("This imagery request has no catalog selection.")
+        temporal_role = TemporalRole(role)
+        outcome = request.selection.for_sensor(sensor).for_role(temporal_role)
+        observation = outcome.observation
+        if observation is None:
+            raise ValueError("The requested imagery role has no selected observation.")
+        grid = self._region_resolver.plan_grid(
+            region.inspection, sensor, overview=overview
+        )
+        return RenderRequest(
+            observation=observation,
+            region=region.inspection,
+            grid=grid,
+            recipe_version=observation.recipe_version
+            or _identifiers.default_recipe(sensor),
+            output_kind=output_kind or _identifiers.default_output_kind(sensor),
+        )
+
+    def preparation_identity(
+        self,
+        request: GroundImageryRequest,
+        *,
+        sensor: Sensor,
+        role: TemporalRole,
+        overview: bool,
+        output_kind: str | None,
+    ) -> tuple[str, str]:
+        rendering = self._render_request(
+            request,
+            sensor=sensor,
+            role=role.value,
+            overview=overview,
+            output_kind=output_kind,
+        )
+        return (
+            _identifiers.selection_id(
+                request.request_id, sensor, role, rendering.observation
+            ),
+            raster_identity(rendering),
+        )
+
     async def prepare(
         self,
         request: GroundImageryRequest,
@@ -96,34 +151,22 @@ class GroundImageryArtifactWorkflow:
             raise GroundImageryError(
                 "The imagery artifact pipeline is not available on this deployment."
             )
+        rendering = self._render_request(
+            request,
+            sensor=sensor,
+            role=role,
+            overview=overview,
+            output_kind=output_kind,
+        )
         region = request.region_resolution.region
-        if region is None:
-            raise ValueError("An imagery region must be resolved before rendering.")
-        if request.selection is None:
-            raise ValueError("This imagery request has no catalog selection.")
+        assert region is not None
         temporal_role = TemporalRole(role)
-        outcome = request.selection.for_sensor(sensor).for_role(temporal_role)
-        observation = outcome.observation
-        if observation is None:
-            raise ValueError("The requested imagery role has no selected observation.")
-        grid = self._region_resolver.plan_grid(
-            region.inspection, sensor, overview=overview
-        )
-        recipe_version = observation.recipe_version or _identifiers.default_recipe(
-            sensor
-        )
-        requested_output_kind = output_kind or _identifiers.default_output_kind(sensor)
+        observation = rendering.observation
+        grid = rendering.grid
+        requested_output_kind = rendering.output_kind
         assert self._shared_rasters is not None
         try:
-            stored, normalized, reused = await self._shared_rasters.prepare(
-                RenderRequest(
-                    observation=observation,
-                    region=region.inspection,
-                    grid=grid,
-                    recipe_version=recipe_version,
-                    output_kind=requested_output_kind,
-                )
-            )
+            stored, normalized, reused = await self._shared_rasters.prepare(rendering)
         except GroundImageryRenderError as error:
             raise GroundImageryError(f"{error.reason_code}: {error}") from error
         except ImageryArtifactStoreError as error:
