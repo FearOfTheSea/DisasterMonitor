@@ -16,6 +16,9 @@ from disaster_monitor.domain.collection import (
     CollectionPartition,
     CollectionProviderError,
 )
+from disaster_monitor.domain.collection_retrieval_priority import (
+    citation_resolution_priority,
+)
 from disaster_monitor.domain.disaster_types import Country
 from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.infrastructure.news.collection_http import CollectionHttp
@@ -190,8 +193,14 @@ class GoogleNewsCollectionProvider:
                 defer_initial_request=True,
                 shared_resource=partition.alternate_for is None,
             )
-            for article in feed_articles(response.body, locale)
+            for article in sorted(
+                feed_articles(response.body, locale),
+                key=lambda item: citation_resolution_priority(item.title),
+                reverse=True,
+            )
         )
+        # Stable hint ordering retains every result, including unfamiliar titles.
+        # The journal still balances query families and publication windows.
         # Resolve unstarted citations after initial index coverage. A successful
         # public-page step becomes a normal-priority journal continuation, so its
         # short-lived public metadata is used before other unstarted citations.

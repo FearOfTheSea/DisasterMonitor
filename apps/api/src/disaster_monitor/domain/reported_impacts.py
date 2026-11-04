@@ -43,7 +43,8 @@ IMPACT_LABELS = {
 }
 _TERMS = {
     "fatalities": (
-        r"died|dies?|dead|killed|(?<!-)killing|drowned|deaths?|fatalities|death toll|"
+        r"died|dies?|dead|kill(?:ed|s)?|(?<!-)killing|drowned|"
+        r"deaths?|fatalities|death toll|"
         r"claimed the lives of|took the lives of"
     ),
     "injuries": r"injured|injuries|wounded",
@@ -119,8 +120,9 @@ _NONFATAL_DROWNING = re.compile(
     re.I,
 )
 _PREDICTED_DEATH = re.compile(
-    r"\b(?:going\s+to|will)\s+(?:(?:not|never)\s+)?"
-    r"(?:be\s+)?(?:die|dead|killed|drowned)\b",
+    r"\b(?:(?:going|expected|likely)\s+to|will)\s+(?:(?:not|never)\s+)?"
+    r"(?:be\s+)?(?:die|dead|kill(?:ed|s)?|drowned)\b|"
+    r"\b(?:can|could|may|might|would)\s+(?:(?:not|never)\s+)?kill\b",
     re.I,
 )
 _POPULATION_COMPARISON = re.compile(
@@ -154,7 +156,7 @@ _QUALIFIERS = {
         r"\b(?:last year|years? ago|historical|anniversary|previous disaster)\b"
     ),
     "uncertain": (
-        r"\b(?:may|might|unconfirmed|uncertain|estimated|at least|about|"
+        r"\b(?:may|might|could\s+have|unconfirmed|uncertain|estimated|at least|about|"
         r"approximately|reportedly|denied|false)\b"
     ),
 }

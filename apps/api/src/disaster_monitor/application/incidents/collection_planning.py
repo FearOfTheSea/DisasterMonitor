@@ -21,7 +21,7 @@ from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v114"
+PLAN_VERSION = "collection-v117"
 
 
 def plan_collection(

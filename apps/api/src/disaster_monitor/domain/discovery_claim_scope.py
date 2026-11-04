@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 
 from disaster_monitor.domain.disaster_types import Disaster
+from disaster_monitor.domain.discovery_accident_accounts import scoped_accident_account
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 from disaster_monitor.domain.regional_accounts import (
     has_french_fatal_mass_wording,
@@ -257,6 +258,9 @@ def scoped_disaster_text(
     )
     retained = []
     for sentence in source_sentences(text[:20_000]):
+        sentence = scoped_accident_account(sentence, disaster)
+        if not sentence:
+            continue
         sentence = _recollection_account(sentence, disaster)
         if has_competing_cause(sentence):
             continue

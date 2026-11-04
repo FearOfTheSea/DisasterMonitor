@@ -25,6 +25,8 @@ def fatalities(text):
     "text",
     [
         "A wildfire killed 50 alpacas.",
+        "A flood kills 200 cattle.",
+        "Floods kill 200 cattle.",
         "A wildfire killed 50 llamas.",
         "There were 9,000 livestock fatalities within the burned area.",
         "There were almost 9,000 livestock fatalities within the LGA "
@@ -50,6 +52,7 @@ def test_explicit_animal_or_plant_accounts_are_not_human_fatalities(text):
     "text",
     [
         "A wildfire killed John and 50 alpacas.",
+        "A flood kills John and 50 alpacas.",
         "A wildfire killed 50 alpacas and John.",
         "John and 50 alpacas died in the wildfire.",
         "Marta y 50 alpacas murieron en el incendio forestal.",
@@ -63,6 +66,15 @@ def test_shared_human_and_animal_accounts_remain_visible_without_an_animal_toll(
     assert claims
     assert all(c.fact.value not in {"50", "52"} for c in claims)
     assert all(c.excerpt == text for c in claims)
+
+
+@pytest.mark.parametrize(
+    "text", ["A flood kills two people.", "Floods kill two people."]
+)
+def test_present_tense_human_fatalities_keep_the_attributed_count(text):
+    (claim,) = fatalities(text)
+    assert claim.fact.value == "two"
+    assert claim.excerpt == text
 
 
 def test_nonhuman_nominal_losses_do_not_hide_a_separate_human_death():

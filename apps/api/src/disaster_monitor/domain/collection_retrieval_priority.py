@@ -123,15 +123,28 @@ def _consequence_headline(text: str) -> bool:
     )
 
 
-def lead_retrieval_priority(lead: NewsFeedItem) -> int:
-    """Inspect specific casualty and consequence context before weak themes."""
-    headlines = dict.fromkeys((lead.title, lead.search_title or ""))
+def _headline_priority(headlines: tuple[str, ...]) -> int:
     if any(_has_fatality_hint(t) for t in headlines if t):
         return 3
     # Recovery and retrospective reporting can carry fatality context only in
     # the body. This is an inspection hint, never a casualty or event claim.
     if any(_consequence_headline(t) for t in headlines if t):
         return 2
+    return 0
+
+
+def citation_resolution_priority(title: str) -> int:
+    """Order index hints for inspection; retain every citation and its uncertainty."""
+    if _specific_disaster_account(title):
+        return 4
+    return _headline_priority((title,))
+
+
+def lead_retrieval_priority(lead: NewsFeedItem) -> int:
+    """Inspect specific casualty and consequence context before weak themes."""
+    headlines = tuple(dict.fromkeys((lead.title, lead.search_title or "")))
+    if priority := _headline_priority(headlines):
+        return priority
     if not lead.discovery_hint:
         return 0
     if _specific_disaster_account(lead.discovery_hint):

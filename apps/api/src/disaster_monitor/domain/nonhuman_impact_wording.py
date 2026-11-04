@@ -33,14 +33,14 @@ _COORDINATED_NAME = re.compile(
     rf"\b(?P<before>{_NAME})\s+{_COORDINATOR}\s+{_NONHUMAN_MEMBER}\b|"
     rf"\b(?i:{NONHUMAN_TERMS})\s+{_COORDINATOR}\s+(?P<after>{_NAME})\b"
 )
-_DEATH = r"died|dies?|dead|killed|drowned|deaths?|fatalities"
+_DEATH = r"died|dies?|dead|kill(?:ed|s)?|drowned|deaths?|fatalities"
 _AUXILIARY = (
     r"(?:(?:were|was|are|is|have|had|has|been|being|also|reportedly|"
     r"found|reported|to)\s+)*"
 )
 _NONHUMAN_DEATH = re.compile(
     rf"\b(?:{NONHUMAN_TERMS})\s+{_AUXILIARY}(?:{_DEATH})\b|"
-    rf"\b(?:killed|(?<!-)killing|drowned|dead|deaths? of)\s+"
+    rf"\b(?:kill(?:ed|s)?|(?<!-)killing|drowned|dead|deaths? of)\s+"
     rf"(?:(?:{REPORTED_NUMBER})\s+)?(?:of\s+)?(?:{NONHUMAN_TERMS})\b",
     re.I,
 )
