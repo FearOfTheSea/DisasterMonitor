@@ -54,8 +54,10 @@ async def test_citation_expansion_balances_queries_and_weeks_across_restart_and_
     roots = tuple(root(f, w) for f in ("quake", "rain", "dry") for w in (0, 1))
     run = DiscoveryRun("view", ReportingInterval.at_start(30, NOW))
     await store.attach(run, roots, now=NOW, budget=10)
-    for _ in roots:
-        work = await store.claim("search", "feed", now=NOW)
+    # Hold index responses until all roots are leased, isolating citation-family
+    # and publication-window fairness from index/resolution interleaving.
+    feeds = [await store.claim("search", "feed", now=NOW) for _ in roots]
+    for work in feeds:
         parent = work.partition
         assert not parent.defer_initial_request
         children = tuple(

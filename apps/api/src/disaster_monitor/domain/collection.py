@@ -18,6 +18,10 @@ from disaster_monitor.domain.news import NewsFeedItem
 
 WorkKind = Literal["search", "retrieve"]
 
+# Reserve one index-search opportunity followed by two citation-resolution
+# opportunities. Empty or blocked lanes fall back to other eligible work.
+SEARCH_INDEX_REQUEST_CYCLE = 3
+
 
 def fatality_hint_needs_followup(lead: NewsFeedItem, article: DiscoveryArticle) -> bool:
     """Seek other wording for an unresolved hint; never promote the hint to a claim."""
@@ -53,7 +57,7 @@ FailureOutcome = Literal[
 def search_acquisition_priority(
     *, alternate_for: str | None = None, defer_initial_request: bool = False
 ) -> int:
-    """Complete initial coverage before an acquired-headline follow-up stream."""
+    """Keep initial coverage ahead of ordinary alternate-headline searches."""
     return int(not alternate_for and not defer_initial_request)
 
 
@@ -70,8 +74,8 @@ class CollectionPartition:
     priority: int = 0
     # Archive search identity can outlive a viewer's article refresh generation.
     retrieval_generation: str | None = None
-    # Citation expansion starts after initial index coverage. Once a request has
-    # supplied continuation state, finish that state at normal search priority.
+    # Citation expansion shares bounded opportunities with initial index coverage.
+    # Once started, its continuation precedes unstarted citation work.
     defer_initial_request: bool = False
     # Public metadata resolution can be shared by identity across query windows.
     shared_resource: bool = False

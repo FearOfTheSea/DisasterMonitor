@@ -9,6 +9,7 @@ from uuid import uuid4
 from pydantic import TypeAdapter
 
 from disaster_monitor.domain.collection import (
+    SEARCH_INDEX_REQUEST_CYCLE,
     ClaimedCollectionWork,
     CollectionPartition,
     WorkKind,
@@ -42,6 +43,7 @@ _CANDIDATES = (
     "JOIN active_scans s ON s.id=sw.scan "
     "LEFT JOIN cooldowns c ON c.provider=w.provider "
     "LEFT JOIN pass_budget m ON m.pass_id=s.pass_id AND m.provider='all-metadata' "
+    "LEFT JOIN pass_budget b ON b.pass_id=s.pass_id AND b.provider=w.provider "
     "WHERE w.kind=? AND (w.state='pending' OR "
     "(w.state='leased' AND w.lease_until<=?)) "
     "AND w.due<=? AND COALESCE(c.until_time,0)<=? "
@@ -119,6 +121,18 @@ def _candidate_rows(
         provider,
     )
     if kind == "search":
+        # The durable provider allowance supplies the rotation position, including
+        # requests from other viewers/workers and earlier opens of this journal.
+        # Keep one opportunity for initial coverage in every cycle; use the other
+        # opportunities to turn retained index citations into publisher links.
+        citation_slot = (
+            " AND ((s.budget-COALESCE(b.remaining,s.budget)) % "
+            f"{SEARCH_INDEX_REQUEST_CYCLE})!=0"
+        )
+        with closing(
+            ordered_citation_candidates(db, _CANDIDATES + citation_slot, parameters)
+        ) as rows:
+            yield from rows
         with closing(
             db.execute(
                 _CANDIDATES

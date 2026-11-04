@@ -205,9 +205,9 @@ class GoogleNewsCollectionProvider:
         # Stable hint ordering retains every result, including unfamiliar titles.
         # Recency breaks equal-strength ties; it never supplies publication facts.
         # The journal still balances query families and publication windows.
-        # Resolve unstarted citations after initial index coverage. A successful
-        # public-page step becomes a normal-priority journal continuation, so its
-        # short-lived public metadata is used before other unstarted citations.
+        # The journal interleaves index coverage and citation resolution. A
+        # successful public-page step takes precedence over unstarted citations,
+        # so its short-lived metadata can be used promptly.
         return CollectionPage(
             children=children,
             saturated=True,

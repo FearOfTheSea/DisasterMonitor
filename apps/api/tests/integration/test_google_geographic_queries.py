@@ -264,7 +264,7 @@ async def test_full_catalog_reaches_publisher_intake_within_unchanged_phase_allo
             await store.continue_scan(run.scan_id, now=NOW, budget=200, partitions=())
         assert publisher is not None
         assert publisher.lead.canonical_url == "https://daily.example/response"
-        assert allocation < 10
+        assert allocation <= 1
         assert len(replies.calls) <= (allocation + 1) * 200
-        assert len(replies.calls) < 40 * 200
+        assert len(replies.calls) <= 2 * 200
         assert (await store.read(run.scan_id)).interval == interval

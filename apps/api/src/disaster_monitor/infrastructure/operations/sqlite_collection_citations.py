@@ -97,7 +97,7 @@ def ordered_citation_candidates(
     # Balance query families, then publication weeks, then their individual route.
     # Within equal routes preserve initial source order and the RSS index rank.
     return db.execute(
-        "WITH eligible AS (" + eligible_sql + " AND w.priority=0), "
+        "WITH eligible AS (" + eligible_sql + "), "
         "families AS (SELECT provider,family,SUM(claimed) AS used,"
         "MIN(source_order) AS first_seen FROM citation_lanes "
         "GROUP BY provider,family), "
@@ -107,6 +107,7 @@ def ordered_citation_candidates(
         "JOIN citation_work c ON c.work=e.id JOIN citation_lanes l ON l.id=c.lane "
         "JOIN families f ON f.provider=l.provider AND f.family=l.family "
         "JOIN windows t ON t.provider=l.provider AND t.window_start=l.window_start "
-        "ORDER BY f.used,t.used,l.claimed,f.first_seen,l.window_start,c.position,e.id",
+        "ORDER BY e.priority DESC,f.used,t.used,l.claimed,f.first_seen,"
+        "l.window_start,c.position,e.id",
         parameters,
     )
