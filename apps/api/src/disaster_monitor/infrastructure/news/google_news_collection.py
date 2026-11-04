@@ -195,11 +195,15 @@ class GoogleNewsCollectionProvider:
             )
             for article in sorted(
                 feed_articles(response.body, locale),
-                key=lambda item: citation_resolution_priority(item.title),
+                key=lambda item: (
+                    citation_resolution_priority(item.title),
+                    item.indexed_at or datetime.min.replace(tzinfo=UTC),
+                ),
                 reverse=True,
             )
         )
         # Stable hint ordering retains every result, including unfamiliar titles.
+        # Recency breaks equal-strength ties; it never supplies publication facts.
         # The journal still balances query families and publication windows.
         # Resolve unstarted citations after initial index coverage. A successful
         # public-page step becomes a normal-priority journal continuation, so its

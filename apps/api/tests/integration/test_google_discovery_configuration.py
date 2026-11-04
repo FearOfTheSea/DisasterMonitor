@@ -15,16 +15,17 @@ from disaster_monitor.infrastructure.configuration import Settings
 
 
 @pytest.mark.parametrize(
-    "news,google,legacy,expected",
+    "news,google,legacy,limit,expected",
     [
-        (True, True, False, True),
-        (True, False, False, False),
-        (False, True, False, False),
-        (True, True, True, True),
+        (True, True, False, 2, True),
+        (True, False, False, 2, False),
+        (False, True, False, 2, False),
+        (True, True, True, 2, True),
+        (True, True, True, 7, True),
     ],
 )
 async def test_google_discovery_honours_switches_and_shared_limit(
-    tmp_path, monkeypatch, news, google, legacy, expected
+    tmp_path, monkeypatch, news, google, legacy, limit, expected
 ):
     requests = []
     google_clients = []
@@ -49,7 +50,7 @@ async def test_google_discovery_honours_switches_and_shared_limit(
         _env_file=None,
         news_sensing_enabled=news,
         google_news_rss_enabled=google,
-        discovery_metadata_request_limit=2,
+        discovery_metadata_request_limit=limit,
         gdelt_news_enabled=legacy,
         gdelt_archive_enabled=legacy,
         gdelt_gkg_enabled=legacy,
@@ -70,16 +71,22 @@ async def test_google_discovery_honours_switches_and_shared_limit(
         service = dependencies.discovery_scans
         scan = await service.start(1)
         await service.wait(scan.scan_id)
-        assert sum(url.host == "news.google.com" for url in requests) == int(expected)
+        google_requests = sum(url.host == "news.google.com" for url in requests)
+        assert google_requests <= int(expected)
+        if not legacy or limit >= 7:
+            assert google_requests == int(expected)
         with sqlite3.connect(settings.discovery_collection_path) as db:
-            assert db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0] <= 2
+            assert db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0] <= limit
+            providers = {
+                row[0]
+                for row in db.execute(
+                    "SELECT DISTINCT provider FROM work WHERE kind='search'"
+                )
+            }
+            assert ("google-rss-discovery" in providers) == expected
             if legacy:
-                providers = {
-                    row[0]
-                    for row in db.execute(
-                        "SELECT DISTINCT provider FROM work WHERE kind='search'"
-                    )
-                }
+                # Two shared requests cannot guarantee a turn for every one of
+                # seven providers. Unstarted roots remain durably planned.
                 assert providers == {
                     "reliefweb-discovery",
                     "bing-rss-discovery",

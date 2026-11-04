@@ -3,6 +3,9 @@
 import re
 
 from disaster_monitor.domain.disaster_types import Disaster
+from disaster_monitor.domain.hazards.nonliteral_hazards import (
+    mask_nonliteral_hazard_context,
+)
 from disaster_monitor.domain.hazards.regional_vocabulary import (
     REGIONAL_HAZARDS,
     TURKISH_LANDSLIDE_ENDING,
@@ -90,6 +93,7 @@ def classify_disaster_text(title: str) -> Disaster | None:
 def disasters_in_text(text: str) -> tuple[Disaster, ...]:
     """Expose the same hazard vocabulary for conservative source-account scoping."""
     text = _NONLITERAL_HAZARDS.sub(lambda match: " " * len(match[0]), text)
+    text = mask_nonliteral_hazard_context(text)
     return tuple(
         disaster
         for disaster, pattern in _HAZARD_PATTERNS

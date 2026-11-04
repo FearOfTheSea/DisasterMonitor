@@ -90,3 +90,71 @@ async def test_ranked_citation_reaches_journal_claim_and_survives_continuation(
             "google-article:BACKGROUND",
             "google-article:UNKNOWN",
         ]
+
+
+async def test_equal_strength_citations_use_index_recency_without_dropping_unknowns(
+    tmp_path,
+):
+    entries = (
+        ("OLD", "Mon, 14 Sep 2026 12:00:00 GMT"),
+        ("UNKNOWN_A", None),
+        ("NEW", "Tue, 15 Sep 2026 10:00:00 GMT"),
+        ("OFFSET", "Tue, 15 Sep 2026 11:00:00 +0200"),
+        ("TIED", "Tue, 15 Sep 2026 12:00:00 +0200"),
+        ("UNKNOWN_B", None),
+        ("WEAK", "Tue, 15 Sep 2026 11:00:00 GMT"),
+    )
+
+    def dated_response(request):
+        items = "".join(
+            "<item><title>"
+            + (
+                "Local families describe response"
+                if key == "WEAK"
+                else "Flood killed two"
+            )
+            + f"</title><link>https://news.google.com/rss/articles/{key}</link>"
+            + '<source url="https://daily.example">Daily</source>'
+            + (f"<pubDate>{stamp}</pubDate>" if stamp else "")
+            + "</item>"
+            for key, stamp in entries
+        )
+        return httpx.Response(200, text=f"<rss><channel>{items}</channel></rss>")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(dated_response)
+    ) as client:
+        provider = GoogleNewsCollectionProvider(
+            client=client, minimum_interval=0, clock=lambda: NOW
+        )
+        page = await provider.fetch_page(
+            CollectionPartition(
+                provider.source_id, provider.queries[0], NOW - timedelta(days=1), NOW
+            )
+        )
+    assert [c.query for c in page.children] == [
+        "google-article:NEW",
+        "google-article:TIED",
+        "google-article:OFFSET",
+        "google-article:OLD",
+        "google-article:UNKNOWN_A",
+        "google-article:UNKNOWN_B",
+        "google-article:WEAK",
+    ]
+    assert not page.articles and not page.leads
+    assert len(page.children) == len(entries)
+    assert all(c.defer_initial_request and c.shared_resource for c in page.children)
+    journal = SQLiteCollectionJournal(tmp_path / "recent.sqlite")
+    root = CollectionPartition(
+        provider.source_id, provider.queries[0], NOW - timedelta(days=1), NOW
+    )
+    await journal.attach(
+        DiscoveryRun("recent", ReportingInterval.at_start(1, NOW)),
+        (root,),
+        now=NOW,
+        budget=20,
+    )
+    work = await journal.claim("search", "feed", now=NOW)
+    await journal.commit_page(work, page, now=NOW)
+    selected = await journal.claim("search", "resolve", now=NOW)
+    assert selected.partition.query == "google-article:NEW"
