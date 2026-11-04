@@ -247,6 +247,7 @@ class ArticleParser(HTMLParser):
         )
         article_body = (
             story_section
+            or values.get("id") == "articleContent"
             or (
                 "articleBody" in (values.get("itemprop") or "").split()
                 or values.get("data-article-body") == "true"
@@ -254,7 +255,8 @@ class ArticleParser(HTMLParser):
             or bool(
                 re.search(
                     r"(?:^|\s)(?:post-content|post_content|entry-content|article-content|story-body|"
-                    r"read__content|articlebodycontent|q-content__info|content-body)(?:\s|$)",
+                    r"read__content|articlebodycontent|q-content__info|content-body|"
+                    r"elementor-widget-theme-post-content)(?:\s|$)",
                     values.get("class") or "",
                 )
             )
@@ -433,7 +435,7 @@ class ArticleParser(HTMLParser):
         if self._caption_stack and not self._hidden:
             self.caption_parts[-1].append(" ".join(data.split()))
         if (
-            (self._paragraph or self._body_stack)
+            (self._paragraph or self._body_stack or self._unwrapped_article_text())
             and not self._hidden
             and not self._excluded
             and self._parts_seen < 2000
@@ -447,6 +449,17 @@ class ArticleParser(HTMLParser):
                 if self._in_link:
                     block.linked_characters += len(data)
             self._record(data)
+
+    def _unwrapped_article_text(self) -> bool:
+        """Read direct article prose, without admitting arbitrary nested widgets."""
+        if not self._article_stack or self._in_link:
+            return False
+        for element in reversed(self._elements):
+            if element.tag == "article":
+                return True
+            if element.tag not in {"span", "strong", "b", "em", "i"}:
+                return False
+        return False
 
     def _record(self, text: str) -> None:
         self._parts_seen += 1

@@ -25,6 +25,16 @@ FRENCH_SOIL_SLIDE = (
     r"[eé]boulements?(?:\s+(?:meurtriers?|mortels?|tragiques?))?\s+"
     rf"{FRENCH_MASS_OBJECT}"
 )
+FRENCH_MINE_SLIDE = (
+    r"[eé]boulements?(?=[^.!?;\n]{0,100}\bdans\s+(?:(?:la|une)\s+)?"
+    r"(?:mines?|carri[eè]res?)\b)"
+)
+PORTUGUESE_VEGETATION_FIRE = (
+    r"(?:inc[eê]ndios?\s+floresta(?:l|is)|"
+    r"(?:inc[eê]ndios?|fogo)\s+"
+    r"(?:(?:em|n[oa]s?)\s+(?:(?:uma?|[oa])\s+)?|atingiu\s+(?:uma?\s+)?)"
+    r"(?:[aá]reas?\s+de\s+)?(?:pastos?|pastage(?:m|ns)|vegeta[çc][aã]o|mata))"
+)
 GERMAN_SOIL_SLIDE = (
     r"(?:Erdrutsch(?:es|en|e)?|(?:Kohle)?schlammlawinen?|"
     r"Felsst(?:urz(?:es)?|ürze[n]?))"
@@ -42,7 +52,9 @@ REGIONAL_HAZARDS = {
     ),
     Disaster.FLOOD: re.compile(
         r"\b(?:inundaci[oó]n(?:es)?|riadas?|inondations?|banjir|"
-        r"enchentes?|enxurradas?|inundaç(?:ão|ões)|"
+        r"enchentes?|enxurradas?|inundaç(?:ão|ões)|alagamentos?|"
+        r"transbordamento\s+(?:de|do|da)\s+(?:(?:um|uma)\s+)?"
+        r"(?:c[oó]rrego|rio|ribeir[aã]o)|"
         r"(?:caminos?|carreteras?|calles?|viviendas?|casas?|barrios?|pueblos?|zonas?)"
         r"\s+inundad[oa]s?)\b",
         re.I,
@@ -50,7 +62,8 @@ REGIONAL_HAZARDS = {
     Disaster.WILDFIRE: re.compile(
         r"\b(?:incendios? forestal(?:es)?|"
         r"incendies? (?:de (?:la )?for[eê]t|forestiers?)|"
-        r"kebakaran (?:hutan(?: dan lahan)?|lahan)|karhutla)\b",
+        r"kebakaran (?:hutan(?: dan lahan)?|lahan)|karhutla|"
+        rf"{PORTUGUESE_VEGETATION_FIRE})\b",
         re.I,
     ),
     Disaster.LANDSLIDE: re.compile(
@@ -58,7 +71,7 @@ REGIONAL_HAZARDS = {
         r"glissements? de terrain|coul[eé]es? de boue|"
         r"(?:tanah )?longsor|deslizamentos?(?: de (?:terra|solo))?|"
         rf"desmoronamentos? de (?:terra|solo)|{GERMAN_SOIL_SLIDE}|{FRENCH_SOIL_SLIDE}|"
-        rf"{TURKISH_SOIL_SLIDE})\b",
+        rf"{FRENCH_MINE_SLIDE}|{TURKISH_SOIL_SLIDE})\b",
         re.I,
     ),
     Disaster.DROUGHT: re.compile(
@@ -78,4 +91,12 @@ REGIONAL_HAZARDS = {
         r"gunung(?:\s+[^\W\d_][\w-]*){1,4}\s+(?:erupsi|meletus))\b",
         re.I,
     ),
+}
+
+# These scripts do not separate words with spaces. Latin word boundaries would
+# silently miss a literal hazard embedded in an ordinary native sentence.
+UNSEGMENTED_HAZARDS = {
+    Disaster.FLOOD: re.compile(r"氾濫|洪水"),
+    Disaster.TROPICAL_CYCLONE: re.compile(r"台風"),
+    Disaster.LANDSLIDE: re.compile(r"山体崩塌|山體崩塌|落石|泥石流|ดิน(?:โคลน)?ถล่ม"),
 }

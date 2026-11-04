@@ -364,3 +364,40 @@ async def test_alternative_query_bounds_cannot_override_dates_or_add_urls(query)
         with pytest.raises(CollectionProviderError):
             await provider.fetch_page(root)
     assert not replies.calls
+
+
+@pytest.mark.parametrize(
+    ("key", "locale"),
+    [
+        ("id|kebakaran lahan tewas", ("id", "ID", "ID:id")),
+        ("id|gempa meninggal", ("id", "ID", "ID:id")),
+        ("id|kekeringan meninggal", ("id", "ID", "ID:id")),
+        ("id|siklon tropis tewas", ("id", "ID", "ID:id")),
+        ("id|erupsi gunung tewas", ("id", "ID", "ID:id")),
+        ("pt-BR|incêndio pasto morreu", ("pt-BR", "BR", "BR:pt-419")),
+        ("ja|氾濫", ("ja", "JP", "JP:ja")),
+        ("ja|台風 死亡", ("ja", "JP", "JP:ja")),
+        ("zh-CN|山体崩塌", ("zh-CN", "CN", "CN:zh-Hans")),
+        ("th|ดินถล่ม", ("th", "TH", "TH:th")),
+    ],
+)
+async def test_native_routes_use_metered_search_and_keep_search_dates_out_of_facts(
+    key, locale
+):
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(200, text="<rss><channel/></rss>")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        provider = GoogleNewsCollectionProvider(
+            client=client, minimum_interval=0, clock=lambda: NOW
+        )
+        assert key in provider.queries
+        page = await provider.fetch_page(replace(partition(provider), query=key))
+    assert len(calls) == 1
+    params = calls[0].url.params
+    assert tuple(params[k] for k in ("hl", "gl", "ceid")) == locale
+    assert params["q"].startswith(key.split("|", 1)[1] + " after:")
+    assert page.requested_start is not None and page.requested_end is not None

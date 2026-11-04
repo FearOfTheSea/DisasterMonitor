@@ -44,6 +44,10 @@ _MARKETS = {
     "tr": ("tr", "TR", "TR:tr"),
     "id": ("id", "ID", "ID:id"),
     "ar": ("ar", "SA", "SA:ar"),
+    "pt-BR": ("pt-BR", "BR", "BR:pt-419"),
+    "ja": ("ja", "JP", "JP:ja"),
+    "zh-CN": ("zh-CN", "CN", "CN:zh-Hans"),
+    "th": ("th", "TH", "TH:th"),
 }
 _SEEDS = {
     "en-US": (
@@ -66,8 +70,30 @@ _SEEDS = {
     "fr": ("glissement de terrain", "éboulement morts"),
     "es": ("inundaciones", "crecida muere"),
     "tr": ("deprem", "heyelan öldü"),
-    "id": ("longsor", "longsor tewas"),
+    "id": (
+        "longsor",
+        "longsor tewas",
+        "gempa meninggal",
+        "banjir tewas",
+        "kebakaran hutan tewas",
+        "kebakaran lahan tewas",
+        "karhutla meninggal",
+        "kekeringan meninggal",
+        "siklon tropis tewas",
+        "topan tewas",
+        "erupsi gunung tewas",
+        "letusan gunung meninggal",
+    ),
     "ar": ("زلزال", "انهيار أرضي قتلى"),
+    "pt-BR": (
+        "incêndio pasto morreu",
+        "incêndio vegetação mortos",
+        "alagamento morreu",
+        "transbordamento córrego morreu",
+    ),
+    "ja": ("氾濫", "洪水 死亡", "台風", "台風 死亡"),
+    "zh-CN": ("山体崩塌", "落石 遇难", "泥石流 死亡"),
+    "th": ("ดินถล่ม", "ดินโคลนถล่ม เสียชีวิต"),
 }
 _QUERIES = {
     market + "|" + query: (query, _MARKETS[market])

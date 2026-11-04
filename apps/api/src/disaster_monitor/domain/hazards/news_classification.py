@@ -9,6 +9,7 @@ from disaster_monitor.domain.hazards.nonliteral_hazards import (
 from disaster_monitor.domain.hazards.regional_vocabulary import (
     REGIONAL_HAZARDS,
     TURKISH_LANDSLIDE_ENDING,
+    UNSEGMENTED_HAZARDS,
 )
 from disaster_monitor.domain.regional_accounts import regional_fatality_account
 
@@ -26,7 +27,8 @@ _NONLITERAL_HAZARDS = re.compile(
     rf"\bflood(?:s|ed|ing)?\s+with\s+{_FIGURATIVE_SUBJECT}\b|"
     r"\briadas?\s+de\s+(?:mensajes|homenajes|cr[ií]ticas|solicitudes|"
     r"condolencias|quejas)\b|"
-    rf"\bsiyasi\s+heyelan(?:lar)?{TURKISH_LANDSLIDE_ENDING}\b",
+    rf"\bsiyasi\s+heyelan(?:lar)?{TURKISH_LANDSLIDE_ENDING}\b|"
+    r"洪水のような(?:メール|メッセージ)",
     re.I,
 )
 
@@ -97,5 +99,10 @@ def disasters_in_text(text: str) -> tuple[Disaster, ...]:
     return tuple(
         disaster
         for disaster, pattern in _HAZARD_PATTERNS
-        if pattern.search(text) or REGIONAL_HAZARDS[disaster].search(text)
+        if pattern.search(text)
+        or REGIONAL_HAZARDS[disaster].search(text)
+        or (
+            disaster in UNSEGMENTED_HAZARDS
+            and UNSEGMENTED_HAZARDS[disaster].search(text)
+        )
     )
