@@ -75,6 +75,10 @@ from disaster_monitor.infrastructure.operations.sqlite_request_schedule import (
 from disaster_monitor.infrastructure.operations.sqlite_retained_observations import (
     initialize_retained_observation_lookup,
 )
+from disaster_monitor.infrastructure.operations.sqlite_retrieval_sources import (
+    initialize_retrieval_sources,
+    register_retrieval_source,
+)
 
 T = TypeVar("T")
 PARTITION = TypeAdapter(CollectionPartition)
@@ -190,6 +194,7 @@ class SQLiteCollectionJournal:
                 )
             initialize_search_priorities(db)
             initialize_citation_schedule(db)
+            initialize_retrieval_sources(db)
             initialize_retrieval_priorities(
                 db, priority_column_created="priority" not in columns
             )
@@ -521,6 +526,7 @@ class SQLiteCollectionJournal:
                     partition.retrieval_generation or partition.generation,
                 )
                 self._link_child(db, work.work_id, key)
+                register_retrieval_source(db, key, work.provider)
                 if partition.alternate_for:
                     db.execute("UPDATE work SET alternate_depth=1 WHERE id=?", (key,))
             for article in page.articles:

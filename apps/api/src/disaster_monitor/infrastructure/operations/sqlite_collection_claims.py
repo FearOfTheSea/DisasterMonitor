@@ -27,6 +27,10 @@ from disaster_monitor.infrastructure.operations.sqlite_request_schedule import (
 from disaster_monitor.infrastructure.operations.sqlite_retained_observations import (
     reuse_retained_observation,
 )
+from disaster_monitor.infrastructure.operations.sqlite_retrieval_sources import (
+    ordered_retrieval_candidates,
+    record_retrieval_source_claim,
+)
 
 PARTITION = TypeAdapter(CollectionPartition)
 LEAD = TypeAdapter(NewsFeedItem)
@@ -37,8 +41,8 @@ ACTIVE_COLLECTION_SCANS = (
     "SELECT s.id,s.pass_id,p.budget FROM scans s "
     "JOIN passes p ON p.id=s.pass_id WHERE p.active=1 AND p.started>?) "
 )
-_CANDIDATES = (
-    ACTIVE_COLLECTION_SCANS + "SELECT DISTINCT w.*,s.pass_id,s.budget FROM work w "
+_CANDIDATE_SCOPE = (
+    " FROM work w "
     "JOIN scan_work sw ON sw.work=w.id "
     "JOIN active_scans s ON s.id=sw.scan "
     "LEFT JOIN cooldowns c ON c.provider=w.provider "
@@ -50,6 +54,12 @@ _CANDIDATES = (
     "AND (? IS NULL OR w.provider=?) "
     "AND (w.kind!='search' OR COALESCE(m.remaining,1)>0) "
 )
+_CANDIDATES = (
+    ACTIVE_COLLECTION_SCANS
+    + "SELECT DISTINCT w.*,s.pass_id,s.budget"
+    + _CANDIDATE_SCOPE
+)
+
 
 METADATA_BUDGET = "all-metadata"
 
@@ -152,18 +162,23 @@ def _candidate_rows(
     if preferred is not None:
         # A narrow indexed lane avoids sorting the full backlog with a CASE key.
         with closing(
-            db.execute(
-                _CANDIDATES
-                + "AND w.priority=? ORDER BY w.priority DESC,w.sequence,w.id",
+            ordered_retrieval_candidates(
+                db,
+                _CANDIDATES + "AND w.priority=? ",
                 (*parameters, preferred),
             )
         ) as rows:
             yield from rows
     # Preferred work may be absent, delayed, leased, blocked or out of budget.
     # The ordinary order can still use the unchanged allowance in that case.
-    with closing(
-        db.execute(_CANDIDATES + "ORDER BY w.priority DESC,w.sequence,w.id", parameters)
-    ) as rows:
+    candidates = (
+        ordered_retrieval_candidates(db, _CANDIDATES, parameters)
+        if kind == "retrieve"
+        else db.execute(
+            _CANDIDATES + "ORDER BY w.priority DESC,w.sequence,w.id", parameters
+        )
+    )
+    with closing(candidates) as rows:
         yield from rows
 
 
@@ -239,6 +254,8 @@ def claim_collection_work(
                 "VALUES(?,?,?,?,?)",
                 (token, row["id"], row["provider"], timestamp, row["pass_id"]),
             )
+            if kind == "retrieve":
+                record_retrieval_source_claim(db, row["id"])
             if kind == "search" and maximum_metadata_requests is not None:
                 db.execute(
                     "UPDATE pass_budget SET remaining=remaining-1 "

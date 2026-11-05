@@ -567,6 +567,19 @@ def _objects(value: Any, depth: int = 0) -> list[dict[str, Any]]:
 def _date(value: Any) -> datetime | None:
     if not isinstance(value, str):
         return None
+    labelled = re.fullmatch(
+        r"(\d{4}-\d{2}-\d{2})(CET|CEST)"
+        r"(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)(\+0[12]:?00)",
+        value,
+    )
+    if labelled:
+        day, label, clock, offset = labelled.groups()
+        # Keep the publisher's explicit offset. A label alone is insufficient,
+        # and disagreement between the label and offset must remain unresolved.
+        expected = "+0100" if label == "CET" else "+0200"
+        if offset.replace(":", "") != expected:
+            return None
+        value = f"{day}T{clock}{offset}"
     try:
         result = datetime.fromisoformat(value.replace("Z", "+00:00"))
         return result if result.tzinfo is not None else None
