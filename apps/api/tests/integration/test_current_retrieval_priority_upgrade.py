@@ -75,6 +75,7 @@ async def test_revision5_retained_work_adopts_new_policy_without_changing_its_st
         assert after == before
         for table, rows in unchanged.items():
             assert [tuple(row) for row in db.execute("SELECT * FROM " + table)] == rows
+
     assert await restarted.read(run.scan_id) == await store.read(run.scan_id)
     # A second open must not change work, refill budgets or create attempts.
     SQLiteCollectionJournal(path)
@@ -85,3 +86,47 @@ async def test_revision5_retained_work_adopts_new_policy_without_changing_its_st
         assert again == before
         for table, rows in unchanged.items():
             assert [tuple(row) for row in db.execute("SELECT * FROM " + table)] == rows
+
+
+async def test_revision6_body_followup_uses_reserved_consequence_turn(tmp_path):
+    path = tmp_path / "collection.sqlite"
+    store = SQLiteCollectionJournal(path)
+    interval = ReportingInterval.at_start(7, NOW)
+    partition = CollectionPartition("controlled", "earthquake", interval.start, NOW)
+    await store.attach(DiscoveryRun("scan", interval), (partition,), now=NOW, budget=2)
+    search = await store.claim("search", "index", now=NOW)
+    assert search is not None
+    followup = NewsFeedItem(
+        "late-local",
+        "Local paper",
+        "A tres meses del sismo, la iglesia sigue sin techo",
+        "https://later.example/report",
+        None,
+        None,
+    )
+    stronger = tuple(
+        NewsFeedItem(
+            f"fatal-{i}",
+            "Daily",
+            "Earthquake killed two residents",
+            f"https://publisher{i}.example/report",
+            None,
+            None,
+        )
+        for i in range(8)
+    )
+    assert await store.commit_page(
+        search, CollectionPage(leads=(*stronger, followup)), now=NOW
+    )
+    with sqlite3.connect(path) as db:
+        db.execute("PRAGMA user_version=6")
+        db.execute(
+            "UPDATE work SET priority=0 WHERE kind='retrieve' AND payload LIKE ?",
+            ("%late-local%",),
+        )
+    restarted = SQLiteCollectionJournal(path)
+    claimed = [await restarted.claim("retrieve", str(i), now=NOW) for i in range(8)]
+    assert all(work is not None for work in claimed)
+    assert claimed[4].lead == followup
+    assert claimed[4].lead.published_at is None
+    assert await restarted.claim("retrieve", "over-budget", now=NOW) is None

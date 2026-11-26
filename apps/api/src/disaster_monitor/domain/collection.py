@@ -79,6 +79,10 @@ class CollectionPartition:
     defer_initial_request: bool = False
     # Public metadata resolution can be shared by identity across query windows.
     shared_resource: bool = False
+    # Order initial dated searches across windows independently of attachment order.
+    window_query_rank: int | None = None
+    # Search for an independently published edition after a linked report fails.
+    publisher_document_alternate: bool = False
 
     def __post_init__(self) -> None:
         if not self.provider.strip() or not self.query.strip():
@@ -97,6 +101,14 @@ class CollectionPartition:
             raise ValueError("Shared resources require a bounded metadata child.")
         if not isinstance(self.defer_initial_request, bool):
             raise ValueError("Initial request deferral must be boolean.")
+        if not isinstance(self.publisher_document_alternate, bool) or (
+            self.publisher_document_alternate and not self.alternate_for
+        ):
+            raise ValueError("Report recovery requires an unavailable publisher URL.")
+        if self.window_query_rank is not None and (
+            type(self.window_query_rank) is not int or self.window_query_rank < 0
+        ):
+            raise ValueError("Window query rank must be a nonnegative integer.")
         if (
             isinstance(self.priority, bool)
             or not isinstance(self.priority, int)

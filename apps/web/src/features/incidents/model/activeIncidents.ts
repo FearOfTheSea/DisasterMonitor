@@ -10,15 +10,15 @@ export type DisasterType =
 export type IncidentCoverageState =
   'events_found' | 'no_matching_records' | 'degraded' | 'unavailable';
 
-export type ObservationKind = 'physical_event' | 'preliminary_event' | 'acquisition';
-export type EventTimePrecision = 'exact' | 'day' | 'week' | 'range';
+type ObservationKind = 'physical_event' | 'preliminary_event' | 'acquisition';
+type EventTimePrecision = 'exact' | 'day' | 'week' | 'range';
 
-export type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
+type IncidentActivityStatus = 'ongoing' | 'ended' | 'unknown';
 
-export type IncidentVerificationStatus =
+type IncidentVerificationStatus =
   'provisional_news_detected' | 'source_backed' | 'rejected';
 
-export type IncidentDetectionTimeline = {
+type IncidentDetectionTimeline = {
   news_break_at: string | null;
   first_observed_at: string | null;
   candidate_created_at: string | null;
@@ -49,7 +49,7 @@ export type IncidentSource = {
   snapshot_id: string | null;
 };
 
-export type IncidentCoordinate = {
+type IncidentCoordinate = {
   latitude: number;
   longitude: number;
 };
@@ -62,7 +62,7 @@ export type IncidentGeometry = {
   estimated: boolean;
 };
 
-export type IncidentMeasurement = {
+type IncidentMeasurement = {
   kind:
     | 'magnitude'
     | 'intensity'
@@ -76,7 +76,7 @@ export type IncidentMeasurement = {
   source_id: string;
 };
 
-export type IncidentCountryAssociationBasis =
+type IncidentCountryAssociationBasis =
   'coordinate_polygon' | 'source_mention' | 'named_region' | 'nearby_boundary';
 
 export type IncidentCountry = {

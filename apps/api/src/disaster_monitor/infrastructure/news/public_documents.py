@@ -19,6 +19,7 @@ from disaster_monitor.infrastructure.news.public_document_access import (
     PublicDocumentAccess,
     PublicRedirectResume,
 )
+from disaster_monitor.infrastructure.news.publisher_pdf import MAX_PDF_BYTES
 
 Resolver = Callable[[str], tuple[str, ...] | Awaitable[tuple[str, ...]]]
 
@@ -26,6 +27,12 @@ Resolver = Callable[[str], tuple[str, ...] | Awaitable[tuple[str, ...]]]
 @dataclass(frozen=True, slots=True)
 class PublicDocument:
     html: str
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
+class PublicPdfDocument:
+    body: bytes
     url: str
 
 
@@ -73,7 +80,7 @@ class PublicDocumentReader:
         self._clock = clock
         self._sleep = sleep
 
-    async def read(self, url: str) -> PublicDocument:
+    async def read(self, url: str) -> PublicDocument | PublicPdfDocument:
         async with asyncio.timeout(self._timeout):
             deadline = self._clock() + self._timeout
             parsed = urlsplit(url)
@@ -121,12 +128,14 @@ class PublicDocumentReader:
                             "Publisher robots policy disallows article retrieval."
                         )
                     try:
-                        html = await self._get(
+                        body = await self._get(
                             client, url, address, robots=False, deadline=deadline
                         )
                         if self._access:
                             await self._access.clear_redirect(initial_url)
-                        return PublicDocument(html, url)
+                        if isinstance(body, bytes):
+                            return PublicPdfDocument(body, url)
+                        return PublicDocument(body, url)
                     except _Redirect as redirect:
                         target = redirect.destination
                         _require_article_destination(target, hostname)
@@ -198,6 +207,7 @@ class PublicDocumentReader:
                 )
                 if self._access:
                     await self._access.clear_redirect(initial_url)
+                assert isinstance(text, str)
                 return text
             except _Redirect as redirect:
                 url = redirect.destination
@@ -221,13 +231,14 @@ class PublicDocumentReader:
         robots: bool,
         policy_host: str | None = None,
         deadline: float | None = None,
-    ) -> str:
+    ) -> str | bytes:
         host = urlsplit(url).hostname
         assert host is not None
         token = await self._request_slot(host, deadline) if self._access else None
         try:
             text = await self._download(client, url, address, robots=robots)
             if robots and self._access:
+                assert isinstance(text, str)
                 policy = Protego.parse(text)
                 await self._access.remember_robots(
                     policy_host or host,
@@ -260,7 +271,7 @@ class PublicDocumentReader:
 
     async def _download(
         self, client: httpx.AsyncClient, url: str, address: str, *, robots: bool
-    ) -> str:
+    ) -> str | bytes:
         original = httpx.URL(url)
         target = original.copy_with(host=address)
         limit = 100_000 if robots else 1_000_000
@@ -273,7 +284,9 @@ class PublicDocumentReader:
                 "Host": original.host,
                 "User-Agent": self.user_agent,
                 "Cookie": "",
-                "Accept": "text/plain" if robots else "text/html,application/xhtml+xml",
+                "Accept": "text/plain"
+                if robots
+                else "text/html,application/xhtml+xml,application/pdf",
             },
             extensions={"sni_hostname": original.host},
         ) as response:
@@ -297,8 +310,19 @@ class PublicDocumentReader:
             )
             if robots and media_type in {"text/html", "application/xhtml+xml"}:
                 raise ValueError("Publisher robots response is an HTML page.")
-            if not robots and media_type not in {"text/html", "application/xhtml+xml"}:
-                raise ValueError("Article response is not HTML.")
+            pdf = not robots and media_type == "application/pdf"
+            if (
+                not robots
+                and not pdf
+                and media_type
+                not in {
+                    "text/html",
+                    "application/xhtml+xml",
+                }
+            ):
+                raise ValueError("Publisher response is neither HTML nor PDF.")
+            if pdf:
+                limit = MAX_PDF_BYTES
             if int(response.headers.get("content-length", "0")) > limit:
                 raise ValueError("Article response exceeds byte limit.")
             body = bytearray()
@@ -306,7 +330,11 @@ class PublicDocumentReader:
                 body.extend(chunk)
                 if len(body) > limit:
                     raise ValueError("Article response exceeds byte limit.")
-            return bytes(body).decode("utf-8", errors="replace")
+            if pdf:
+                if not body.startswith(b"%PDF-"):
+                    raise ValueError("Publisher response lacks a PDF header.")
+                return bytes(body)
+            return body.decode("utf-8", errors="replace")
 
 
 async def resolve_public_addresses(host: str) -> tuple[str, ...]:

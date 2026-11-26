@@ -43,7 +43,7 @@ class CheckpointJournal:
     async def claim(self, *args, **kwargs):
         return None
 
-    async def next_retry(self, *, now):
+    async def next_retry(self, *, now, search_provider=None):
         return None
 
     async def finish_pass(self, *, now):

@@ -45,7 +45,6 @@ export async function exerciseGroundImagery(page) {
   const groundRequest = {
     request_id: 'ground-imagery:system-fixture',
     request_version: 2,
-    incident_id: 'system-flood',
     disaster: 'flood',
     state: 'ready',
     reason_codes: ['partial_coverage'],
@@ -181,8 +180,10 @@ export async function exerciseGroundImagery(page) {
     sensors: [],
     artifacts: [],
   };
+  let incidentId;
   await page.route('**/api/v1/ground-imagery/**', async (route) => {
-    const url = route.request().url();
+    const request = route.request();
+    const url = request.url();
     if (url.endsWith('/readiness')) {
       return route.fulfill({
         json: {
@@ -198,34 +199,39 @@ export async function exerciseGroundImagery(page) {
         headers: { 'Access-Control-Allow-Origin': '*' },
       });
     }
-    if (url.endsWith('/regions') && route.request().method() === 'POST') {
-      const { region } = route.request().postDataJSON();
+    if (url.endsWith('/requests') && request.method() === 'POST') {
+      incidentId = request.postDataJSON().incident_id;
+    }
+    if (url.endsWith('/regions') && request.method() === 'POST') {
+      const { region } = request.postDataJSON();
       if (region.type !== 'MultiPolygon' || region.coordinates[0][0].length !== 65)
         throw new Error('The selected inspection circle was not submitted.');
       activeGroundRequest = groundRequest;
     }
-    return route.fulfill({ json: activeGroundRequest });
+    return route.fulfill({ json: { ...activeGroundRequest, incident_id: incidentId } });
   });
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
-  const groundTileResponse = page.waitForResponse((response) =>
-    response
-      .url()
-      .includes('/ground-imagery/artifacts/artifact%3Asystem-fixture/tiles/'),
-  );
   await page.getByRole('button', { name: 'Focus Thailand on map' }).click();
   await page.getByRole('button', { name: 'Find imagery', exact: true }).click();
   await page.getByRole('heading', { name: 'Ground view' }).waitFor();
   await page.getByText('The source point is a broad event locator.').waitFor();
   await page.getByLabel('Center latitude').fill('15');
   await page.getByLabel('Center longitude').fill('105');
-  await page.getByRole('button', { name: 'Search this area' }).click();
+  const [tileResponse] = await Promise.all([
+    page.waitForResponse((response) =>
+      response
+        .url()
+        .includes('/ground-imagery/artifacts/artifact%3Asystem-fixture/tiles/'),
+    ),
+    page.getByRole('button', { name: 'Search this area' }).click(),
+  ]);
   await page.getByRole('heading', { name: 'Prepared observation' }).waitFor();
   await page.getByText('user selected', { exact: true }).waitFor();
   await page.getByRole('region', { name: 'Observation coverage map' }).waitFor();
   await page.getByText('Core usable 70% · covered 90%').waitFor();
   await page.getByLabel('Image opacity 85%').fill('50');
   await page.getByText('Image opacity 50%').waitFor();
-  if (!(await groundTileResponse).ok()) {
+  if (!tileResponse.ok()) {
     throw new Error('The Ground coverage map did not load its stored image tile.');
   }
   await page.waitForFunction(() => {

@@ -12,6 +12,7 @@ from disaster_monitor.domain.events import EventGeometry
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import classify_disaster_text
 from disaster_monitor.domain.mention_occurrence import occurrence_role
+from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.domain.reported_impacts import (
     fatality_analysis_text,
     nonhuman_fatality_sentences,
@@ -85,6 +86,7 @@ class DiscoveryArticle:
     photograph_captions: tuple[str, ...] = ()
     # Publisher-declared names; neither report identities nor independence evidence.
     bylines: tuple[str, ...] = ()
+    document_leads: tuple[NewsFeedItem, ...] = ()
 
     def __post_init__(self) -> None:
         for value in (

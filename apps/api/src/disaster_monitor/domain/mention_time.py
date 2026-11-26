@@ -29,6 +29,22 @@ MONTH_WORDING = (
     + r"|Sept\.?"
 )
 
+_SPANISH_MONTHS = (
+    "enero febrero marzo abril mayo junio julio agosto septiembre "
+    "octubre noviembre diciembre"
+).split()
+_SPANISH_MONTH_NUMBER = {
+    month: number for number, month in enumerate(_SPANISH_MONTHS, 1)
+}
+_SPANISH_MONTH_NUMBER["setiembre"] = 9
+_SPANISH_MONTH_WORDING = "|".join(_SPANISH_MONTH_NUMBER)
+_MONTH_PERIOD = re.compile(
+    rf"\b(?:(?P<english>{MONTH_WORDING})\s+|"
+    rf"(?P<spanish>{_SPANISH_MONTH_WORDING})\s+de\s+)"
+    r"(?P<year>(?:19|20)\d{2})\b",
+    re.I,
+)
+
 
 DAY_MONTH_DATE = re.compile(
     rf"\b(?P<day>\d{{1,2}})(?:(?:[-–]|\s+to\s+)(?P<last>\d{{1,2}}))?\s+(?P<month>{MONTH_WORDING})(?:\s+(?P<year>20\d{{2}}|19\d{{2}}))?(?!\w)",
@@ -79,6 +95,15 @@ _OTHER_ACCIDENT = re.compile(
     r"hurac(?:án|anes)|tif(?:ón|ones)|cicl(?:ón|ones))\b",
     re.I,
 )
+_NEARBY_EARLIER_OCCURRENCE = re.compile(
+    r"^(?:(?:el|este|ese)\s+(?:incidente|suceso|evento)|"
+    r"(?:el|este|ese)\s+(?:deslave|deslizamiento))\s+"
+    r"(?:ocurri[oó]|se produjo|tuvo lugar)\s+a\s+(?:solo\s+)?"
+    rf"{_SPANISH_PERIOD_QUANTITY}\s+(?:kil[oó]metros?|metros?)\s+del\s+lugar\s+"
+    rf"donde,?\s+(?P<earlier>en\s+(?:{_SPANISH_MONTH_WORDING})\s+de\s+"
+    r"(?:19|20)\d{2}\b[^.!?;]*)[.!?]?$",
+    re.I,
+)
 
 
 def _distinct_earlier_period(text: str) -> str | None:
@@ -113,6 +138,12 @@ def separate_earlier_occurrence(text: str) -> tuple[OccurrenceAccount, ...]:
         # An untyped different accident cannot inherit the previous hazard.
         # Typed older hazards keep their own account and literal relative clock.
         return (OccurrenceAccount(text, True, True, earlier_period),)
+    nearby = _NEARBY_EARLIER_OCCURRENCE.fullmatch(text)
+    if nearby and occurrence_role(nearby["earlier"]) == "reported":
+        # The introductory occurrence and distance only refer to the current
+        # incident. The clause after "donde" supplies the older physical account.
+        earlier = text[nearby.start("earlier") :]
+        return (OccurrenceAccount(earlier, separate=True, historical=True),)
     if re.match(r"^[\"'“‘]?\s*(?:After|Following)\b", text, re.I):
         for period in _EARLIER_PERIOD.finditer(text):
             earlier, later = text[: period.end()], text[period.end() :].strip()
@@ -154,11 +185,7 @@ def _month_period(text: str) -> MentionTime | None:
     ]
     matches = [
         match
-        for match in re.finditer(
-            rf"\b(?P<month>{MONTH_WORDING})\s+(?P<year>(?:19|20)\d{{2}})\b",
-            text,
-            re.I,
-        )
+        for match in _MONTH_PERIOD.finditer(text)
         if not any(
             start <= match.start() and match.end() <= end for start, end in full_dates
         )
@@ -170,10 +197,14 @@ def _month_period(text: str) -> MentionTime | None:
         return _unresolved_period(text, matches)
     match = matches[0]
     year = int(match["year"])
-    month = next(
-        i + 1
-        for i, name in enumerate(_MONTHS)
-        if name[:3].casefold() == match["month"][:3].casefold()
+    month = (
+        _SPANISH_MONTH_NUMBER[match["spanish"].casefold()]
+        if match["spanish"]
+        else next(
+            i + 1
+            for i, name in enumerate(_MONTHS)
+            if name[:3].casefold() == match["english"][:3].casefold()
+        )
     )
     return MentionTime(
         match[0],

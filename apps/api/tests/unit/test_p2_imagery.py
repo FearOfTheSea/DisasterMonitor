@@ -1,10 +1,8 @@
 from datetime import UTC, datetime
-from pathlib import Path
 
 import httpx
 import numpy as np
 import pytest
-from affine import Affine
 from rasterio.io import MemoryFile
 from rasterio.transform import from_bounds
 
@@ -13,11 +11,6 @@ from disaster_monitor.application.ground_imagery.impact_regions import (
     CemsProductKind,
     cems_product_region,
     shakemap_source_regions,
-)
-from disaster_monitor.application.ground_imagery.offline_packages import (
-    OfflineTile,
-    build_local_basemap_package,
-    build_mbtiles_package,
 )
 from disaster_monitor.application.ports.ground_imagery.rendering import (
     GroundImageryRenderError,
@@ -30,10 +23,6 @@ from disaster_monitor.domain.earthquake_context import (
     ShakeMapLayer,
     ShakeMeasure,
 )
-from disaster_monitor.domain.imagery.analysis import (
-    AnalyticalFindingReview,
-    FindingReviewDecision,
-)
 from disaster_monitor.domain.imagery.observations import (
     AcquisitionIdentity,
     CaptureInterval,
@@ -41,18 +30,9 @@ from disaster_monitor.domain.imagery.observations import (
     ObservationReadiness,
     Sensor,
 )
-from disaster_monitor.domain.imagery.regions import RegionSourceKind
-from disaster_monitor.infrastructure.ground_imagery.analytics import (
-    BurnChangeAlgorithm,
-    FloodChangeAlgorithm,
-)
-from disaster_monitor.infrastructure.ground_imagery.geometry_partitioning import (
-    GeometryPartitionKind,
-    partition_geometry,
-)
-from disaster_monitor.infrastructure.ground_imagery.gfm_regions import (
-    GfmMaskLineage,
-    extract_gfm_components,
+from disaster_monitor.domain.imagery.regions import (
+    RegionSourceKind,
+    polygon_from_geojson,
 )
 from disaster_monitor.infrastructure.ground_imagery.local_products import (
     FallbackGroundImageryRenderer,
@@ -64,59 +44,6 @@ from disaster_monitor.infrastructure.ground_imagery.raster_quality import (
 )
 
 NOW = datetime(2026, 9, 15, 8, tzinfo=UTC)
-
-
-def test_gfm_mask_components_are_bounded_and_retain_processing_lineage() -> None:
-    mask = np.zeros((6, 8), dtype=np.uint8)
-    mask[1:3, 1:3] = 1
-    mask[3:6, 5:8] = 1
-    lineage = GfmMaskLineage(
-        source_item_id="GFM_20260915T060000Z",
-        source_asset_url="https://example.test/gfm.tif",
-        source_sha256="a" * 64,
-        source_crs="EPSG:4326",
-        mask_band="ensemble_flood_extent",
-        threshold_expression="pixel == 1",
-        algorithm_version="gfm-components:v1",
-        captured_at=NOW,
-        retrieved_at=NOW,
-    )
-
-    regions = extract_gfm_components(
-        mask,
-        transform=Affine.translation(100, 20) @ Affine.scale(0.1, -0.1),
-        lineage=lineage,
-        minimum_pixels=3,
-        maximum_components=10,
-    )
-
-    assert [region.pixel_count for region in regions] == [9, 4]
-    assert all(
-        region.evidence.source.source_kind is RegionSourceKind.OBSERVATION_MASK
-        for region in regions
-    )
-    assert regions[0].evidence.derivation_inputs == (
-        "GFM_20260915T060000Z",
-        "a" * 64,
-        "pixel == 1",
-        "gfm-components:v1",
-    )
-    assert regions[0].evidence.semantic_role == "official observed flood extent"
-
-
-def test_gfm_lineage_rejects_non_sha256_checksum_text() -> None:
-    with pytest.raises(ValueError, match="lowercase SHA-256"):
-        GfmMaskLineage(
-            source_item_id="GFM_20260915T060000Z",
-            source_asset_url="https://example.test/gfm.tif",
-            source_sha256="z" * 64,
-            source_crs="EPSG:4326",
-            mask_band="ensemble_flood_extent",
-            threshold_expression="pixel == 1",
-            algorithm_version="gfm-components:v1",
-            captured_at=NOW,
-            retrieved_at=NOW,
-        )
 
 
 def test_cems_and_shakemap_products_become_distinct_source_regions() -> None:
@@ -157,130 +84,6 @@ def test_cems_and_shakemap_products_become_distinct_source_regions() -> None:
     assert shaking[0].source.source_kind is RegionSourceKind.MODELED_HAZARD
     assert shaking[0].semantic_role == "USGS ShakeMap shaking coverage"
     assert shaking[0].association.value == "confirmed"
-
-
-def test_partitioning_handles_antimeridian_polar_and_multiple_utm_zones() -> None:
-    antimeridian = _polygon([[179, 10], [-179, 10], [-179, 12], [179, 12], [179, 10]])
-    polar = _polygon([[10, 85], [20, 85], [20, 86], [10, 86], [10, 85]])
-    multi_zone = _polygon([[-1, 50], [8, 50], [8, 51], [-1, 51], [-1, 50]])
-
-    anti_plan = partition_geometry(antimeridian)
-    polar_plan = partition_geometry(polar)
-    zone_plan = partition_geometry(multi_zone)
-
-    assert anti_plan.kind is GeometryPartitionKind.ANTIMERIDIAN
-    assert len(anti_plan.parts) == 2
-    assert polar_plan.kind is GeometryPartitionKind.POLAR
-    assert {part.grid_crs for part in polar_plan.parts} == {"EPSG:32661"}
-    assert zone_plan.kind is GeometryPartitionKind.MULTI_UTM_ZONE
-    assert len({part.grid_crs for part in zone_plan.parts}) >= 2
-    assert all(part.merge_order >= 0 for part in zone_plan.parts)
-
-
-def test_radar_and_optical_change_are_analytical_and_quality_gated() -> None:
-    before_vv = np.array([[0.4, 0.5], [0.3, 0.7]], dtype=np.float32)
-    after_vv = np.array([[0.05, 0.5], [0.04, 0.68]], dtype=np.float32)
-    flood = FloodChangeAlgorithm().measure(
-        before_vv,
-        after_vv,
-        valid_mask=np.ones((2, 2), dtype=bool),
-        source_product_ids=("S1-before", "S1-after"),
-    )
-    assert flood.algorithm_id == "sentinel-1-flood-change"
-    assert flood.algorithm_version == "1.0.0"
-    assert flood.evidence_role == "analytical_observation"
-    assert flood.metrics["changed_fraction"] == pytest.approx(0.5)
-    assert flood.authoritative_extent is False
-
-    before_nir = np.array([[0.8, 0.7]], dtype=np.float32)
-    before_swir = np.array([[0.2, 0.3]], dtype=np.float32)
-    after_nir = np.array([[0.3, 0.7]], dtype=np.float32)
-    after_swir = np.array([[0.6, 0.3]], dtype=np.float32)
-    burn = BurnChangeAlgorithm().measure(
-        before_nir,
-        before_swir,
-        after_nir,
-        after_swir,
-        valid_mask=np.ones((1, 2), dtype=bool),
-        cloud_fraction=0.1,
-        source_product_ids=("S2-before", "S2-after"),
-    )
-    assert burn.metrics["changed_fraction"] == pytest.approx(0.5)
-    assert burn.interpretation.startswith("Analytical Sentinel-2")
-
-    with pytest.raises(ValueError, match="cloud gate"):
-        BurnChangeAlgorithm().measure(
-            before_nir,
-            before_swir,
-            after_nir,
-            after_swir,
-            valid_mask=np.ones((1, 2), dtype=bool),
-            cloud_fraction=0.8,
-            source_product_ids=("S2-before", "S2-after"),
-        )
-
-
-def test_human_review_wraps_but_does_not_mutate_analytical_output() -> None:
-    finding = FloodChangeAlgorithm().measure(
-        np.array([[0.4]], dtype=np.float32),
-        np.array([[0.05]], dtype=np.float32),
-        valid_mask=np.ones((1, 1), dtype=bool),
-        source_product_ids=("before", "after"),
-    )
-    review = AnalyticalFindingReview.create(
-        finding=finding,
-        decision=FindingReviewDecision.ACCEPTED,
-        reviewer_id="operator:alice",
-        reviewed_at=NOW,
-        annotation="Consistent with the official extent; still analytical.",
-    )
-
-    assert review.finding_id == finding.finding_id
-    assert review.finding_sha256 == finding.sha256
-    assert review.decision is FindingReviewDecision.ACCEPTED
-    assert review.review_id.startswith("imagery-review:")
-
-
-def test_mbtiles_package_requires_redistribution_permission(tmp_path: Path) -> None:
-    destination = tmp_path / "incident.mbtiles"
-    tile = OfflineTile(zoom=3, x=4, y=2, content=b"tile")
-
-    manifest = build_mbtiles_package(
-        destination,
-        tiles=(tile,),
-        package_id="offline:test",
-        name="Incident test package",
-        attribution="Open test data",
-        source_license="CC-BY-4.0",
-        redistribution_permitted=True,
-        bounds=(-10, -5, 10, 5),
-    )
-
-    assert destination.is_file()
-    assert manifest.tile_count == 1
-    assert manifest.sha256
-    basemap = build_local_basemap_package(
-        tmp_path / "basemap.mbtiles",
-        tiles=(OfflineTile(0, 0, 0, b"png"),),
-        package_id="basemap:test",
-        name="Local basemap",
-        attribution="© OpenStreetMap contributors",
-        source_license="ODbL-1.0",
-        redistribution_permitted=True,
-        bounds=(-180, -85, 180, 85),
-    )
-    assert basemap.format == "mbtiles-1.3"
-    with pytest.raises(ValueError, match="redistribution"):
-        build_mbtiles_package(
-            tmp_path / "forbidden.mbtiles",
-            tiles=(tile,),
-            package_id="offline:forbidden",
-            name="Forbidden",
-            attribution="Restricted",
-            source_license="restricted",
-            redistribution_permitted=False,
-            bounds=(-10, -5, 10, 5),
-        )
 
 
 @pytest.mark.asyncio
@@ -397,8 +200,6 @@ def test_raster_quality_checks_band_order_masks_noise_and_scl_semantics() -> Non
 
 
 def _polygon(coordinates: list[list[float]]):
-    from disaster_monitor.domain.imagery.regions import polygon_from_geojson
-
     return polygon_from_geojson({"type": "Polygon", "coordinates": [coordinates]})
 
 

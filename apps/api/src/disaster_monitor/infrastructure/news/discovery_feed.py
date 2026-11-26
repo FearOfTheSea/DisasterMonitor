@@ -17,16 +17,14 @@ from disaster_monitor.domain.discovery import (
 )
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.news import NewsFeedItem
-from disaster_monitor.infrastructure.news.discovery_parser import (
-    parse_discovery_article,
-)
 from disaster_monitor.infrastructure.news.feeds import (
     _gdelt_item,
     _gdelt_time,
 )
-from disaster_monitor.infrastructure.news.public_documents import (
-    PublicDocument,
-    PublicDocumentReader,
+from disaster_monitor.infrastructure.news.public_documents import PublicDocumentReader
+from disaster_monitor.infrastructure.news.publisher_document import (
+    PublisherDocument,
+    parse_publisher_document,
 )
 from disaster_monitor.infrastructure.news.request_schedule import (
     NewsRequestError,
@@ -45,7 +43,7 @@ _QUERIES = (
 
 
 class ArticleReader(Protocol):
-    async def read(self, url: str) -> str | PublicDocument: ...
+    async def read(self, url: str) -> PublisherDocument: ...
 
 
 class GdeltDiscoveryFeed:
@@ -286,15 +284,9 @@ class GdeltDiscoveryFeed:
     async def _parse_article(self, item: NewsFeedItem) -> DiscoveryArticle:
         async with asyncio.timeout(self._timeout):
             document = await self._reader.read(item.canonical_url)
-        return parse_discovery_article(
-            document.html if isinstance(document, PublicDocument) else document,
-            url=item.canonical_url,
-            document_url=document.url if isinstance(document, PublicDocument) else None,
-            title=item.title,
-            publisher=item.publisher,
-            retrieved_at=datetime.now(UTC),
-            indexed_at=item.indexed_at,
-        )
+            return await parse_publisher_document(
+                document, item, retrieved_at=datetime.now(UTC)
+            )
 
 
 def _access_failure(error: BaseException) -> str:

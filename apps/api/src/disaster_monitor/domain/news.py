@@ -37,6 +37,8 @@ class NewsFeedItem:
     discovery_hint: str | None = None
     # Untrusted index wording, used only to locate other publisher articles.
     search_title: str | None = None
+    # Publisher-owned link provenance. A referring page supplies no PDF date.
+    referring_document_url: str | None = None
 
     def __post_init__(self) -> None:
         if not all(

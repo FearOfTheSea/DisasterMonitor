@@ -37,6 +37,7 @@ from disaster_monitor.domain.discovery import (
 )
 
 logger = logging.getLogger(__name__)
+_PUBLISHER_WORKERS = 4
 
 
 class ResumableDiscovery:
@@ -130,19 +131,19 @@ class ResumableDiscovery:
                 return
 
     async def _pump(self) -> None:
-        began = monotonic()
+        deadline = monotonic() + self._pass_seconds
         finishing_ids: tuple[str, ...] = ()
         self._capacity_reached.clear()
         projector = asyncio.create_task(self._project_periodically())
         try:
-            while monotonic() - began < self._pass_seconds:
+            while monotonic() < deadline:
                 searches_done = asyncio.Event()
                 retrievals = [
                     asyncio.create_task(self._article_worker(searches_done, str(i)))
-                    for i in range(2)
+                    for i in range(_PUBLISHER_WORKERS)
                 ]
                 searches = [
-                    asyncio.create_task(self._search_worker(p.source_id))
+                    asyncio.create_task(self._search_worker(p.source_id, deadline))
                     for p in self._providers
                 ]
                 try:
@@ -161,7 +162,7 @@ class ResumableDiscovery:
                 if retry is None:
                     break
                 wait = max(0, (retry - self._clock()).total_seconds())
-                if monotonic() - began + wait >= self._pass_seconds:
+                if monotonic() + wait >= deadline:
                     break
                 await asyncio.sleep(min(max(wait, 0.05), 1))
             async with self._lifecycle_lock:
@@ -205,13 +206,24 @@ class ResumableDiscovery:
             projector.cancel()
             await asyncio.gather(projector, return_exceptions=True)
 
-    async def _search_worker(self, worker: str) -> None:
-        while not self._capacity_reached.is_set():
+    async def _search_worker(self, worker: str, deadline: float) -> None:
+        while monotonic() < deadline and not self._capacity_reached.is_set():
             work = await self._journal.claim(
                 "search", "search:" + worker, now=self._clock(), provider=worker
             )
             if work is None:
-                return
+                retry = await self._journal.next_retry(
+                    now=self._clock(), search_provider=worker
+                )
+                if retry is None:
+                    return
+                delay = max(0.05, (retry - self._clock()).total_seconds())
+                if monotonic() + delay >= deadline:
+                    return
+                # A provider with an expiring cooldown can resume while a
+                # different provider still has an in-flight page.
+                await asyncio.sleep(min(delay, 1))
+                continue
             try:
                 if work.partition is None or work.provider not in self._by_provider:
                     raise CollectionProviderError(
@@ -296,15 +308,19 @@ class ResumableDiscovery:
                     continue
                 # A bounded outcome retains the lead and actual provider attribution.
                 # Do not retain exception messages that may contain sensitive URLs.
+                now = self._clock()
                 await self._journal.fail(
                     work,
                     outcome="article_unavailable",
                     detail=error.detail
                     if isinstance(error, CollectionProviderError)
                     else f"Publisher article unavailable ({type(error).__name__}).",
-                    now=self._clock(),
+                    now=now,
                     alternates=plan_alternate_reports(
-                        work, self._providers, observed_at=self._clock()
+                        work,
+                        self._providers,
+                        observed_at=now,
+                        publisher_unavailable=True,
                     ),
                 )
             self._dirty.set()

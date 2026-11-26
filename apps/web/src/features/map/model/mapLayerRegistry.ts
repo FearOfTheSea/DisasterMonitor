@@ -6,7 +6,7 @@ export type MapLayerId =
   | 'authoritative-weather-alerts'
   | 'compound-correlations';
 
-export type MapLayerCategory =
+type MapLayerCategory =
   'incidents' | 'imagery' | 'evidence' | 'forecast' | 'warnings' | 'context';
 
 export type MapLayerDefinition = {

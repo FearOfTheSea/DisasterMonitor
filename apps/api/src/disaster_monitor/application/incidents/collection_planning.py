@@ -8,7 +8,9 @@ from disaster_monitor.application.incidents.collection_index_planning import (
 )
 from disaster_monitor.application.ports.collection import (
     CollectionProvider,
+    HistoricalReportSearchProvider,
     ImmutableIndexProvider,
+    PublisherCitationProvider,
 )
 from disaster_monitor.domain.collection import (
     ClaimedCollectionWork,
@@ -21,7 +23,15 @@ from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.hazards.news_classification import disasters_in_text
 from disaster_monitor.domain.mention_extraction import extract_mentions
 
-PLAN_VERSION = "collection-v123"
+PLAN_VERSION = "collection-v125"
+# A 30-day scan can include five earlier aligned weeks. Give them each one
+# query turn per 15 current-week roots while the current week still has work.
+# Start that first group early so every week gets a seed under a small allowance.
+_CURRENT_WEEK_TURNS = 15
+_FIRST_EARLIER_WEEK_TURN = 3
+# Give report publications one turn immediately before the second ordinary
+# query for each earlier week. The current week keeps its original ordering.
+_EARLIER_REPORT_TURN = _FIRST_EARLIER_WEEK_TURN + _CURRENT_WEEK_TURNS - 1
 
 
 def plan_collection(
@@ -34,29 +44,43 @@ def plan_collection(
     # generations revisit late indexing, without changing a viewer's exact interval.
     span = 7 * 86400
     start = int(interval.start.timestamp()) // span * span
+    current_week = int(observed_at.timestamp()) // span * span
     generation = f"{PLAN_VERSION}:{int(observed_at.timestamp()) // 21600}"
     result = []
     # A maintained directory can refresh between calls, but one plan must retain
     # one immutable query ordering while its aligned windows are assembled.
-    historical = tuple(
-        (p, p.queries)
+    dated = tuple(
+        (
+            p.source_id,
+            p.queries,
+            p.historical_report_query
+            if isinstance(p, HistoricalReportSearchProvider)
+            else None,
+        )
         for p in providers
         if p.supports_time_filter and not isinstance(p, ImmutableIndexProvider)
     )
     while start <= interval.end.timestamp():
         lower = datetime.fromtimestamp(start, UTC)
         upper = lower + timedelta(days=7)
-        for index in range(max((len(queries) for _, queries in historical), default=0)):
-            for provider, queries in historical:
+        for index in range(max((len(queries) for _, queries, _ in dated), default=0)):
+            for provider, queries, report_query in dated:
                 if index < len(queries):
+                    query = queries[index]
+                    rank = index
+                    if start != current_week:
+                        rank = index * _CURRENT_WEEK_TURNS + _FIRST_EARLIER_WEEK_TURN
+                        if query == report_query:
+                            rank = min(rank, _EARLIER_REPORT_TURN)
                     result.append(
                         CollectionPartition(
-                            provider.source_id,
-                            queries[index],
+                            provider,
+                            query,
                             lower,
                             upper,
                             generation=generation,
                             priority=search_acquisition_priority(),
+                            window_query_rank=rank,
                         )
                     )
         start += span
@@ -92,10 +116,49 @@ def plan_alternate_reports(
     *,
     observed_at: datetime,
     article: DiscoveryArticle | None = None,
+    publisher_unavailable: bool = False,
 ) -> tuple[CollectionPartition, ...]:
-    if work.alternate_depth or work.lead is None:
+    if work.lead is None:
         return ()
     lead = work.lead
+    generation = f"{PLAN_VERSION}:{int(observed_at.timestamp()) // 21600}"
+    if publisher_unavailable:
+        for provider in providers:
+            if isinstance(provider, PublisherCitationProvider):
+                citation = provider.publisher_citation_partition(
+                    lead.canonical_url, observed_at=observed_at, generation=generation
+                )
+                if citation is not None:
+                    return (citation,)
+    if work.alternate_depth:
+        return ()
+    if lead.referring_document_url is not None:
+        if not publisher_unavailable or not lead.search_title:
+            return ()
+        words = re.findall(r"[\w'-]+", lead.search_title)[:16]
+        # A generic caption cannot locate an independently published edition.
+        if len(words) < 4:
+            return ()
+        provider = next(
+            (p for p in providers if p.supports_alternates and p.supports_time_filter),
+            None,
+        )
+        if provider is None:
+            return ()
+        day = observed_at.astimezone(UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        return (
+            CollectionPartition(
+                provider.source_id,
+                " ".join(words),
+                day - timedelta(days=30),
+                day + timedelta(days=1),
+                generation=generation,
+                alternate_for=lead.canonical_url,
+                publisher_document_alternate=True,
+            ),
+        )
     if article is not None and not fatality_hint_needs_followup(lead, article):
         return ()
     hint = lead.discovery_hint or lead.title
@@ -154,7 +217,6 @@ def plan_alternate_reports(
     if provider is None:
         return ()
     date_hint = lead.indexed_at or observed_at
-    generation = f"{PLAN_VERSION}:{int(observed_at.timestamp()) // 21600}"
     return tuple(
         CollectionPartition(
             provider.source_id,

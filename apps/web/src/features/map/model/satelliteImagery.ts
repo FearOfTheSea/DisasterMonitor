@@ -11,7 +11,7 @@ export type SatelliteMapState = {
   observationTime?: string;
 };
 
-export type SatelliteTemporalMode = 'daily' | 'subdaily';
+type SatelliteTemporalMode = 'daily' | 'subdaily';
 
 type DirectGibsAccess = {
   kind: 'direct-gibs';

@@ -8,6 +8,7 @@ from disaster_monitor.domain.discovery import (
     DiscoveryArticle,
     ReportingInterval,
     assess_article,
+    group_reports,
 )
 from disaster_monitor.domain.evidence_types import SourceReference
 
@@ -118,3 +119,46 @@ def test_source_article_metadata_is_not_an_exact_clock_for_the_prior_disaster():
     report = assess(text)
     old = [m for m, c in deaths(report) if c.fact.value == "13"]
     assert old and all(m.time and m.time.start is None for m in old)
+
+
+@pytest.mark.parametrize(
+    "older_hazard", ["el colapso de una montaña", "un deslizamiento de tierra"]
+)
+def test_dated_nearby_slide_keeps_its_own_toll_and_month(older_hazard):
+    earlier = (
+        "El incidente ocurrió a solo dos kilómetros del lugar donde, "
+        f"en marzo de 2023, {older_hazard} dejó 68 personas fallecidas."
+    )
+    current = "Un nuevo deslizamiento de tierra bloqueó el río cerca de Brookside."
+    article = DiscoveryArticle(
+        SOURCE, f"{current} {earlier}", event_time=NOW, location="Brookside"
+    )
+
+    report = assess_article(article, ReportingInterval.at_start(30, NOW))
+    events = group_reports((report,))
+    older = [m for m, claim in deaths(report) if claim.fact.value == "68"]
+
+    assert len(older) == 1
+    (mention,) = older
+    assert mention.role == "historical"
+    assert (
+        mention.excerpt
+        == f"en marzo de 2023, {older_hazard} dejó 68 personas fallecidas."
+    )
+    assert mention.time.wording == "marzo de 2023"
+    assert mention.time.start == datetime(2023, 3, 1, tzinfo=UTC)
+    assert mention.time.end == datetime(2023, 4, 1, tzinfo=UTC)
+    assert mention.place is None
+    assert len(events) == 2
+    assert {event.event_time for event in events} == {NOW, mention.time.start}
+
+
+@pytest.mark.parametrize("current_reference", ["El incidente", "Este deslizamiento"])
+def test_nearby_structural_collapse_does_not_become_a_landslide(current_reference):
+    earlier = (
+        f"{current_reference} ocurrió a dos kilómetros del lugar donde, "
+        "en marzo de 2023, el colapso de una vivienda dejó 68 personas fallecidas."
+    )
+    report = assess(f"Un nuevo deslizamiento de tierra bloqueó el río. {earlier}")
+
+    assert not any(claim.fact.value == "68" for _, claim in deaths(report))

@@ -60,6 +60,17 @@ _CANDIDATES = (
     + _CANDIDATE_SCOPE
 )
 
+_WINDOW_QUERY_RANK = "json_extract(w.payload,'$.window_query_rank')"
+_PROVIDER_SEARCH_COUNT = "(s.budget-COALESCE(b.remaining,s.budget))"
+_ROOT_SEARCH_TURN = f"({_PROVIDER_SEARCH_COUNT} % {SEARCH_INDEX_REQUEST_CYCLE})=0"
+_DOCUMENT_RECOVERY_TURN = (
+    f"({_PROVIDER_SEARCH_COUNT} % {4 * SEARCH_INDEX_REQUEST_CYCLE})=1"
+)
+_DOCUMENT_RECOVERY_ROOT = (
+    "(json_extract(w.payload,'$.publisher_document_alternate')=1 "
+    "AND json_extract(w.payload,'$.depth')=0)"
+)
+
 
 METADATA_BUDGET = "all-metadata"
 
@@ -131,14 +142,22 @@ def _candidate_rows(
         provider,
     )
     if kind == "search":
+        # Independently published report searches get one of every four
+        # citation cycles. Missing or blocked recovery work leaves that turn open.
+        with closing(
+            db.execute(
+                _CANDIDATES
+                + f"AND {_DOCUMENT_RECOVERY_TURN} AND {_DOCUMENT_RECOVERY_ROOT} "
+                + "ORDER BY w.sequence,w.id",
+                parameters,
+            )
+        ) as rows:
+            yield from rows
         # The durable provider allowance supplies the rotation position, including
         # requests from other viewers/workers and earlier opens of this journal.
         # Keep one opportunity for initial coverage in every cycle; use the other
         # opportunities to turn retained index citations into publisher links.
-        citation_slot = (
-            " AND ((s.budget-COALESCE(b.remaining,s.budget)) % "
-            f"{SEARCH_INDEX_REQUEST_CYCLE})!=0"
-        )
+        citation_slot = f" AND NOT ({_ROOT_SEARCH_TURN})"
         with closing(
             ordered_citation_candidates(db, _CANDIDATES + citation_slot, parameters)
         ) as rows:
@@ -146,7 +165,14 @@ def _candidate_rows(
         with closing(
             db.execute(
                 _CANDIDATES
-                + "AND w.priority>0 ORDER BY w.priority DESC,w.sequence,w.id",
+                + "AND w.priority>0 ORDER BY w.priority DESC,"
+                # Dated roots also get their turn when a started citation has
+                # another page ready. The intervening turns still favor citations.
+                + f"CASE WHEN {_ROOT_SEARCH_TURN} "
+                + f"THEN {_WINDOW_QUERY_RANK} IS NULL "
+                + f"ELSE {_WINDOW_QUERY_RANK} IS NOT NULL END,{_WINDOW_QUERY_RANK},"
+                + f"CASE WHEN {_WINDOW_QUERY_RANK} IS NOT NULL THEN "
+                + "json_extract(w.payload,'$.start') END DESC,w.sequence,w.id",
                 parameters,
             )
         ) as rows:

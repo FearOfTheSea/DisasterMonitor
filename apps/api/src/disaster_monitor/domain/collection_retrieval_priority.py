@@ -21,6 +21,22 @@ _CONSEQUENCE_HINT = re.compile(
     re.I,
 )
 
+_POST_DISASTER_FOLLOWUP = re.compile(
+    r"\b(?:"
+    r"(?:wildfires?|bushfires?|floods?|landslides?|earthquakes?)\s+victims?|"
+    r"(?:homes?|housing)\b[^.!?;]{0,55}\brecovery|"
+    r"(?:a\s+)?(?:\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)"
+    r"\s+(?:d[ií]as?|semanas?|mes(?:es)?|años?)\s+(?:despu[eé]s\s+)?"
+    r"(?:del|de la)\s+"
+    r"(?:sismo|terremoto|deslave|deslizamiento|inundaci[oó]n|hurac[aá]n)|"
+    r"(?:penanganan dampak|pemulihan pasca)\s+(?:gempa bumi|banjir|longsor|karhutla)"
+    r")\b",
+    re.I,
+)
+_FOLLOWUP_EXERCISE = re.compile(
+    r"\b(?:drills?|simulat\w*|simulacros?|simulaci[oó]n|simulasi|latihan|skenario)\b",
+    re.I,
+)
 
 # These are retrieval hints only. Literal supported hazard context is still needed.
 _TURKISH_CONSEQUENCE_HINT = re.compile(
@@ -112,7 +128,9 @@ def _consequence_headline(text: str) -> bool:
         or occurrence_role(text) == "forecast"
     ):
         return False
-    if _CONSEQUENCE_HINT.search(text):
+    if _CONSEQUENCE_HINT.search(text) or (
+        _POST_DISASTER_FOLLOWUP.search(text) and not _FOLLOWUP_EXERCISE.search(text)
+    ):
         return True
     return bool(
         (
@@ -145,6 +163,8 @@ def lead_retrieval_priority(lead: NewsFeedItem) -> int:
     headlines = tuple(dict.fromkeys((lead.title, lead.search_title or "")))
     if priority := _headline_priority(headlines):
         return priority
+    if lead.referring_document_url is not None:
+        return 2
     if not lead.discovery_hint:
         return 0
     if _specific_disaster_account(lead.discovery_hint):

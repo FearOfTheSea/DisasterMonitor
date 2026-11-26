@@ -1,1 +1,0 @@
-"""Local notification delivery adapters."""

@@ -1,12 +1,12 @@
 import { API_BASE_URL } from '@/shared/config/runtime';
 
-export type ProductReference = {
+type ProductReference = {
   product_id: string;
   version: string;
   updated_at: string;
 };
 
-export type ShakeMapLayer = {
+type ShakeMapLayer = {
   product: ProductReference;
   measure: 'mmi' | 'pga' | 'pgv';
   unit: string;

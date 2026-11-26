@@ -93,10 +93,7 @@ export function applyRegionalPreset(id: RegionalPresetId): {
   return { regionalPreset: id, view: { ...regionalPreset(id).view } };
 }
 
-export function viewMatchesRegionalPreset(
-  view: MapView,
-  presetId: RegionalPresetId,
-): boolean {
+function viewMatchesRegionalPreset(view: MapView, presetId: RegionalPresetId): boolean {
   const target = regionalPreset(presetId).view;
   return (
     Math.abs(view.centerLatitude - target.centerLatitude) <= 0.05 &&

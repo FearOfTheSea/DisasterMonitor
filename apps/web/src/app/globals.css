@@ -237,18 +237,6 @@ summary:focus-visible {
   position: relative;
 }
 
-.workspace-assistant-open {
-  grid-template-columns: var(--incident-rail) minmax(0, 1fr);
-}
-
-.workspace-operations-open {
-  grid-template-columns: var(--incident-rail) minmax(0, 1fr);
-}
-
-.workspace-source-catalog-open {
-  grid-template-columns: var(--incident-rail) minmax(0, 1fr);
-}
-
 .map-region {
   background: var(--ocean);
   grid-column: 2;
@@ -315,16 +303,6 @@ input[type='radio'] {
   flex: 0 0 26px;
   height: 26px;
   width: 26px;
-}
-
-.panel-scrim {
-  background: rgba(13, 27, 62, 0.16);
-  border: 0;
-  grid-column: 2;
-  grid-row: 1;
-  inset: 0;
-  position: absolute;
-  z-index: 7;
 }
 
 .selected-incident-summary {
@@ -674,8 +652,4 @@ input[type='radio'] {
 .event-brief-timeline time {
   color: var(--muted);
   font-size: 0.65rem;
-}
-
-.mobile-navigation {
-  display: none;
 }

@@ -1,6 +1,6 @@
-export type SourceAvailability = 'available' | 'unconfigured' | 'maintained_only';
+type SourceAvailability = 'available' | 'unconfigured' | 'maintained_only';
 
-export type SourceOperationalState = {
+type SourceOperationalState = {
   registered: boolean;
   configured: boolean;
   availability: SourceAvailability;
@@ -9,7 +9,7 @@ export type SourceOperationalState = {
   execution_roles: string[];
 };
 
-export type SourceCatalogItem = {
+type SourceCatalogItem = {
   source_id: string;
   provider: string;
   publisher: string;

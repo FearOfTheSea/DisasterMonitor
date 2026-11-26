@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from disaster_monitor.domain.hazards.regional_vocabulary import (
     FRENCH_MASS_OBJECT,
     GERMAN_CALENDAR_MONTH,
+    GERMAN_FLOOD,
     GERMAN_SOIL_SLIDE,
     TURKISH_EARTHQUAKE_ENDING,
     TURKISH_MULTIPLE_SLIDES,
@@ -159,7 +160,7 @@ _TURKISH_SLIDE_OCCURRENCE = re.compile(
 _QUALIFIERS = {
     "uncertain": (
         r"\b(?:al menos|au moins|estimad[oa]s?|estim[eé](?:s|e|es)?|"
-        r"sedikitnya|setidaknya|diperkirakan|pelo menos|en az)\b"
+        r"sedikitnya|setidaknya|diperkirakan|pelo menos|en az|mehr als|mindestens)\b"
     ),
     "preliminary": r"\b(?:preliminar(?:es)?|provisoire|provisional)\b",
     "corrected": r"\b(?:correcci[oó]n|rectificaci[oó]n|corrig[eé]|rectifi[eé])\b",
@@ -249,6 +250,12 @@ _TURKISH_WORDING = _wording(
     r"hiç",
 )
 
+_GERMAN_POSTPOSED_FLOOD_TOLL = re.compile(
+    rf"\b(?:starb|starben)\s+bei\s+(?:der|dem|einer|einem)\s+{GERMAN_FLOOD}\s+"
+    rf"(?:(?:mehr als|mindestens)\s+)?(\d+(?:[ .\u202f]\d{{3}})*)\s+(?:{_PERSON})\b",
+    re.I,
+)
+
 _WORDINGS = (
     _wording(
         _SPANISH_DEATH,
@@ -289,7 +296,8 @@ _WORDINGS = (
         r"töteten?|starb|starben",
         "ein:1 eine:1 einer:1 zwei:2 drei:3 vier:4 fünf:5 sechs:6 sieben:7 "
         "acht:8 neun:9 zehn:10 elf:11 zwölf:12",
-        rf"wurden|wurde|sind|ist|bei|beim|dem|der|einem|einer|{GERMAN_SOIL_SLIDE}",
+        rf"wurden|wurde|sind|ist|bei|beim|dem|der|einem|einer|{GERMAN_SOIL_SLIDE}|"
+        rf"{GERMAN_FLOOD}",
         r"kein(?:e[nrms]?)?|niemand",
     ),
 )
@@ -309,7 +317,9 @@ def mask_german_articles(text: str) -> str:
     # Sentence-initial Die before a capitalized noun is a German article, not
     # an English report of death. Do not mask English all-capital DIE headlines.
     german_article = re.search(r"\bDie\s+[A-ZÄÖÜ]", text)
-    if not german_article and not re.search(rf"\b{GERMAN_SOIL_SLIDE}\b", text, re.I):
+    if not german_article and not re.search(
+        rf"\b(?:{GERMAN_SOIL_SLIDE}|{GERMAN_FLOOD})\b", text, re.I
+    ):
         return text
     return re.sub(r"\bdies?\b", lambda m: " " * len(m[0]), text, flags=re.I)
 
@@ -404,6 +414,10 @@ def regional_fatality_account(sentence: str) -> RegionalFatalityAccount | None:
         for match in _count_matches(w, sentence)
         if not _context_count(sentence, match)
     }
+    counts.update(
+        re.sub(r"[ .\u202f]", "", match[1])
+        for match in _GERMAN_POSTPOSED_FLOOD_TOLL.finditer(sentence)
+    )
     if zero and not any(value != "0" for value in counts):
         return RegionalFatalityAccount("0", qualifiers)
     combined = bool(

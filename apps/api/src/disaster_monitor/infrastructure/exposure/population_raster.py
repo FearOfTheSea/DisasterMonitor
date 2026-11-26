@@ -1,19 +1,16 @@
 """Local GeoTIFF population exposure adapter for WorldPop and GHSL."""
 
 import hashlib
-import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-import httpx
 import numpy as np
 import rasterio
 from rasterio.mask import mask
 
 from disaster_monitor.domain.exposure import (
     ExposureDataset,
-    ExposureDatasetRole,
     ExposureGeometry,
     PopulationExposureEstimate,
 )
@@ -82,144 +79,6 @@ class PopulationRasterExposure:
                 geometry_hash,
             ),
         )
-
-
-class WorldPopRasterExposure(PopulationRasterExposure):
-    """Primary locally cached WorldPop population surface."""
-
-    def __init__(
-        self,
-        raster_path: Path,
-        *,
-        version: str,
-        vintage: int,
-        resolution_m: float,
-        source_url: str,
-        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
-    ) -> None:
-        super().__init__(
-            raster_path,
-            ExposureDataset(
-                dataset_id=f"worldpop-{version}",
-                publisher="WorldPop",
-                version=version,
-                vintage=vintage,
-                resolution_m=resolution_m,
-                license_name="WorldPop Open Data License (CC BY 4.0)",
-                source_url=source_url,
-                role=ExposureDatasetRole.PRIMARY,
-                uncertainty=(
-                    "Modelled gridded population; census vintage, spatial allocation, "
-                    "and cell aggregation introduce uncertainty."
-                ),
-            ),
-            clock=clock,
-        )
-
-
-class GhslRasterExposure(PopulationRasterExposure):
-    """Secondary locally cached GHSL population surface for fallback/cross-check."""
-
-    def __init__(
-        self,
-        raster_path: Path,
-        *,
-        version: str,
-        vintage: int,
-        resolution_m: float,
-        source_url: str,
-        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
-    ) -> None:
-        super().__init__(
-            raster_path,
-            ExposureDataset(
-                dataset_id=f"ghsl-{version}",
-                publisher="European Commission Joint Research Centre",
-                version=version,
-                vintage=vintage,
-                resolution_m=resolution_m,
-                license_name="European Commission reuse notice / CC BY 4.0",
-                source_url=source_url,
-                role=ExposureDatasetRole.SECONDARY,
-                uncertainty=(
-                    "Modelled resident-population grid; reference epoch, source "
-                    "census, "
-                    "and built-settlement allocation introduce uncertainty."
-                ),
-            ),
-            clock=clock,
-        )
-
-
-class PopulationDatasetCache:
-    """Bounded immutable downloader for reusable population raster datasets."""
-
-    def __init__(
-        self,
-        root: Path,
-        *,
-        allowed_hosts: frozenset[str],
-        max_bytes: int = 5_000_000_000,
-        client: httpx.AsyncClient | None = None,
-    ) -> None:
-        if max_bytes <= 0:
-            raise ValueError("Population cache byte limit must be positive.")
-        root.mkdir(parents=True, exist_ok=True)
-        self._root = root.resolve()
-        self._allowed_hosts = allowed_hosts
-        self._max_bytes = max_bytes
-        self._client = client or httpx.AsyncClient(timeout=120)
-        self._owns_client = client is None
-
-    async def aclose(self) -> None:
-        if self._owns_client:
-            await self._client.aclose()
-
-    async def download(
-        self, *, dataset_id: str, url: str, expected_sha256: str
-    ) -> Path:
-        from urllib.parse import urlparse
-
-        if not dataset_id or any(
-            character
-            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
-            for character in dataset_id
-        ):
-            raise ValueError("Population dataset cache identity is invalid.")
-        parsed = urlparse(url)
-        if parsed.scheme != "https" or parsed.hostname not in self._allowed_hosts:
-            raise ValueError("Population download URL is outside approved hosts.")
-        if len(expected_sha256) != 64:
-            raise ValueError("Population downloads require a SHA-256 checksum.")
-        target = self._root / f"{dataset_id}.tif"
-        if target.is_file() and _sha256(target) == expected_sha256:
-            return target
-        temporary = self._root / f".{dataset_id}.partial"
-        digest = hashlib.sha256()
-        size = 0
-        try:
-            async with self._client.stream(
-                "GET", url, follow_redirects=False
-            ) as response:
-                response.raise_for_status()
-                with temporary.open("wb") as output:
-                    async for chunk in response.aiter_bytes():
-                        size += len(chunk)
-                        if size > self._max_bytes:
-                            raise ValueError(
-                                "Population raster exceeds the cache limit."
-                            )
-                        digest.update(chunk)
-                        output.write(chunk)
-            if digest.hexdigest() != expected_sha256:
-                raise ValueError(
-                    "Population raster checksum differs from its manifest."
-                )
-            os.replace(temporary, target)
-        finally:
-            if temporary.exists():
-                temporary.unlink()
-        return target
 
 
 def _sha256(path: Path) -> str:

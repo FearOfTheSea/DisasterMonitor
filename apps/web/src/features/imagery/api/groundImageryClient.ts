@@ -1,6 +1,5 @@
 import type {
   ApiSchemaName,
-  GroundImageryManifestResponse,
   GroundImageryReadinessResponse,
   GroundImageryRequestResponse,
   GroundImageryPrepareRequest,
@@ -150,17 +149,6 @@ export async function prepareGroundImagerySelection(
       body: JSON.stringify(payload),
       signal,
     },
-  );
-}
-
-export async function fetchGroundImageryManifest(
-  requestId: string,
-  signal?: AbortSignal,
-): Promise<GroundImageryManifestResponse> {
-  return requestJson<GroundImageryManifestResponse>(
-    'GroundImageryManifestResponse',
-    requestPath(requestId, '/manifest'),
-    { signal },
   );
 }
 

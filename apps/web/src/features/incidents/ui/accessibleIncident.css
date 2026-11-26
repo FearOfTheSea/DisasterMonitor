@@ -95,8 +95,7 @@
   .assistant-panel,
   .operations-panel,
   .source-catalog-panel,
-  .ground-imagery-panel,
-  .mobile-navigation {
+  .ground-imagery-panel {
     display: none !important;
   }
 

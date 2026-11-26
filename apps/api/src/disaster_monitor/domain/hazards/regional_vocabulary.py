@@ -39,9 +39,19 @@ GERMAN_SOIL_SLIDE = (
     r"(?:Erdrutsch(?:es|en|e)?|(?:Kohle)?schlammlawinen?|"
     r"Felsst(?:urz(?:es)?|ürze[n]?))"
 )
+GERMAN_FLOOD = (
+    r"(?:Ahrtal-?flut|Sturzflut(?:en)?|Flutkatastrophen?|"
+    r"(?:Ü|Ue)berschwemmung(?:en)?|Hochwasser(?:s)?)"
+)
 GERMAN_CALENDAR_MONTH = (
     r"(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|"
     r"Oktober|November|Dezember)"
+)
+SPANISH_RIVER_RISE = (
+    r"(?:crecientes?(?:\s+(?:s[uú]bitas?|repentinas?))?\s+"
+    r"(?:del|de\s+(?:la|un|una))\s+(?:r[ií]o|quebrada|arroyo|cauce)|"
+    r"(?:en medio de|durante|por|tras)\s+(?:la|una)\s+"
+    r"creciente(?=[ \t]*(?:\.(?!\.)|[!?;]|$)))"
 )
 
 REGIONAL_HAZARDS = {
@@ -52,6 +62,7 @@ REGIONAL_HAZARDS = {
     ),
     Disaster.FLOOD: re.compile(
         r"\b(?:inundaci[oó]n(?:es)?|riadas?|inondations?|banjir|"
+        rf"{SPANISH_RIVER_RISE}|{GERMAN_FLOOD}|"
         r"enchentes?|enxurradas?|inundaç(?:ão|ões)|alagamentos?|"
         r"transbordamento\s+(?:de|do|da)\s+(?:(?:um|uma)\s+)?"
         r"(?:c[oó]rrego|rio|ribeir[aã]o)|"
@@ -68,6 +79,7 @@ REGIONAL_HAZARDS = {
     ),
     Disaster.LANDSLIDE: re.compile(
         r"\b(?:deslizamientos? de (?:tierra|ladera)|deslaves?|"
+        r"colapsos? de (?:una?|la|el) (?:montañas?|laderas?|taludes?)|"
         r"glissements? de terrain|coul[eé]es? de boue|"
         r"(?:tanah )?longsor|deslizamentos?(?: de (?:terra|solo))?|"
         rf"desmoronamentos? de (?:terra|solo)|{GERMAN_SOIL_SLIDE}|{FRENCH_SOIL_SLIDE}|"

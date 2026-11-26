@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from math import cos, isfinite, radians
+from math import isfinite
 from typing import Any
 
 
@@ -325,55 +325,6 @@ def _signed_ring_area(ring: LinearRing) -> float:
             )
         )
         / 2
-    )
-
-
-def approximate_area_km2(geometry: MultiPolygon) -> float:
-    """Estimate geodesic area for policy limits without claiming survey accuracy.
-
-    The computation uses a local equirectangular projection per polygon.  Exact
-    provider-facing area/coverage work belongs to the infrastructure geometry
-    adapter, while this deterministic fallback keeps domain validation usable
-    without native geospatial libraries.
-    """
-    total = 0.0
-    earth_radius_m = 6_371_008.8
-    for polygon in geometry.polygons:
-        reference_latitude = radians(
-            sum(point.latitude for point in polygon.exterior.coordinates[:-1])
-            / max(1, len(polygon.exterior.coordinates) - 1)
-        )
-
-        def ring_area(ring: LinearRing, latitude: float = reference_latitude) -> float:
-            projected = [
-                (
-                    earth_radius_m * radians(point.longitude) * cos(latitude),
-                    earth_radius_m * radians(point.latitude),
-                )
-                for point in ring.coordinates
-            ]
-            return abs(
-                sum(
-                    first[0] * second[1] - second[0] * first[1]
-                    for first, second in zip(projected, projected[1:], strict=False)
-                )
-                / 2
-            )
-
-        total += ring_area(polygon.exterior) - sum(
-            ring_area(hole) for hole in polygon.holes
-        )
-    return max(0.0, total / 1_000_000)
-
-
-def point_geometry(coordinate: Coordinate) -> MultiPolygon:
-    """Carry a point only through a metric buffer adapter.
-
-    This helper intentionally does not turn a point into an impact polygon; it is
-    useful for ports that need to carry a verified point separately from a region.
-    """
-    raise TypeError(
-        "A point is not an imagery region; use the metric geometry port to buffer it."
     )
 
 

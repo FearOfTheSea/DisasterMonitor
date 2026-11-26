@@ -40,6 +40,22 @@ class ImmutableIndexProvider(Protocol):
     index_availability_delay: timedelta
 
 
+@runtime_checkable
+class HistoricalReportSearchProvider(Protocol):
+    """A dated index with one dedicated historical publication query."""
+
+    historical_report_query: str
+
+
+@runtime_checkable
+class PublisherCitationProvider(Protocol):
+    """An official API that can resolve its own public report citations."""
+
+    def publisher_citation_partition(
+        self, url: str, *, observed_at: datetime, generation: str
+    ) -> CollectionPartition | None: ...
+
+
 class CollectionArticleReader(Protocol):
     async def retrieve(self, lead: NewsFeedItem) -> DiscoveryArticle: ...
 
@@ -103,7 +119,9 @@ class CollectionJournal(DiscoveryStore, Protocol):
         """Scans with active acquisition or an unfinished terminal projection."""
         ...
 
-    async def next_retry(self, *, now: datetime) -> datetime | None: ...
+    async def next_retry(
+        self, *, now: datetime, search_provider: str | None = None
+    ) -> datetime | None: ...
 
 
 class CollectionRuntime(Protocol):

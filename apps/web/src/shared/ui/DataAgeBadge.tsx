@@ -1,4 +1,4 @@
-export type DataAgeKind =
+type DataAgeKind =
   'source' | 'projection' | 'imagery_capture' | 'forecast_validity' | 'retrieved';
 
 type DataAgeBadgeProps = {

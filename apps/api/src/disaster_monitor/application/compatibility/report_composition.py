@@ -1,15 +1,13 @@
 """Compatibility facade over the shared bounded disaster tool workflow."""
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from disaster_monitor.application.agent.models import (
     SourceDescriptor,
 )
 from disaster_monitor.application.agent.tooling import (
-    AgentTool,
     DisasterToolDependencies,
-    ToolRegistry,
     build_disaster_tool_registry,
 )
 from disaster_monitor.application.conversations.memory_recall import MemoryRecallService
@@ -133,16 +131,6 @@ class CurrentDisasterReportService:
     @property
     def source_catalog(self) -> SourceCatalog:
         return self._source_catalog
-
-    def build_agent_tools(
-        self,
-        source_catalog: SourceCatalog,
-        additional_tools: Iterable[AgentTool] = (),
-    ) -> ToolRegistry:
-        """Expose this facade's exact dependencies through bounded agent tools."""
-        return build_disaster_tool_registry(
-            self._tool_dependencies(source_catalog), additional_tools
-        )
 
     def _tool_dependencies(
         self, source_catalog: SourceCatalog

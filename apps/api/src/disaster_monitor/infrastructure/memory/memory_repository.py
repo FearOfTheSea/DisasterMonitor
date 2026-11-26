@@ -73,22 +73,6 @@ class InMemoryMemoryRepository:
             )
         )
 
-    async def mark_superseded(
-        self,
-        memory_id: str,
-        *,
-        superseded_by_memory_id: str,
-    ) -> bool:
-        record = self._records.get(memory_id)
-        if record is None or record.status is not MemoryLifecycleStatus.ACTIVE:
-            return False
-        self._records[memory_id] = replace(
-            record,
-            status=MemoryLifecycleStatus.SUPERSEDED,
-            superseded_by_memory_id=superseded_by_memory_id,
-        )
-        return True
-
     async def mark_expired(self, memory_id: str) -> bool:
         record = self._records.get(memory_id)
         if (

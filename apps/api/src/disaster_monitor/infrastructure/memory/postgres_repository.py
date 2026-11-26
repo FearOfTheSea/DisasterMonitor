@@ -134,24 +134,6 @@ class PostgresMemoryRepository:
                 rows = await cursor.fetchall()
         return tuple(_record(row) for row in rows)
 
-    async def mark_superseded(
-        self,
-        memory_id: str,
-        *,
-        superseded_by_memory_id: str,
-    ) -> bool:
-        async with await self._connection() as connection:
-            async with connection.cursor() as cursor:
-                await cursor.execute(
-                    """
-                    UPDATE agent_memory
-                    SET lifecycle_status='superseded', superseded_by_memory_id=%s
-                    WHERE memory_id=%s AND lifecycle_status='active'
-                    """,
-                    (superseded_by_memory_id, memory_id),
-                )
-                return cursor.rowcount == 1
-
     async def mark_expired(self, memory_id: str) -> bool:
         async with await self._connection() as connection:
             async with connection.cursor() as cursor:

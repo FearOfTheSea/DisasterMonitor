@@ -5,6 +5,7 @@ import re
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from itertools import zip_longest
 from typing import Any
 from urllib.parse import urlencode, urljoin
 
@@ -49,23 +50,16 @@ _MARKETS = {
     "zh-CN": ("zh-CN", "CN", "CN:zh-Hans"),
     "th": ("th", "TH", "TH:th"),
 }
-_SEEDS = {
-    "en-US": (
-        "earthquake",
-        "earthquake killed",
-        "flood",
-        "flood killed",
-        "wildfire",
-        "wildfire killed",
-        "landslide",
-        "landslide killed",
-        "cyclone",
-        "cyclone killed",
-        "volcanic eruption",
-        "volcanic eruption deaths",
-        "drought",
-        "drought deaths",
-    ),
+_ENGLISH_HAZARDS = (
+    ("earthquake", "earthquake killed"),
+    ("flood", "flood killed"),
+    ("wildfire", "wildfire killed"),
+    ("landslide", "landslide killed"),
+    ("cyclone", "cyclone killed"),
+    ("volcanic eruption", "volcanic eruption deaths"),
+    ("drought", "drought deaths"),
+)
+_REGIONAL_SEEDS = {
     "en-IN": ("landslide", "landslide killed"),
     "fr": ("glissement de terrain", "éboulement morts"),
     "es": ("inundaciones", "crecida muere"),
@@ -95,10 +89,38 @@ _SEEDS = {
     "zh-CN": ("山体崩塌", "落石 遇难", "泥石流 死亡"),
     "th": ("ดินถล่ม", "ดินโคลนถล่ม เสียชีวิต"),
 }
+_REPORT_MARKET = "en-US"
+_REPORT_QUERY = '"natural disasters" report'
+
+
+def _ordered_seeds() -> tuple[tuple[str, str], ...]:
+    # A short allocation can spend most requests resolving citations. Use its
+    # first roots for several hazards and markets before repeating either lane.
+    english = (
+        ("en-US", query)
+        for turn in zip(*_ENGLISH_HAZARDS, strict=True)
+        for query in turn
+    )
+    regional = (
+        (market, query)
+        for turn in zip_longest(*_REGIONAL_SEEDS.values())
+        for market, query in zip(_REGIONAL_SEEDS, turn, strict=True)
+        if query is not None
+    )
+    interleaved = tuple(
+        seed
+        for pair in zip_longest(english, regional)
+        for seed in pair
+        if seed is not None
+    )
+    # Keep four root pairs for hazard and regional coverage, then look for
+    # separately published reports through the same dated index.
+    return (*interleaved[:8], (_REPORT_MARKET, _REPORT_QUERY), *interleaved[8:])
+
+
 _QUERIES = {
     market + "|" + query: (query, _MARKETS[market])
-    for market, queries in _SEEDS.items()
-    for query in queries
+    for market, query in _ordered_seeds()
 }
 _COUNTRY_HAZARDS = (
     "earthquake OR flood OR wildfire OR landslide OR cyclone OR "
@@ -130,6 +152,7 @@ class GoogleNewsCollectionProvider:
     source_id = "google-rss-discovery"
     supports_time_filter = True
     supports_alternates = True
+    historical_report_query = _REPORT_MARKET + "|" + _REPORT_QUERY
 
     def __init__(
         self,
@@ -218,6 +241,7 @@ class GoogleNewsCollectionProvider:
                 priority=0,
                 defer_initial_request=True,
                 shared_resource=partition.alternate_for is None,
+                window_query_rank=None,
             )
             for article in sorted(
                 feed_articles(response.body, locale),

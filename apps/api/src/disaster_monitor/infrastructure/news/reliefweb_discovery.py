@@ -4,6 +4,7 @@ This adapter supplies articles to the existing publication-window assessment. Th
 editorial catalog is complementary coverage, never a universal publisher gate.
 """
 
+import re
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from typing import Any
@@ -12,6 +13,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from disaster_monitor.application.ports.provider_text import sanitize_provider_text
+from disaster_monitor.domain.collection import CollectionPage, CollectionProviderError
 from disaster_monitor.domain.discovery import (
     AcquisitionAudit,
     DiscoveryArticle,
@@ -19,7 +21,12 @@ from disaster_monitor.domain.discovery import (
     ReportingInterval,
 )
 from disaster_monitor.domain.evidence_types import SourceReference
+from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.infrastructure.news.discovery_parser import _date
+from disaster_monitor.infrastructure.news.public_documents import public_document_host
+from disaster_monitor.infrastructure.news.publisher_document_links import (
+    publisher_pdf_lead,
+)
 from disaster_monitor.infrastructure.news.request_schedule import (
     NewsRequestError,
     ScheduledNewsJson,
@@ -43,6 +50,11 @@ _FIELDS = (
     "disaster",
     "primary_country",
     "origin",
+)
+_ATTACHMENT_URL = re.compile(
+    r"https://reliefweb\.int/attachments/"
+    r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/[^/?#]+\.pdf",
+    re.I,
 )
 
 
@@ -196,14 +208,7 @@ def _article(item: Any, *, retrieved_at: datetime) -> DiscoveryArticle | None:
     title, url = fields.get("title"), fields.get("url")
     if not isinstance(title, str) or not isinstance(url, str):
         return None
-    parsed = urlsplit(url)
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname != "reliefweb.int"
-        or parsed.username
-        or parsed.password
-        or parsed.port not in (None, 443)
-    ):
+    if public_document_host(url) != "reliefweb.int":
         return None
     dates = fields.get("date")
     dates = dates if isinstance(dates, dict) else {}
@@ -290,3 +295,60 @@ def _original_url(value: Any) -> str | None:
     except ValueError:
         pass
     return None
+
+
+def reliefweb_citation_page(
+    payload: Any, *, citation: str, identity_field: str, retrieved_at: datetime
+) -> CollectionPage:
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        raise CollectionProviderError(
+            "invalid_response", "ReliefWeb returned no valid citation list."
+        )
+    matches = [
+        entry
+        for entry in payload["data"]
+        if isinstance(entry, dict)
+        and isinstance(fields := entry.get("fields"), dict)
+        and fields.get("status") == "published"
+        and fields.get(identity_field) == citation
+    ]
+    if len(matches) > 1:
+        raise CollectionProviderError(
+            "invalid_response", "ReliefWeb returned an ambiguous citation."
+        )
+    article = _article(matches[0], retrieved_at=retrieved_at) if matches else None
+    if article is None:
+        return CollectionPage(
+            notices=("ReliefWeb supplied no exact published report.",)
+        )
+    return CollectionPage(
+        articles=(article,),
+        leads=_citation_attachments(matches[0]["fields"].get("file"), article.source),
+    )
+
+
+def _citation_attachments(
+    value: Any, source: SourceReference
+) -> tuple[NewsFeedItem, ...]:
+    if not isinstance(value, list):
+        return ()
+    leads = {}
+    for entry in value:
+        if not isinstance(entry, dict) or entry.get("mimetype") != "application/pdf":
+            continue
+        url = entry.get("url")
+        if not isinstance(url, str) or not _ATTACHMENT_URL.fullmatch(url):
+            continue
+        label = entry.get("description") or entry.get("filename")
+        lead = publisher_pdf_lead(
+            url,
+            label if isinstance(label, str) else "PDF attachment",
+            page_url=source.canonical_url,
+            publisher=source.publisher,
+            page_title=source.title,
+        )
+        if lead is not None:
+            leads.setdefault(lead.canonical_url, lead)
+        if len(leads) == 2:
+            break
+    return tuple(leads.values())

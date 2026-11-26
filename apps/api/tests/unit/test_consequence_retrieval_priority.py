@@ -20,6 +20,11 @@ LEAD = NewsFeedItem(
         "Earthquake anniversary remembered at community gathering",
         "Wildfire memorial honors displaced families",
         "Volcanic eruption survivors discuss rehabilitation",
+        "Wildfire victims plead for more pet-friendly housing",
+        "Officials prioritize earthquake-resistant bamboo homes in Flores recovery",
+        "A tres meses del sismo, la iglesia sigue sin techo",
+        "Flores: un mes después del terremoto, siguen los trabajos",
+        "Kementerian PU percepat penanganan dampak gempa bumi di Flores NTT",
     ],
 )
 def test_consequence_headlines_receive_inspection_priority_without_death_metadata(
@@ -41,6 +46,10 @@ def test_consequence_headlines_receive_inspection_priority_without_death_metadat
         "Memorial tributes flood in for beloved actor",
         "Families move after heavy rainfall",
         "No deaths reported as flood survivors await resettlement",
+        "Tres meses antes del terremoto, compraron equipos",
+        "A tres meses del simulacro de sismo, se realizó una evaluación",
+        "Simulasi penanganan dampak gempa bumi",
+        "Economic recovery report mentions a distant earthquake",
     ],
 )
 def test_forecasts_and_unrecognized_or_nonliteral_context_do_not_gain_priority(

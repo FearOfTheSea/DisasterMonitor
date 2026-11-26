@@ -86,3 +86,45 @@ def test_predicted_flooded_road_toll_is_not_observed_reporting():
     assert not any(
         c.fact.category == "fatalities" for m in report.mentions for c in m.claims
     )
+
+
+def test_bare_creciente_retains_fatal_river_flood_account():
+    fatal_account = (
+        "Las autoridades indicaron que una persona murió en medio de una creciente."
+    )
+    text = (
+        "Las lluvias provocaron emergencias en la región. "
+        f"{fatal_account} "
+        "La corriente de la quebrada arrastró al motociclista."
+    )
+    report = assess_article(
+        DiscoveryArticle(SOURCE, text), ReportingInterval.at_start(3, NOW)
+    )
+    assert report.eligibility == "eligible"
+    assert any(
+        mention.disaster is Disaster.FLOOD
+        and mention.role == "reported"
+        and any(
+            claim.fact.category == "fatalities" and claim.excerpt == fatal_account
+            for claim in mention.claims
+        )
+        for mention in report.mentions
+    )
+
+
+@pytest.mark.parametrize(
+    "wording",
+    [
+        "Un campesino murió en la creciente del río.",
+        "Una persona desapareció tras una creciente repentina de la quebrada.",
+    ],
+)
+def test_creciente_specifying_a_waterway_is_literal(wording):
+    assert disasters_in_text(wording) == (Disaster.FLOOD,)
+
+
+def test_growing_concern_and_normal_stream_current_do_not_imply_flooding():
+    assert Disaster.FLOOD not in disasters_in_text(
+        "La noticia llegó en medio de una creciente preocupación. "
+        "Una persona fue arrastrada por la corriente del río mientras nadaba."
+    )

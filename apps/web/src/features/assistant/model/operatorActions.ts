@@ -18,7 +18,7 @@ export type OperatorAction =
   | SetTimeWindowOperatorActionResponse
   | ShowLayerOperatorActionResponse
   | CreateIncidentWatchOperatorActionResponse;
-export type OperatorPanelId = 'findings' | 'sources' | 'watches' | 'operations';
+type OperatorPanelId = 'findings' | 'sources' | 'watches' | 'operations';
 
 export type AutomaticOperatorActionResult = {
   mapLayerState: MapLayerState;

@@ -1,6 +1,7 @@
 """GDELT lead discovery and complementary ReliefWeb report pages."""
 
 import asyncio
+import re
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -15,23 +16,27 @@ from disaster_monitor.domain.discovery import DiscoveryArticle
 from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.infrastructure.news.collection_http import CollectionHttp
 from disaster_monitor.infrastructure.news.discovery_feed import _QUERIES, ArticleReader
-from disaster_monitor.infrastructure.news.discovery_parser import (
-    parse_discovery_article,
-)
 from disaster_monitor.infrastructure.news.feeds import _gdelt_item, _gdelt_time
 from disaster_monitor.infrastructure.news.public_document_access import (
     PublicAccessDeferred,
 )
-from disaster_monitor.infrastructure.news.public_documents import (
-    PublicDocument,
-    PublicDocumentReader,
+from disaster_monitor.infrastructure.news.public_documents import PublicDocumentReader
+from disaster_monitor.infrastructure.news.publisher_document import (
+    parse_publisher_document,
 )
 from disaster_monitor.infrastructure.news.reliefweb_discovery import (
     _CATEGORIES,
     _FIELDS,
     _article,
+    reliefweb_citation_page,
 )
 from disaster_monitor.infrastructure.news.request_schedule import _retry_after
+
+_RELIEFWEB_CITATION = re.compile(
+    r"https://reliefweb\.int/(?:node/(?P<node>[0-9]{1,12})|"
+    r"report/[\w%-]{1,100}/[\w%-]{1,300})",
+    re.ASCII,
+)
 
 
 class GdeltCollectionProvider:
@@ -142,14 +147,12 @@ class ReliefWebCollectionProvider:
         )
 
     async def fetch_page(self, partition: CollectionPartition) -> CollectionPage:
-        if not self._app_name or self._app_name.lower() in {
-            "disaster-monitor-local",
-            "change-me",
-            "your-app-name",
-        }:
+        if not self._has_app_name():
             raise CollectionProviderError(
                 "access_refused", "ReliefWeb needs an approved configured appname."
             )
+        if partition.publisher_document_alternate:
+            return await self._fetch_citation(partition)
         offset = int(partition.cursor or "0")
         params = {
             "appname": self._app_name,
@@ -197,6 +200,57 @@ class ReliefWebCollectionProvider:
             else (),
         )
 
+    def _has_app_name(self) -> bool:
+        return bool(self._app_name) and self._app_name.lower() not in {
+            "disaster-monitor-local",
+            "change-me",
+            "your-app-name",
+        }
+
+    def publisher_citation_partition(
+        self, url: str, *, observed_at: datetime, generation: str
+    ) -> CollectionPartition | None:
+        if not self._has_app_name() or not _RELIEFWEB_CITATION.fullmatch(url):
+            return None
+        day = observed_at.astimezone(UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        return CollectionPartition(
+            self.source_id,
+            url,
+            day,
+            day + timedelta(days=1),
+            generation=generation,
+            alternate_for=url,
+            publisher_document_alternate=True,
+        )
+
+    async def _fetch_citation(self, partition: CollectionPartition) -> CollectionPage:
+        url = partition.query
+        match = _RELIEFWEB_CITATION.fullmatch(url)
+        if not match or partition.alternate_for != url or partition.cursor:
+            raise CollectionProviderError(
+                "invalid_response", "ReliefWeb citation identity is invalid."
+            )
+        node = match["node"]
+        params = {
+            "appname": self._app_name,
+            "filter[field]": "id" if node else "url_alias",
+            "filter[value]": node or url,
+            "limit": "2",
+            **{
+                f"fields[include][{i}]": field
+                for i, field in enumerate((*_FIELDS, "url_alias", "status", "file"))
+            },
+        }
+        snapshot = await self._http.get_json(self.endpoint, params)
+        return reliefweb_citation_page(
+            snapshot.payload,
+            citation=url,
+            identity_field="url" if node else "url_alias",
+            retrieved_at=snapshot.retrieved_at,
+        )
+
     async def aclose(self) -> None:
         await self._http.aclose()
 
@@ -212,6 +266,10 @@ class PublicCollectionArticleReader:
         try:
             async with asyncio.timeout(self._timeout):
                 document = await self._reader.read(lead.canonical_url)
+                # Publisher metadata sets publication; provider age stays separate.
+                article = await parse_publisher_document(
+                    document, lead, retrieved_at=datetime.now(UTC)
+                )
         except PublicAccessDeferred as error:
             raise CollectionProviderError(
                 "policy_deferred", str(error), error.retry_after_seconds
@@ -229,17 +287,11 @@ class PublicCollectionArticleReader:
             raise CollectionProviderError(
                 "article_unavailable", str(error)[:200]
             ) from error
-        # Publisher metadata establishes publication; provider age stays separate.
-        article = parse_discovery_article(
-            document.html if isinstance(document, PublicDocument) else document,
-            url=lead.canonical_url,
-            document_url=document.url if isinstance(document, PublicDocument) else None,
-            title=lead.title,
-            publisher=lead.publisher,
-            retrieved_at=datetime.now(UTC),
-            indexed_at=lead.indexed_at,
-        )
-        if not article.text.strip() and article.source.published_at is None:
+        if (
+            not article.text.strip()
+            and article.source.published_at is None
+            and not article.document_leads
+        ):
             raise CollectionProviderError(
                 "article_unavailable",
                 "Retrieved page has no publisher text or publication evidence.",

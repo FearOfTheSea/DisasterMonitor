@@ -136,7 +136,7 @@ async def test_old_journal_upgrades_both_policies_without_resetting_any_work(
                 )
         for table, rows in retained.items():
             assert [tuple(r) for r in db.execute(f"SELECT * FROM {table}")] == rows
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 7
     # Reopening must be idempotent, including leased and capacity-stopped work.
     SQLiteCollectionJournal(path)
     with sqlite3.connect(path) as db:

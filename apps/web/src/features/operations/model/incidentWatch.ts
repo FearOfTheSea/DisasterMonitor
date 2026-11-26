@@ -7,7 +7,7 @@ import type {
 
 export type IncidentWatchCoverageState = IncidentCoverageState | 'stale';
 
-export type IncidentWatchScope = {
+type IncidentWatchScope = {
   kind: 'country' | 'worldwide';
   country_code: string | null;
   country_name: string | null;
@@ -32,7 +32,7 @@ export type IncidentWatchEvent = Omit<ActiveIncident, 'country'> & {
   evidence_sources: IncidentSource[];
 };
 
-export type IncidentWatchChangeKind =
+type IncidentWatchChangeKind =
   | 'new_event'
   | 'observation_gap'
   | 'measurements_changed'

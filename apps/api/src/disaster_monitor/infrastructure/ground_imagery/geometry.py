@@ -81,11 +81,6 @@ class GeodesicGeometryEngine:
             self.validate(geometry)
         return _from_shapely(unary_union([_to_shapely(item) for item in geometries]))
 
-    def area_km2(self, geometry: MultiPolygon) -> float:
-        self.validate(geometry)
-        area, _ = _WGS84.geometry_area_perimeter(_to_shapely(geometry))
-        return abs(area) / 1_000_000
-
     def intersection_area_km2(self, first: MultiPolygon, second: MultiPolygon) -> float:
         self.validate(first)
         self.validate(second)

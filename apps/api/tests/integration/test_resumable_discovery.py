@@ -3,14 +3,20 @@
 import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlsplit
 
 import pytest
 
+from disaster_monitor.application.incidents.collection_planning import plan_collection
 from disaster_monitor.application.incidents.resumable_discovery import (
     ResumableDiscovery,
 )
 from disaster_monitor.domain.collection import CollectionPage, CollectionProviderError
-from disaster_monitor.domain.discovery import DiscoveryArticle
+from disaster_monitor.domain.discovery import (
+    DiscoveryArticle,
+    DiscoveryRun,
+    ReportingInterval,
+)
 from disaster_monitor.domain.evidence_types import SourceReference
 from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.infrastructure.operations.sqlite_collection import (
@@ -195,6 +201,123 @@ async def test_slow_article_does_not_block_subsequent_lead_pages(tmp_path):
     await service.wait(run.scan_id)
     assert (await service.get(run.scan_id)).collection.pages_acquired == 2
     await service.aclose()
+
+
+async def test_publisher_workers_use_four_distinct_hosts_with_one_shared_budget(
+    tmp_path,
+):
+    urls = (
+        "https://first.example/one",
+        "https://first.example/two",
+        "https://second.example/one",
+        "https://third.example/one",
+        "https://fourth.example/one",
+        "https://fifth.example/one",
+    )
+    release = asyncio.Event()
+    four_started = asyncio.Event()
+    started_hosts = []
+
+    class LeadProvider(Provider):
+        async def fetch_page(self, partition):
+            return CollectionPage(
+                leads=tuple(
+                    NewsFeedItem(
+                        url, "Publisher", "Flood in Riverton", url, None, None, NOW
+                    )
+                    for url in urls
+                )
+            )
+
+    class WaitingReader:
+        async def retrieve(self, lead):
+            started_hosts.append(urlsplit(lead.canonical_url).hostname)
+            if len(started_hosts) == 4:
+                four_started.set()
+            await release.wait()
+            return article(lead.canonical_url)
+
+    service = ResumableDiscovery(
+        (LeadProvider(),),
+        WaitingReader(),
+        SQLiteCollectionJournal(tmp_path / "jobs.sqlite"),
+        clock=lambda: NOW,
+        page_budget=1,
+    )
+    try:
+        run = await service.start(1)
+        await asyncio.wait_for(four_started.wait(), 2)
+        assert len(set(started_hosts)) == 4
+        release.set()
+        await service.wait(run.scan_id)
+        assert len(started_hosts) == 4
+        result = await service.get(run.scan_id)
+        assert result.collection.articles_retrieved == 4
+        assert result.collection.can_continue
+    finally:
+        release.set()
+        await service.aclose()
+
+
+async def test_provider_retries_when_cooldown_expires_during_other_search(tmp_path):
+    now = [NOW]
+    slow_started = asyncio.Event()
+    slow_release = asyncio.Event()
+    cooldown_observed = asyncio.Event()
+    resumed = asyncio.Event()
+
+    class CoolingProvider(Provider):
+        async def fetch_page(self, partition):
+            resumed.set()
+            return CollectionPage()
+
+    class SlowProvider(Provider):
+        source_id = "slow"
+
+        async def fetch_page(self, partition):
+            slow_started.set()
+            await slow_release.wait()
+            return CollectionPage()
+
+    class ObservedJournal(SQLiteCollectionJournal):
+        async def claim(self, kind, worker, *, now, provider=None):
+            work = await super().claim(kind, worker, now=now, provider=provider)
+            if provider == Provider.source_id and work is None and now == NOW:
+                cooldown_observed.set()
+            return work
+
+    journal = ObservedJournal(tmp_path / "jobs.sqlite")
+    providers = (CoolingProvider(), SlowProvider())
+    scan = DiscoveryRun("scan", ReportingInterval.at_start(1, NOW))
+    await journal.attach(
+        scan,
+        plan_collection(scan.interval, providers, observed_at=NOW),
+        now=NOW,
+        budget=2,
+    )
+    previous = await journal.claim(
+        "search", "seed", now=NOW, provider=Provider.source_id
+    )
+    assert previous is not None
+    retry = NOW + timedelta(milliseconds=50)
+    assert await journal.fail(
+        previous, outcome="rate_limited", detail="HTTP 429", now=NOW, retry_at=retry
+    )
+    service = ResumableDiscovery(
+        providers, Reader(), journal, clock=lambda: now[0], page_budget=2
+    )
+    try:
+        await service.recover()
+        await asyncio.wait_for(slow_started.wait(), 2)
+        await asyncio.wait_for(cooldown_observed.wait(), 2)
+        assert not resumed.is_set()
+        now[0] = retry
+        await asyncio.wait_for(resumed.wait(), 2)
+        assert not slow_release.is_set()
+        slow_release.set()
+        await service.wait(scan.scan_id)
+    finally:
+        await service.aclose()
 
 
 async def test_budget_continue_and_restart_resume_same_cursor(tmp_path):

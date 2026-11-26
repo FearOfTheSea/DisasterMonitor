@@ -3,7 +3,7 @@ import { exerciseDesktopIncidentAccess } from './system_desktop_incident_access.
 import { exerciseResponsiveWorkspaces } from './system_responsive_workspaces.mjs';
 import { spawn } from 'node:child_process';
 
-import { chromium } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
 
 const stackProcess = spawn(
   'uv',
@@ -315,17 +315,17 @@ try {
   await page.getByRole('heading', { name: 'Incident watches' }).waitFor();
   await page.getByLabel('Watch disaster').selectOption('wildfire');
   await page.getByLabel('Watch scope').selectOption('worldwide');
-  if (!(await page.getByRole('button', { name: 'Create watch' }).isEnabled())) {
-    throw new Error(
-      'Scheduled-watch regression is blocked: this stack has no durable operational storage/readiness. Core desktop map and event handoff checks completed; no watch acceptance is claimed.',
-    );
-  }
+  const createWatch = page.getByRole('button', { name: 'Create watch' });
+  await expect(
+    createWatch,
+    'Scheduled monitoring should become available',
+  ).toBeEnabled();
   const createWatchResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/v1/incident-watches') &&
       response.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Create watch' }).click();
+  await createWatch.click();
   if (!(await createWatchResponse).ok()) {
     throw new Error('The Incident Watch create request failed.');
   }

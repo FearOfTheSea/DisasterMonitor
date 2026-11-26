@@ -26,26 +26,22 @@
   padding: 0 5px;
 }
 
-.satellite-controls-heading,
-.satellite-toggle,
-.satellite-controls label {
+.satellite-controls-heading {
   align-items: center;
   display: flex;
   gap: 8px;
-}
-
-.satellite-controls-heading {
   justify-content: space-between;
 }
 
-.satellite-toggle span,
 .satellite-controls label > span:first-child {
   color: var(--ink-soft);
   font-weight: 650;
 }
 
-.satellite-controls label:not(.satellite-toggle) {
+.satellite-controls label {
+  align-items: center;
   display: grid;
+  gap: 8px;
   grid-template-columns: minmax(92px, auto) minmax(0, 1fr) auto;
 }
 

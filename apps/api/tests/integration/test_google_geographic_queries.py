@@ -11,10 +11,12 @@ import pytest
 
 from disaster_monitor.application.incidents.collection_planning import plan_collection
 from disaster_monitor.domain.collection import (
+    CollectionPage,
     CollectionPartition,
     CollectionProviderError,
 )
 from disaster_monitor.domain.discovery import DiscoveryRun, ReportingInterval
+from disaster_monitor.domain.news import NewsFeedItem
 from disaster_monitor.infrastructure.geography.static_country_catalog import (
     StaticCountryCatalog,
 )
@@ -268,3 +270,238 @@ async def test_full_catalog_reaches_publisher_intake_within_unchanged_phase_allo
         assert len(replies.calls) <= (allocation + 1) * 200
         assert len(replies.calls) <= 2 * 200
         assert (await store.read(run.scan_id)).interval == interval
+
+
+async def test_later_attached_month_gets_root_searches_in_every_week(tmp_path):
+    async with httpx.AsyncClient() as client:
+        provider = GoogleNewsCollectionProvider(
+            countries=geographic_countries, client=client
+        )
+        short = DiscoveryRun("short", ReportingInterval.at_start(1, NOW))
+        month = DiscoveryRun("month", ReportingInterval.at_start(30, NOW))
+        short_roots = plan_collection(short.interval, (provider,), observed_at=NOW)
+        month_roots = plan_collection(month.interval, (provider,), observed_at=NOW)
+        weeks = sorted({partition.start for partition in month_roots}, reverse=True)
+        budget = len(weeks) + 3
+        path = tmp_path / "windows.sqlite"
+        journal = SQLiteCollectionJournal(path)
+        await journal.attach(short, short_roots, now=NOW, budget=budget)
+        await journal.attach(month, month_roots, now=NOW, budget=budget)
+
+        # The shorter scan inserted its whole current-week queue first. An index
+        # turns still reach each older week before draining the current week.
+        visited = []
+        for _ in range(budget):
+            journal = SQLiteCollectionJournal(path)
+            work = await journal.claim("search", "index", now=NOW)
+            assert work is not None and work.partition is not None
+            visited.append(work.partition.start)
+            assert await journal.commit_page(work, CollectionPage(), now=NOW)
+
+        assert visited == [weeks[0]] * 4 + weeks[1:]
+        assert await journal.claim("search", "index", now=NOW) is None
+        assert (await journal.read(short.scan_id)).interval == short.interval
+        assert (await journal.read(month.scan_id)).interval == month.interval
+
+
+@pytest.mark.parametrize("continued", [False, True])
+async def test_small_google_allowance_reaches_multiple_markets_and_all_weeks(
+    tmp_path, continued
+):
+    budget = 47
+    async with httpx.AsyncClient() as client:
+        provider = GoogleNewsCollectionProvider(client=client)
+        interval = ReportingInterval.at_start(30, NOW)
+        roots = plan_collection(interval, (provider,), observed_at=NOW)
+        journal = SQLiteCollectionJournal(tmp_path / "regional.sqlite")
+        initial = roots
+        if continued:
+            initial = tuple(
+                replace(root, window_query_rank=root.window_query_rank + len(roots))
+                if not root.query.startswith("en-US|")
+                else root
+                for root in roots
+            )
+        await journal.attach(
+            DiscoveryRun("month", interval), initial, now=NOW, budget=budget
+        )
+        if continued:
+            await journal.finish_pass(now=NOW)
+            journal = SQLiteCollectionJournal(tmp_path / "regional.sqlite")
+            await journal.continue_scan(
+                "month", now=NOW, budget=budget, partitions=roots
+            )
+
+        claimed_roots = []
+        citation_pages = 0
+        for _ in range(budget):
+            work = await journal.claim("search", "index", now=NOW)
+            assert work is not None and work.partition is not None
+            partition = work.partition
+            if partition.depth:
+                citation_pages += 1
+                page = CollectionPage(
+                    next_cursor=None if partition.cursor else "fetched-parameters"
+                )
+            else:
+                claimed_roots.append(partition)
+                citation = replace(
+                    partition,
+                    query=f"google-article:fixture-{len(claimed_roots)}",
+                    depth=1,
+                    defer_initial_request=True,
+                    shared_resource=True,
+                    window_query_rank=None,
+                )
+                page = CollectionPage(children=(citation,))
+            assert await journal.commit_page(work, page, now=NOW)
+
+        assert await journal.claim("search", "past-budget", now=NOW) is None
+        assert citation_pages == 31
+        assert {root.start for root in claimed_roots} == {root.start for root in roots}
+        current_week = max(root.start for root in roots)
+        current_queries = {
+            root.query for root in claimed_roots if root.start == current_week
+        }
+        assert {"en-US|earthquake", "en-US|flood", "en-US|wildfire"} <= current_queries
+        assert len({query.split("|")[0] for query in current_queries}) >= 6
+        assert 'en-US|"natural disasters" report' in current_queries
+
+
+async def test_weekly_google_report_root_searches_for_publication_evidence():
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(200, text="<rss><channel/></rss>")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        provider = GoogleNewsCollectionProvider(
+            client=client, minimum_interval=0, clock=lambda: NOW
+        )
+        interval = ReportingInterval.at_start(30, NOW)
+        roots = plan_collection(interval, (provider,), observed_at=NOW)
+        current_week = max(root.start for root in roots)
+        report_roots = [
+            r for r in roots if r.query == 'en-US|"natural disasters" report'
+        ]
+        assert {r.start for r in report_roots} == {r.start for r in roots}
+        root = next(r for r in report_roots if r.start == current_week)
+        assert 6 <= root.window_query_rank <= 10
+        await provider.fetch_page(root)
+    (request,) = calls
+    assert request.url.params["ceid"] == "US:en"
+    assert request.url.params["q"].startswith('"natural disasters" report after:')
+
+
+@pytest.mark.parametrize("resume_retained", [False, True])
+async def test_historical_report_roots_run_within_a_bounded_allocation(
+    tmp_path, resume_retained
+):
+    provider = GoogleNewsCollectionProvider()
+    interval = ReportingInterval.at_start(30, NOW)
+    roots = plan_collection(interval, (provider,), observed_at=NOW)
+    report_query = 'en-US|"natural disasters" report'
+    current_week = max(root.start for root in roots)
+    budget = 90
+    path = tmp_path / "historical-reports.sqlite"
+    journal = SQLiteCollectionJournal(path)
+    retained = tuple(
+        replace(root, window_query_rank=123)
+        if root.start < current_week and root.query == report_query
+        else root
+        for root in roots
+    )
+    await journal.attach(
+        DiscoveryRun("month", interval),
+        retained if resume_retained else roots,
+        now=NOW,
+        budget=budget,
+    )
+    if resume_retained:
+        first = await journal.claim("search", "index", now=NOW)
+        assert first is not None and first.partition is not None
+        await journal.commit_page(first, CollectionPage(), now=NOW)
+        await journal.finish_pass(now=NOW)
+        journal = SQLiteCollectionJournal(path)
+        await journal.continue_scan("month", now=NOW, budget=budget, partitions=roots)
+
+    claimed_roots = []
+    for _ in range(budget):
+        work = await journal.claim("search", "index", now=NOW)
+        assert work is not None and work.partition is not None
+        part = work.partition
+        if part.depth:
+            page = CollectionPage(
+                next_cursor=None if part.cursor else "received-parameters"
+            )
+        else:
+            claimed_roots.append(part)
+            page = CollectionPage(
+                children=(
+                    replace(
+                        part,
+                        query=f"google-article:fixture-{len(claimed_roots)}",
+                        depth=1,
+                        defer_initial_request=True,
+                        shared_resource=True,
+                        window_query_rank=None,
+                    ),
+                )
+            )
+        assert await journal.commit_page(work, page, now=NOW)
+    assert await journal.claim("search", "index", now=NOW) is None
+    assert {root.start for root in claimed_roots if root.query == report_query} == {
+        root.start for root in roots
+    }
+    if resume_retained:
+        assert first.partition.key not in {root.key for root in claimed_roots}
+
+
+async def test_google_report_fallback_claims_a_bounded_turn_amid_index_work(tmp_path):
+    interval = ReportingInterval.at_start(30, NOW)
+    provider = GoogleNewsCollectionProvider()
+    roots = plan_collection(interval, (provider,), observed_at=NOW)
+    journal = SQLiteCollectionJournal(tmp_path / "report-recovery.sqlite")
+    await journal.attach(DiscoveryRun("month", interval), roots, now=NOW, budget=14)
+    first = await journal.claim("search", "google", now=NOW)
+    lead_url = "https://publisher.example/report.pdf"
+    citations = tuple(
+        replace(
+            first.partition,
+            query=f"google-article:{i}",
+            depth=1,
+            defer_initial_request=True,
+            window_query_rank=None,
+            priority=0,
+        )
+        for i in range(20)
+    )
+    lead = NewsFeedItem("reference", "Publisher", "Full report", lead_url, None, None)
+    await journal.commit_page(
+        first, CollectionPage(leads=(lead,), children=citations), now=NOW
+    )
+    retrieval = await journal.claim("retrieve", "publisher", now=NOW)
+    alternate = CollectionPartition(
+        provider.source_id,
+        "River Basin Flood Recovery Assessment",
+        interval.start,
+        NOW,
+        alternate_for=lead_url,
+        publisher_document_alternate=True,
+    )
+    await journal.fail(
+        retrieval,
+        now=NOW,
+        outcome="article_unavailable",
+        detail="Controlled absence",
+        alternates=(alternate,),
+    )
+    claimed = []
+    for _ in range(13):
+        work = await journal.claim("search", "google", now=NOW)
+        claimed.append(work.partition)
+        await journal.commit_page(work, CollectionPage(), now=NOW)
+    assert claimed[0] == alternate
+    assert claimed.count(alternate) == 1
+    assert sum(part.depth == 1 for part in claimed) == 8

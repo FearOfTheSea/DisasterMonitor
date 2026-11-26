@@ -192,7 +192,7 @@ async def test_legacy_open_search_priorities_migrate_without_resetting_progress(
             assert migrated["priority"] == after[key]["priority"]
         assert db.execute("SELECT * FROM pass_budget").fetchall() == budgets
         assert db.execute("SELECT * FROM scans").fetchall() == scans
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 7
         once = after
     SQLiteCollectionJournal(path)
     with sqlite3.connect(path) as db:
@@ -236,3 +236,51 @@ async def test_an_existing_lease_keeps_new_priority_when_committing_its_next_pag
     with sqlite3.connect(path) as db:
         priority, payload = db.execute("SELECT priority,payload FROM work").fetchone()
         assert json.loads(payload)["priority"] == priority == 1
+
+
+async def test_reserved_dated_search_turn_precedes_citation_continuations(tmp_path):
+    path = tmp_path / "dated-search.sqlite"
+    journal = SQLiteCollectionJournal(path, maximum_metadata_requests=5)
+    run = DiscoveryRun("dated", ReportingInterval.at_start(30, NOW))
+    current = replace(ROOT, window_query_rank=0)
+    earlier = replace(
+        current,
+        start=current.start - timedelta(days=7),
+        end=current.end - timedelta(days=7),
+        window_query_rank=3,
+    )
+    await journal.attach(run, (current, earlier), now=NOW, budget=5)
+    first = await journal.claim("search", "root", now=NOW)
+    assert first is not None and first.partition == replace(current, priority=1)
+    initial_citation = replace(
+        current,
+        query="citation",
+        depth=1,
+        cursor="resolve",
+        defer_initial_request=True,
+        window_query_rank=None,
+    )
+    assert await journal.commit_page(
+        first, CollectionPage(children=(initial_citation,)), now=NOW
+    )
+
+    for cursor, next_cursor in (
+        ("resolve", "metadata-step-1"),
+        ("metadata-step-1", "metadata-step-2"),
+    ):
+        citation = await journal.claim("search", "citation", now=NOW)
+        assert citation is not None and citation.partition is not None
+        assert citation.partition.query == initial_citation.query
+        assert citation.partition.cursor == cursor
+        assert await journal.commit_page(
+            citation, CollectionPage(next_cursor=next_cursor), now=NOW
+        )
+
+    journal = SQLiteCollectionJournal(path, maximum_metadata_requests=5)
+    reserved = await journal.claim("search", "root", now=NOW)
+    assert reserved is not None and reserved.partition == replace(earlier, priority=1)
+    continuation = await journal.claim("search", "citation", now=NOW)
+    assert continuation is not None and continuation.partition is not None
+    assert continuation.partition.query == initial_citation.query
+    assert continuation.partition.cursor == "metadata-step-2"
+    assert await journal.claim("search", "budget-exhausted", now=NOW) is None

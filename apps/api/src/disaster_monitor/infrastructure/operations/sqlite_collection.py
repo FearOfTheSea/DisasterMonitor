@@ -53,8 +53,9 @@ from disaster_monitor.infrastructure.operations.sqlite_collection_claims import 
     initialize_metadata_attempts,
 )
 from disaster_monitor.infrastructure.operations.sqlite_collection_leads import (
-    enqueue_retrieval_lead,
+    index_retrieval_lead,
     initialize_retrieval_priorities,
+    link_publisher_documents,
 )
 from disaster_monitor.infrastructure.operations.sqlite_collection_links import (
     attach_collection_descendants,
@@ -77,7 +78,6 @@ from disaster_monitor.infrastructure.operations.sqlite_retained_observations imp
 )
 from disaster_monitor.infrastructure.operations.sqlite_retrieval_sources import (
     initialize_retrieval_sources,
-    register_retrieval_source,
 )
 
 T = TypeVar("T")
@@ -493,7 +493,13 @@ class SQLiteCollectionJournal:
                     "SELECT payload FROM work WHERE id=?", (work.work_id,)
                 ).fetchone()[0]
             )
-            new_urls = {item.canonical_url for item in page.leads}
+            leads = tuple(
+                item
+                for item in page.leads
+                if not partition.publisher_document_alternate
+                or item.canonical_url != partition.alternate_for
+            )
+            new_urls = {item.canonical_url for item in leads}
             refusal = self._lead_budget.page_refusal(
                 db, work.provider, new_urls, len(page.articles)
             )
@@ -511,22 +517,14 @@ class SQLiteCollectionJournal:
                 "INSERT INTO pages VALUES(?,?,?,?)",
                 (work.token, work.work_id, payload, now.timestamp()),
             )
-            for item in page.leads:
-                db.execute(
-                    "INSERT OR IGNORE INTO leads VALUES(?,?)",
-                    (item.canonical_url, LEAD.dump_json(item)),
-                )
-                db.execute(
-                    "INSERT OR IGNORE INTO work_leads VALUES(?,?)",
-                    (work.work_id, item.canonical_url),
-                )
-                key = enqueue_retrieval_lead(
+            for item in leads:
+                key = index_retrieval_lead(
                     db,
+                    work.work_id,
                     item,
                     partition.retrieval_generation or partition.generation,
+                    work.provider,
                 )
-                self._link_child(db, work.work_id, key)
-                register_retrieval_source(db, key, work.provider)
                 if partition.alternate_for:
                     db.execute("UPDATE work SET alternate_depth=1 WHERE id=?", (key,))
             for article in page.articles:
@@ -540,6 +538,7 @@ class SQLiteCollectionJournal:
                 cursor=page.next_cursor or "",
                 defer_initial_request=False,
                 priority=search_continuation_priority(partition),
+                window_query_rank=None,
             )
             state = (
                 "pending"
@@ -601,14 +600,16 @@ class SQLiteCollectionJournal:
                 )
                 return False
             self._evidence(db, work.work_id, article)
+            link_issue = link_publisher_documents(db, work, article, self._lead_budget)
             for partition in alternates:
                 self._add_work(db, partition)
                 self._link_child(db, work.work_id, partition.key)
             db.execute(
                 "UPDATE work SET "
-                "state='done',outcome='article_retrieved',token=NULL,lease_until=NULL"
+                "state='done',outcome='article_retrieved',token=NULL,lease_until=NULL,"
+                "detail=COALESCE(?,detail)"
                 " WHERE id=?",
-                (work.work_id,),
+                (link_issue, work.work_id),
             )
             db.execute(
                 "UPDATE attempts SET "
@@ -765,13 +766,27 @@ class SQLiteCollectionJournal:
                 "(SELECT scan FROM scan_capacity)"
             )
 
-    async def next_retry(self, *, now: datetime) -> datetime | None:
-        return await asyncio.to_thread(self._next_retry, now)
+    async def next_retry(
+        self, *, now: datetime, search_provider: str | None = None
+    ) -> datetime | None:
+        return await asyncio.to_thread(self._next_retry, now, search_provider)
 
-    def _next_retry(self, now: datetime) -> datetime | None:
+    def _next_retry(
+        self, now: datetime, search_provider: str | None
+    ) -> datetime | None:
+        columns = "w.*"
+        scope = ""
+        parameters: tuple[float | str, ...] = (now.timestamp() - self._pass_seconds,)
+        if search_provider is not None:
+            # Search work is scoped by provider, so no publisher lookup is needed.
+            columns = (
+                "MIN(MAX(w.due,COALESCE(w.lease_until,0),COALESCE(c.until_time,0)))"
+            )
+            scope = " AND w.kind='search' AND w.provider=?"
+            parameters = (*parameters, search_provider)
         with self._connect() as db:
             rows = db.execute(
-                _ACTIVE_SCANS + "SELECT w.* "
+                _ACTIVE_SCANS + f"SELECT {columns} "
                 "FROM work w JOIN scan_work sw ON sw.work=w.id JOIN "
                 "active_scans s ON s.id=sw.scan "
                 "LEFT JOIN cooldowns c ON c.provider=w.provider "
@@ -782,14 +797,20 @@ class SQLiteCollectionJournal:
                 "AND m.provider='all-metadata' WHERE "
                 "w.state IN ('pending','leased') "
                 "AND COALESCE(b.remaining,s.budget)>0 "
-                "AND (w.kind!='search' OR COALESCE(m.remaining,1)>0)",
-                (now.timestamp() - self._pass_seconds,),
-            ).fetchall()
-            schedule = CollectionRequestSchedule(db, self._retained_refusals)
-            retry = min(
-                (max(schedule.ready_at(row), row["lease_until"] or 0) for row in rows),
-                default=None,
+                "AND (w.kind!='search' OR COALESCE(m.remaining,1)>0)" + scope,
+                parameters,
             )
+            if search_provider is not None:
+                retry = rows.fetchone()[0]
+            else:
+                schedule = CollectionRequestSchedule(db, self._retained_refusals)
+                retry = min(
+                    (
+                        max(schedule.ready_at(row), row["lease_until"] or 0)
+                        for row in rows
+                    ),
+                    default=None,
+                )
             return (
                 datetime.fromtimestamp(max(retry, now.timestamp()), UTC)
                 if retry is not None

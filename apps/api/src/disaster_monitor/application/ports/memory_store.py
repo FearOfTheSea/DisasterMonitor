@@ -22,13 +22,6 @@ class MemoryStore(Protocol):
         self, conversation_id: str, physical_event_id: str | None = None
     ) -> tuple[MemoryRecord, ...]: ...
 
-    async def mark_superseded(
-        self,
-        memory_id: str,
-        *,
-        superseded_by_memory_id: str,
-    ) -> bool: ...
-
     async def mark_expired(self, memory_id: str) -> bool: ...
 
     async def mark_deleted_for_conversation(

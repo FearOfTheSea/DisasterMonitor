@@ -130,7 +130,6 @@
   padding-left: 17px;
 }
 
-.incident-loading,
 .operations-loading {
   align-items: center;
   color: var(--muted);
@@ -139,22 +138,6 @@
   gap: 12px;
   min-height: 76px;
   padding: 16px 20px;
-}
-
-.incident-loading-copy {
-  display: grid;
-  gap: 3px;
-  line-height: 1.35;
-}
-
-.incident-loading-copy strong {
-  color: var(--ink);
-  font-size: 0.86rem;
-}
-
-.incident-loading-copy span,
-.incident-loading-copy small {
-  color: var(--muted);
 }
 
 .loading-indicator {

@@ -49,9 +49,8 @@ async def test_reprocess_preserves_original_and_reassesses_retained_articles_onl
     class NeverAcquire:
         source_id = "must-not-run"
 
-        async def discover(self, *, interval):
+        def discover(self, *, interval):
             raise AssertionError("Reprocessing must not reacquire news")
-            yield
 
     service = DiscoveryScanService((NeverAcquire(),), store, clock=lambda: NOW)
     try:

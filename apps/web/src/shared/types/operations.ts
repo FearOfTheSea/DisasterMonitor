@@ -1,4 +1,4 @@
-export type FreshnessState = 'fresh' | 'stale' | 'unavailable' | 'never_ingested';
+type FreshnessState = 'fresh' | 'stale' | 'unavailable' | 'never_ingested';
 
 export type ProviderFreshness = {
   source_id: string;
@@ -31,10 +31,10 @@ export type ProviderBudget = {
   reset_at: string;
 };
 
-export type CountryCatalogUpdateState =
+type CountryCatalogUpdateState =
   'never_run' | 'running' | 'updated' | 'unchanged' | 'failed';
 
-export type CountryCatalogSource = {
+type CountryCatalogSource = {
   source_id: string;
   version: string;
   revision: string;

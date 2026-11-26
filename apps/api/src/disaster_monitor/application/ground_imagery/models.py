@@ -187,12 +187,6 @@ class GroundImageryRequest:
             return self.candidates
         return tuple(item for item in self.candidates if item.sensor is sensor)
 
-    def sensor_search(self, sensor: Sensor) -> SensorSearchStatus:
-        for status in self.search_status:
-            if status.sensor is sensor:
-                return status
-        raise KeyError(sensor.value)
-
     def selected_observation(
         self, sensor: Sensor, role: TemporalRole
     ) -> Observation | None:

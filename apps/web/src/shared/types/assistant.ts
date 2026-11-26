@@ -9,7 +9,6 @@ import type {
   ConversationMessageResponse,
   ConversationResponse,
   ConversationSummaryResponse,
-  DecisionEstimateResponse,
   DecisionFactResponse,
   DecisionSupportResponse,
   CycloneMapLayerResponse,
@@ -26,9 +25,7 @@ import type {
   InvestigationTargetResponse,
   LineStringGeometryResponse,
   MapNavigationActionResponse,
-  MeasurementKind as ApiMeasurementKind,
   MultimodalAssetResponse,
-  MultimodalSourceResponse,
   MultimodalStateResponse,
   PointGeometryResponse,
   PolygonGeometryResponse,
@@ -37,11 +34,10 @@ import type {
   SourceMapFeatureResponse,
   SourceMapLayerResponse,
   SourceResponse,
-  VisualAnalysisConfigurationResponse,
   VisualObservationResponse,
 } from '@/shared/api/generated/assistant';
 
-export type MessageRole = 'user' | 'assistant';
+type MessageRole = 'user' | 'assistant';
 
 export type MapView = {
   centerLatitude: number;
@@ -73,7 +69,7 @@ export type InvestigationSummary = Omit<
   evidence_count: number;
   capability_gaps: string[];
 };
-export type CompoundHazardCorrelation = Omit<
+type CompoundHazardCorrelation = Omit<
   CompoundHazardCorrelationResponse,
   'source_ids'
 > & {
@@ -95,14 +91,13 @@ export type InvestigationCase = Omit<
   targets: InvestigationTarget[];
   correlations: CompoundHazardCorrelation[];
 };
-export type AssistantSource = SourceResponse;
+type AssistantSource = SourceResponse;
 export type EvidenceClaim = EvidenceClaimResponse;
 export type EvidenceClaimVariant = EvidenceClaimVariantResponse;
 export type EvidenceTimelineEntry = EvidenceTimelineEntryResponse;
-export type MeasurementKind = ApiMeasurementKind;
-export type EventMeasurement = EventMeasurementResponse;
-export type EventCoordinate = EventCoordinateResponse;
-export type EventGeometry = Omit<EventGeometryResponse, 'coordinates'> & {
+type EventMeasurement = EventMeasurementResponse;
+type EventCoordinate = EventCoordinateResponse;
+type EventGeometry = Omit<EventGeometryResponse, 'coordinates'> & {
   coordinates: EventCoordinate[];
 };
 export type CycloneMapLayer = Omit<CycloneMapLayerResponse, 'coordinates'> & {
@@ -116,15 +111,11 @@ export type SelectedEvent = Omit<
   measurements: EventMeasurement[];
   supplemental_geometry?: CycloneMapLayer[];
 };
-export type ReportSection = ReportSectionResponse;
-export type DecisionFact = DecisionFactResponse;
+type ReportSection = ReportSectionResponse;
+type DecisionFact = DecisionFactResponse;
 export type DecisionFactStatementType = DecisionFact['statement_type'];
-export type DecisionEstimate = DecisionEstimateResponse;
 export type DecisionSupportArtifact = DecisionSupportResponse;
-export type DisasterMediaItem = Omit<
-  DisasterMediaItemResponse,
-  'association_rule_ids'
-> & {
+type DisasterMediaItem = Omit<DisasterMediaItemResponse, 'association_rule_ids'> & {
   association_rule_ids: string[];
 };
 export type DisasterMediaGallery = Omit<
@@ -136,24 +127,22 @@ export type DisasterMediaGallery = Omit<
   warnings: string[];
   rejected_count: number;
 };
-export type Wgs84PointGeometry = PointGeometryResponse;
-export type Wgs84LineStringGeometry = LineStringGeometryResponse;
-export type Wgs84PolygonGeometry = PolygonGeometryResponse;
+type Wgs84PointGeometry = PointGeometryResponse;
+type Wgs84LineStringGeometry = LineStringGeometryResponse;
+type Wgs84PolygonGeometry = PolygonGeometryResponse;
 export type CopGeometry =
   Wgs84PointGeometry | Wgs84LineStringGeometry | Wgs84PolygonGeometry;
-export type MultimodalSource = MultimodalSourceResponse;
-export type MultimodalAsset = Omit<
+type MultimodalAsset = Omit<
   MultimodalAssetResponse,
   'parent_asset_ids' | 'eligibility_reasons'
 > & {
   parent_asset_ids: string[];
   eligibility_reasons: string[];
 };
-export type AssetEventAssociation = Omit<AssetEventAssociationResponse, 'rule_ids'> & {
+type AssetEventAssociation = Omit<AssetEventAssociationResponse, 'rule_ids'> & {
   rule_ids: string[];
 };
-export type VisualAnalysisConfiguration = VisualAnalysisConfigurationResponse;
-export type VisualObservation = Omit<
+type VisualObservation = Omit<
   VisualObservationResponse,
   'visual_cues' | 'safety_rule_ids'
 > & {
@@ -170,8 +159,8 @@ export type MultimodalEvidenceState = Omit<
 };
 export type SourceMapFeature = SourceMapFeatureResponse;
 export type AnalyticalMapFeature = AnalyticalMapFeatureResponse;
-export type SourceMapLayer = SourceMapLayerResponse;
-export type AnalyticalMapLayer = AnalyticalMapLayerResponse;
+type SourceMapLayer = SourceMapLayerResponse;
+type AnalyticalMapLayer = AnalyticalMapLayerResponse;
 export type CopLayer = SourceMapLayer | AnalyticalMapLayer;
 export type CommonOperationalPicture = CommonOperationalPictureResponse;
 

@@ -1,4 +1,4 @@
-export type FieldReportReviewState =
+type FieldReportReviewState =
   | 'pending_review'
   | 'retained_unverified'
   | 'rejected'

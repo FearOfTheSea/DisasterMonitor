@@ -5,7 +5,7 @@ export type WeatherAlertUrgency =
 export type WeatherAlertCertainty =
   'observed' | 'likely' | 'possible' | 'unlikely' | 'unknown';
 
-export type WeatherAlertCoordinate = {
+type WeatherAlertCoordinate = {
   latitude: number;
   longitude: number;
 };
@@ -47,7 +47,7 @@ export type WeatherAlert = {
   signature_verified?: boolean | null;
 };
 
-export type WeatherAlertCoverageState =
+type WeatherAlertCoverageState =
   'alerts_found' | 'no_active_alerts' | 'degraded' | 'unavailable';
 
 export type WeatherAlertsSnapshot = {

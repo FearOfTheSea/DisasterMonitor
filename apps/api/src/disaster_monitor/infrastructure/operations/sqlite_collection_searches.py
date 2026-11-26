@@ -62,10 +62,18 @@ def enqueue_search_partition(
     ).fetchone()
     if existing is not None and existing["state"] in ("pending", "leased", "capacity"):
         retained = _PARTITION.validate_json(existing["payload"])
+        rank = retained.window_query_rank
+        if (
+            existing["state"] == "pending"
+            and not retained.cursor
+            and partition.window_query_rank is not None
+        ):
+            rank = partition.window_query_rank
         partition = replace(
             retained,
             retrieval_generation=partition.retrieval_generation
             or retained.retrieval_generation,
+            window_query_rank=rank,
         )
     db.execute(
         "INSERT INTO work(id,kind,provider,payload,priority,sequence) "

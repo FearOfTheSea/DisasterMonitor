@@ -29,6 +29,9 @@ from disaster_monitor.infrastructure.news.headline_narrative import (
     is_article_decoration,
     is_photograph_caption,
 )
+from disaster_monitor.infrastructure.news.publisher_document_links import (
+    publisher_document_leads,
+)
 from disaster_monitor.infrastructure.news.scoped_article_publication import (
     scoped_article_publication,
 )
@@ -157,6 +160,7 @@ class ArticleTextSection:
     main_index: int | None = None
     continuation_parent: int | None = None
     continuation_position: int = 0
+    report_links: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -180,7 +184,7 @@ class ArticleParser(HTMLParser):
         self.byline_metadata: list[str] = []
         self.objects: list[dict[str, Any]] = []
         self.flight_metadata = FlightArticleMetadata()
-        self.main_parts: list[ArticleTextPiece] = []
+        self._main = ArticleTextSection(None)
         self.caption_parts: list[list[str]] = []
         self._caption_stack: list[str] = []
         self._body_stack: list[tuple[str, ArticleTextSection]] = []
@@ -200,6 +204,8 @@ class ArticleParser(HTMLParser):
         self._excluded: list[str] = []
         self._text_blocks: list[ArticleTextBlock] = []
         self._in_link = False
+        self._report_href: str | None = None
+        self._report_label: list[str] = []
         self._span_emphasis: list[bool] = []
         self._elements: list[ArticleElement] = []
         self._element_sequence = 0
@@ -370,6 +376,17 @@ class ArticleParser(HTMLParser):
             # HTML anchors cannot nest. Starting another anchor closes the prior
             # one; a malformed menu must not mark all later reporting as linked.
             self._in_link = True
+            self._report_href = None
+            self._report_label = []
+            href = values.get("href") or ""
+            if (
+                not self._hidden
+                and not self._excluded
+                and "nofollow" not in (values.get("rel") or "").casefold().split()
+                and len(href) <= 2048
+                and re.search(r"\.pdf(?:[?#]|$)", href, re.I)
+            ):
+                self._report_href = href
 
     def handle_endtag(self, tag: str) -> None:
         for index in range(len(self._elements) - 1, -1, -1):
@@ -421,8 +438,17 @@ class ArticleParser(HTMLParser):
                 self._text_blocks = self._text_blocks[:index]
         if tag == "a":
             self._in_link = False
+            self._record_report_link()
+            self._report_href = None
 
     def handle_data(self, data: str) -> None:
+        if (
+            self._report_href is not None
+            and not self._hidden
+            and not self._excluded
+            and len(self._report_label) < 16
+        ):
+            self._report_label.append(data[:240])
         if (
             self._external_heading is not None
             and self._hidden == self._header_depth
@@ -470,13 +496,33 @@ class ArticleParser(HTMLParser):
         if article_index is not None:
             self._articles[article_index].parts.append(piece)
         if self._main_depth:
-            self.main_parts.append(piece)
+            self._main.parts.append(piece)
         if self._body_stack:
             section = self._body_stack[-1][1]
             if section.article_index == article_index:
                 section.parts.append(piece)
 
-    def narrative_parts(self, headlines: tuple[str, ...] = ()) -> list[str]:
+    def _record_report_link(self) -> None:
+        if not self._report_href:
+            return
+        label = " ".join(" ".join(self._report_label).split())
+        if not label:
+            return
+        sections = []
+        article_index = self._article_stack[-1] if self._article_stack else None
+        if article_index is not None:
+            sections.append(self._articles[article_index])
+        if self._body_stack and self._body_stack[-1][1].article_index == article_index:
+            sections.append(self._body_stack[-1][1])
+        if self._main_depth and self._main_sequence == 1:
+            sections.append(self._main)
+        for section in sections:
+            if len(section.report_links) < 40:
+                section.report_links.append((self._report_href, label))
+
+    def narrative_sections(
+        self, headlines: tuple[str, ...] = ()
+    ) -> list[ArticleTextSection]:
         primary = [section for section in self._articles if section.primary_heading]
         bodies = [
             section
@@ -508,7 +554,7 @@ class ArticleParser(HTMLParser):
                 for index, body in enumerate(bodies)
             )
         ):
-            return [part for body in bodies for part in _narrative(body.parts)]
+            return bodies
         anchors = [
             anchor
             for anchor in self._external_headings
@@ -523,32 +569,24 @@ class ArticleParser(HTMLParser):
             selected = anchors[0].article_index
             owned = [body for body in bodies if body.article_index == selected]
             assert selected is not None
-            return (
-                [part for body in owned for part in _narrative(body.parts)]
-                if owned
-                else _narrative(self._articles[selected].parts)
-            )
+            return owned or [self._articles[selected]]
         if len(primary) > 1:
             return []
         if primary:
             owned = [b for b in bodies if b.article_index == primary[0].article_index]
-            return (
-                [p for b in owned for p in _narrative(b.parts)]
-                if owned
-                else _narrative(primary[0].parts)
-            )
+            return owned or primary
         if len(bodies) == 1:
-            return _narrative(bodies[0].parts)
+            return bodies
         if len(bodies) > 1:
             return []
         if len(self._articles) == 1:
-            return _narrative(self._articles[0].parts)
+            return self._articles
         # Multiple unidentified article cards cannot become one attributed report.
-        return [] if self._articles else _narrative(self.main_parts)
+        return [] if self._articles else [self._main]
 
     @property
     def has_narrative_structure(self) -> bool:
-        return bool(self._articles or self._bodies or self.main_parts)
+        return bool(self._articles or self._bodies or self._main.parts)
 
 
 def _objects(value: Any, depth: int = 0) -> list[dict[str, Any]]:
@@ -628,7 +666,8 @@ def parse_discovery_article(
         if news or parser.meta.get("og:type", "").casefold() == "article"
         else ()
     )
-    narrative = parser.narrative_parts(external_headlines)
+    sections = parser.narrative_sections(external_headlines)
+    narrative = [part for section in sections for part in _narrative(section.parts)]
     if not narrative and not parser.has_narrative_structure:
         narrative = [
             "\n".join(
@@ -731,5 +770,11 @@ def parse_discovery_article(
         bylines=article_bylines(news, parser.byline_metadata),
         photograph_captions=tuple(
             " ".join(parts).strip() for parts in parser.caption_parts if any(parts)
+        ),
+        document_leads=publisher_document_leads(
+            [link for section in sections for link in section.report_links],
+            page_url=document_url or url,
+            publisher=source_publisher,
+            page_title=source_title,
         ),
     )
